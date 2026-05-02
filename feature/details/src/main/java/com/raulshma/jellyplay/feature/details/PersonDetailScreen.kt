@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateTopPadding
+import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -71,8 +73,13 @@ fun PersonDetailScreen(
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(120.dp),
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = padding.calculateTopPadding() + 16.dp,
+                        bottom = padding.calculateBottomPadding() + 16.dp,
+                    ),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

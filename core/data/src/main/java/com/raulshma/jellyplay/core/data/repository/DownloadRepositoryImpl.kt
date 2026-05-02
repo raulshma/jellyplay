@@ -72,6 +72,20 @@ class DownloadRepositoryImpl @Inject constructor(
         downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.CANCELLED.name)
     }
 
+    override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+        if (entity.status == DownloadStatus.DOWNLOADING.name || entity.status == DownloadStatus.PENDING.name) {
+            downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
+        }
+    }
+
+    override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+        if (entity.status == DownloadStatus.PAUSED.name || entity.status == DownloadStatus.FAILED.name) {
+            downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PENDING.name)
+        }
+    }
+
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         val file = File(entity.downloadPath)

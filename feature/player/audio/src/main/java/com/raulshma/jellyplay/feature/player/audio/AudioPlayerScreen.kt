@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,10 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -57,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -79,11 +85,27 @@ fun AudioPlayerScreen(
         onDispose { viewModel.release() }
     }
 
+    BackHandler {
+        if (showQueue || showSpeedPicker) {
+            showQueue = false
+            showSpeedPicker = false
+        } else {
+            onBack()
+        }
+    }
+
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+
+    ArtworkThemeWrapper(
+        imageUrl = viewModel.albumArtUrl.ifBlank { null },
+        dynamicTheming = preferences.dynamicTheming,
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 32.dp),
+                .padding(horizontal = 32.dp)
+                .padding(WindowInsets.navigationBars.asPaddingValues()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             TopAppBar(
@@ -329,9 +351,10 @@ private fun QueueSheet(
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(end = 8.dp),
                             )
-                        }
-                    }
-                }
+        }
+    }
+    }
+}
             }
         }
     }

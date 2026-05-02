@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -38,25 +40,22 @@ fun AlbumsScreen(
             TopAppBar(title = { Text("Albums") })
         },
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             when (val refreshState = albums.loadState.refresh) {
                 is LoadState.Loading -> {
-                    LoadingScreen()
+                    LoadingScreen(modifier = Modifier.padding(padding))
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
                         message = refreshState.error.localizedMessage ?: "Failed to load albums",
                         onRetry = { albums.refresh() },
+                        modifier = Modifier.padding(padding),
                     )
                 }
                 is LoadState.NotLoading -> {
                     if (albums.itemCount == 0) {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().padding(padding),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -68,7 +67,12 @@ fun AlbumsScreen(
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(160.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = padding.calculateTopPadding() + 8.dp,
+                                bottom = padding.calculateBottomPadding() + 8.dp,
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize(),

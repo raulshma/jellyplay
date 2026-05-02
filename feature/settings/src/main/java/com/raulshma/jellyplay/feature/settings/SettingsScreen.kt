@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayCircle
@@ -51,6 +52,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    onServerManagement: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -83,6 +85,17 @@ fun SettingsScreen(
                 )
                 HorizontalDivider()
             }
+
+            SettingsSectionHeader("Servers")
+
+            SettingItem(
+                icon = Icons.Default.Dns,
+                title = "Server Management",
+                subtitle = "Switch between servers or add new ones",
+                onClick = onServerManagement,
+            )
+
+            HorizontalDivider()
 
             SettingsSectionHeader("Playback")
 

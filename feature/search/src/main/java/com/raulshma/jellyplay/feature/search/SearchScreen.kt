@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.search
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -61,6 +63,11 @@ fun SearchScreen(
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
 
+    BackHandler(enabled = query.isNotBlank() || filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()) {
+        viewModel.search("")
+        viewModel.clearFilters()
+    }
+
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -91,7 +98,8 @@ fun SearchScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .imePadding(),
         ) {
             TextField(
                 value = query,

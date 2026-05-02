@@ -49,6 +49,27 @@ class AuthRepositoryImpl @Inject constructor(
         serverDao.deleteServerById(serverId)
     }
 
+    override suspend fun switchServer(serverId: String): Result<Unit> = runCatching {
+        val serverEntity = serverDao.getServerById(serverId) ?: return Result.success(Unit)
+        val server = serverEntity.toServerInfo()
+        apiClient.disconnect()
+        apiClient.setServer(server)
+        val token = serverEntity.accessToken
+        if (token != null && serverEntity.userId != null) {
+            apiClient.setUser(
+                UserInfo(
+                    id = serverEntity.userId,
+                    name = "",
+                    serverAddress = server.address,
+                    accessToken = token,
+                )
+            )
+            preferencesStore.setActiveServer(serverId)
+            preferencesStore.setActiveUser(serverEntity.userId)
+            serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
+        }
+    }
+
     override suspend fun login(
         serverAddress: String,
         username: String,

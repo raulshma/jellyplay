@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -110,6 +111,14 @@ fun OfflinePlayerScreen(
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
+        }
+    }
+
+    BackHandler {
+        if (isFullscreen) {
+            isFullscreen = false
+        } else {
+            onBack()
         }
     }
 

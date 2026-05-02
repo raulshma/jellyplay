@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.music.genres
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -39,24 +41,21 @@ fun GenresScreen(
             TopAppBar(title = { Text("Genres") })
         },
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading -> {
-                    LoadingScreen()
+                    LoadingScreen(modifier = Modifier.padding(padding))
                 }
                 error != null -> {
                     ErrorScreen(
                         message = error!!,
                         onRetry = { viewModel.refresh() },
+                        modifier = Modifier.padding(padding),
                     )
                 }
                 genres.isEmpty() -> {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(padding),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -69,7 +68,12 @@ fun GenresScreen(
                 else -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(120.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = padding.calculateTopPadding() + 8.dp,
+                            bottom = padding.calculateBottomPadding() + 8.dp,
+                        ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize(),

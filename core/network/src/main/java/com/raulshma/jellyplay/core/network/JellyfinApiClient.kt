@@ -137,4 +137,8 @@ interface JellyfinApiClient {
         mediaSourceId: String,
         startTimeTicks: Long = 0,
     ): String
+
+    fun getSubtitleDeliveryUrl(
+        deliveryUrl: String,
+    ): String
 }

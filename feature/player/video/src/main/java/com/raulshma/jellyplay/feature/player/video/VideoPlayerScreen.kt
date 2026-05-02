@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -147,6 +148,22 @@ fun VideoPlayerScreen(
         }
     }
 
+    BackHandler {
+        if (showSpeedPicker || showAudioPicker || showSubtitlePicker || showChapterPicker ||
+            showPlaybackInfo || showAspectRatio || showSubtitleStyle
+        ) {
+            showSpeedPicker = false
+            showAudioPicker = false
+            showSubtitlePicker = false
+            showChapterPicker = false
+            showPlaybackInfo = false
+            showAspectRatio = false
+            showSubtitleStyle = false
+        } else {
+            onBack()
+        }
+    }
+
     val exoPlayer = viewModel.exoPlayer
     val streamUrl = viewModel.streamUrl
     val title = viewModel.title
@@ -161,18 +178,6 @@ fun VideoPlayerScreen(
     val playMethod = viewModel.playMethod
     val trickplayUrl = viewModel.trickplayUrl
     val subtitleStyle = viewModel.subtitleStyle
-
-    LaunchedEffect(streamUrl) {
-        streamUrl?.let { url ->
-            val mediaItem = MediaItem.fromUri(url)
-            exoPlayer?.setMediaItem(mediaItem)
-            exoPlayer?.prepare()
-            if (startPositionTicks > 0) {
-                exoPlayer?.seekTo(startPositionTicks / 10_000)
-            }
-            exoPlayer?.playWhenReady = true
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -208,6 +213,24 @@ fun VideoPlayerScreen(
                     PlayerView(ctx).apply {
                         this.player = player
                         useController = false
+                        val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
+                        val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
+                        subtitleView?.setStyle(
+                            androidx.media3.ui.CaptionStyleCompat(
+                                subtitleStyle.fontColor.value,
+                                bgColorWithAlpha,
+                                android.graphics.Color.TRANSPARENT,
+                                when (subtitleStyle.edgeType) {
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
+                                    else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+                                },
+                                subtitleStyle.edgeColor.value,
+                            )
+                        )
+                        subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
                     }
                 },
                 modifier = Modifier.fillMaxSize(),

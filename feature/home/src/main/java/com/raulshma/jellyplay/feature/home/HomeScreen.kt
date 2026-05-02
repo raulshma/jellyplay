@@ -72,9 +72,8 @@ fun HomeScreen(
             }
             else -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = padding,
                 ) {
                     items(count = sections.size) { index ->
                         val section = sections[index]

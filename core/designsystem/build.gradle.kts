@@ -26,4 +26,7 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.iconsExtended)
+    implementation(libs.palette.ktx)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }

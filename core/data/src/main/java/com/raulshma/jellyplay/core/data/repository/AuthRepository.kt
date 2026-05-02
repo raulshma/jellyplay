@@ -18,6 +18,8 @@ interface AuthRepository {
 
     suspend fun removeServer(serverId: String)
 
+    suspend fun switchServer(serverId: String): Result<Unit>
+
     suspend fun login(serverAddress: String, username: String, password: String): Result<UserInfo>
 
     suspend fun restoreSession(): Result<Unit>

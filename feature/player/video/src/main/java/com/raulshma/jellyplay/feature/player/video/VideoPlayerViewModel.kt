@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -20,12 +22,14 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -173,6 +177,30 @@ class VideoPlayerViewModel @Inject constructor(
                     )
                     _streamUrl = url
 
+                    val subtitleConfigs = buildSubtitleConfigurations(source?.mediaStreams ?: emptyList())
+
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(url)
+                        .setSubtitleConfigurations(subtitleConfigs)
+                        .build()
+
+                    _exoPlayer?.setMediaItem(mediaItem)
+                    _exoPlayer?.prepare()
+
+                    if (startPositionTicks > 0) {
+                        _exoPlayer?.seekTo(startPositionTicks / 10_000)
+                    }
+
+                    _exoPlayer?.play()
+
+                    val prefs = preferencesStore.preferences.first()
+                    if (prefs.preferredSubtitleLanguage != null) {
+                        val selector = _trackSelector ?: return@launch
+                        val params = selector.buildUponParameters()
+                        params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
+                        selector.setParameters(params)
+                    }
+
                     playbackRepository.reportPlaybackStart(
                         com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                             itemId = itemId,
@@ -306,6 +334,36 @@ class VideoPlayerViewModel @Inject constructor(
         mime.startsWith("audio/") -> mime.removePrefix("audio/")
         mime.startsWith("text/") -> mime.removePrefix("text/")
         else -> mime
+    }
+
+    private fun buildSubtitleConfigurations(streams: List<MediaStream>): List<MediaItem.SubtitleConfiguration> {
+        return streams
+            .filter { it.type == StreamType.SUBTITLE && it.isExternal && !it.deliveryUrl.isNullOrBlank() }
+            .map { stream ->
+                val mimeType = mapSubtitleCodecToMime(stream.codec)
+                val url = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(url))
+                    .setMimeType(mimeType)
+                    .setLanguage(stream.language)
+                    .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
+                    .setSelectionFlags(
+                        if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0 or
+                        if (stream.isForced) C.SELECTION_FLAG_FORCED else 0
+                    )
+                    .build()
+            }
+    }
+
+    private fun mapSubtitleCodecToMime(codec: String?): String? {
+        if (codec == null) return null
+        return when (codec.lowercase()) {
+            "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
+            "ass", "ssa" -> MimeTypes.TEXT_SSA
+            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
+            "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
+            "pgs" -> MimeTypes.APPLICATION_PGS
+            else -> null
+        }
     }
 
     private fun startPositionTracking() {

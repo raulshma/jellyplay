@@ -514,6 +514,11 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         return "${server.address}/Videos/$itemId/stream?mediaSourceId=$mediaSourceId&startTimeTicks=$startTimeTicks&api_key=${user.accessToken}"
     }
 
+    override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
+        val server = _currentServer.value ?: return ""
+        return if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
+    }
+
     private fun org.jellyfin.sdk.model.api.BaseItemDto.toMediaItem() = MediaItem(
         id = id.toString(),
         name = name ?: "",

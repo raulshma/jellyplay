@@ -16,4 +16,6 @@ interface PlaybackRepository {
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 
     fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+
+    fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 }

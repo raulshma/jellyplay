@@ -55,6 +55,20 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
+    fun pauseDownload(item: DownloadItem) {
+        viewModelScope.launch {
+            downloadRepository.pauseDownload(item.id)
+            workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+        }
+    }
+
+    fun resumeDownload(item: DownloadItem) {
+        viewModelScope.launch {
+            downloadRepository.resumeDownload(item.id)
+            enqueueDownloadWorker(item.id)
+        }
+    }
+
     fun deleteDownload(item: DownloadItem) {
         viewModelScope.launch {
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")

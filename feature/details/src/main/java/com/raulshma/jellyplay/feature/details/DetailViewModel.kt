@@ -16,11 +16,15 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -30,7 +34,11 @@ class DetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : ViewModel() {
+
+    val preferences = preferencesStore.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     private val _detail = mutableStateOf<MediaDetail?>(null)
     val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail

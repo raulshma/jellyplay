@@ -16,12 +16,16 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -41,7 +45,11 @@ class AudioPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : ViewModel() {
+
+    val preferences = preferencesStore.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     private var exoPlayer by mutableStateOf<ExoPlayer?>(null)
     private var mediaSession by mutableStateOf<MediaSession?>(null)

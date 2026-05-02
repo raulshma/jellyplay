@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -80,33 +81,41 @@ fun MediaDetailScreen(
     val detail by viewModel.detail
     val isLoading by viewModel.isLoading
     val error by viewModel.error
+    val preferences by viewModel.preferences
 
-    when {
-        isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+    val currentItem = detail?.item
+    val backdropUrl = currentItem?.let { viewModel.getBackdropUrl(it.id) }
+
+    ArtworkThemeWrapper(
+        imageUrl = backdropUrl,
+        dynamicTheming = preferences.dynamicTheming,
+    ) {
+        when {
+            isLoading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
-        }
-        error != null -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedButton(onClick = { viewModel.loadItem(itemId) }) {
-                        Text("Retry")
+            error != null -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(onClick = { viewModel.loadItem(itemId) }) {
+                            Text("Retry")
+                        }
                     }
                 }
             }
-        }
-        detail != null -> {
-            DetailContent(
-                detail = detail!!,
-                seasons = viewModel.seasons,
-                episodes = viewModel.episodes,
-                getImageUrl = { viewModel.getImageUrl(it) },
-                getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                isDownloading = viewModel.isDownloading,
-                downloadStarted = viewModel.downloadStarted,
+            detail != null -> {
+                DetailContent(
+                    detail = detail!!,
+                    seasons = viewModel.seasons,
+                    episodes = viewModel.episodes,
+                    getImageUrl = { viewModel.getImageUrl(it) },
+                    getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                    isDownloading = viewModel.isDownloading,
+                    downloadStarted = viewModel.downloadStarted,
                 onPlayClick = { sourceId, start -> onPlayClick(itemId, sourceId, start) },
                 onAudioClick = { onAudioClick(itemId) },
                 onDownloadClick = { viewModel.startDownload() },
@@ -235,10 +244,11 @@ private fun DetailContent(
                                 text = it,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+            )
+            }
+        }
+    }
+}
                 Column {
                     IconButton(onClick = onToggleFavorite) {
                         Icon(

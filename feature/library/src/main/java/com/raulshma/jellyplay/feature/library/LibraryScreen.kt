@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateTopPadding
+import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -86,9 +88,7 @@ fun LibraryScreen(
             )
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 if (folders.size > 1) {
                     LazyRow(
@@ -149,7 +149,12 @@ fun LibraryScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(120.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = padding.calculateTopPadding() + 8.dp,
+                            bottom = padding.calculateBottomPadding() + 8.dp,
+                        ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize(),

@@ -20,6 +20,10 @@ interface DownloadRepository {
 
     suspend fun cancelDownload(id: String): Result<Unit>
 
+    suspend fun pauseDownload(id: String): Result<Unit>
+
+    suspend fun resumeDownload(id: String): Result<Unit>
+
     suspend fun deleteDownload(id: String): Result<Unit>
 
     suspend fun retryDownload(id: String): Result<Unit>

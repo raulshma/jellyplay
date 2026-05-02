@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,25 +39,22 @@ fun TracksScreen(
             TopAppBar(title = { Text("Tracks") })
         },
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             when (val refreshState = tracks.loadState.refresh) {
                 is LoadState.Loading -> {
-                    LoadingScreen()
+                    LoadingScreen(modifier = Modifier.padding(padding))
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
                         message = refreshState.error.localizedMessage ?: "Failed to load tracks",
                         onRetry = { tracks.refresh() },
+                        modifier = Modifier.padding(padding),
                     )
                 }
                 is LoadState.NotLoading -> {
                     if (tracks.itemCount == 0) {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().padding(padding),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -66,7 +65,10 @@ fun TracksScreen(
                         }
                     } else {
                         LazyColumn(
-                            contentPadding = PaddingValues(vertical = 8.dp),
+                            contentPadding = PaddingValues(
+                                top = padding.calculateTopPadding() + 8.dp,
+                                bottom = padding.calculateBottomPadding() + 8.dp,
+                            ),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {

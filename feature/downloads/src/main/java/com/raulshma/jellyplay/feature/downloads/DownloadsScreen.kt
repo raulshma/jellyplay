@@ -22,6 +22,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,6 +111,8 @@ fun DownloadsScreen(
                             }
                         },
                         onCancel = { viewModel.cancelDownload(download) },
+                        onPause = { viewModel.pauseDownload(download) },
+                        onResume = { viewModel.resumeDownload(download) },
                         onDelete = { viewModel.deleteDownload(download) },
                         onRetry = { viewModel.retryDownload(download) },
                     )
@@ -124,6 +128,8 @@ private fun DownloadItemRow(
     formatBytes: (Long) -> String,
     onClick: () -> Unit,
     onCancel: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -231,7 +237,39 @@ private fun DownloadItemRow(
             }
 
             when (item.status) {
-                DownloadStatus.DOWNLOADING, DownloadStatus.PENDING -> {
+                DownloadStatus.DOWNLOADING -> {
+                    IconButton(onClick = onPause) {
+                        Icon(
+                            Icons.Default.Pause,
+                            "Pause",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    IconButton(onClick = onCancel) {
+                        Icon(
+                            Icons.Default.Delete,
+                            "Cancel",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                DownloadStatus.PENDING -> {
+                    IconButton(onClick = onCancel) {
+                        Icon(
+                            Icons.Default.Delete,
+                            "Cancel",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                DownloadStatus.PAUSED -> {
+                    IconButton(onClick = onResume) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            "Resume",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     IconButton(onClick = onCancel) {
                         Icon(
                             Icons.Default.Delete,

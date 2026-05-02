@@ -3,6 +3,8 @@ package com.raulshma.jellyplay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)
@@ -21,6 +24,9 @@ class MainViewModel @Inject constructor(
 
     val isAuthenticated = authRepository.isAuthenticated
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val preferences = preferencesStore.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     init {
         viewModelScope.launch {
