@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
-    val downloads by viewModel.downloads
+    val downloads = viewModel.downloads
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Downloads") }) }

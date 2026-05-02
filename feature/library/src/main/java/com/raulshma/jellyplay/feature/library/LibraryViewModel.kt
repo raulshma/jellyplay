@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.library
 
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,38 +13,22 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@Stable
-class LibraryState {
-    var folders by mutableStateOf<List<LibraryFolder>>(emptyList())
-        private set
-    var items by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-    var selectedFolder by mutableStateOf<LibraryFolder?>(null)
-        private set
-
-    fun updateFolders(folders: List<LibraryFolder>) { this.folders = folders }
-    fun updateItems(items: List<MediaItem>) { this.items = items }
-    fun setLoading(loading: Boolean) { isLoading = loading }
-    fun setError(error: String?) { this.error = error }
-    fun selectFolder(folder: LibraryFolder?) { selectedFolder = folder }
-}
-
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
 ) : ViewModel() {
 
-    private val _state = LibraryState()
-    val folders get() = _state.folders
-    val items get() = _state.items
-    val isLoading get() = _state.isLoading
-    val error get() = _state.error
-    val selectedFolder get() = _state.selectedFolder
+    private val _folders = mutableStateOf<List<LibraryFolder>>(emptyList())
+    val folders: androidx.compose.runtime.State<List<LibraryFolder>> get() = _folders
+    private val _items = mutableStateOf<List<MediaItem>>(emptyList())
+    val items: androidx.compose.runtime.State<List<MediaItem>> get() = _items
+    private val _isLoading = mutableStateOf(true)
+    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
+    private val _error = mutableStateOf<String?>(null)
+    val error: androidx.compose.runtime.State<String?> get() = _error
+    private val _selectedFolder = mutableStateOf<LibraryFolder?>(null)
+    val selectedFolder: androidx.compose.runtime.State<LibraryFolder?> get() = _selectedFolder
 
     init {
         loadFolders()
@@ -55,28 +38,28 @@ class LibraryViewModel @Inject constructor(
     private fun loadFolders() {
         viewModelScope.launch {
             mediaRepository.getLibraryFolders()
-                .onSuccess { _state.updateFolders(it) }
-                .onFailure { _state.setError(it.message ?: "Failed to load folders") }
+                .onSuccess { _folders.value = it }
+                .onFailure { _error.value = it.message ?: "Failed to load folders" }
         }
     }
 
     private fun loadItems(parentId: String? = null) {
         viewModelScope.launch {
-            _state.setLoading(true)
+            _isLoading.value = true
             mediaRepository.getMediaItems(parentId = parentId, limit = 100)
-                .onSuccess { _state.updateItems(it.items) }
-                .onFailure { _state.setError(it.message ?: "Failed to load items") }
-            _state.setLoading(false)
+                .onSuccess { _items.value = it.items }
+                .onFailure { _error.value = it.message ?: "Failed to load items" }
+            _isLoading.value = false
         }
     }
 
     fun selectFolder(folder: LibraryFolder?) {
-        _state.selectFolder(folder)
+        _selectedFolder.value = folder
         loadItems(folder?.id)
     }
 
     fun refresh() {
-        loadItems(_state.selectedFolder?.id)
+        loadItems(_selectedFolder.value?.id)
     }
 
     fun getImageUrl(itemId: String): String =

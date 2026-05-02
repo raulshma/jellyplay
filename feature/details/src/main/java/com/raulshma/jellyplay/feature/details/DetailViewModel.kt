@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -13,44 +12,32 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@Stable
-class DetailState {
-    var detail by mutableStateOf<MediaDetail?>(null)
-        private set
-    var isLoading by mutableStateOf(false)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-
-    fun setDetail(detail: MediaDetail?) { this.detail = detail }
-    fun setLoading(loading: Boolean) { isLoading = loading }
-    fun setError(error: String?) { this.error = error }
-}
-
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
 ) : ViewModel() {
 
-    private val _state = DetailState()
-    val detail get() = _state.detail
-    val isLoading get() = _state.isLoading
-    val error get() = _state.error
+    private val _detail = mutableStateOf<MediaDetail?>(null)
+    val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail
+    private val _isLoading = mutableStateOf(false)
+    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
+    private val _error = mutableStateOf<String?>(null)
+    val error: androidx.compose.runtime.State<String?> get() = _error
 
     fun loadItem(itemId: String) {
         viewModelScope.launch {
-            _state.setLoading(true)
-            _state.setError(null)
+            _isLoading.value = true
+            _error.value = null
             mediaRepository.getMediaDetail(itemId)
-                .onSuccess { _state.setDetail(it) }
-                .onFailure { _state.setError(it.message ?: "Failed to load details") }
-            _state.setLoading(false)
+                .onSuccess { _detail.value = it }
+                .onFailure { _error.value = it.message ?: "Failed to load details" }
+            _isLoading.value = false
         }
     }
 
     fun toggleFavorite() {
-        val itemId = _state.detail?.item?.id ?: return
+        val itemId = _detail.value?.item?.id ?: return
         viewModelScope.launch {
             mediaRepository.toggleFavorite(itemId)
                 .onSuccess { loadItem(itemId) }
@@ -58,7 +45,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun markPlayed() {
-        val itemId = _state.detail?.item?.id ?: return
+        val itemId = _detail.value?.item?.id ?: return
         viewModelScope.launch {
             mediaRepository.markPlayed(itemId)
             loadItem(itemId)
@@ -66,7 +53,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun markUnplayed() {
-        val itemId = _state.detail?.item?.id ?: return
+        val itemId = _detail.value?.item?.id ?: return
         viewModelScope.launch {
             mediaRepository.markUnplayed(itemId)
             loadItem(itemId)

@@ -25,14 +25,14 @@ class VideoPlayerViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
 ) : ViewModel() {
 
-    var exoPlayer by mutableStateOf<ExoPlayer?>(null)
-        private set
-    var streamUrl by mutableStateOf<String?>(null)
-        private set
-    var title by mutableStateOf("")
-        private set
-    var isPlaying by mutableStateOf(false)
-        private set
+    private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
+    val exoPlayer get() = _exoPlayer
+    private var _streamUrl by mutableStateOf<String?>(null)
+    val streamUrl get() = _streamUrl
+    private var _title by mutableStateOf("")
+    val title get() = _title
+    private var _isPlaying by mutableStateOf(false)
+    val isPlaying get() = _isPlaying
 
     private var progressJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
@@ -40,12 +40,12 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         currentItemId = itemId
-        exoPlayer = ExoPlayer.Builder(context).build()
+        _exoPlayer = ExoPlayer.Builder(context).build()
 
         viewModelScope.launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    title = detail.item.name
+                    _title = detail.item.name
                     val source = if (mediaSourceId != null) {
                         detail.mediaSources.find { it.id == mediaSourceId }
                     } else {
@@ -56,7 +56,7 @@ class VideoPlayerViewModel @Inject constructor(
                         source?.id ?: "",
                         startPositionTicks,
                     )
-                    streamUrl = url
+                    _streamUrl = url
 
                     playbackRepository.reportPlaybackStart(
                         com.raulshma.jellyplay.core.model.PlaybackStartInfo(
@@ -69,7 +69,7 @@ class VideoPlayerViewModel @Inject constructor(
                     startProgressReporting()
                 }
                 .onFailure {
-                    title = "Error loading media"
+                    _title = "Error loading media"
                 }
         }
     }
@@ -79,7 +79,7 @@ class VideoPlayerViewModel @Inject constructor(
         progressJob = viewModelScope.launch {
             while (true) {
                 delay(10_000)
-                val player = exoPlayer ?: continue
+                val player = _exoPlayer ?: continue
                 val itemId = currentItemId ?: continue
                 playbackRepository.reportPlaybackProgress(
                     com.raulshma.jellyplay.core.model.PlaybackProgress(
@@ -95,7 +95,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun release() {
         viewModelScope.launch {
-            val player = exoPlayer ?: return@launch
+            val player = _exoPlayer ?: return@launch
             val itemId = currentItemId ?: return@launch
             playbackRepository.reportPlaybackStopped(
                 itemId = itemId,
@@ -104,13 +104,13 @@ class VideoPlayerViewModel @Inject constructor(
             )
         }
         progressJob?.cancel()
-        exoPlayer?.release()
-        exoPlayer = null
+        _exoPlayer?.release()
+        _exoPlayer = null
     }
 
     override fun onCleared() {
         super.onCleared()
-        exoPlayer?.release()
-        exoPlayer = null
+        _exoPlayer?.release()
+        _exoPlayer = null
     }
 }

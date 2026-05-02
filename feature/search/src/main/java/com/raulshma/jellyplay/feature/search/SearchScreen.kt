@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.search
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,11 +17,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import androidx.compose.foundation.lazy.grid.items
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,16 +31,16 @@ fun SearchScreen(
     onItemClick: (String) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
-    val query by viewModel.query
-    val results by viewModel.results
-    val isSearching by viewModel.isSearching
+    val query = viewModel.query
+    val searchResults = viewModel.results
+    val isSearching = viewModel.isSearching
 
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("Search") })
         },
     ) { padding ->
-        androidx.compose.foundation.layout.Column(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
@@ -53,15 +57,14 @@ fun SearchScreen(
             )
             if (isSearching) {
                 LoadingScreen()
-            } else if (results.isNotEmpty()) {
+            } else if (searchResults.isNotEmpty()) {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(120.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(count = results.size, key = { results[it].id }) { index ->
-                        val item = results[index]
+                    items(searchResults, key = { it.id }) { item ->
                         PosterCard(
                             item = item,
                             imageUrl = viewModel.getImageUrl(item.id),
@@ -70,9 +73,9 @@ fun SearchScreen(
                     }
                 }
             } else if (query.isNotBlank()) {
-                androidx.compose.foundation.layout.Box(
+                Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "No results found",

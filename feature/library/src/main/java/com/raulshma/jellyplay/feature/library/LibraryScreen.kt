@@ -1,11 +1,15 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -40,7 +44,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val folders by viewModel.folders
-    val items by viewModel.items
+    val mediaItems by viewModel.items
     val isLoading by viewModel.isLoading
     val error by viewModel.error
     val selectedFolder by viewModel.selectedFolder
@@ -50,8 +54,8 @@ fun LibraryScreen(
             TopAppBar(title = { Text("Library") })
         },
     ) { padding ->
-        if (isLoading && items.isEmpty()) {
-            androidx.compose.foundation.layout.Box(
+        if (isLoading && mediaItems.isEmpty()) {
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
@@ -59,20 +63,20 @@ fun LibraryScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else if (error != null && items.isEmpty()) {
+        } else if (error != null && mediaItems.isEmpty()) {
             ErrorScreen(
                 message = error!!,
                 onRetry = { viewModel.refresh() },
                 modifier = Modifier.padding(padding),
             )
         } else {
-            androidx.compose.foundation.layout.Column(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
             ) {
                 if (folders.size > 1) {
-                    androidx.compose.foundation.lazy.LazyRow(
+                    LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -100,7 +104,7 @@ fun LibraryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(items, key = { it.id }) { item ->
+                    items(mediaItems, key = { it.id }) { item ->
                         PosterCard(
                             item = item,
                             imageUrl = viewModel.getImageUrl(item.id),

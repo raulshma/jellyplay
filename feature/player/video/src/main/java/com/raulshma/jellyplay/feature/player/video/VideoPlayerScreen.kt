@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -100,9 +101,9 @@ fun VideoPlayerScreen(
     }
 
     val exoPlayer = viewModel.exoPlayer
-    val streamUrl by viewModel.streamUrl
-    val title by viewModel.title
-    val isPlaying by viewModel.isPlaying
+    val streamUrl = viewModel.streamUrl
+    val title = viewModel.title
+    val isPlaying = viewModel.isPlaying
 
     LaunchedEffect(streamUrl) {
         streamUrl?.let { url ->

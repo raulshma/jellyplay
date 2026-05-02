@@ -31,9 +31,9 @@ fun HomeScreen(
     onItemClick: (String) -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
-    val sections by viewModel.sections
-    val isLoading by viewModel.isLoading
-    val error by viewModel.error
+    val sections = viewModel.sections
+    val isLoading = viewModel.isLoading
+    val error = viewModel.error
 
     Scaffold(
         topBar = {

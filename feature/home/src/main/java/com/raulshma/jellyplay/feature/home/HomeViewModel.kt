@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.home
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,8 +12,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@Stable
-class HomeState {
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    private val mediaRepository: MediaRepository,
+    private val playbackRepository: PlaybackRepository,
+) : ViewModel() {
+
     var sections by mutableStateOf<List<HomeSection>>(emptyList())
         private set
     var isLoading by mutableStateOf(true)
@@ -23,38 +25,22 @@ class HomeState {
     var error by mutableStateOf<String?>(null)
         private set
 
-    fun updateSections(sections: List<HomeSection>) { this.sections = sections }
-    fun setLoading(loading: Boolean) { isLoading = loading }
-    fun setError(error: String?) { this.error = error }
-}
-
-@HiltViewModel
-class HomeViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
-
-    private val _state = HomeState()
-    val sections get() = _state.sections
-    val isLoading get() = _state.isLoading
-    val error get() = _state.error
-
     init {
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _state.setLoading(true)
-            _state.setError(null)
+            isLoading = true
+            error = null
             mediaRepository.getHomeSections()
                 .onSuccess { sections ->
-                    _state.updateSections(sections)
+                    this@HomeViewModel.sections = sections
                 }
                 .onFailure {
-                    _state.setError(it.message ?: "Failed to load home sections")
+                    error = it.message ?: "Failed to load home sections"
                 }
-            _state.setLoading(false)
+            isLoading = false
         }
     }
 
