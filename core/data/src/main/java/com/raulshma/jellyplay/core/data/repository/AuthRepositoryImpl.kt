@@ -6,15 +6,10 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +18,6 @@ class AuthRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val serverDao: ServerDao,
     private val preferencesStore: UserPreferencesStore,
-    private val coroutineScope: CoroutineScope,
 ) : AuthRepository {
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->

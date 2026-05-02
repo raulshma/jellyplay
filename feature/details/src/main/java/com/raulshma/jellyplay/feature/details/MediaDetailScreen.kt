@@ -110,6 +110,7 @@ fun MediaDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailContent(
     detail: MediaDetail,
