@@ -135,7 +135,7 @@ private fun MainContent(
                     audioPlayerSection(navigator)
                     downloadsSection(navigator)
                     settingsSection(navigator, onLogout)
-                    musicSection()
+                    musicSection(navigator)
                 },
             )
     }

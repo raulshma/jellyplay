@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material3.BottomSheetScaffold
@@ -89,6 +90,7 @@ import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import kotlinx.coroutines.delay
 
@@ -114,6 +116,7 @@ fun VideoPlayerScreen(
     var showChapterPicker by remember { mutableStateOf(false) }
     var showPlaybackInfo by remember { mutableStateOf(false) }
     var showAspectRatio by remember { mutableStateOf(false) }
+    var showSubtitleStyle by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
 
@@ -157,6 +160,7 @@ fun VideoPlayerScreen(
     val aspectRatio = viewModel.aspectRatio
     val playMethod = viewModel.playMethod
     val trickplayUrl = viewModel.trickplayUrl
+    val subtitleStyle = viewModel.subtitleStyle
 
     LaunchedEffect(streamUrl) {
         streamUrl?.let { url ->
@@ -297,6 +301,7 @@ fun VideoPlayerScreen(
                 onSpeedClick = { showSpeedPicker = true },
                 onAudioClick = { showAudioPicker = true },
                 onSubtitleClick = { showSubtitlePicker = true },
+                onSubtitleStyleClick = { showSubtitleStyle = true },
                 onChapterClick = { showChapterPicker = true },
                 onInfoClick = { showPlaybackInfo = true },
                 onAspectRatioClick = { showAspectRatio = true },
@@ -384,6 +389,14 @@ fun VideoPlayerScreen(
             currentRatio = aspectRatio,
             onSelect = { viewModel.setAspectRatio(it) },
             onDismiss = { showAspectRatio = false },
+        )
+    }
+
+    if (showSubtitleStyle) {
+        SubtitleStyleSheet(
+            currentStyle = subtitleStyle,
+            onStyleChange = { viewModel.setSubtitleStyle(it) },
+            onDismiss = { showSubtitleStyle = false },
         )
     }
 }
@@ -534,6 +547,7 @@ private fun PlayerControls(
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
+    onSubtitleStyleClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -664,6 +678,9 @@ private fun PlayerControls(
                     }
                     IconButton(onClick = onSubtitleClick) {
                         Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
+                    }
+                    IconButton(onClick = onSubtitleStyleClick) {
+                        Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                     if (hasChapters) {
                         IconButton(onClick = onChapterClick) {

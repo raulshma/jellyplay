@@ -14,9 +14,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.StreamingQuality
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +113,40 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            SettingItem(
+                icon = Icons.Default.HighQuality,
+                title = "Streaming Quality",
+                subtitle = when (preferences.streamingQuality) {
+                    StreamingQuality.AUTO -> "Auto (adaptive)"
+                    StreamingQuality.LOW_360P -> "360p (Low)"
+                    StreamingQuality.SD_480P -> "480p (SD)"
+                    StreamingQuality.HD_720P -> "720p (HD)"
+                    StreamingQuality.FHD_1080P -> "1080p (Full HD)"
+                    StreamingQuality.UHD_4K -> "4K (Ultra HD)"
+                },
+                onClick = {
+                    val qualities = StreamingQuality.entries
+                    val currentIndex = qualities.indexOf(preferences.streamingQuality)
+                    val nextIndex = (currentIndex + 1) % qualities.size
+                    viewModel.setStreamingQuality(qualities[nextIndex])
+                },
+            ) {
+                Text(
+                    when (preferences.streamingQuality) {
+                        StreamingQuality.AUTO -> "Auto"
+                        StreamingQuality.LOW_360P -> "360p"
+                        StreamingQuality.SD_480P -> "480p"
+                        StreamingQuality.HD_720P -> "720p"
+                        StreamingQuality.FHD_1080P -> "1080p"
+                        StreamingQuality.UHD_4K -> "4K"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            HorizontalDivider()
+
             SettingsSectionHeader("Language")
 
             SettingItem(
@@ -124,6 +164,54 @@ fun SettingsScreen(
                 subtitle = preferences.preferredSubtitleLanguage ?: "Default",
                 onClick = { viewModel.setPreferredSubtitleLanguage(null) },
             )
+
+            HorizontalDivider()
+
+            SettingsSectionHeader("Storage")
+
+            SettingItem(
+                icon = Icons.Default.Storage,
+                title = "Cache Size",
+                subtitle = "${viewModel.cacheSizeMb} MB used",
+            )
+
+            SettingItem(
+                icon = Icons.Default.Delete,
+                title = "Clear Cache",
+                subtitle = "Free up storage space",
+                onClick = { viewModel.clearCache() },
+            )
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.Cached,
+                title = "Auto-delete Cache",
+                subtitle = "Automatically clear cache when storage is low",
+            ) {
+                Switch(
+                    checked = preferences.autoDeleteCache,
+                    onCheckedChange = { viewModel.setAutoDeleteCache(it) },
+                )
+            }
+
+            SettingItem(
+                icon = Icons.Default.Speed,
+                title = "Max Cache Size",
+                subtitle = "${preferences.maxCacheSizeMb} MB",
+                onClick = {
+                    val sizes = listOf(250, 500, 1000, 2000, 5000)
+                    val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
+                    val nextIndex = (currentIndex + 1) % sizes.size
+                    viewModel.setMaxCacheSize(sizes[nextIndex])
+                },
+            ) {
+                Text(
+                    "${preferences.maxCacheSizeMb} MB",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
 
             HorizontalDivider()
 

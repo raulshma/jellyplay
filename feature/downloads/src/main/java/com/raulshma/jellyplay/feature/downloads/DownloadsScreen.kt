@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
+    onPlayOffline: (filePath: String, title: String) -> Unit,
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -104,7 +105,7 @@ fun DownloadsScreen(
                         formatBytes = { viewModel.formatBytes(it) },
                         onClick = {
                             if (download.status == DownloadStatus.COMPLETED) {
-                                onItemClick(download.mediaItemId)
+                                onPlayOffline(download.downloadPath, download.name)
                             }
                         },
                         onCancel = { viewModel.cancelDownload(download) },

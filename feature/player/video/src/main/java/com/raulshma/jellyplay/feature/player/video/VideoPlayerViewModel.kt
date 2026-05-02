@@ -15,10 +15,12 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,6 +41,7 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : ViewModel() {
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
@@ -96,6 +99,9 @@ class VideoPlayerViewModel @Inject constructor(
     private var _trickplayUrl by mutableStateOf<String?>(null)
     val trickplayUrl get() = _trickplayUrl
 
+    private var _subtitleStyle by mutableStateOf(SubtitleStyle())
+    val subtitleStyle get() = _subtitleStyle
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
@@ -130,6 +136,12 @@ class VideoPlayerViewModel @Inject constructor(
         _mediaSession = MediaSession.Builder(context, player).build()
 
         startPositionTracking()
+
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                _subtitleStyle = prefs.subtitleStyle
+            }
+        }
 
         viewModelScope.launch {
             mediaRepository.getMediaDetail(itemId)
@@ -215,6 +227,13 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio = ratio
+    }
+
+    fun setSubtitleStyle(style: SubtitleStyle) {
+        _subtitleStyle = style
+        viewModelScope.launch {
+            preferencesStore.setSubtitleStyle(style)
+        }
     }
 
     fun getTrickplayImageUrl(positionMs: Long): String? {

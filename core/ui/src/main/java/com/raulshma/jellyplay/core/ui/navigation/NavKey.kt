@@ -36,6 +36,11 @@ sealed class Route : NavKey {
     @Serializable data class ArtistDetail(val artistId: String) : Route()
     @Serializable data class AlbumDetail(val albumId: String) : Route()
     @Serializable data class CollectionDetail(val collectionId: String) : Route()
+
+    @Serializable data class OfflinePlayer(
+        val filePath: String,
+        val title: String,
+    ) : Route()
 }
 
 val TOP_LEVEL_ROUTES = linkedMapOf(
