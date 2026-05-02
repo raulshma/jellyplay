@@ -3,11 +3,16 @@ package com.raulshma.jellyplay.feature.player.video
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,26 +25,42 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.ClosedCaptionOff
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,8 +70,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -58,12 +81,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import kotlinx.coroutines.delay
-import kotlin.math.abs
+
+private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
 @Composable
 fun VideoPlayerScreen(
@@ -78,6 +99,15 @@ fun VideoPlayerScreen(
 
     var isFullscreen by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
+    var showSpeedPicker by remember { mutableStateOf(false) }
+    var showAudioPicker by remember { mutableStateOf(false) }
+    var showSubtitlePicker by remember { mutableStateOf(false) }
+    var showChapterPicker by remember { mutableStateOf(false) }
+
+    var seekOffsetMs by remember { mutableLongStateOf(0L) }
+    var seekDirection by remember { mutableIntStateOf(0) }
+    var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
+    var volumeOverlay by remember { mutableFloatStateOf(-1f) }
 
     LaunchedEffect(itemId) {
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
@@ -87,7 +117,8 @@ fun VideoPlayerScreen(
         activity?.let {
             val window = it.window
             val controller = WindowCompat.getInsetsController(window, window.decorView)
-            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
@@ -103,7 +134,11 @@ fun VideoPlayerScreen(
     val exoPlayer = viewModel.exoPlayer
     val streamUrl = viewModel.streamUrl
     val title = viewModel.title
+    val subtitle = viewModel.subtitle
     val isPlaying = viewModel.isPlaying
+    val currentPosition = viewModel.currentPosition
+    val duration = viewModel.duration
+    val playbackSpeed = viewModel.playbackSpeed
 
     LaunchedEffect(streamUrl) {
         streamUrl?.let { url ->
@@ -124,6 +159,24 @@ fun VideoPlayerScreen(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { showControls = !showControls },
+                    onDoubleTap = { offset ->
+                        val width = size.width
+                        when {
+                            offset.x < width * 0.35 -> {
+                                seekDirection = -1
+                                seekOffsetMs = 10_000L
+                                exoPlayer?.seekBack()
+                            }
+                            offset.x > width * 0.65 -> {
+                                seekDirection = 1
+                                seekOffsetMs = 10_000L
+                                exoPlayer?.seekForward()
+                            }
+                            else -> {
+                                if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
+                            }
+                        }
+                    },
                 )
             },
     ) {
@@ -139,6 +192,48 @@ fun VideoPlayerScreen(
             )
         }
 
+        GestureOverlay(
+            seekDirection = seekDirection,
+            seekOffsetMs = seekOffsetMs,
+            brightnessValue = brightnessOverlay,
+            volumeValue = volumeOverlay,
+            onSeekGesture = { delta ->
+                exoPlayer?.let { player ->
+                    val newPos = (player.currentPosition + delta).coerceIn(0, player.duration.coerceAtLeast(0))
+                    player.seekTo(newPos)
+                }
+            },
+            onBrightnessGesture = { delta ->
+                activity?.let { act ->
+                    val window = act.window
+                    val layout = window.attributes
+                    val current = layout.screenBrightness
+                    val newBrightness = (current + delta).coerceIn(0f, 1f)
+                    layout.screenBrightness = newBrightness
+                    window.attributes = layout
+                    brightnessOverlay = newBrightness
+                }
+            },
+            onVolumeGesture = { delta ->
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.let { am ->
+                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                    val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                    val step = 1
+                    val newVol = if (delta > 0) (current + step).coerceAtMost(max)
+                    else (current - step).coerceAtLeast(0)
+                    am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                    volumeOverlay = newVol.toFloat() / max.toFloat()
+                }
+            },
+            onClearOverlays = {
+                seekDirection = 0
+                seekOffsetMs = 0L
+                brightnessOverlay = -1f
+                volumeOverlay = -1f
+            },
+        )
+
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn(),
@@ -146,22 +241,36 @@ fun VideoPlayerScreen(
         ) {
             PlayerControls(
                 title = title,
+                subtitle = subtitle,
                 isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                duration = duration,
+                playbackSpeed = playbackSpeed,
+                hasChapters = viewModel.chapters.isNotEmpty(),
                 exoPlayer = exoPlayer,
                 onPlayPause = {
                     if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
+                },
+                onSeek = { fraction ->
+                    if (duration > 0) {
+                        exoPlayer?.seekTo((fraction * duration).toLong())
+                    }
                 },
                 onBack = onBack,
                 onFullscreen = {
                     isFullscreen = !isFullscreen
                     activity?.let { act ->
-                        if (isFullscreen) {
-                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        act.requestedOrientation = if (isFullscreen) {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         } else {
-                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         }
                     }
                 },
+                onSpeedClick = { showSpeedPicker = true },
+                onAudioClick = { showAudioPicker = true },
+                onSubtitleClick = { showSubtitlePicker = true },
+                onChapterClick = { showChapterPicker = true },
                 isFullscreen = isFullscreen,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -174,32 +283,193 @@ fun VideoPlayerScreen(
             showControls = false
         }
     }
+
+    if (showSpeedPicker) {
+        SpeedPickerSheet(
+            currentSpeed = playbackSpeed,
+            onSelect = { viewModel.setPlaybackSpeed(it) },
+            onDismiss = { showSpeedPicker = false },
+        )
+    }
+
+    if (showAudioPicker) {
+        TrackPickerSheet(
+            title = "Audio",
+            tracks = viewModel.audioTracks,
+            onSelect = { viewModel.selectAudioTrack(it) },
+            onDismiss = { showAudioPicker = false },
+        )
+    }
+
+    if (showSubtitlePicker) {
+        TrackPickerSheet(
+            title = "Subtitles",
+            tracks = viewModel.subtitleTracks,
+            onSelect = { viewModel.selectSubtitleTrack(it) },
+            onDismiss = { showSubtitlePicker = false },
+        )
+    }
+
+    if (showChapterPicker) {
+        ChapterPickerSheet(
+            chapters = viewModel.chapters,
+            currentPositionMs = currentPosition,
+            onSelect = { positionTicks ->
+                exoPlayer?.seekTo(positionTicks / 10_000)
+                showChapterPicker = false
+            },
+            onDismiss = { showChapterPicker = false },
+        )
+    }
 }
 
 @Composable
+private fun GestureOverlay(
+    seekDirection: Int,
+    seekOffsetMs: Long,
+    brightnessValue: Float,
+    volumeValue: Float,
+    onSeekGesture: (Long) -> Unit,
+    onBrightnessGesture: (Float) -> Unit,
+    onVolumeGesture: (Float) -> Unit,
+    onClearOverlays: () -> Unit,
+) {
+    val activity = LocalContext.current.findActivity()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = {},
+                    onDragEnd = { onClearOverlays() },
+                    onDragCancel = { onClearOverlays() },
+                    onHorizontalDrag = { _, dragAmount ->
+                        if (kotlin.math.abs(dragAmount) > 20) {
+                            val seekDelta = ((dragAmount / size.width) * 120_000L).toLong()
+                            onSeekGesture(seekDelta)
+                        }
+                    },
+                )
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = {},
+                    onDragEnd = { onClearOverlays() },
+                    onDragCancel = { onClearOverlays() },
+                    onVerticalDrag = { change, dragAmount ->
+                        if (kotlin.math.abs(dragAmount) > 10) {
+                            val halfWidth = size.width / 2f
+                            if (change.position.x > halfWidth) {
+                                val delta = -(dragAmount / size.height) * 0.5f
+                                onVolumeGesture(delta)
+                            } else {
+                                val delta = -(dragAmount / size.height) * 0.5f
+                                onBrightnessGesture(delta)
+                            }
+                        }
+                    },
+                )
+            },
+    ) {
+        if (seekDirection != 0 && seekOffsetMs > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.7f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val icon = if (seekDirection < 0) Icons.Default.SkipPrevious else Icons.Default.SkipNext
+                        Icon(icon, null, tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${if (seekDirection < 0) "-" else "+"}${seekOffsetMs / 1000}s",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (brightnessValue >= 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 40.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.7f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("☀", fontSize = 14.sp, color = Color.White)
+                        Spacer(Modifier.width(6.dp))
+                        Text("${(brightnessValue * 100).toInt()}%", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        if (volumeValue >= 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = 40.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.7f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.VolumeUp, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("${(volumeValue * 100).toInt()}%", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun PlayerControls(
     title: String,
+    subtitle: String,
     isPlaying: Boolean,
-    exoPlayer: ExoPlayer?,
+    currentPosition: Long,
+    duration: Long,
+    playbackSpeed: Float,
+    hasChapters: Boolean,
+    exoPlayer: androidx.media3.exoplayer.ExoPlayer?,
     onPlayPause: () -> Unit,
+    onSeek: (Float) -> Unit,
     onBack: () -> Unit,
     onFullscreen: () -> Unit,
+    onSpeedClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onSubtitleClick: () -> Unit,
+    onChapterClick: () -> Unit,
     isFullscreen: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            exoPlayer?.let {
-                currentPosition = it.currentPosition
-                duration = it.duration.coerceAtLeast(0L)
-            }
-            delay(250)
-        }
-    }
-
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
@@ -218,14 +488,24 @@ private fun PlayerControls(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
 
@@ -235,7 +515,10 @@ private fun PlayerControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { exoPlayer?.seekBack() }) {
-                Icon(Icons.Default.SkipPrevious, "Rewind", tint = Color.White, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Default.SkipPrevious, "Rewind",
+                    tint = Color.White, modifier = Modifier.size(36.dp)
+                )
             }
             Spacer(Modifier.width(24.dp))
             IconButton(onClick = onPlayPause) {
@@ -248,7 +531,10 @@ private fun PlayerControls(
             }
             Spacer(Modifier.width(24.dp))
             IconButton(onClick = { exoPlayer?.seekForward() }) {
-                Icon(Icons.Default.SkipNext, "Forward", tint = Color.White, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Default.SkipNext, "Forward",
+                    tint = Color.White, modifier = Modifier.size(36.dp)
+                )
             }
         }
 
@@ -280,11 +566,7 @@ private fun PlayerControls(
             }
             Slider(
                 value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                onValueChange = { fraction ->
-                    if (duration > 0) {
-                        exoPlayer?.seekTo((fraction * duration).toLong())
-                    }
-                },
+                onValueChange = onSeek,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -293,14 +575,185 @@ private fun PlayerControls(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Row {
+                    IconButton(onClick = onSpeedClick) {
+                        val speedText = if (playbackSpeed == 1.0f) "1x" else "${playbackSpeed}x"
+                        Text(speedText, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                    IconButton(onClick = onAudioClick) {
+                        Icon(Icons.Default.Audiotrack, "Audio", tint = Color.White)
+                    }
+                    IconButton(onClick = onSubtitleClick) {
+                        Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
+                    }
+                    if (hasChapters) {
+                        IconButton(onClick = onChapterClick) {
+                            Icon(Icons.Default.List, "Chapters", tint = Color.White)
+                        }
+                    }
+                }
                 IconButton(onClick = onFullscreen) {
                     Icon(
                         if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
                         if (isFullscreen) "Exit fullscreen" else "Fullscreen",
                         tint = Color.White,
                     )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedPickerSheet(
+    currentSpeed: Float,
+    onSelect: (Float) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text("Playback Speed", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SPEED_OPTIONS.forEach { speed ->
+                    FilterChip(
+                        selected = speed == currentSpeed,
+                        onClick = { onSelect(speed); onDismiss() },
+                        label = { Text(if (speed == 1.0f) "1x" else "${speed}x") },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrackPickerSheet(
+    title: String,
+    tracks: List<TrackOption>,
+    onSelect: (TrackOption) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyColumn {
+                itemsIndexed(tracks) { _, track ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelect(track)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            track.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (track.isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (track.isSelected) {
+                            Text("\u2713", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChapterPickerSheet(
+    chapters: List<com.raulshma.jellyplay.core.model.ChapterInfo>,
+    currentPositionMs: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Chapters",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyColumn {
+                itemsIndexed(chapters) { index, chapter ->
+                    val chapterMs = chapter.startPositionTicks / 10_000
+                    val isCurrentChapter = if (index < chapters.lastIndex) {
+                        val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
+                        currentPositionMs in chapterMs until nextChapterMs
+                    } else {
+                        currentPositionMs >= chapterMs
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(chapter.startPositionTicks) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                chapter.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isCurrentChapter) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isCurrentChapter) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                            Text(
+                                formatDuration(chapterMs),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (isCurrentChapter) {
+                            Text("►", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                        }
+                    }
                 }
             }
         }
@@ -327,3 +780,5 @@ private fun Context.findActivity(): Activity? {
     }
     return null
 }
+
+private fun mutableLongStateOf(initial: Long) = mutableStateOf(initial)

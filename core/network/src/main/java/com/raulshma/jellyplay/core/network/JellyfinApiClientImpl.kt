@@ -231,10 +231,58 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             itemId = uuid,
             limit = 12,
         ).content.items.map { it.toMediaItem() }
+        val chapters = item.chapters?.map { chapter ->
+            ChapterInfo(
+                name = chapter.name ?: "",
+                startPositionTicks = chapter.startPositionTicks ?: 0L,
+                imageDateModified = chapter.imageDateModified?.toString(),
+            )
+        } ?: emptyList()
+        val mediaSources = item.mediaSources?.map { source ->
+            com.raulshma.jellyplay.core.model.MediaSource(
+                id = source.id.toString(),
+                name = source.name ?: "",
+                container = source.container,
+                size = source.size,
+                bitrate = source.bitrate?.toLong(),
+                runTimeTicks = source.runTimeTicks,
+                supportsTranscoding = source.supportsTranscoding,
+                supportsDirectStream = source.supportsDirectStream,
+                supportsDirectPlay = source.supportsDirectPlay,
+                transcodeUrl = source.transcodingUrl,
+                path = source.path,
+                mediaStreams = source.mediaStreams?.map { stream ->
+                    com.raulshma.jellyplay.core.model.MediaStream(
+                        index = stream.index,
+                        type = when (stream.type) {
+                            org.jellyfin.sdk.model.api.MediaStreamType.VIDEO -> com.raulshma.jellyplay.core.model.StreamType.VIDEO
+                            org.jellyfin.sdk.model.api.MediaStreamType.AUDIO -> com.raulshma.jellyplay.core.model.StreamType.AUDIO
+                            org.jellyfin.sdk.model.api.MediaStreamType.SUBTITLE -> com.raulshma.jellyplay.core.model.StreamType.SUBTITLE
+                            else -> com.raulshma.jellyplay.core.model.StreamType.EMBEDDED_IMAGE
+                        },
+                        codec = stream.codec,
+                        language = stream.language,
+                        title = stream.title,
+                        displayTitle = stream.displayTitle,
+                        isDefault = stream.isDefault,
+                        isForced = stream.isForced,
+                        isExternal = stream.isExternal,
+                        width = stream.width,
+                        height = stream.height,
+                        bitRate = stream.bitRate?.toLong(),
+                        sampleRate = stream.sampleRate,
+                        channels = stream.channels,
+                        deliveryUrl = stream.deliveryUrl,
+                    )
+                } ?: emptyList(),
+            )
+        } ?: emptyList()
         MediaDetail(
             item = item.toMediaItem(),
             people = people,
             relatedItems = relatedItems,
+            chapters = chapters,
+            mediaSources = mediaSources,
         )
     }
 
@@ -347,20 +395,59 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
     }
 
     override suspend fun reportPlaybackStart(itemId: String, sessionId: String): Result<Unit> =
-        runCatching { /* TODO */ }
+        runCatching {
+            val uuid = java.util.UUID.fromString(itemId)
+            requireApi().playStateApi.reportPlaybackStart(
+                org.jellyfin.sdk.model.api.PlaybackStartInfo(
+                    canSeek = true,
+                    itemId = uuid,
+                    sessionId = sessionId,
+                    isPaused = false,
+                    isMuted = false,
+                    playMethod = org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY,
+                    repeatMode = org.jellyfin.sdk.model.api.RepeatMode.REPEAT_NONE,
+                    playbackOrder = org.jellyfin.sdk.model.api.PlaybackOrder.DEFAULT,
+                )
+            )
+        }
 
     override suspend fun reportPlaybackProgress(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
         isPaused: Boolean,
-    ): Result<Unit> = runCatching { /* TODO */ }
+    ): Result<Unit> = runCatching {
+        val uuid = java.util.UUID.fromString(itemId)
+        requireApi().playStateApi.reportPlaybackProgress(
+            org.jellyfin.sdk.model.api.PlaybackProgressInfo(
+                canSeek = true,
+                itemId = uuid,
+                sessionId = sessionId,
+                positionTicks = positionTicks,
+                isPaused = isPaused,
+                isMuted = false,
+                playMethod = org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY,
+                repeatMode = org.jellyfin.sdk.model.api.RepeatMode.REPEAT_NONE,
+                playbackOrder = org.jellyfin.sdk.model.api.PlaybackOrder.DEFAULT,
+            )
+        )
+    }
 
     override suspend fun reportPlaybackStopped(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ): Result<Unit> = runCatching { /* TODO */ }
+    ): Result<Unit> = runCatching {
+        val uuid = java.util.UUID.fromString(itemId)
+        requireApi().playStateApi.reportPlaybackStopped(
+            org.jellyfin.sdk.model.api.PlaybackStopInfo(
+                itemId = uuid,
+                sessionId = sessionId,
+                positionTicks = positionTicks,
+                failed = false,
+            )
+        )
+    }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int, tag: String?): String {
         val server = _currentServer.value ?: return ""

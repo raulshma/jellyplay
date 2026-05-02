@@ -12,6 +12,7 @@ fun EntryProviderScope<NavKey>.homeSection(
     entry<Route.Home> {
         HomeScreen(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onSettingsClick = { navigator.navigate(Route.Settings) },
         )
     }
 }
