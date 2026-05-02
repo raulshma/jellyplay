@@ -348,6 +348,20 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             ).content.items.map { it.toMediaItem() }
         }
 
+    override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
+        runCatching {
+            val response = requireApi().itemsApi.getItems(
+                personIds = listOf(java.util.UUID.fromString(personId)),
+                limit = limit,
+                recursive = true,
+                fields = listOf(
+                    org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                    org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                ),
+            ).content
+            response.items.map { it.toMediaItem() }
+        }
+
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = runCatching {
         requireApi().tvShowsApi.getSeasons(
             seriesId = java.util.UUID.fromString(seriesId),

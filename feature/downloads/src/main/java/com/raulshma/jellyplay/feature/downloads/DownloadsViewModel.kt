@@ -1,15 +1,98 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class DownloadsViewModel @Inject constructor() : ViewModel() {
+class DownloadsViewModel @Inject constructor(
+    @ApplicationContext context: Context,
+    private val downloadRepository: DownloadRepository,
+) : ViewModel() {
+
+    private val workManager = WorkManager.getInstance(context)
+
     var downloads by mutableStateOf<List<DownloadItem>>(emptyList())
         private set
+    var totalStorageBytes by mutableLongStateOf(0L)
+        private set
+    var isLoading by mutableStateOf(true)
+        private set
+
+    init {
+        viewModelScope.launch {
+            downloadRepository.getAllDownloads().collectLatest { items ->
+                downloads = items
+                isLoading = false
+                totalStorageBytes = downloadRepository.getTotalDownloadedBytes()
+            }
+        }
+    }
+
+    fun cancelDownload(item: DownloadItem) {
+        viewModelScope.launch {
+            downloadRepository.cancelDownload(item.id)
+            workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+        }
+    }
+
+    fun deleteDownload(item: DownloadItem) {
+        viewModelScope.launch {
+            workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+            downloadRepository.deleteDownload(item.id)
+            totalStorageBytes = downloadRepository.getTotalDownloadedBytes()
+        }
+    }
+
+    fun retryDownload(item: DownloadItem) {
+        viewModelScope.launch {
+            downloadRepository.retryDownload(item.id)
+            enqueueDownloadWorker(item.id)
+        }
+    }
+
+    private fun enqueueDownloadWorker(downloadId: String) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setConstraints(constraints)
+            .setInputData(
+                Data.Builder()
+                    .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
+                    .build()
+            )
+            .build()
+        workManager.enqueueUniqueWork(
+            "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId",
+            ExistingWorkPolicy.REPLACE,
+            workRequest,
+        )
+    }
+
+    fun formatBytes(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
+        else -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))
+    }
 }

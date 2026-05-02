@@ -22,7 +22,7 @@ object DatabaseModule {
         context,
         JellyPlayDatabase::class.java,
         "jellyplay.db",
-    ).build()
+    ).fallbackToDestructiveMigration().build()
 
     @Provides
     fun provideServerDao(database: JellyPlayDatabase) = database.serverDao()

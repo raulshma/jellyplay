@@ -9,10 +9,12 @@ data class DownloadItem(
     val name: String,
     val mediaType: MediaType,
     val downloadPath: String,
+    val downloadUrl: String,
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
     val status: DownloadStatus,
     val mediaSourceId: String? = null,
+    val imageUrl: String? = null,
 )
 
 @Serializable

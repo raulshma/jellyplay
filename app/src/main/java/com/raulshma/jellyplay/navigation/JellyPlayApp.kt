@@ -30,8 +30,10 @@ import com.raulshma.jellyplay.core.ui.navigation.TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
+import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
+import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -129,6 +131,8 @@ private fun MainContent(
                 searchSection(navigator)
                 detailsSection(navigator)
                 videoPlayerSection(navigator)
+                audioPlayerSection(navigator)
+                downloadsSection(navigator)
                 settingsSection(navigator, onLogout)
             },
         )

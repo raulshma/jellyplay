@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.details.MediaDetailScreen
+import com.raulshma.jellyplay.feature.details.PersonDetailScreen
 
 fun EntryProviderScope<NavKey>.detailsSection(
     navigator: Navigator,
@@ -17,6 +18,18 @@ fun EntryProviderScope<NavKey>.detailsSection(
                     Route.VideoPlayer(itemId, mediaSourceId, startPosition)
                 )
             },
+            onAudioClick = { itemId ->
+                navigator.navigate(Route.AudioPlayer(itemId))
+            },
+            onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.PersonDetail> { key ->
+        PersonDetailScreen(
+            personId = key.personId,
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onBack = { navigator.goBack() },
         )

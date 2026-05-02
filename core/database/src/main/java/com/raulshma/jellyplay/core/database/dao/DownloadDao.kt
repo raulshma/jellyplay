@@ -32,4 +32,10 @@ interface DownloadDao {
 
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun deleteDownloadById(id: String)
+
+    @Query("SELECT COALESCE(SUM(downloadedBytes), 0) FROM downloads WHERE status = 'COMPLETED'")
+    suspend fun getTotalDownloadedBytes(): Long
+
+    @Query("UPDATE downloads SET downloadedBytes = :bytes, status = :status WHERE id = :id")
+    suspend fun updateProgress(id: String, bytes: Long, status: String)
 }

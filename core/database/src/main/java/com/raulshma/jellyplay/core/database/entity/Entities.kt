@@ -20,9 +20,11 @@ data class DownloadEntity(
     val name: String,
     val mediaType: String,
     val downloadPath: String,
+    val downloadUrl: String,
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
     val status: String,
     val mediaSourceId: String? = null,
+    val imageUrl: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )

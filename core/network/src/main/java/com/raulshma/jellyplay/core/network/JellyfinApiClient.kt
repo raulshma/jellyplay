@@ -74,6 +74,11 @@ interface JellyfinApiClient {
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
+    suspend fun getItemsByPerson(
+        personId: String,
+        limit: Int = 50,
+    ): Result<List<MediaItem>>
+
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
 
     suspend fun getEpisodes(

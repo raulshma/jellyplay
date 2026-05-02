@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -51,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,7 +67,9 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 fun MediaDetailScreen(
     itemId: String,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
+    onAudioClick: (itemId: String) -> Unit,
     onItemClick: (itemId: String) -> Unit,
+    onPersonClick: (personId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -97,13 +101,20 @@ fun MediaDetailScreen(
         detail != null -> {
             DetailContent(
                 detail = detail!!,
+                seasons = viewModel.seasons,
+                episodes = viewModel.episodes,
                 getImageUrl = { viewModel.getImageUrl(it) },
                 getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                isDownloading = viewModel.isDownloading,
+                downloadStarted = viewModel.downloadStarted,
                 onPlayClick = { sourceId, start -> onPlayClick(itemId, sourceId, start) },
+                onAudioClick = { onAudioClick(itemId) },
+                onDownloadClick = { viewModel.startDownload() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onMarkPlayed = { viewModel.markPlayed() },
                 onMarkUnplayed = { viewModel.markUnplayed() },
                 onItemClick = onItemClick,
+                onPersonClick = onPersonClick,
                 onBack = onBack,
             )
         }
@@ -114,17 +125,25 @@ fun MediaDetailScreen(
 @Composable
 private fun DetailContent(
     detail: MediaDetail,
+    seasons: List<MediaItem>,
+    episodes: Map<String, List<MediaItem>>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
+    isDownloading: Boolean,
+    downloadStarted: Boolean,
     onPlayClick: (mediaSourceId: String?, startPosition: Long) -> Unit,
+    onAudioClick: () -> Unit,
+    onDownloadClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
     onItemClick: (String) -> Unit,
+    onPersonClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val item = detail.item
     val scrollState = rememberScrollState()
+    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
 
     Box(modifier = Modifier.fillMaxSize()) {
         MediaImage(
@@ -241,9 +260,13 @@ private fun DetailContent(
             ) {
                 Button(
                     onClick = {
-                        val sourceId = detail.mediaSources.firstOrNull()?.id
-                        val startPos = item.playbackPositionTicks ?: 0L
-                        onPlayClick(sourceId, startPos)
+                        if (isAudio) {
+                            onAudioClick()
+                        } else {
+                            val sourceId = detail.mediaSources.firstOrNull()?.id
+                            val startPos = item.playbackPositionTicks ?: 0L
+                            onPlayClick(sourceId, startPos)
+                        }
                     },
                     modifier = Modifier.weight(1f),
                 ) {
@@ -262,13 +285,30 @@ private fun DetailContent(
                         contentDescription = null,
                     )
                 }
+                if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = onDownloadClick,
+                        enabled = !isDownloading && !downloadStarted,
+                    ) {
+                        if (isDownloading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else if (downloadStarted) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        } else {
+                            Icon(Icons.Default.Download, contentDescription = null)
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
 
             item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
                 Text(
-                    text = genres.joinToString(" • "),
+                    text = genres.joinToString(" \u2022 "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -291,6 +331,20 @@ private fun DetailContent(
                 Spacer(Modifier.height(16.dp))
             }
 
+            if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
+                SeasonsSection(
+                    seriesItem = item,
+                    seasons = seasons,
+                    episodes = episodes,
+                    getImageUrl = getImageUrl,
+                    onEpisodeClick = { episode ->
+                        val sourceId = null
+                        val startPos = episode.playbackPositionTicks ?: 0L
+                        onPlayClick(sourceId, startPos)
+                    },
+                )
+            }
+
             if (detail.people.isNotEmpty()) {
                 Text(
                     text = "Cast & Crew",
@@ -306,6 +360,7 @@ private fun DetailContent(
                         PersonItem(
                             person = person,
                             imageUrl = getImageUrl(person.id),
+                            onClick = { onPersonClick(person.id) },
                         )
                     }
                 }
@@ -340,13 +395,160 @@ private fun DetailContent(
 }
 
 @Composable
+private fun SeasonsSection(
+    seriesItem: MediaItem,
+    seasons: List<MediaItem>,
+    episodes: Map<String, List<MediaItem>>,
+    getImageUrl: (String) -> String,
+    onEpisodeClick: (MediaItem) -> Unit,
+) {
+    var selectedSeasonIndex by remember { mutableStateOf(0) }
+
+    Text(
+        text = "Seasons",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    Spacer(Modifier.height(8.dp))
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(seasons.indices.toList()) { index ->
+            val season = seasons[index]
+            val isSelected = index == selectedSeasonIndex
+            androidx.compose.material3.FilterChip(
+                selected = isSelected,
+                onClick = { selectedSeasonIndex = index },
+                label = {
+                    Text(
+                        season.name ?: "Season ${season.indexNumber ?: index + 1}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+            )
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
+
+    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
+    val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
+
+    if (seasonEpisodes.isNotEmpty()) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            seasonEpisodes.forEach { episode ->
+                EpisodeRow(
+                    episode = episode,
+                    getImageUrl = getImageUrl,
+                    onClick = { onEpisodeClick(episode) },
+                )
+            }
+        }
+    } else if (selectedSeason != null) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+}
+
+@Composable
+private fun EpisodeRow(
+    episode: MediaItem,
+    getImageUrl: (String) -> String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaImage(
+                url = getImageUrl(episode.id),
+                contentDescription = episode.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            if (episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0) {
+                val progress = if (episode.runTimeTicks != null && episode.runTimeTicks!! > 0) {
+                    (episode.playbackPositionTicks!!.toFloat() / episode.runTimeTicks!!).coerceIn(0f, 1f)
+                } else 0f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = buildString {
+                    episode.indexNumber?.let { append("E$it. ") }
+                    append(episode.name)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            episode.overview?.let { overview ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (episode.runTimeTicks != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "${episode.runTimeTicks!! / 600_000_000}min",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PersonItem(
     person: PersonInfo,
     imageUrl: String,
+    onClick: () -> Unit = {},
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(80.dp),
+        modifier = Modifier
+            .width(80.dp)
+            .clickable(onClick = onClick),
     ) {
         MediaImage(
             url = imageUrl,
