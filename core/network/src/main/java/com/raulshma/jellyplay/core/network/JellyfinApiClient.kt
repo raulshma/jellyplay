@@ -86,6 +86,18 @@ interface JellyfinApiClient {
         seasonId: String,
     ): Result<List<MediaItem>>
 
+    suspend fun getCollectionItems(
+        collectionId: String,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<SearchResult>
+
+    suspend fun getTags(
+        parentId: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 100,
+    ): Result<List<String>>
+
     suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun markUnplayed(itemId: String): Result<Unit>

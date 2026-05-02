@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
+import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
@@ -121,20 +122,21 @@ private fun MainContent(
     ) { innerPadding ->
         val currentBackStack = navigationState.backStacks[currentTopLevel] ?: return@Scaffold
 
-        NavDisplay(
-            backStack = currentBackStack,
-            onBack = { navigator.goBack() },
-            modifier = Modifier.padding(innerPadding),
-            entryProvider = entryProvider {
-                homeSection(navigator)
-                librarySection(navigator)
-                searchSection(navigator)
-                detailsSection(navigator)
-                videoPlayerSection(navigator)
-                audioPlayerSection(navigator)
-                downloadsSection(navigator)
-                settingsSection(navigator, onLogout)
-            },
-        )
+            NavDisplay(
+                backStack = currentBackStack,
+                onBack = { navigator.goBack() },
+                modifier = Modifier.padding(innerPadding),
+                entryProvider = entryProvider {
+                    homeSection(navigator)
+                    librarySection(navigator)
+                    searchSection(navigator)
+                    detailsSection(navigator)
+                    videoPlayerSection(navigator)
+                    audioPlayerSection(navigator)
+                    downloadsSection(navigator)
+                    settingsSection(navigator, onLogout)
+                    musicSection()
+                },
+            )
     }
 }

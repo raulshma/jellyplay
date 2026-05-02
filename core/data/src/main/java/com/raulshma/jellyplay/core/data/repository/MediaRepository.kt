@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Genre
+import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository {
 
@@ -33,6 +35,20 @@ interface MediaRepository {
         limit: Int = 50,
     ): Result<SearchResult>
 
+    fun getMediaItemsPaged(
+        parentId: String? = null,
+        mediaTypes: List<MediaType>? = null,
+        genres: List<String>? = null,
+        years: List<Int>? = null,
+        sortBy: String = "SortName",
+        sortOrder: String = "Ascending",
+    ): Flow<PagingData<MediaItem>>
+
+    fun searchPaged(
+        query: String,
+        mediaTypes: List<MediaType>? = null,
+    ): Flow<PagingData<MediaItem>>
+
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
@@ -42,6 +58,18 @@ interface MediaRepository {
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
 
     suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
+
+    suspend fun getCollectionItems(
+        collectionId: String,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<SearchResult>
+
+    suspend fun getTags(
+        parentId: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 100,
+    ): Result<List<String>>
 
     suspend fun markPlayed(itemId: String): Result<Unit>
 

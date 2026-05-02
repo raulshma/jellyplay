@@ -17,6 +17,9 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -78,6 +81,21 @@ class VideoPlayerViewModel @Inject constructor(
     private var _mediaDetail by mutableStateOf<MediaDetail?>(null)
     val mediaDetail get() = _mediaDetail
 
+    private var _currentMediaSource by mutableStateOf<MediaSource?>(null)
+    val currentMediaSource get() = _currentMediaSource
+
+    private var _mediaStreams by mutableStateOf<List<MediaStream>>(emptyList())
+    val mediaStreams get() = _mediaStreams
+
+    private var _aspectRatio by mutableStateOf(AspectRatio.FIT)
+    val aspectRatio get() = _aspectRatio
+
+    private var _playMethod by mutableStateOf("Direct Play")
+    val playMethod get() = _playMethod
+
+    private var _trickplayUrl by mutableStateOf<String?>(null)
+    val trickplayUrl get() = _trickplayUrl
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
@@ -126,6 +144,16 @@ class VideoPlayerViewModel @Inject constructor(
                     } else {
                         detail.mediaSources.firstOrNull()
                     }
+                    _currentMediaSource = source
+                    _mediaStreams = source?.mediaStreams ?: emptyList()
+
+                    _playMethod = when {
+                        source?.supportsDirectPlay == true -> "Direct Play"
+                        source?.supportsDirectStream == true -> "Direct Stream"
+                        source?.supportsTranscoding == true -> "Transcode"
+                        else -> "Direct Play"
+                    }
+
                     val url = playbackRepository.getStreamUrl(
                         itemId,
                         source?.id ?: "",
@@ -183,6 +211,17 @@ class VideoPlayerViewModel @Inject constructor(
         }
         selector.setParameters(params)
         updateTracks()
+    }
+
+    fun setAspectRatio(ratio: AspectRatio) {
+        _aspectRatio = ratio
+    }
+
+    fun getTrickplayImageUrl(positionMs: Long): String? {
+        val itemId = currentItemId ?: return null
+        val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
+        val index = (positionMs / 10_000).toInt()
+        return "$server/Items/$itemId/Trickplay/320/$index.jpg"
     }
 
     private fun updateTracks() {

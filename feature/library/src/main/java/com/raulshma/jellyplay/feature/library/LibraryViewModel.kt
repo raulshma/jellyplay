@@ -1,17 +1,46 @@
 package com.raulshma.jellyplay.feature.library
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class LibraryFilters(
+    val mediaTypes: List<MediaType> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+    val sortBy: SortOption = SortOption.SORT_NAME,
+    val playedStatus: PlayedStatus = PlayedStatus.ALL,
+)
+
+enum class SortOption(val displayName: String, val apiValue: String) {
+    SORT_NAME("Name", "SortName"),
+    YEAR_DESC("Newest", "ProductionYear,SortName"),
+    YEAR_ASC("Oldest", "ProductionYear,SortName"),
+    RATING("Rating", "CommunityRating,SortName"),
+    DATE_ADDED("Recently Added", "DateCreated,SortName"),
+}
+
+enum class PlayedStatus(val displayName: String) {
+    ALL("All"),
+    PLAYED("Played"),
+    UNPLAYED("Unplayed"),
+}
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -19,47 +48,80 @@ class LibraryViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
 ) : ViewModel() {
 
-    private val _folders = mutableStateOf<List<LibraryFolder>>(emptyList())
-    val folders: androidx.compose.runtime.State<List<LibraryFolder>> get() = _folders
-    private val _items = mutableStateOf<List<MediaItem>>(emptyList())
-    val items: androidx.compose.runtime.State<List<MediaItem>> get() = _items
-    private val _isLoading = mutableStateOf(true)
-    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
-    private val _error = mutableStateOf<String?>(null)
-    val error: androidx.compose.runtime.State<String?> get() = _error
-    private val _selectedFolder = mutableStateOf<LibraryFolder?>(null)
-    val selectedFolder: androidx.compose.runtime.State<LibraryFolder?> get() = _selectedFolder
+    private val _folders = MutableStateFlow<List<LibraryFolder>>(emptyList())
+    val folders: StateFlow<List<LibraryFolder>> = _folders.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _selectedFolder = MutableStateFlow<LibraryFolder?>(null)
+    val selectedFolder: StateFlow<LibraryFolder?> = _selectedFolder.asStateFlow()
+
+    private val _filters = MutableStateFlow(LibraryFilters())
+    val filters: StateFlow<LibraryFilters> = _filters.asStateFlow()
+
+    private val _genres = MutableStateFlow<List<Genre>>(emptyList())
+    val genres: StateFlow<List<Genre>> = _genres.asStateFlow()
+
+    private val _showFilters = MutableStateFlow(false)
+    val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val pagedItems: Flow<PagingData<MediaItem>> = _selectedFolder
+        .flatMapLatest { folder ->
+            mediaRepository.getMediaItemsPaged(
+                parentId = folder?.id,
+                mediaTypes = _filters.value.mediaTypes.ifEmpty { null },
+                genres = _filters.value.genres.ifEmpty { null },
+                years = _filters.value.years.ifEmpty { null },
+                sortBy = _filters.value.sortBy.apiValue,
+            )
+        }
+        .cachedIn(viewModelScope)
 
     init {
         loadFolders()
-        loadItems()
+        loadGenres()
     }
 
     private fun loadFolders() {
         viewModelScope.launch {
+            _isLoading.value = true
             mediaRepository.getLibraryFolders()
                 .onSuccess { _folders.value = it }
                 .onFailure { _error.value = it.message ?: "Failed to load folders" }
+            _isLoading.value = false
         }
     }
 
-    private fun loadItems(parentId: String? = null) {
+    private fun loadGenres() {
         viewModelScope.launch {
-            _isLoading.value = true
-            mediaRepository.getMediaItems(parentId = parentId, limit = 100)
-                .onSuccess { _items.value = it.items }
-                .onFailure { _error.value = it.message ?: "Failed to load items" }
-            _isLoading.value = false
+            mediaRepository.getGenres()
+                .onSuccess { _genres.value = it }
         }
     }
 
     fun selectFolder(folder: LibraryFolder?) {
         _selectedFolder.value = folder
-        loadItems(folder?.id)
+    }
+
+    fun updateFilters(newFilters: LibraryFilters) {
+        _filters.value = newFilters
+    }
+
+    fun toggleShowFilters() {
+        _showFilters.value = !_showFilters.value
+    }
+
+    fun clearFilters() {
+        _filters.value = LibraryFilters()
     }
 
     fun refresh() {
-        loadItems(_selectedFolder.value?.id)
+        loadFolders()
     }
 
     fun getImageUrl(itemId: String): String =

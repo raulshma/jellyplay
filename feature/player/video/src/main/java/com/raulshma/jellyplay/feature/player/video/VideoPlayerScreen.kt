@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -30,10 +31,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -81,11 +84,17 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import kotlinx.coroutines.delay
 
 private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
     itemId: String,
@@ -103,6 +112,10 @@ fun VideoPlayerScreen(
     var showAudioPicker by remember { mutableStateOf(false) }
     var showSubtitlePicker by remember { mutableStateOf(false) }
     var showChapterPicker by remember { mutableStateOf(false) }
+    var showPlaybackInfo by remember { mutableStateOf(false) }
+    var showAspectRatio by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPositionMs by remember { mutableLongStateOf(0L) }
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -139,6 +152,11 @@ fun VideoPlayerScreen(
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
     val playbackSpeed = viewModel.playbackSpeed
+    val currentMediaSource = viewModel.currentMediaSource
+    val mediaStreams = viewModel.mediaStreams
+    val aspectRatio = viewModel.aspectRatio
+    val playMethod = viewModel.playMethod
+    val trickplayUrl = viewModel.trickplayUrl
 
     LaunchedEffect(streamUrl) {
         streamUrl?.let { url ->
@@ -256,6 +274,15 @@ fun VideoPlayerScreen(
                         exoPlayer?.seekTo((fraction * duration).toLong())
                     }
                 },
+                onSeekStart = {
+                    isSeeking = true
+                },
+                onSeekEnd = {
+                    isSeeking = false
+                },
+                onSeekPositionChange = { positionMs ->
+                    seekPositionMs = positionMs
+                },
                 onBack = onBack,
                 onFullscreen = {
                     isFullscreen = !isFullscreen
@@ -271,9 +298,22 @@ fun VideoPlayerScreen(
                 onAudioClick = { showAudioPicker = true },
                 onSubtitleClick = { showSubtitlePicker = true },
                 onChapterClick = { showChapterPicker = true },
+                onInfoClick = { showPlaybackInfo = true },
+                onAspectRatioClick = { showAspectRatio = true },
                 isFullscreen = isFullscreen,
                 modifier = Modifier.fillMaxSize(),
             )
+
+            if (isSeeking) {
+                val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
+                TrickplayOverlay(
+                    imageUrl = trickplayImageUrl,
+                    positionMs = seekPositionMs,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 80.dp),
+                )
+            }
         }
     }
 
@@ -319,6 +359,31 @@ fun VideoPlayerScreen(
                 showChapterPicker = false
             },
             onDismiss = { showChapterPicker = false },
+        )
+    }
+
+    if (showPlaybackInfo) {
+        ModalBottomSheet(
+            onDismissRequest = { showPlaybackInfo = false },
+            sheetState = rememberModalBottomSheetState(),
+        ) {
+            PlaybackInfoOverlay(
+                mediaSource = currentMediaSource,
+                mediaStreams = mediaStreams,
+                playMethod = playMethod,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+            )
+        }
+    }
+
+    if (showAspectRatio) {
+        AspectRatioSheet(
+            currentRatio = aspectRatio,
+            onSelect = { viewModel.setAspectRatio(it) },
+            onDismiss = { showAspectRatio = false },
         )
     }
 }
@@ -461,12 +526,17 @@ private fun PlayerControls(
     exoPlayer: androidx.media3.exoplayer.ExoPlayer?,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
+    onSeekStart: () -> Unit,
+    onSeekEnd: () -> Unit,
+    onSeekPositionChange: (Long) -> Unit,
     onBack: () -> Unit,
     onFullscreen: () -> Unit,
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onChapterClick: () -> Unit,
+    onInfoClick: () -> Unit,
+    onAspectRatioClick: () -> Unit,
     isFullscreen: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -566,7 +636,13 @@ private fun PlayerControls(
             }
             Slider(
                 value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                onValueChange = onSeek,
+                onValueChange = { fraction ->
+                    onSeek(fraction)
+                    onSeekPositionChange((fraction * duration).toLong())
+                },
+                onValueChangeFinished = {
+                    onSeekEnd()
+                },
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -593,6 +669,12 @@ private fun PlayerControls(
                         IconButton(onClick = onChapterClick) {
                             Icon(Icons.Default.List, "Chapters", tint = Color.White)
                         }
+                    }
+                    IconButton(onClick = onAspectRatioClick) {
+                        Icon(Icons.Default.AspectRatio, "Aspect Ratio", tint = Color.White)
+                    }
+                    IconButton(onClick = onInfoClick) {
+                        Icon(Icons.Default.Info, "Playback Info", tint = Color.White)
                     }
                 }
                 IconButton(onClick = onFullscreen) {

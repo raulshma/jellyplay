@@ -1,5 +1,10 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
+import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -8,6 +13,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,6 +57,50 @@ class MediaRepositoryImpl @Inject constructor(
         limit: Int,
     ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit)
 
+    override fun getMediaItemsPaged(
+        parentId: String?,
+        mediaTypes: List<MediaType>?,
+        genres: List<String>?,
+        years: List<Int>?,
+        sortBy: String,
+        sortOrder: String,
+    ): Flow<PagingData<MediaItem>> = Pager(
+        config = PagingConfig(
+            pageSize = PAGE_SIZE,
+            enablePlaceholders = false,
+            prefetchDistance = PREFETCH_DISTANCE,
+        ),
+        pagingSourceFactory = {
+            MediaPagingSource(
+                mediaRepository = this,
+                parentId = parentId,
+                mediaTypes = mediaTypes,
+                genres = genres,
+                years = years,
+                sortBy = sortBy,
+                sortOrder = sortOrder,
+            )
+        },
+    ).flow
+
+    override fun searchPaged(
+        query: String,
+        mediaTypes: List<MediaType>?,
+    ): Flow<PagingData<MediaItem>> = Pager(
+        config = PagingConfig(
+            pageSize = PAGE_SIZE,
+            enablePlaceholders = false,
+            prefetchDistance = PREFETCH_DISTANCE,
+        ),
+        pagingSourceFactory = {
+            SearchPagingSource(
+                mediaRepository = this,
+                query = query,
+                mediaTypes = mediaTypes,
+            )
+        },
+    ).flow
+
     override suspend fun getGenres(parentId: String?): Result<List<Genre>> =
         apiClient.getGenres(parentId)
 
@@ -66,6 +116,18 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
         apiClient.getEpisodes(seriesId, seasonId)
 
+    override suspend fun getCollectionItems(
+        collectionId: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<SearchResult> = apiClient.getCollectionItems(collectionId, startIndex, limit)
+
+    override suspend fun getTags(
+        parentId: String?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<String>> = apiClient.getTags(parentId, startIndex, limit)
+
     override suspend fun markPlayed(itemId: String): Result<Unit> =
         apiClient.markPlayed(itemId)
 
@@ -74,4 +136,9 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
         apiClient.toggleFavorite(itemId)
+
+    companion object {
+        private const val PAGE_SIZE = 50
+        private const val PREFETCH_DISTANCE = 10
+    }
 }

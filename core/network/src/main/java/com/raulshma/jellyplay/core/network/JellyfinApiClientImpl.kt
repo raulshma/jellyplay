@@ -376,6 +376,43 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             ).content.items.map { it.toMediaItem() }
         }
 
+    override suspend fun getCollectionItems(
+        collectionId: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<SearchResult> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            parentId = java.util.UUID.fromString(collectionId),
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        SearchResult(
+            items = response.items.map { it.toMediaItem() },
+            totalRecordCount = response.totalRecordCount,
+            startIndex = startIndex,
+        )
+    }
+
+    override suspend fun getTags(
+        parentId: String?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<String>> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            parentId = parentId?.let { java.util.UUID.fromString(it) },
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.TAGS),
+        ).content
+        response.items.flatMap { it.tags ?: emptyList() }.distinct().sorted()
+    }
+
     override suspend fun markPlayed(itemId: String): Result<Unit> = runCatching {
         requireApi().playStateApi.markPlayedItem(
             userId = java.util.UUID.fromString(_currentUser.value?.id),
