@@ -103,6 +103,7 @@ dependencies {
     implementation(libs.compose.material3.adaptive)
     implementation(libs.compose.material3.adaptive.layout)
     implementation(libs.compose.material3.adaptive.navigation)
+    implementation("androidx.compose.animation:animation-android")
 
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)

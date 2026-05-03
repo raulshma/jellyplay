@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.navigation
 
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainViewModel
+import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.TOP_LEVEL_ROUTES
@@ -186,22 +188,28 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    NavDisplay(
-        backStack = currentBackStack,
-        onBack = { navigator.goBack() },
-        entryProvider = entryProvider {
-            homeSection(navigator)
-            librarySection(navigator)
-            searchSection(navigator)
-            liveTvSection(navigator)
-            detailsSection(navigator)
-            videoPlayerSection(navigator)
-            audioPlayerSection(navigator)
-            downloadsSection(navigator)
-            settingsSection(navigator, onLogout)
-            musicSection(navigator)
-            syncPlaySection(navigator)
-        },
-        modifier = modifier,
-    )
+    SharedTransitionLayout {
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalSharedTransitionScope provides this@SharedTransitionLayout
+        ) {
+            NavDisplay(
+                backStack = currentBackStack,
+                onBack = { navigator.goBack() },
+                entryProvider = entryProvider {
+                    homeSection(navigator)
+                    librarySection(navigator)
+                    searchSection(navigator)
+                    liveTvSection(navigator)
+                    detailsSection(navigator)
+                    videoPlayerSection(navigator)
+                    audioPlayerSection(navigator)
+                    downloadsSection(navigator)
+                    settingsSection(navigator, onLogout)
+                    musicSection(navigator)
+                    syncPlaySection(navigator)
+                },
+                modifier = modifier,
+            )
+        }
+    }
 }

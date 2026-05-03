@@ -157,6 +157,9 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+        if (currentItemId == itemId) return
+        releaseInternals()
+        playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
 
         val trackSelector = DefaultTrackSelector(context)
@@ -177,7 +180,9 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer = player
         player.addListener(playerListener)
 
-        val session = MediaSession.Builder(context, player).build()
+        val session = MediaSession.Builder(context, player)
+            .setId(playSessionId)
+            .build()
         _mediaSession = session
         sessionManager.setActiveSession(session)
 
@@ -565,16 +570,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun release() {
-        viewModelScope.launch {
-            val player = _exoPlayer ?: return@launch
-            val itemId = currentItemId ?: return@launch
-            playbackRepository.reportPlaybackStopped(
-                itemId = itemId,
-                sessionId = playSessionId,
-                positionTicks = player.currentPosition * 10_000,
-            )
-        }
+    private fun releaseInternals() {
         progressJob?.cancel()
         positionJob?.cancel()
         _exoPlayer?.removeListener(playerListener)
@@ -585,19 +581,25 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer = null
         _trackSelector = null
         dialogueBoost.detach()
+    }
+
+    fun release() {
+        viewModelScope.launch {
+            val player = _exoPlayer ?: return@launch
+            val itemId = currentItemId ?: return@launch
+            playbackRepository.reportPlaybackStopped(
+                itemId = itemId,
+                sessionId = playSessionId,
+                positionTicks = player.currentPosition * 10_000,
+            )
+        }
+        releaseInternals()
         castManager.release()
     }
 
     override fun onCleared() {
         super.onCleared()
-        progressJob?.cancel()
-        positionJob?.cancel()
-        _exoPlayer?.removeListener(playerListener)
-        _mediaSession?.let { sessionManager.clearSession(it) }
-        _mediaSession?.release()
-        _exoPlayer?.release()
-        _exoPlayer = null
-        dialogueBoost.detach()
+        releaseInternals()
     }
 }
 

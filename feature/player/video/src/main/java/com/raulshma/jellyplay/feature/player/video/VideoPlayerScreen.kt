@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -37,8 +38,6 @@ import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
@@ -91,6 +90,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
@@ -111,8 +111,8 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
+    val sharedTransitionScope = LocalSharedTransitionScope.current
 
-    var isFullscreen by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showAudioPicker by remember { mutableStateOf(false) }
@@ -143,6 +143,7 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         activity?.let {
+            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = it.window
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
@@ -151,6 +152,7 @@ fun VideoPlayerScreen(
         }
         onDispose {
             activity?.let {
+                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 val window = it.window
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
@@ -198,6 +200,18 @@ fun VideoPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .then(
+                if (sharedTransitionScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElementWithCallerManagedVisibility(
+                            rememberSharedContentState(key = "backdrop_$itemId"),
+                            visible = true,
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { showControls = !showControls },
@@ -356,16 +370,6 @@ fun VideoPlayerScreen(
                     seekPositionMs = positionMs
                 },
                 onBack = onBack,
-                onFullscreen = {
-                    isFullscreen = !isFullscreen
-                    activity?.let { act ->
-                        act.requestedOrientation = if (isFullscreen) {
-                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        } else {
-                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                        }
-                    }
-                },
                 onSpeedClick = { showSpeedPicker = true },
                 onAudioClick = { showAudioPicker = true },
                 onSubtitleClick = { showSubtitlePicker = true },
@@ -376,7 +380,6 @@ fun VideoPlayerScreen(
                 onAspectRatioClick = { showAspectRatio = true },
                 onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
                 dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
-                isFullscreen = isFullscreen,
                 isCasting = isCasting,
                 onCastClick = { viewModel.castToDevice() },
                 onOcrClick = {
@@ -734,7 +737,6 @@ private fun PlayerControls(
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit,
     onBack: () -> Unit,
-    onFullscreen: () -> Unit,
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
@@ -745,7 +747,6 @@ private fun PlayerControls(
     onAspectRatioClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     dialogueBoostEnabled: Boolean,
-    isFullscreen: Boolean,
     isCasting: Boolean = false,
     onCastClick: () -> Unit = {},
     onOcrClick: () -> Unit = {},
@@ -913,13 +914,6 @@ private fun PlayerControls(
                             modifier = Modifier.size(20.dp),
                         )
                     }
-                }
-                IconButton(onClick = onFullscreen) {
-                    Icon(
-                        if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                        if (isFullscreen) "Exit fullscreen" else "Fullscreen",
-                        tint = Color.White,
-                    )
                 }
             }
         }

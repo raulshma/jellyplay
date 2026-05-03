@@ -16,6 +16,7 @@ class PlaybackSessionManager @Inject constructor(
     val currentSession: MediaSession? get() = _currentSession
 
     fun setActiveSession(session: MediaSession) {
+        _currentSession?.release()
         _currentSession = session
         val intent = Intent(context, JellyPlayPlaybackService::class.java)
         context.startForegroundService(intent)

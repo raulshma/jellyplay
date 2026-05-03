@@ -411,7 +411,9 @@ class AudioPlayerViewModel @Inject constructor(
         player.addListener(playerListener)
 
         exoPlayer = player
-        val session = MediaSession.Builder(context, player).build()
+        val session = MediaSession.Builder(context, player)
+            .setId(playSessionId)
+            .build()
         mediaSession = session
         sessionManager.setActiveSession(session)
         return player

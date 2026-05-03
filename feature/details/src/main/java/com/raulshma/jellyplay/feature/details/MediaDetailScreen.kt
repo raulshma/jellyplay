@@ -43,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.os.StatFs
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +68,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
@@ -160,6 +162,7 @@ private fun DetailContent(
     val scrollState = rememberScrollState()
     val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         MediaImage(
@@ -167,7 +170,19 @@ private fun DetailContent(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp),
+                .height(300.dp)
+                .then(
+                    if (sharedTransitionScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElementWithCallerManagedVisibility(
+                                rememberSharedContentState(key = "backdrop_${item.id}"),
+                                visible = true,
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                ),
             contentScale = ContentScale.Crop,
         )
 
@@ -372,7 +387,7 @@ private fun DetailContent(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(detail.people, key = { it.id }) { person ->
+                    items(detail.people, key = { "person_${it.id}" }) { person ->
                         PersonItem(
                             person = person,
                             imageUrl = getImageUrl(person.id),
@@ -394,7 +409,7 @@ private fun DetailContent(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(detail.relatedItems, key = { it.id }) { related ->
+                    items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
                         PosterCard(
                             item = related,
                             imageUrl = getImageUrl(related.id),

@@ -254,6 +254,7 @@ class JellyfinApiClientImpl @Inject constructor(
             ),
         ).content
         (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+            .distinctBy { it.id }
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = apiResult {
@@ -314,7 +315,7 @@ class JellyfinApiClientImpl @Inject constructor(
         val client = requireApi()
         val uuid = java.util.UUID.fromString(itemId)
         val item = client.userLibraryApi.getItem(itemId = uuid).content
-        val people = item.people?.map { person ->
+        val people = (item.people?.map { person ->
             PersonInfo(
                 id = person.id.toString(),
                 name = person.name ?: "",
@@ -322,11 +323,13 @@ class JellyfinApiClientImpl @Inject constructor(
                 type = person.type?.serialName ?: "",
                 primaryImageTag = person.primaryImageTag,
             )
-        } ?: emptyList()
+        } ?: emptyList()).distinctBy { it.id }
         val relatedItems = client.libraryApi.getSimilarItems(
             itemId = uuid,
             limit = 12,
         ).content.items.map { it.toMediaItem() }
+            .distinctBy { it.id }
+            .filter { it.id != itemId }
         val chapters = item.chapters?.map { chapter ->
             ChapterInfo(
                 name = chapter.name ?: "",
