@@ -143,7 +143,6 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         activity?.let {
-            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = it.window
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
@@ -159,6 +158,12 @@ fun VideoPlayerScreen(
             }
             viewModel.release()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        // Wait for shared element transition to finish before forcing landscape
+        kotlinx.coroutines.delay(400)
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 
     BackHandler {
@@ -338,76 +343,75 @@ fun VideoPlayerScreen(
             }
         }
 
+        PlayerControls(
+            title = title,
+            subtitle = subtitle,
+            isPlaying = isPlaying,
+            currentPosition = currentPosition,
+            duration = duration,
+            playbackSpeed = playbackSpeed,
+            hasChapters = viewModel.chapters.isNotEmpty(),
+            exoPlayer = exoPlayer,
+            isVisible = showControls,
+            onPlayPause = {
+                if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
+            },
+            onSeek = { fraction ->
+                if (duration > 0) {
+                    exoPlayer?.seekTo((fraction * duration).toLong())
+                }
+            },
+            onSeekStart = {
+                isSeeking = true
+            },
+            onSeekEnd = {
+                isSeeking = false
+            },
+            onSeekPositionChange = { positionMs ->
+                seekPositionMs = positionMs
+            },
+            onBack = onBack,
+            onSpeedClick = { showSpeedPicker = true },
+            onAudioClick = { showAudioPicker = true },
+            onSubtitleClick = { showSubtitlePicker = true },
+            onSubtitleStyleClick = { showSubtitleStyle = true },
+            onSecondarySubtitleClick = { showSecondarySubtitlePicker = true },
+            onChapterClick = { showChapterPicker = true },
+            onInfoClick = { showPlaybackInfo = true },
+            onAspectRatioClick = { showAspectRatio = true },
+            onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
+            dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
+            isCasting = isCasting,
+            onCastClick = { viewModel.castToDevice() },
+            onOcrClick = {
+                val pv = playerViewRef
+                val bitmap = if (pv != null && pv.width > 0 && pv.height > 0) {
+                    try {
+                        android.graphics.Bitmap.createBitmap(pv.width, pv.height, android.graphics.Bitmap.Config.ARGB_8888).also {
+                            pv.draw(android.graphics.Canvas(it))
+                        }
+                    } catch (_: Exception) { null }
+                } else null
+                viewModel.captureOcrSubtitle(bitmap)
+                showOcrResult = true
+            },
+            isOcrRunning = viewModel.isOcrRunning,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls && isSeeking,
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            PlayerControls(
-                title = title,
-                subtitle = subtitle,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                playbackSpeed = playbackSpeed,
-                hasChapters = viewModel.chapters.isNotEmpty(),
-                exoPlayer = exoPlayer,
-                onPlayPause = {
-                    if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
-                },
-                onSeek = { fraction ->
-                    if (duration > 0) {
-                        exoPlayer?.seekTo((fraction * duration).toLong())
-                    }
-                },
-                onSeekStart = {
-                    isSeeking = true
-                },
-                onSeekEnd = {
-                    isSeeking = false
-                },
-                onSeekPositionChange = { positionMs ->
-                    seekPositionMs = positionMs
-                },
-                onBack = onBack,
-                onSpeedClick = { showSpeedPicker = true },
-                onAudioClick = { showAudioPicker = true },
-                onSubtitleClick = { showSubtitlePicker = true },
-                onSubtitleStyleClick = { showSubtitleStyle = true },
-                onSecondarySubtitleClick = { showSecondarySubtitlePicker = true },
-                onChapterClick = { showChapterPicker = true },
-                onInfoClick = { showPlaybackInfo = true },
-                onAspectRatioClick = { showAspectRatio = true },
-                onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
-                dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
-                isCasting = isCasting,
-                onCastClick = { viewModel.castToDevice() },
-                onOcrClick = {
-                    val pv = playerViewRef
-                    val bitmap = if (pv != null && pv.width > 0 && pv.height > 0) {
-                        try {
-                            android.graphics.Bitmap.createBitmap(pv.width, pv.height, android.graphics.Bitmap.Config.ARGB_8888).also {
-                                pv.draw(android.graphics.Canvas(it))
-                            }
-                        } catch (_: Exception) { null }
-                    } else null
-                    viewModel.captureOcrSubtitle(bitmap)
-                    showOcrResult = true
-                },
-                isOcrRunning = viewModel.isOcrRunning,
-                modifier = Modifier.fillMaxSize(),
+            val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
+            TrickplayOverlay(
+                imageUrl = trickplayImageUrl,
+                positionMs = seekPositionMs,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 80.dp),
             )
-
-            if (isSeeking) {
-                val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
-                TrickplayOverlay(
-                    imageUrl = trickplayImageUrl,
-                    positionMs = seekPositionMs,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 80.dp),
-                )
-            }
         }
     }
 
@@ -731,6 +735,7 @@ private fun PlayerControls(
     playbackSpeed: Float,
     hasChapters: Boolean,
     exoPlayer: androidx.media3.exoplayer.ExoPlayer?,
+    isVisible: Boolean,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
@@ -754,130 +759,169 @@ private fun PlayerControls(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent)
-                    )
-                )
-                .statusBarsPadding()
-                .padding(8.dp)
-                .align(Alignment.TopCenter),
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn() + androidx.compose.animation.slideInVertically { -it },
+            exit = fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+            modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
-                }
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)
+                        )
                     )
-                    if (subtitle.isNotBlank()) {
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f),
+                            title,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (subtitle.isNotBlank()) {
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.75f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Row(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(androidx.compose.animation.core.tween(300)) + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+            exit = fadeOut(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleOut(targetScale = 0.9f),
+            modifier = Modifier.align(Alignment.Center)
         ) {
-            IconButton(onClick = { exoPlayer?.seekBack() }) {
-                Icon(
-                    Icons.Default.SkipPrevious, "Rewind",
-                    tint = Color.White, modifier = Modifier.size(36.dp)
-                )
-            }
-            Spacer(Modifier.width(24.dp))
-            IconButton(onClick = onPlayPause) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    if (isPlaying) "Pause" else "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(64.dp),
-                )
-            }
-            Spacer(Modifier.width(24.dp))
-            IconButton(onClick = { exoPlayer?.seekForward() }) {
-                Icon(
-                    Icons.Default.SkipNext, "Forward",
-                    tint = Color.White, modifier = Modifier.size(36.dp)
-                )
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = { exoPlayer?.seekBack() },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.SkipPrevious, "Rewind",
+                        tint = Color.White, modifier = Modifier.size(32.dp)
+                    )
+                }
+                Spacer(Modifier.width(32.dp))
+                IconButton(
+                    onClick = onPlayPause,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    androidx.compose.animation.Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
+                        Icon(
+                            if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (playing) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(32.dp))
+                IconButton(
+                    onClick = { exoPlayer?.seekForward() },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.SkipNext, "Forward",
+                        tint = Color.White, modifier = Modifier.size(32.dp)
+                    )
+                }
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                    )
-                )
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .align(Alignment.BottomCenter),
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn() + androidx.compose.animation.slideInVertically { it },
+            exit = fadeOut() + androidx.compose.animation.slideOutVertically { it },
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                        )
+                    )
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
             ) {
-                Text(
-                    formatDuration(currentPosition),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        formatDuration(currentPosition),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                    )
+                    Text(
+                        if (duration > 0) formatDuration(duration) else "--:--",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                    )
+                }
+                Slider(
+                    value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                    onValueChange = { fraction ->
+                        onSeek(fraction)
+                        onSeekPositionChange((fraction * duration).toLong())
+                    },
+                    onValueChangeFinished = {
+                        onSeekEnd()
+                    },
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    if (duration > 0) formatDuration(duration) else "--:--",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                )
-            }
-            Slider(
-                value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                onValueChange = { fraction ->
-                    onSeek(fraction)
-                    onSeekPositionChange((fraction * duration).toLong())
-                },
-                onValueChangeFinished = {
-                    onSeekEnd()
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row {
-                    IconButton(onClick = onSpeedClick) {
-                        val speedText = if (playbackSpeed == 1.0f) "1x" else "${playbackSpeed}x"
-                        Text(speedText, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                    IconButton(onClick = onAudioClick) {
-                        Icon(Icons.Default.Audiotrack, "Audio", tint = Color.White)
-                    }
-                    IconButton(onClick = onSubtitleClick) {
-                        Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row {
+                        IconButton(onClick = onSpeedClick) {
+                            val speedText = if (playbackSpeed == 1.0f) "1x" else "${playbackSpeed}x"
+                            Text(speedText, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        IconButton(onClick = onAudioClick) {
+                            Icon(Icons.Default.Audiotrack, "Audio", tint = Color.White)
+                        }
+                        IconButton(onClick = onSubtitleClick) {
+                            Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
+                        }
                     IconButton(onClick = onSubtitleStyleClick) {
                         Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
@@ -913,6 +957,7 @@ private fun PlayerControls(
                             tint = Color.White,
                             modifier = Modifier.size(20.dp),
                         )
+                    }
                     }
                 }
             }

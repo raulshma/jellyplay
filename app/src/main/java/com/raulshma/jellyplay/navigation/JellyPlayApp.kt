@@ -117,9 +117,36 @@ private fun MainContent(
     val configuration = LocalConfiguration.current
     val isExpanded = configuration.screenWidthDp >= 600
 
-    if (isExpanded) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            if (!isPlayerScreen) {
+    Scaffold(
+        bottomBar = {
+            if (!isPlayerScreen && !isExpanded) {
+                NavigationBar {
+                    TOP_LEVEL_ROUTES.forEach { (route, label) ->
+                        NavigationBarItem(
+                            selected = route == currentTopLevel,
+                            onClick = { navigator.navigate(route) },
+                            icon = {
+                                when (route) {
+                                    Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
+                                    Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
+                                    Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
+                                    Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
+                                    else -> {}
+                                }
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+        ) {
+            if (!isPlayerScreen && isExpanded) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
@@ -146,43 +173,6 @@ private fun MainContent(
                 navigator = navigator,
                 onLogout = onLogout,
                 modifier = Modifier.weight(1f),
-            )
-        }
-    } else {
-        Scaffold(
-            bottomBar = {
-                if (!isPlayerScreen) {
-                    NavigationBar {
-                        TOP_LEVEL_ROUTES.forEach { (route, label) ->
-                            NavigationBarItem(
-                                selected = route == currentTopLevel,
-                                onClick = { navigator.navigate(route) },
-                                icon = {
-                                    when (route) {
-                                        Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-                                        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-                                        Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-                                        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-                                        else -> {}
-                                    }
-                                },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-                }
-            },
-        ) { innerPadding ->
-            MainNavDisplay(
-                navigationState = navigationState,
-                navigator = navigator,
-                onLogout = onLogout,
-                modifier = Modifier.padding(
-                    PaddingValues(
-                        top = 0.dp,
-                        bottom = innerPadding.calculateBottomPadding(),
-                    )
-                ),
             )
         }
     }
