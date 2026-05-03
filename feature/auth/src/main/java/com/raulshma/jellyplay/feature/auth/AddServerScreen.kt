@@ -30,6 +30,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
+
+private fun getRootCause(throwable: Throwable): Throwable {
+    var cause = throwable
+    while (cause.cause != null && cause.cause != cause) cause = cause.cause!!
+    return cause
+}
+
+private fun getConnectionErrorMessage(throwable: Throwable): String {
+    val root = getRootCause(throwable)
+    return when {
+        root is UnknownHostException -> "Unable to resolve server address"
+        root is ConnectException -> "Could not connect to server"
+        root is SocketTimeoutException -> "Connection timed out"
+        root is SSLException -> "SSL/TLS error - check server certificate"
+        root.message?.contains("cleartext", ignoreCase = true) == true -> "HTTP connections are not allowed for this server. Use HTTPS."
+        root.message?.contains("ssl", ignoreCase = true) == true -> "SSL/TLS error - check server certificate"
+        else -> root.message?.takeIf { it.isNotBlank() && !it.startsWith("org.") && it.length < 100 } ?: "Failed to connect to server"
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,8 +128,8 @@ fun AddServerScreen(
                         isConnecting = false
                         result.onSuccess {
                             onServerAdded(serverAddress.trim())
-                        }.onFailure {
-                            error = it.message ?: "Failed to connect"
+                        }.onFailure { throwable ->
+                            error = getConnectionErrorMessage(throwable)
                         }
                     }
                 },

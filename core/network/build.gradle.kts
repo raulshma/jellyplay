@@ -25,4 +25,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.kotlinx.serialization.json)
+    
+    // SLF4J - required by Jellyfin SDK
+    implementation(libs.slf4j.api)
+    runtimeOnly(libs.slf4j.nop)
 }

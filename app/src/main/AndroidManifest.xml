@@ -18,6 +18,7 @@
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.JellyPlay"
+        android:usesCleartextTraffic="true"
         tools:targetApi="36">
         <activity
             android:name=".MainActivity"

@@ -18,10 +18,13 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
@@ -74,15 +77,26 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun connectToServer(address: String): Result<ServerInfo> = runCatching {
-        val client = jellyfin.createApi(address)
-        val systemInfo = client.systemApi.getPublicSystemInfo().content
-        val info = ServerInfo(
-            id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
-            name = systemInfo.serverName ?: "Jellyfin Server",
-            address = address,
-        )
-        _currentServer.value = info
-        info
+        val normalizedAddress = address.trim().trimEnd('/').let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it
+            else "https://$it"
+        }
+        withContext(Dispatchers.IO) {
+            try {
+                val client = jellyfin.createApi(normalizedAddress)
+                val systemInfo = client.systemApi.getPublicSystemInfo().content
+                val info = ServerInfo(
+                    id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
+                    name = systemInfo.serverName ?: "Jellyfin Server",
+                    address = normalizedAddress,
+                )
+                _currentServer.value = info
+                info
+            } catch (e: Exception) {
+                Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
+                throw e
+            }
+        }
     }
 
     override suspend fun authenticateUser(
@@ -92,40 +106,42 @@ class JellyfinApiClientImpl @Inject constructor(
     ): Result<UserInfo> = runCatching {
         val server = _currentServer.value
             ?: connectToServer(serverAddress).getOrThrow()
-        val client = jellyfin.createApi(server.address)
-        val authResult = client.userApi.authenticateUserByName(
-            org.jellyfin.sdk.model.api.AuthenticateUserByName(
-                username = username,
-                pw = password,
+        withContext(Dispatchers.IO) {
+            val client = jellyfin.createApi(server.address)
+            val authResult = client.userApi.authenticateUserByName(
+                org.jellyfin.sdk.model.api.AuthenticateUserByName(
+                    username = username,
+                    pw = password,
+                )
+            ).content
+            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+            val authenticatedClient = jellyfin.createApi(
+                baseUrl = server.address,
+                accessToken = accessTokenValue,
             )
-        ).content
-        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-        val authenticatedClient = jellyfin.createApi(
-            baseUrl = server.address,
-            accessToken = accessTokenValue,
-        )
-        api = authenticatedClient
-        val userDto = authResult.user ?: throw Exception("Authentication failed")
-        val policy = userDto.policy
-        val userInfo = UserInfo(
-            id = userDto.id.toString(),
-            name = userDto.name ?: username,
-            serverAddress = server.address,
-            accessToken = accessTokenValue,
-            isAdmin = policy?.isAdministrator ?: false,
-            maxParentalAgeRating = policy?.maxParentalRating,
-            primaryImageTag = userDto.primaryImageTag,
-            enabledFolderIds = if (policy?.enableAllFolders == false) {
-                policy.enabledFolders?.map { it.toString() } ?: emptyList()
-            } else emptyList(),
-        )
-        _currentUser.value = userInfo
-        _currentServer.value = server.copy(
-            userId = userInfo.id,
-            accessToken = userInfo.accessToken,
-            isConnected = true,
-        )
-        userInfo
+            api = authenticatedClient
+            val userDto = authResult.user ?: throw Exception("Authentication failed")
+            val policy = userDto.policy
+            val userInfo = UserInfo(
+                id = userDto.id.toString(),
+                name = userDto.name ?: username,
+                serverAddress = server.address,
+                accessToken = accessTokenValue,
+                isAdmin = policy?.isAdministrator ?: false,
+                maxParentalAgeRating = policy?.maxParentalRating,
+                primaryImageTag = userDto.primaryImageTag,
+                enabledFolderIds = if (policy?.enableAllFolders == false) {
+                    policy.enabledFolders?.map { it.toString() } ?: emptyList()
+                } else emptyList(),
+            )
+            _currentUser.value = userInfo
+            _currentServer.value = server.copy(
+                userId = userInfo.id,
+                accessToken = userInfo.accessToken,
+                isConnected = true,
+            )
+            userInfo
+        }
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
