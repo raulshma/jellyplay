@@ -156,6 +156,8 @@ fun VideoPlayerScreen(
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
+            playerViewRef?.player = null
+            playerViewRef = null
             viewModel.release()
         }
     }

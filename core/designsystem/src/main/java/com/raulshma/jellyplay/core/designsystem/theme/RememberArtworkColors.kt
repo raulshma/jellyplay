@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
     val context = LocalContext.current
     var artworkColors by remember { mutableStateOf<ArtworkColors?>(null) }
+    val loader = remember { ImageLoader(context) }
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) {
@@ -28,7 +29,6 @@ fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
         }
         withContext(Dispatchers.IO) {
             try {
-                val loader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
                     .size(Size(256, 256))

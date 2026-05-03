@@ -1,30 +1,29 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.content.Context
-import android.content.Intent
+import androidx.annotation.GuardedBy
 import androidx.media3.session.MediaSession
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class PlaybackSessionManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
-    @Volatile
+class PlaybackSessionManager @Inject constructor() {
+    private val lock = Any()
+    @GuardedBy("lock")
     private var _currentSession: MediaSession? = null
-    val currentSession: MediaSession? get() = _currentSession
+    val currentSession: MediaSession? get() = synchronized(lock) { _currentSession }
 
     fun setActiveSession(session: MediaSession) {
-        _currentSession?.release()
-        _currentSession = session
-        val intent = Intent(context, JellyPlayPlaybackService::class.java)
-        context.startForegroundService(intent)
+        synchronized(lock) {
+            _currentSession?.release()
+            _currentSession = session
+        }
     }
 
     fun clearSession(session: MediaSession) {
-        if (_currentSession === session) {
-            _currentSession = null
+        synchronized(lock) {
+            if (_currentSession === session) {
+                _currentSession = null
+            }
         }
     }
 }

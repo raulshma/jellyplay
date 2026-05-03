@@ -139,9 +139,13 @@ class SyncPlayViewModel @Inject constructor(
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             while (true) {
-                delay(2000)
-                mediaRepository.getSyncPlayInfo()
-                    .onSuccess { currentGroup = it }
+                try {
+                    delay(2000)
+                    mediaRepository.getSyncPlayInfo()
+                        .onSuccess { currentGroup = it }
+                } catch (_: Exception) {
+                    delay(5000)
+                }
             }
         }
     }

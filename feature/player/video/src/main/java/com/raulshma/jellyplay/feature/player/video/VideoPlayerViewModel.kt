@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -172,9 +173,15 @@ class VideoPlayerViewModel @Inject constructor(
                 ) { subtitleOffsetMs * 1000L }
             )
 
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .build()
+
         val player = ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
+            .setAudioAttributes(audioAttributes, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         _exoPlayer = player
@@ -336,10 +343,13 @@ class VideoPlayerViewModel @Inject constructor(
             val url = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
             val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
             val request = okhttp3.Request.Builder().url(url).build()
-            val response = okhttp3.OkHttpClient().newCall(request).execute()
-            val bytes = response.body?.bytes() ?: return
-            val cues = SubtitleParserHelper.parseSubtitles(bytes, mimeType)
-            _secondarySubtitleCues = cues
+            val client = okhttp3.OkHttpClient()
+            val response = client.newCall(request).execute()
+            response.use { resp ->
+                val bytes = resp.body?.bytes() ?: return
+                val cues = SubtitleParserHelper.parseSubtitles(bytes, mimeType)
+                _secondarySubtitleCues = cues
+            }
         } catch (_: Exception) {
             _secondarySubtitleCues = emptyList()
         }
@@ -423,6 +433,7 @@ class VideoPlayerViewModel @Inject constructor(
             } catch (_: Exception) {
                 _ocrText = null
             } finally {
+                if (!bitmap.isRecycled) bitmap.recycle()
                 _isOcrRunning = false
             }
         }
@@ -584,17 +595,20 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun release() {
-        viewModelScope.launch {
-            val player = _exoPlayer ?: return@launch
-            val itemId = currentItemId ?: return@launch
-            playbackRepository.reportPlaybackStopped(
-                itemId = itemId,
-                sessionId = playSessionId,
-                positionTicks = player.currentPosition * 10_000,
-            )
-        }
+        val player = _exoPlayer
+        val itemId = currentItemId
+        val sessionId = playSessionId
         releaseInternals()
         castManager.release()
+        if (player != null && itemId != null) {
+            viewModelScope.launch {
+                playbackRepository.reportPlaybackStopped(
+                    itemId = itemId,
+                    sessionId = sessionId,
+                    positionTicks = player.currentPosition * 10_000,
+                )
+            }
+        }
     }
 
     override fun onCleared() {
@@ -602,5 +616,3 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
     }
 }
-
-private fun mutableLongStateOf(initial: Long) = mutableStateOf(initial)

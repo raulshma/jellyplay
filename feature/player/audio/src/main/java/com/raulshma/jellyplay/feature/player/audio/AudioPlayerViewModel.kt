@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 
 data class AudioQueueItem(
     val id: String,
@@ -463,15 +464,8 @@ class AudioPlayerViewModel @Inject constructor(
     }
 
     fun release() {
-        viewModelScope.launch {
-            val player = exoPlayer ?: return@launch
-            val itemId = currentItemId ?: return@launch
-            playbackRepository.reportPlaybackStopped(
-                itemId = itemId,
-                sessionId = playSessionId,
-                positionTicks = player.currentPosition * 10_000,
-            )
-        }
+        val player = exoPlayer
+        val itemId = currentItemId
         progressJob?.cancel()
         positionJob?.cancel()
         exoPlayer?.removeListener(playerListener)
@@ -484,6 +478,15 @@ class AudioPlayerViewModel @Inject constructor(
         equalizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
+        if (player != null && itemId != null) {
+            viewModelScope.launch {
+                playbackRepository.reportPlaybackStopped(
+                    itemId = itemId,
+                    sessionId = playSessionId,
+                    positionTicks = player.currentPosition * 10_000,
+                )
+            }
+        }
     }
 
     override fun onCleared() {
@@ -493,6 +496,7 @@ class AudioPlayerViewModel @Inject constructor(
         exoPlayer?.removeListener(playerListener)
         mediaSession?.let { sessionManager.clearSession(it) }
         mediaSession?.release()
+        mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
         dialogueBoost.detach()

@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video.subtitle
 
 import android.graphics.Bitmap
-import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -53,7 +56,9 @@ object SubtitleOcrHelper {
         )
 
         val enhanced = enhanceForOcr(cropped)
+        cropped.recycle()
         val text = recognizeTextFromBitmap(enhanced)
+        enhanced.recycle()
 
         return text.takeIf { it.isNotBlank() && isLikelySubtitleText(it) }
     }
@@ -62,21 +67,31 @@ object SubtitleOcrHelper {
         val width = bitmap.width
         val height = bitmap.height
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                val pixel = bitmap.getPixel(x, y)
-                val r = Color.red(pixel)
-                val g = Color.green(pixel)
-                val b = Color.blue(pixel)
-                val brightness = (r * 0.299f + g * 0.587f + b * 0.114f)
-                val isLight = brightness > 128
-                result.setPixel(
-                    x, y,
-                    if (isLight) Color.WHITE else Color.BLACK,
-                )
-            }
+        val canvas = Canvas(result)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(
+                ColorMatrix(
+                    floatArrayOf(
+                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                        0.299f, 0.587f, 0.114f, 0f, 0f,
+                        0f, 0f, 0f, 1f, 0f,
+                    )
+                ).apply {
+                    postConcat(
+                        ColorMatrix(
+                            floatArrayOf(
+                                2f, 0f, 0f, 0f, -255f,
+                                2f, 0f, 0f, 0f, -255f,
+                                2f, 0f, 0f, 0f, -255f,
+                                0f, 0f, 0f, 1f, 0f,
+                            )
+                        )
+                    )
+                }
+            )
         }
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
         return result
     }
 
