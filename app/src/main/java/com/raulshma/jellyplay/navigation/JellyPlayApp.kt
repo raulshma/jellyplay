@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -165,7 +166,12 @@ private fun MainContent(
                 navigationState = navigationState,
                 navigator = navigator,
                 onLogout = onLogout,
-                modifier = Modifier.padding(innerPadding),
+                modifier = Modifier.padding(
+                    PaddingValues(
+                        top = 0.dp,
+                        bottom = innerPadding.calculateBottomPadding(),
+                    )
+                ),
             )
         }
     }

@@ -69,7 +69,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    error = it.message ?: "Failed to load home sections"
+                    error = it.message ?: "${it::class.simpleName}"
                 }
             isLoading = false
         }

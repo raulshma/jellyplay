@@ -103,29 +103,44 @@ fun HomeScreen(
                     )
                 }
                 else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = padding,
-                    ) {
-                        if (surpriseItem != null) {
-                            item {
-                                com.raulshma.jellyplay.feature.home.SurpriseMeCard(
-                                    item = surpriseItem,
-                                    imageUrl = viewModel.getImageUrl(surpriseItem.id),
-                                    onClick = { onItemClick(surpriseItem.id) },
+                    if (sections.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(padding),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "No content available. Check your Jellyfin libraries.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = padding,
+                        ) {
+                            if (surpriseItem != null) {
+                                item {
+                                    com.raulshma.jellyplay.feature.home.SurpriseMeCard(
+                                        item = surpriseItem,
+                                        imageUrl = viewModel.getImageUrl(surpriseItem.id),
+                                        onClick = { onItemClick(surpriseItem.id) },
+                                    )
+                                }
+                            }
+                            items(count = sections.size) { index ->
+                                val section = sections[index]
+                                MediaRow(
+                                    title = section.title,
+                                    items = section.items,
+                                    imageUrlBuilder = { item ->
+                                        viewModel.getImageUrl(item.id)
+                                    },
+                                    onItemClick = { item -> onItemClick(item.id) },
                                 )
                             }
-                        }
-                        items(count = sections.size) { index ->
-                            val section = sections[index]
-                            MediaRow(
-                                title = section.title,
-                                items = section.items,
-                                imageUrlBuilder = { item ->
-                                    viewModel.getImageUrl(item.id)
-                                },
-                                onItemClick = { item -> onItemClick(item.id) },
-                            )
                         }
                     }
                 }

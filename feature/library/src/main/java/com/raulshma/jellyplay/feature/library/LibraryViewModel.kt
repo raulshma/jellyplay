@@ -92,7 +92,7 @@ class LibraryViewModel @Inject constructor(
             _isLoading.value = true
             mediaRepository.getLibraryFolders()
                 .onSuccess { _folders.value = it }
-                .onFailure { _error.value = it.message ?: "Failed to load folders" }
+                .onFailure { _error.value = it.message ?: "${it::class.simpleName}" }
             _isLoading.value = false
         }
     }
