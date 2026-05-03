@@ -101,7 +101,12 @@ fun MediaDetailScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     val currentItem = detail?.item
-    val backdropUrl = currentItem?.let { viewModel.getBackdropUrl(it.id) }
+    val targetBackdropId = if (currentItem?.mediaType == MediaType.EPISODE && currentItem.seriesId != null) {
+        currentItem.seriesId!!
+    } else {
+        currentItem?.id ?: itemId
+    }
+    val backdropUrl = viewModel.getBackdropUrl(targetBackdropId)
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl,
@@ -200,6 +205,12 @@ private fun DetailContent(
         label = "titleAlpha",
     )
 
+    val targetBackdropId = if (item?.mediaType == MediaType.EPISODE && item.seriesId != null) {
+        item.seriesId!!
+    } else {
+        itemId
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         // Backdrop Image with Parallax & Fade
         Box(
@@ -212,7 +223,7 @@ private fun DetailContent(
                 }
         ) {
             MediaImage(
-                url = getBackdropUrl(itemId),
+                url = getBackdropUrl(targetBackdropId),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -280,7 +291,7 @@ private fun DetailContent(
             ) {
                 // The actual content starts here. We pad it so it starts when the background is solid.
                 Column(
-                    modifier = Modifier.padding(top = 40.dp) 
+                    modifier = Modifier.padding(top = 30.dp) 
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp),
