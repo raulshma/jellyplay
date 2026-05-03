@@ -107,57 +107,45 @@ fun MediaDetailScreen(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
     ) {
-        when {
-            isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            error != null -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedButton(onClick = { viewModel.loadItem(itemId) }) {
-                            Text("Retry")
-                        }
-                    }
-                }
-            }
-            detail != null -> {
-                DetailContent(
-                    detail = detail!!,
-                    seasons = viewModel.seasons,
-                    episodes = viewModel.episodes,
-                    getImageUrl = { viewModel.getImageUrl(it) },
-                    getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                    isDownloading = viewModel.isDownloading,
-                    downloadStarted = viewModel.downloadStarted,
-                onPlayClick = { playItemId, sourceId, start -> onPlayClick(playItemId, sourceId, start) },
-                onAudioClick = { onAudioClick(itemId) },
-                onDownloadClick = { viewModel.startDownload() },
-                onToggleFavorite = { viewModel.toggleFavorite() },
-                onMarkPlayed = { viewModel.markPlayed() },
-                onMarkUnplayed = { viewModel.markUnplayed() },
-                onItemClick = onItemClick,
-                onPersonClick = onPersonClick,
-                onBack = onBack,
-            )
-        }
-    }
+        DetailContent(
+            itemId = itemId,
+            detail = detail,
+            seasons = viewModel.seasons,
+            episodes = viewModel.episodes,
+            getImageUrl = { viewModel.getImageUrl(it) },
+            getBackdropUrl = { viewModel.getBackdropUrl(it) },
+            isDownloading = viewModel.isDownloading,
+            downloadStarted = viewModel.downloadStarted,
+            isLoading = isLoading,
+            error = error,
+            onRetry = { viewModel.loadItem(itemId) },
+            onPlayClick = { playItemId, sourceId, start -> onPlayClick(playItemId, sourceId, start) },
+            onAudioClick = { onAudioClick(itemId) },
+            onDownloadClick = { viewModel.startDownload() },
+            onToggleFavorite = { viewModel.toggleFavorite() },
+            onMarkPlayed = { viewModel.markPlayed() },
+            onMarkUnplayed = { viewModel.markUnplayed() },
+            onItemClick = onItemClick,
+            onPersonClick = onPersonClick,
+            onBack = onBack,
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailContent(
-    detail: MediaDetail,
+    itemId: String,
+    detail: MediaDetail?,
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
     downloadStarted: Boolean,
+    isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onDownloadClick: () -> Unit,
@@ -168,9 +156,9 @@ private fun DetailContent(
     onPersonClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
-    val item = detail.item
+    val item = detail?.item
     val scrollState = rememberScrollState()
-    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
+    val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val artworkColors = LocalArtworkColors.current
@@ -212,11 +200,6 @@ private fun DetailContent(
         label = "titleAlpha",
     )
 
-    var contentLoaded by remember { mutableStateOf(false) }
-    LaunchedEffect(detail) {
-        contentLoaded = true
-    }
-
     Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         // Backdrop Image with Parallax & Fade
         Box(
@@ -229,7 +212,7 @@ private fun DetailContent(
                 }
         ) {
             MediaImage(
-                url = getBackdropUrl(item.id),
+                url = getBackdropUrl(itemId),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -242,7 +225,7 @@ private fun DetailContent(
                         if (sharedTransitionScope != null) {
                             with(sharedTransitionScope) {
                                 Modifier.sharedElementWithCallerManagedVisibility(
-                                    rememberSharedContentState(key = "backdrop_${item.id}"),
+                                    rememberSharedContentState(key = "backdrop_$itemId"),
                                     visible = true,
                                 )
                             }
@@ -297,35 +280,73 @@ private fun DetailContent(
             ) {
                 // The actual content starts here. We pad it so it starts when the background is solid.
                 Column(
-                    modifier = Modifier.padding(top = 100.dp) 
+                    modifier = Modifier.padding(top = 40.dp) 
                 ) {
-                    AnimatedVisibility(
-                        visible = contentLoaded,
-                        enter = fadeIn(
-                            animationSpec = tween(600),
-                        ) + slideInVertically(
-                            initialOffsetY = { it / 4 },
-                            animationSpec = tween(600),
-                        ),
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        DetailContentBody(
-                            item = item,
-                            detail = detail,
-                            seasons = seasons,
-                            episodes = episodes,
-                            getImageUrl = getImageUrl,
-                            isAudio = isAudio,
-                            isDownloading = isDownloading,
-                            downloadStarted = downloadStarted,
-                            onPlayClick = onPlayClick,
-                            onAudioClick = onAudioClick,
-                            onDownloadClick = { showDownloadDialog = true },
-                            onToggleFavorite = onToggleFavorite,
-                            onMarkPlayed = onMarkPlayed,
-                            onMarkUnplayed = onMarkUnplayed,
-                            onItemClick = onItemClick,
-                            onPersonClick = onPersonClick,
+                        // Poster Image for seamless shared element transition
+                        MediaImage(
+                            url = getImageUrl(itemId),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .width(120.dp)
+                                .aspectRatio(2f / 3f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .then(
+                                    if (sharedTransitionScope != null) {
+                                        with(sharedTransitionScope) {
+                                            Modifier.sharedElementWithCallerManagedVisibility(
+                                                rememberSharedContentState(key = "poster_$itemId"),
+                                                visible = true,
+                                            )
+                                        }
+                                    } else Modifier
+                                ),
+                            contentScale = ContentScale.Crop,
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (detail != null && item != null) {
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(
+                                animationSpec = tween(600),
+                            ) + slideInVertically(
+                                initialOffsetY = { it / 4 },
+                                animationSpec = tween(600),
+                            ),
+                        ) {
+                            DetailContentBody(
+                                item = item,
+                                detail = detail,
+                                seasons = seasons,
+                                episodes = episodes,
+                                getImageUrl = getImageUrl,
+                                isAudio = isAudio,
+                                isDownloading = isDownloading,
+                                downloadStarted = downloadStarted,
+                                onPlayClick = onPlayClick,
+                                onAudioClick = onAudioClick,
+                                onDownloadClick = { showDownloadDialog = true },
+                                onToggleFavorite = onToggleFavorite,
+                                onMarkPlayed = onMarkPlayed,
+                                onMarkUnplayed = onMarkUnplayed,
+                                onItemClick = onItemClick,
+                                onPersonClick = onPersonClick,
+                            )
+                        }
+                    } else if (isLoading) {
+                        SkeletonDetailBody()
+                    } else if (error != null) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(error, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = onRetry) { Text("Retry") }
+                        }
                     }
                 }
             }
@@ -340,7 +361,7 @@ private fun DetailContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = item.name,
+                        text = item?.name ?: "",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White.copy(alpha = animatedTitleAlpha),
@@ -371,7 +392,7 @@ private fun DetailContent(
     }
 
     if (showDownloadDialog) {
-        val source = detail.mediaSources.firstOrNull()
+        val source = detail?.mediaSources?.firstOrNull()
         val fileSize = source?.size
         val context = LocalContext.current
         val availableBytes = remember {
@@ -929,3 +950,15 @@ private fun PersonItem(
         }
     }
 }
+
+@Composable
+fun SkeletonDetailBody() {
+    Column(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)))
+        Spacer(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.1f)))
+        Spacer(modifier = Modifier.height(24.dp))
+        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)))
+    }
+} 

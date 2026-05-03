@@ -77,7 +77,7 @@ fun PosterCard(
                         if (sharedTransitionScope != null) {
                             with(sharedTransitionScope) {
                                 Modifier.sharedElementWithCallerManagedVisibility(
-                                    rememberSharedContentState(key = "backdrop_${item.id}"),
+                                    rememberSharedContentState(key = "poster_${item.id}"),
                                     visible = true,
                                 )
                             }
