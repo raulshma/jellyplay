@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#16213E"
+        android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="160"
+                android:centerY="90"
+                android:gradientRadius="180">
+                <item android:offset="0" android:color="#FF1E3A5F" />
+                <item android:offset="1" android:color="#FF1A1A2E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Icon circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M130,55L130,55A25,25 0,0 1,155 80L155,80A25,25 0,0 1,130 105L130,105A25,25 0,0 1,105 80L105,80A25,25 0,0 1,130 55z"
+        android:strokeColor="#00B4D8"
+        android:strokeWidth="3" />
+
+    <!-- Play triangle -->
+    <path
+        android:fillColor="#00B4D8"
+        android:pathData="M123.5,70.5L123.5,89.5A1.5,1.5 0,0 0,125.75 90.8L139.25,81.3A1.5,1.5 0,0 0,139.25 78.7L125.75,69.2A1.5,1.5 0,0 0,123.5 70.5z" />
+
+    <!-- Text: JellyPlay -->
+    <!-- J -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M172,68h4v14c0,2.2 -1.8,4 -4,4h-2v-3h1c0.55,0 1,-0.45 1,-1z" />
+    <!-- e -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M183,76c0,-3.3 2.7,-6 6,-6c3.3,0 6,2.7 6,6v1h-8c0.5,1.2 1.7,2 3,2c1.1,0 2.1,-0.55 2.7,-1.4l2.6,1.8c-1.1,1.5 -2.9,2.6 -5.3,2.6c-3.3,0 -6,-2.7 -6,-6zM185,75h6c-0.5,-1.2 -1.7,-2 -3,-2c-1.3,0 -2.5,0.8 -3,2z" />
+    <!-- l -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M198,62h4v18h-4z" />
+    <!-- l -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M204,62h4v18h-4z" />
+    <!-- y -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M210,70l3.5,-8h4.3l-5.8,12v6h-4v-6l-5.8,-12h4.3z" />
+    <!-- P -->
+    <path
+        android:fillColor="#00B4D8"
+        android:pathData="M227,68h5c3.3,0 6,2.7 6,6s-2.7,6 -6,6h-1v4h-4zM231,75h1c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2h-1z" />
+    <!-- l -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M240,62h4v18h-4z" />
+    <!-- a -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M252,76c0,-3.3 2.7,-6 6,-6c1.4,0 2.7,0.5 3.7,1.3l-2.1,2.8c-0.4,-0.3 -0.9,-0.5 -1.5,-0.5c-1.3,0 -2.2,0.9 -2.2,2.2s0.9,2.2 2.2,2.2c0.6,0 1.1,-0.2 1.5,-0.5l2.1,2.8c-1,0.8 -2.3,1.3 -3.7,1.3c-3.3,0 -6,-2.7 -6,-6z" />
+    <!-- y -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M264,70l3.5,-8h4.3l-5.8,12v6h-4v-6l-5.8,-12h4.3z" />
+</vector>

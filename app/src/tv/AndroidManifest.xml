@@ -8,7 +8,7 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <application android:banner="@mipmap/ic_launcher">
+    <application android:banner="@drawable/ic_banner">
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

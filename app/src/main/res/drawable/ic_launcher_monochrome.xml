@@ -10,10 +10,10 @@
         <path
             android:fillColor="#FFFFFF"
             android:pathData="M27,4L27,4A23,23 0,0 1,50 27L50,27A23,23 0,0 1,27 50L27,50A23,23 0,0 1,4 27L4,27A23,23 0,0 1,27 4z"
-            android:strokeColor="#00B4D8"
+            android:strokeColor="#FFFFFF"
             android:strokeWidth="3" />
         <path
-            android:fillColor="#00B4D8"
+            android:fillColor="#FFFFFF"
             android:pathData="M21,18.5L21,35.5A1.5,1.5 0,0 0,23.25 36.8L35.25,28.3A1.5,1.5 0,0 0,35.25 25.7L23.25,17.2A1.5,1.5 0,0 0,21 18.5z" />
     </group>
 </vector>
