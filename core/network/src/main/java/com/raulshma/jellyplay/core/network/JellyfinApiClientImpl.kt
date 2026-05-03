@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -30,9 +32,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
+class JellyfinApiClientImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : JellyfinApiClient {
 
     private val jellyfin: Jellyfin = createJellyfin {
+        context = this@JellyfinApiClientImpl.context
         clientInfo = ClientInfo(name = "JellyPlay", version = "1.0.0")
     }
 
