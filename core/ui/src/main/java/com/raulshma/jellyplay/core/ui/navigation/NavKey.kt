@@ -40,6 +40,8 @@ sealed class Route : NavKey {
     @Serializable data class AlbumDetail(val albumId: String) : Route()
     @Serializable data object SmartPlaylists : Route()
     @Serializable data class SmartPlaylistDetail(val playlistId: String) : Route()
+    @Serializable data object MoodPlaylists : Route()
+    @Serializable data class MoodPlaylistDetail(val playlistId: String) : Route()
     @Serializable data class CollectionDetail(val collectionId: String) : Route()
 
     @Serializable data class OfflinePlayer(
@@ -53,6 +55,12 @@ sealed class Route : NavKey {
     ) : Route()
 
     @Serializable data object LiveTvGuide : Route()
+
+    @Serializable data class Ambient(
+        val imageUrl: String? = null,
+        val title: String = "",
+        val artist: String = "",
+    ) : Route()
 }
 
 val TOP_LEVEL_ROUTES = linkedMapOf(

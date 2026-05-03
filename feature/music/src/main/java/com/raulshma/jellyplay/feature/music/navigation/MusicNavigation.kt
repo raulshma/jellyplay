@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.feature.music.albums.AlbumsScreen
 import com.raulshma.jellyplay.feature.music.artistdetail.ArtistDetailScreen
 import com.raulshma.jellyplay.feature.music.artists.ArtistsScreen
 import com.raulshma.jellyplay.feature.music.genres.GenresScreen
+import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistDetailScreen
+import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistsScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistDetailScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistsScreen
 import com.raulshma.jellyplay.feature.music.tracks.TracksScreen
@@ -76,6 +78,23 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
     }
     entry<Route.SmartPlaylistDetail> { key ->
         SmartPlaylistDetailScreen(
+            playlistId = key.playlistId,
+            onTrackClick = { trackId ->
+                navigator.navigate(Route.AudioPlayer(trackId))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.MoodPlaylists> {
+        MoodPlaylistsScreen(
+            onPlaylistClick = { playlist ->
+                navigator.navigate(Route.MoodPlaylistDetail(playlist.id))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.MoodPlaylistDetail> { key ->
+        MoodPlaylistDetailScreen(
             playlistId = key.playlistId,
             onTrackClick = { trackId ->
                 navigator.navigate(Route.AudioPlayer(trackId))

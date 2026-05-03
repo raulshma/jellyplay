@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -72,6 +73,7 @@ private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 fun AudioPlayerScreen(
     itemId: String,
     onBack: () -> Unit,
+    onAmbientClick: (String?, String, String) -> Unit = { _, _, _ -> },
     viewModel: AudioPlayerViewModel = hiltViewModel(),
 ) {
     var showQueue by remember { mutableStateOf(false) }
@@ -123,6 +125,17 @@ fun AudioPlayerScreen(
                     }
                     IconButton(onClick = { showQueue = true }) {
                         Icon(Icons.Default.QueueMusic, "Queue")
+                    }
+                    IconButton(
+                        onClick = {
+                            onAmbientClick(
+                                viewModel.albumArtUrl.ifBlank { null },
+                                viewModel.title,
+                                viewModel.artist,
+                            )
+                        },
+                    ) {
+                        Icon(Icons.Default.NightsStay, "Ambient Mode")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
