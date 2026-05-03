@@ -37,6 +37,9 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -64,6 +67,10 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
     val exoPlayer get() = _exoPlayer
+
+    private var _playerEngine by mutableStateOf<PlayerEngine?>(null)
+    /** The active player engine (ExoPlayer, mpv, or LibVLC). */
+    val playerEngine: PlayerEngine? get() = _playerEngine
 
     private var _preferredPlayerType by mutableStateOf(PlayerType.EXO_PLAYER)
     val preferredPlayerType get() = _preferredPlayerType
@@ -167,12 +174,82 @@ class VideoPlayerViewModel @Inject constructor(
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
 
-        // Load preferred player type from data store
         viewModelScope.launch {
+            // Load preferred player type and subtitle style
             val prefs = preferencesStore.preferences.first()
             _preferredPlayerType = prefs.preferredPlayer
-        }
+            _subtitleStyle = prefs.subtitleStyle
 
+            // Fetch media detail first (needed by all engines)
+            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detail = detailResult.getOrElse {
+                _title = "Error loading media"
+                return@launch
+            }
+
+            _mediaDetail = detail
+            _title = detail.item.name
+            _subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: "")
+            _chapters = detail.chapters
+
+            val source = if (mediaSourceId != null) {
+                detail.mediaSources.find { it.id == mediaSourceId }
+            } else {
+                detail.mediaSources.firstOrNull()
+            }
+            _currentMediaSource = source
+            _mediaStreams = source?.mediaStreams ?: emptyList()
+
+            _playMethod = when {
+                source?.supportsDirectPlay == true -> "Direct Play"
+                source?.supportsDirectStream == true -> "Direct Stream"
+                source?.supportsTranscoding == true -> "Transcode"
+                else -> "Direct Play"
+            }
+
+            val url = playbackRepository.getStreamUrl(
+                itemId,
+                source?.id ?: "",
+                startPositionTicks,
+            )
+            _streamUrl = url
+
+            when (_preferredPlayerType) {
+                PlayerType.EXO_PLAYER -> initializeExoPlayer(
+                    detail, source, url, startPositionTicks, prefs
+                )
+                PlayerType.MPV, PlayerType.LIBVLC -> initializeAlternativeEngine(
+                    url, detail.item.name, startPositionTicks
+                )
+                PlayerType.EXTERNAL -> {
+                    // External launching is handled by the Screen layer.
+                    // Fall through — we don't init any in-app player.
+                    return@launch
+                }
+            }
+
+            // Start server-side reporting (common to all in-app engines)
+            playbackRepository.reportPlaybackStart(
+                com.raulshma.jellyplay.core.model.PlaybackStartInfo(
+                    itemId = itemId,
+                    sessionId = playSessionId,
+                    mediaSourceId = source?.id,
+                )
+            )
+
+            startPositionTracking()
+            startProgressReporting()
+        }
+    }
+
+    /** Full-featured ExoPlayer init path — keeps all existing logic. */
+    private suspend fun initializeExoPlayer(
+        detail: com.raulshma.jellyplay.core.model.MediaDetail,
+        source: MediaSource?,
+        url: String,
+        startPositionTicks: Long,
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+    ) {
         val trackSelector = DefaultTrackSelector(context)
         _trackSelector = trackSelector
 
@@ -203,103 +280,64 @@ class VideoPlayerViewModel @Inject constructor(
         _mediaSession = session
         sessionManager.setActiveSession(session)
 
-        startPositionTracking()
+        val subtitleConfigs = buildSubtitleConfigurations(source?.mediaStreams ?: emptyList())
+        val artworkUri = Uri.parse(
+            playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
+        )
 
-        viewModelScope.launch {
-            preferencesStore.preferences.collect { prefs ->
-                _subtitleStyle = prefs.subtitleStyle
-            }
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .setSubtitleConfigurations(subtitleConfigs)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(detail.item.name)
+                    .setSubtitle(detail.item.seriesName ?: detail.item.overview?.take(60))
+                    .setArtworkUri(artworkUri)
+                    .build()
+            )
+            .build()
+
+        player.setMediaItem(mediaItem)
+        player.prepare()
+        if (startPositionTicks > 0) player.seekTo(startPositionTicks / 10_000)
+        player.play()
+
+        _dialogueBoostEnabled = prefs.dialogueBoostEnabled
+        if (_dialogueBoostEnabled) applyDialogueBoost()
+
+        if (prefs.preferredSubtitleLanguage != null) {
+            val params = trackSelector.buildUponParameters()
+            params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
+            trackSelector.setParameters(params)
+        }
+    }
+
+    /** Lightweight init path for mpv / LibVLC engines. */
+    private fun initializeAlternativeEngine(
+        url: String,
+        title: String,
+        startPositionTicks: Long,
+    ) {
+        val engine = PlayerEngineFactory.create(context, _preferredPlayerType)
+        _playerEngine = engine
+
+        engine.setOnStateChanged { playing ->
+            _isPlaying = playing
+        }
+        engine.setOnTracksChanged {
+            updateTracksFromEngine(engine)
         }
 
-        viewModelScope.launch {
-            mediaRepository.getMediaDetail(itemId)
-                .onSuccess { detail ->
-                    _mediaDetail = detail
-                    _title = detail.item.name
-                    _subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: "")
-                    _chapters = detail.chapters
-
-                    val source = if (mediaSourceId != null) {
-                        detail.mediaSources.find { it.id == mediaSourceId }
-                    } else {
-                        detail.mediaSources.firstOrNull()
-                    }
-                    _currentMediaSource = source
-                    _mediaStreams = source?.mediaStreams ?: emptyList()
-
-                    _playMethod = when {
-                        source?.supportsDirectPlay == true -> "Direct Play"
-                        source?.supportsDirectStream == true -> "Direct Stream"
-                        source?.supportsTranscoding == true -> "Transcode"
-                        else -> "Direct Play"
-                    }
-
-                    val url = playbackRepository.getStreamUrl(
-                        itemId,
-                        source?.id ?: "",
-                        startPositionTicks,
-                    )
-                    _streamUrl = url
-
-                    val subtitleConfigs = buildSubtitleConfigurations(source?.mediaStreams ?: emptyList())
-
-                    val artworkUri = Uri.parse(
-                        playbackRepository.getImageUrl(itemId, maxWidth = 300)
-                    )
-
-                    val mediaItem = MediaItem.Builder()
-                        .setUri(url)
-                        .setSubtitleConfigurations(subtitleConfigs)
-                        .setMediaMetadata(
-                            MediaMetadata.Builder()
-                                .setTitle(detail.item.name)
-                                .setSubtitle(detail.item.seriesName ?: detail.item.overview?.take(60))
-                                .setArtworkUri(artworkUri)
-                                .build()
-                        )
-                        .build()
-
-                    _exoPlayer?.setMediaItem(mediaItem)
-                    _exoPlayer?.prepare()
-
-                    if (startPositionTicks > 0) {
-                        _exoPlayer?.seekTo(startPositionTicks / 10_000)
-                    }
-
-                    _exoPlayer?.play()
-
-                    val prefs = preferencesStore.preferences.first()
-                    _dialogueBoostEnabled = prefs.dialogueBoostEnabled
-                    if (_dialogueBoostEnabled) {
-                        applyDialogueBoost()
-                    }
-
-                    if (prefs.preferredSubtitleLanguage != null) {
-                        val selector = _trackSelector ?: return@launch
-                        val params = selector.buildUponParameters()
-                        params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
-                        selector.setParameters(params)
-                    }
-
-                    playbackRepository.reportPlaybackStart(
-                        com.raulshma.jellyplay.core.model.PlaybackStartInfo(
-                            itemId = itemId,
-                            sessionId = playSessionId,
-                            mediaSourceId = source?.id,
-                        )
-                    )
-
-                    startProgressReporting()
-                }
-                .onFailure {
-                    _title = "Error loading media"
-                }
-        }
+        engine.initialize(url, title, startPositionTicks / 10_000)
     }
 
     fun setPlaybackSpeed(speed: Float) {
         _playbackSpeed = speed
-        _exoPlayer?.setPlaybackSpeed(speed)
+        if (_playerEngine != null) {
+            _playerEngine?.setPlaybackSpeed(speed)
+        } else {
+            _exoPlayer?.setPlaybackSpeed(speed)
+        }
     }
 
     fun selectAudioTrack(option: TrackOption) {
@@ -505,6 +543,28 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /** Updates track lists using data from a non-ExoPlayer engine. */
+    private fun updateTracksFromEngine(engine: PlayerEngine) {
+        val audioOptions = engine.audioTracks.map { t ->
+            TrackOption(t.index, t.label, t.language, t.isSelected)
+        }
+        val subtitleOptions = engine.subtitleTracks.map { t ->
+            TrackOption(t.index, t.label, t.language, t.isSelected)
+        }
+
+        _audioTracks = if (audioOptions.isEmpty()) {
+            listOf(TrackOption(-1, "Default", null, true))
+        } else {
+            listOf(TrackOption(-1, "Default", null, true)) + audioOptions
+        }
+
+        _subtitleTracks = if (subtitleOptions.isEmpty()) {
+            listOf(TrackOption(-1, "None", null, true))
+        } else {
+            listOf(TrackOption(-1, "Off", null, true)) + subtitleOptions
+        }
+    }
+
     private fun buildTrackLabel(format: Format): String {
         val lang = format.language?.let {
             try {
@@ -563,9 +623,15 @@ class VideoPlayerViewModel @Inject constructor(
         positionJob?.cancel()
         positionJob = viewModelScope.launch {
             while (true) {
-                _exoPlayer?.let { player ->
-                    _currentPosition = player.currentPosition
-                    _duration = player.duration.coerceAtLeast(0L)
+                val engine = _playerEngine
+                if (engine != null) {
+                    _currentPosition = engine.currentPositionMs
+                    _duration = engine.durationMs.coerceAtLeast(0L)
+                } else {
+                    _exoPlayer?.let { player ->
+                        _currentPosition = player.currentPosition
+                        _duration = player.duration.coerceAtLeast(0L)
+                    }
                 }
                 delay(250)
             }
@@ -577,14 +643,24 @@ class VideoPlayerViewModel @Inject constructor(
         progressJob = viewModelScope.launch {
             while (true) {
                 delay(10_000)
-                val player = _exoPlayer ?: continue
                 val itemId = currentItemId ?: continue
+                val engine = _playerEngine
+                val positionTicks: Long
+                val isPaused: Boolean
+                if (engine != null) {
+                    positionTicks = engine.currentPositionMs * 10_000
+                    isPaused = !engine.isPlaying
+                } else {
+                    val player = _exoPlayer ?: continue
+                    positionTicks = player.currentPosition * 10_000
+                    isPaused = !player.isPlaying
+                }
                 playbackRepository.reportPlaybackProgress(
                     com.raulshma.jellyplay.core.model.PlaybackProgress(
                         itemId = itemId,
                         sessionId = playSessionId,
-                        positionTicks = player.currentPosition * 10_000,
-                        isPaused = !player.isPlaying,
+                        positionTicks = positionTicks,
+                        isPaused = isPaused,
                     )
                 )
             }
@@ -594,6 +670,8 @@ class VideoPlayerViewModel @Inject constructor(
     private fun releaseInternals() {
         progressJob?.cancel()
         positionJob?.cancel()
+        _playerEngine?.release()
+        _playerEngine = null
         _exoPlayer?.removeListener(playerListener)
         _mediaSession?.let { sessionManager.clearSession(it) }
         _mediaSession?.release()
@@ -606,16 +684,22 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun release() {
         val player = _exoPlayer
+        val engine = _playerEngine
         val itemId = currentItemId
         val sessionId = playSessionId
+        val positionTicks = when {
+            engine != null -> engine.currentPositionMs * 10_000
+            player != null -> player.currentPosition * 10_000
+            else -> 0L
+        }
         releaseInternals()
         castManager.release()
-        if (player != null && itemId != null) {
+        if (itemId != null && positionTicks > 0) {
             viewModelScope.launch {
                 playbackRepository.reportPlaybackStopped(
                     itemId = itemId,
                     sessionId = sessionId,
-                    positionTicks = player.currentPosition * 10_000,
+                    positionTicks = positionTicks,
                 )
             }
         }

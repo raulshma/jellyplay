@@ -7,16 +7,19 @@ import android.widget.Toast
 import com.raulshma.jellyplay.core.model.PlayerType
 
 /**
- * Handles launching video playback in external or third-party players
- * based on the user's preferred player setting.
+ * Handles launching video playback in external third-party players
+ * via an Android Intent chooser.
+ *
+ * Only used when the user selects [PlayerType.EXTERNAL].
+ * mpv and LibVLC are now embedded as in-app engines via [PlayerEngine].
  */
 object ExternalPlayerLauncher {
 
     /**
-     * Attempts to launch the given [streamUrl] in the player dictated by [playerType].
+     * Attempts to launch the given [streamUrl] via an external player intent.
      *
-     * @return `true` if the player was launched (or at least an intent was fired),
-     *         `false` if the player type should be handled internally.
+     * @return `true` if a chooser was shown, `false` if the player type
+     *         should be handled internally.
      */
     fun tryLaunch(
         context: Context,
@@ -25,93 +28,22 @@ object ExternalPlayerLauncher {
         title: String,
         startPositionMs: Long = 0,
     ): Boolean {
-        return when (playerType) {
-            PlayerType.EXO_PLAYER -> false // handled internally by VideoPlayerScreen
+        if (playerType != PlayerType.EXTERNAL) return false
 
-            PlayerType.MPV -> {
-                launchMpv(context, streamUrl, title, startPositionMs)
-                true
-            }
-
-            PlayerType.LIBVLC -> {
-                launchVlc(context, streamUrl, title, startPositionMs)
-                true
-            }
-
-            PlayerType.EXTERNAL -> {
-                launchGenericExternal(context, streamUrl, title, startPositionMs)
-                true
-            }
-        }
-    }
-
-    private fun launchMpv(context: Context, url: String, title: String, startPositionMs: Long) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            // mpv-android specific extras
-            setPackage("is.xyz.mpv")
-            putExtra("title", title)
-            if (startPositionMs > 0) {
-                putExtra("position", (startPositionMs / 1000).toInt()) // seconds
-            }
-        }
-        launchOrFallback(context, intent, "mpv-android", url, title, startPositionMs)
-    }
-
-    private fun launchVlc(context: Context, url: String, title: String, startPositionMs: Long) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            setPackage("org.videolan.vlc")
-            putExtra("title", title)
-            if (startPositionMs > 0) {
-                putExtra("position", startPositionMs) // VLC expects milliseconds
-            }
-            putExtra("from_start", startPositionMs <= 0)
-        }
-        launchOrFallback(context, intent, "VLC", url, title, startPositionMs)
-    }
-
-    private fun launchGenericExternal(
-        context: Context,
-        url: String,
-        title: String,
-        startPositionMs: Long,
-    ) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
+            setDataAndType(Uri.parse(streamUrl), "video/*")
             putExtra("title", title)
             if (startPositionMs > 0) {
                 putExtra("position", startPositionMs)
             }
         }
-        try {
+
+        return try {
             context.startActivity(Intent.createChooser(intent, "Open with…"))
+            true
         } catch (e: Exception) {
             Toast.makeText(context, "No video player found", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /**
-     * Tries the targeted intent first; if the specific app isn't installed
-     * falls back to a generic chooser so the user can pick any player.
-     */
-    private fun launchOrFallback(
-        context: Context,
-        intent: Intent,
-        appName: String,
-        url: String,
-        title: String,
-        startPositionMs: Long,
-    ) {
-        try {
-            context.startActivity(intent)
-        } catch (_: Exception) {
-            Toast.makeText(
-                context,
-                "$appName not installed — opening chooser",
-                Toast.LENGTH_SHORT,
-            ).show()
-            launchGenericExternal(context, url, title, startPositionMs)
+            false
         }
     }
 }

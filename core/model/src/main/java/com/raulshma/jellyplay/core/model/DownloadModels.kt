@@ -50,8 +50,8 @@ data class UserPreferences(
 @Serializable
 enum class PlayerType(val displayName: String, val description: String) {
     EXO_PLAYER("ExoPlayer", "Built-in Media3 player with full controls"),
-    MPV("mpv", "mpv-android with broad codec support"),
-    LIBVLC("LibVLC", "VLC media engine for maximum compatibility"),
+    MPV("mpv", "Embedded libmpv engine with broad codec & HDR support"),
+    LIBVLC("LibVLC", "Embedded VLC engine for maximum format compatibility"),
     EXTERNAL("External", "Open in an external app (e.g. MX Player)"),
     ;
 

@@ -70,9 +70,23 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            pickFirsts += listOf(
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so",
+                "lib/x86/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so"
+            )
+        }
+    }
 }
 
 dependencies {
+    // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so
+    implementation(libs.libmpv)
+    
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:network"))

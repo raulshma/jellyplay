@@ -142,13 +142,12 @@ fun VideoPlayerScreen(
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
     }
 
-    // When a non-ExoPlayer backend is selected, launch the external player
-    // once the stream URL is resolved and navigate back.
+    // When EXTERNAL player is selected, launch via intent and navigate back.
     val preferredPlayer = viewModel.preferredPlayerType
     val streamUrl = viewModel.streamUrl
 
     LaunchedEffect(preferredPlayer, streamUrl) {
-        if (preferredPlayer != com.raulshma.jellyplay.core.model.PlayerType.EXO_PLAYER
+        if (preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL
             && streamUrl != null
             && !externalLaunched
         ) {
@@ -227,6 +226,24 @@ fun VideoPlayerScreen(
     val trickplayUrl = viewModel.trickplayUrl
     val subtitleStyle = viewModel.subtitleStyle
 
+    // Engine-aware playback helpers — delegate to mpv/LibVLC engine when active,
+    // otherwise fall through to ExoPlayer.
+    val activeEngine = viewModel.playerEngine
+    val doPlay: () -> Unit = { if (activeEngine != null) activeEngine.play() else exoPlayer?.play() }
+    val doPause: () -> Unit = { if (activeEngine != null) activeEngine.pause() else exoPlayer?.pause() }
+    val doTogglePlayPause: () -> Unit = {
+        if (isPlaying) doPause() else doPlay()
+    }
+    val doSeekTo: (Long) -> Unit = { ms ->
+        if (activeEngine != null) activeEngine.seekTo(ms) else exoPlayer?.seekTo(ms)
+    }
+    val doSeekBack: () -> Unit = {
+        if (activeEngine != null) activeEngine.seekBack() else exoPlayer?.seekBack()
+    }
+    val doSeekForward: () -> Unit = {
+        if (activeEngine != null) activeEngine.seekForward() else exoPlayer?.seekForward()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -252,15 +269,15 @@ fun VideoPlayerScreen(
                             offset.x < width * 0.35 -> {
                                 seekDirection = -1
                                 seekOffsetMs = 10_000L
-                                exoPlayer?.seekBack()
+                                doSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
                                 seekOffsetMs = 10_000L
-                                exoPlayer?.seekForward()
+                                doSeekForward()
                             }
                             else -> {
-                                if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
+                                doTogglePlayPause()
                             }
                         }
                     },
@@ -275,36 +292,45 @@ fun VideoPlayerScreen(
                 )
             },
     ) {
-        exoPlayer?.let { player ->
+        val engine = viewModel.playerEngine
+        if (engine != null) {
+            // mpv or LibVLC engine — render the engine's custom surface
             AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        this.player = player
-                        useController = false
-                        playerViewRef = this
-                        val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
-                        val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
-                        subtitleView?.setStyle(
-                            androidx.media3.ui.CaptionStyleCompat(
-                                subtitleStyle.fontColor.value,
-                                bgColorWithAlpha,
-                                android.graphics.Color.TRANSPARENT,
-                                when (subtitleStyle.edgeType) {
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
-                                    else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
-                                },
-                                subtitleStyle.edgeColor.value,
-                                null,
-                            )
-                        )
-                        subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
-                    }
-                },
+                factory = { ctx -> engine.createPlayerView(ctx) },
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            exoPlayer?.let { player ->
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            this.player = player
+                            useController = false
+                            playerViewRef = this
+                            val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
+                            val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
+                            subtitleView?.setStyle(
+                                androidx.media3.ui.CaptionStyleCompat(
+                                    subtitleStyle.fontColor.value,
+                                    bgColorWithAlpha,
+                                    android.graphics.Color.TRANSPARENT,
+                                    when (subtitleStyle.edgeType) {
+                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
+                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
+                                        else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+                                    },
+                                    subtitleStyle.edgeColor.value,
+                                    null,
+                                )
+                            )
+                            subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         GestureOverlay(
@@ -313,9 +339,15 @@ fun VideoPlayerScreen(
             brightnessValue = brightnessOverlay,
             volumeValue = volumeOverlay,
             onSeekGesture = { delta ->
-                exoPlayer?.let { player ->
-                    val newPos = (player.currentPosition + delta).coerceIn(0, player.duration.coerceAtLeast(0))
-                    player.seekTo(newPos)
+                val eng = viewModel.playerEngine
+                if (eng != null) {
+                    val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
+                    eng.seekTo(newPos)
+                } else {
+                    exoPlayer?.let { player ->
+                        val newPos = (player.currentPosition + delta).coerceIn(0, player.duration.coerceAtLeast(0))
+                        player.seekTo(newPos)
+                    }
                 }
             },
             onBrightnessGesture = { delta ->
@@ -377,14 +409,13 @@ fun VideoPlayerScreen(
             duration = duration,
             playbackSpeed = playbackSpeed,
             hasChapters = viewModel.chapters.isNotEmpty(),
-            exoPlayer = exoPlayer,
             isVisible = showControls,
-            onPlayPause = {
-                if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
-            },
+            onPlayPause = { doTogglePlayPause() },
+            onSeekBack = { doSeekBack() },
+            onSeekForward = { doSeekForward() },
             onSeek = { fraction ->
                 if (duration > 0) {
-                    exoPlayer?.seekTo((fraction * duration).toLong())
+                    doSeekTo((fraction * duration).toLong())
                 }
             },
             onSeekStart = {
@@ -463,7 +494,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(exoPlayer, viewModel.secondarySubtitleTrack) {
         val track = viewModel.secondarySubtitleTrack ?: return@LaunchedEffect
         while (true) {
-            val pos = exoPlayer?.currentPosition ?: 0L
+            val pos = activeEngine?.currentPositionMs ?: exoPlayer?.currentPosition ?: 0L
             secondarySubtitleText = viewModel.getSecondarySubtitleText(pos)
             delay(250)
         }
@@ -500,7 +531,7 @@ fun VideoPlayerScreen(
             chapters = viewModel.chapters,
             currentPositionMs = currentPosition,
             onSelect = { positionTicks ->
-                exoPlayer?.seekTo(positionTicks / 10_000)
+                doSeekTo(positionTicks / 10_000)
                 showChapterPicker = false
             },
             onDismiss = { showChapterPicker = false },
@@ -760,9 +791,10 @@ private fun PlayerControls(
     duration: Long,
     playbackSpeed: Float,
     hasChapters: Boolean,
-    exoPlayer: androidx.media3.exoplayer.ExoPlayer?,
     isVisible: Boolean,
     onPlayPause: () -> Unit,
+    onSeekBack: () -> Unit,
+    onSeekForward: () -> Unit,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -844,7 +876,7 @@ private fun PlayerControls(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(
-                    onClick = { exoPlayer?.seekBack() },
+                    onClick = { onSeekBack() },
                     modifier = Modifier
                         .size(56.dp)
                         .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
@@ -872,7 +904,7 @@ private fun PlayerControls(
                 }
                 Spacer(Modifier.width(32.dp))
                 IconButton(
-                    onClick = { exoPlayer?.seekForward() },
+                    onClick = { onSeekForward() },
                     modifier = Modifier
                         .size(56.dp)
                         .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)

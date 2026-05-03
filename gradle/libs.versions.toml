@@ -28,6 +28,8 @@ espressoCore = "3.7.0"
 playServicesCast = "22.1.0"
 mlkitTextRecognition = "16.0.1"
 slf4j = "2.0.13"
+libmpv = "0.1.12"
+libvlc = "3.7.0"
 
 [libraries]
 # AndroidX Core
@@ -114,6 +116,10 @@ mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition"
 # SLF4J
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
 slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
+
+# Player Engines
+libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
+libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
