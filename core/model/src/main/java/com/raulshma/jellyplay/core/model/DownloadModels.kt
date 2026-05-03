@@ -38,6 +38,8 @@ data class UserPreferences(
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val maxCacheSizeMb: Int = 500,
     val autoDeleteCache: Boolean = true,
+    val pinLockEnabled: Boolean = false,
+    val pinHash: String? = null,
 )
 
 @Serializable

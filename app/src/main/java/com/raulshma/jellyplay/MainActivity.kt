@@ -5,10 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
+import com.raulshma.jellyplay.core.ui.components.PinLockScreen
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -22,8 +26,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = hiltViewModel()
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+            var isPinUnlocked by rememberSaveable { mutableStateOf(false) }
+            var pinError by rememberSaveable { mutableStateOf<String?>(null) }
+
+            val showPinLock = preferences.pinLockEnabled &&
+                preferences.pinHash != null &&
+                !isPinUnlocked
+
             JellyPlayTheme(dynamicColor = preferences.dynamicTheming) {
-                JellyPlayApp()
+                if (showPinLock) {
+                    PinLockScreen(
+                        onPinEntered = { pin ->
+                            val valid = viewModel.preferencesStore.verifyPin(
+                                pin,
+                                preferences.pinHash,
+                            )
+                            if (valid) {
+                                isPinUnlocked = true
+                                pinError = null
+                            } else {
+                                pinError = "Incorrect PIN"
+                            }
+                        },
+                        onErrorClear = { pinError = null },
+                        errorMessage = pinError,
+                    )
+                } else {
+                    JellyPlayApp()
+                }
             }
         }
     }

@@ -113,4 +113,27 @@ class SettingsViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch { authRepository.logout() }
     }
+
+    fun setPinLockEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setPinLockEnabled(enabled) }
+    }
+
+    fun setPin(pin: String) {
+        viewModelScope.launch {
+            val hash = preferencesStore.hashPin(pin)
+            preferencesStore.setPinHash(hash)
+            preferencesStore.setPinLockEnabled(true)
+        }
+    }
+
+    fun clearPin() {
+        viewModelScope.launch {
+            preferencesStore.setPinLockEnabled(false)
+            preferencesStore.setPinHash(null)
+        }
+    }
+
+    fun verifyPin(pin: String): Boolean {
+        return preferencesStore.verifyPin(pin, preferences.pinHash)
+    }
 }

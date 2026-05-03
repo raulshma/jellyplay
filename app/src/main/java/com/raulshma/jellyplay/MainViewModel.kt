@@ -16,7 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val preferencesStore: UserPreferencesStore,
+    val preferencesStore: UserPreferencesStore,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)

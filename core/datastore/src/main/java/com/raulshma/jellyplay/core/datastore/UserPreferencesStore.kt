@@ -35,6 +35,9 @@ class UserPreferencesStore @Inject constructor(
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val MAX_CACHE_SIZE_MB = stringPreferencesKey("max_cache_size_mb")
         val AUTO_DELETE_CACHE = stringPreferencesKey("auto_delete_cache")
+        val PIN_LOCK_ENABLED = stringPreferencesKey("pin_lock_enabled")
+        val PIN_HASH = stringPreferencesKey("pin_hash")
+        val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -59,6 +62,8 @@ class UserPreferencesStore @Inject constructor(
             streamingQuality = streamingQuality,
             maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 500,
             autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
+            pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
+            pinHash = prefs[Keys.PIN_HASH],
         )
     }
 
@@ -111,7 +116,42 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled.toString() }
     }
 
+    suspend fun setPinLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setPinHash(hash: String?) {
+        context.dataStore.edit {
+            if (hash != null) it[Keys.PIN_HASH] = hash
+            else it.remove(Keys.PIN_HASH)
+        }
+    }
+
     suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
     }
+
+    fun verifyPin(input: String, storedHash: String?): Boolean {
+        if (storedHash == null) return false
+        return hashPin(input) == storedHash
+    }
+
+    fun hashPin(pin: String): String {
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(pin.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
+        context.dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
+    }
+
+    val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.CONTINUE_WATCHING]?.let {
+                try {
+                    json.decodeFromString<List<com.raulshma.jellyplay.core.model.MediaItem>>(it)
+                } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
 }

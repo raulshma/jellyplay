@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -20,9 +21,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +37,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -57,6 +64,11 @@ fun SettingsScreen(
 ) {
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
+
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinConfirm by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -242,6 +254,34 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            SettingsSectionHeader("Security")
+
+            SettingItem(
+                icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                title = "PIN Lock",
+                subtitle = if (preferences.pinLockEnabled) "Enabled" else "Disabled",
+                onClick = {
+                    if (preferences.pinLockEnabled) {
+                        viewModel.clearPin()
+                    } else {
+                        showPinDialog = true
+                    }
+                },
+            ) {
+                Switch(
+                    checked = preferences.pinLockEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            showPinDialog = true
+                        } else {
+                            viewModel.clearPin()
+                        }
+                    },
+                )
+            }
+
+            HorizontalDivider()
+
             SettingsSectionHeader("About")
 
             SettingItem(
@@ -268,6 +308,88 @@ fun SettingsScreen(
                 Text("Sign Out")
             }
         }
+    }
+
+    if (showPinDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPinDialog = false
+                pinInput = ""
+                pinConfirm = ""
+                pinError = null
+            },
+            title = { Text("Set PIN") },
+            text = {
+                Column {
+                    TextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinInput = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("4-digit PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinError != null,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextField(
+                        value = pinConfirm,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinConfirm = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("Confirm PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinError != null,
+                    )
+                    if (pinError != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            pinError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when {
+                            pinInput.length != 4 -> pinError = "PIN must be 4 digits"
+                            pinInput != pinConfirm -> pinError = "PINs do not match"
+                            else -> {
+                                viewModel.setPin(pinInput)
+                                showPinDialog = false
+                                pinInput = ""
+                                pinConfirm = ""
+                                pinError = null
+                            }
+                        }
+                    },
+                ) {
+                    Text("Set")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPinDialog = false
+                        pinInput = ""
+                        pinConfirm = ""
+                        pinError = null
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
