@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToLong
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -198,15 +199,21 @@ fun SubtitleStyleSheet(
             }
 
             Spacer(Modifier.height(12.dp))
-            Text("Subtitle Offset: ${offsetMs}ms", style = MaterialTheme.typography.bodyMedium)
+            val offsetSec = offsetMs / 1000.0
+            val offsetLabel = when {
+                offsetMs == 0L -> "0.0s"
+                offsetMs > 0 -> "+${"%.1f".format(offsetSec)}s"
+                else -> "${"%.1f".format(offsetSec)}s"
+            }
+            Text("Subtitle Offset: $offsetLabel", style = MaterialTheme.typography.bodyMedium)
             Slider(
                 value = offsetMs.toFloat(),
-                onValueChange = { offsetMs = it.toLong() },
+                onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
                 onValueChangeFinished = {
                     onStyleChange(currentStyle.copy(offsetMs = offsetMs))
                 },
-                valueRange = -5000f..5000f,
-                steps = 20,
+                valueRange = -10000f..10000f,
+                steps = 199,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,

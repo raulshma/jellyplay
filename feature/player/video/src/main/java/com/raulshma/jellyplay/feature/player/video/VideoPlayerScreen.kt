@@ -228,6 +228,7 @@ fun VideoPlayerScreen(
                                     else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
                                 },
                                 subtitleStyle.edgeColor.value,
+                                null,
                             )
                         )
                         subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())

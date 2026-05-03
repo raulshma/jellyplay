@@ -1,21 +1,60 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes Exceptions
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keepclassmembers class **$serializer {
+    *** Companion;
+    *** writeObject(...);
+    *** readObject(...);
+}
+-keepclassmembers class ** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.raulshma.jellyplay.**$$serializer { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+-keep class org.jellyfin.sdk.model.api.** { *; }
+-keep class org.jellyfin.sdk.model.** { *; }
+
+-keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
+
+-keep class com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService { *; }
+
+-keep @androidx.room.Entity class * { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }
+
+-keepclassmembers class * {
+    @androidx.room.Query <methods>;
+    @androidx.room.Insert <methods>;
+    @androidx.room.Update <methods>;
+    @androidx.room.Delete <methods>;
+}
+
+-keepnames class kotlinx.serialization.internal.EnumSerializer { *; }
+-keepnames class kotlinx.serialization.internal.CollectionSerializer { *; }
+-keepnames class kotlinx.serialization.internal.MapSerializer { *; }
+
+-keepclassmembers class * {
+    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
+}
+
+-keep class com.raulshma.jellyplay.core.ui.navigation.Route** { *; }
+-keepclassmembers class com.raulshma.jellyplay.core.ui.navigation.Route** {
+    *;
+}
+
+-dontwarn kotlinx.serialization.**
+-dontwarn org.jellyfin.sdk.**
+-dontwarn org.slf4j.**
+-dontwarn io.github.oshai.kotlinlogging.**

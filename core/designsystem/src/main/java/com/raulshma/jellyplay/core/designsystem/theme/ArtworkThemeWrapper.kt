@@ -9,10 +9,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.graphics.drawable.toBitmap
 import coil3.ImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import coil3.request.allowHardware
 import coil3.size.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,7 +43,8 @@ fun ArtworkThemeWrapper(
                     .build()
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
-                    val bitmap = result.image.toBitmap(256, 256, Bitmap.Config.ARGB_8888)
+                    val bitmap = (result.image as? coil3.BitmapImage)?.bitmap
+                        ?: return@withContext
                     artworkColors = ArtworkColorExtractor.extractColors(bitmap)
                 }
             } catch (_: Exception) {

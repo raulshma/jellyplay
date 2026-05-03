@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -11,9 +12,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -46,6 +50,7 @@ class AudioPlayerViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val sessionManager: PlaybackSessionManager,
 ) : ViewModel() {
 
     val preferences = preferencesStore.preferences
@@ -117,7 +122,19 @@ class AudioPlayerViewModel @Inject constructor(
                         source?.id ?: "",
                     )
 
-                    val mediaItem = androidx.media3.common.MediaItem.fromUri(url)
+                    val artworkUri = Uri.parse(albumArtUrl)
+
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(url)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(title)
+                                .setArtist(artist)
+                                .setAlbumTitle(album)
+                                .setArtworkUri(artworkUri)
+                                .build()
+                        )
+                        .build()
                     player.setMediaItem(mediaItem)
                     player.prepare()
 
@@ -263,11 +280,14 @@ class AudioPlayerViewModel @Inject constructor(
         val player = ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         player.addListener(playerListener)
 
         exoPlayer = player
-        mediaSession = MediaSession.Builder(context, player).build()
+        val session = MediaSession.Builder(context, player).build()
+        mediaSession = session
+        sessionManager.setActiveSession(session)
         return player
     }
 
@@ -316,6 +336,7 @@ class AudioPlayerViewModel @Inject constructor(
         progressJob?.cancel()
         positionJob?.cancel()
         exoPlayer?.removeListener(playerListener)
+        mediaSession?.let { sessionManager.clearSession(it) }
         mediaSession?.release()
         mediaSession = null
         exoPlayer?.release()
@@ -327,6 +348,7 @@ class AudioPlayerViewModel @Inject constructor(
         progressJob?.cancel()
         positionJob?.cancel()
         exoPlayer?.removeListener(playerListener)
+        mediaSession?.let { sessionManager.clearSession(it) }
         mediaSession?.release()
         exoPlayer?.release()
         exoPlayer = null

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.navigation
 
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,7 +14,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,21 +120,21 @@ private fun MainContent(
     ) { innerPadding ->
         val currentBackStack = navigationState.backStacks[currentTopLevel] ?: return@Scaffold
 
-            NavDisplay(
-                backStack = currentBackStack,
-                onBack = { navigator.goBack() },
-                modifier = Modifier.padding(innerPadding),
-                entryProvider = entryProvider {
-                    homeSection(navigator)
-                    librarySection(navigator)
-                    searchSection(navigator)
-                    detailsSection(navigator)
-                    videoPlayerSection(navigator)
-                    audioPlayerSection(navigator)
-                    downloadsSection(navigator)
-                    settingsSection(navigator, onLogout)
-                    musicSection(navigator)
-                },
-            )
+        NavDisplay(
+            backStack = currentBackStack,
+            onBack = { navigator.goBack() },
+            entryProvider = entryProvider {
+                homeSection(navigator)
+                librarySection(navigator)
+                searchSection(navigator)
+                detailsSection(navigator)
+                videoPlayerSection(navigator)
+                audioPlayerSection(navigator)
+                downloadsSection(navigator)
+                settingsSection(navigator, onLogout)
+                musicSection(navigator)
+            },
+            modifier = Modifier.padding(innerPadding),
+        )
     }
 }

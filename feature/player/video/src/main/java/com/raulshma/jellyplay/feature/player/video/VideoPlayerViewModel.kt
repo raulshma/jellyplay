@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -10,11 +11,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -46,6 +49,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val sessionManager: PlaybackSessionManager,
 ) : ViewModel() {
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
@@ -133,11 +137,14 @@ class VideoPlayerViewModel @Inject constructor(
 
         val player = ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         _exoPlayer = player
         player.addListener(playerListener)
 
-        _mediaSession = MediaSession.Builder(context, player).build()
+        val session = MediaSession.Builder(context, player).build()
+        _mediaSession = session
+        sessionManager.setActiveSession(session)
 
         startPositionTracking()
 
@@ -179,9 +186,20 @@ class VideoPlayerViewModel @Inject constructor(
 
                     val subtitleConfigs = buildSubtitleConfigurations(source?.mediaStreams ?: emptyList())
 
+                    val artworkUri = Uri.parse(
+                        playbackRepository.getImageUrl(itemId, maxWidth = 300)
+                    )
+
                     val mediaItem = MediaItem.Builder()
                         .setUri(url)
                         .setSubtitleConfigurations(subtitleConfigs)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(detail.item.name)
+                                .setSubtitle(detail.item.seriesName ?: detail.item.overview?.take(60))
+                                .setArtworkUri(artworkUri)
+                                .build()
+                        )
                         .build()
 
                     _exoPlayer?.setMediaItem(mediaItem)
@@ -411,6 +429,7 @@ class VideoPlayerViewModel @Inject constructor(
         progressJob?.cancel()
         positionJob?.cancel()
         _exoPlayer?.removeListener(playerListener)
+        _mediaSession?.let { sessionManager.clearSession(it) }
         _mediaSession?.release()
         _mediaSession = null
         _exoPlayer?.release()
@@ -423,6 +442,7 @@ class VideoPlayerViewModel @Inject constructor(
         progressJob?.cancel()
         positionJob?.cancel()
         _exoPlayer?.removeListener(playerListener)
+        _mediaSession?.let { sessionManager.clearSession(it) }
         _mediaSession?.release()
         _exoPlayer?.release()
         _exoPlayer = null

@@ -268,6 +268,7 @@ fun AudioPlayerScreen(
             }
         }
     }
+    }
 
     if (showQueue && viewModel.queue.isNotEmpty()) {
         QueueSheet(
@@ -351,10 +352,9 @@ private fun QueueSheet(
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(end = 8.dp),
                             )
-        }
-    }
-    }
-}
+                        }
+                    }
+                }
             }
         }
     }

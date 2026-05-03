@@ -55,17 +55,18 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.disconnect()
         apiClient.setServer(server)
         val token = serverEntity.accessToken
-        if (token != null && serverEntity.userId != null) {
+        val userId = serverEntity.userId
+        if (token != null && userId != null) {
             apiClient.setUser(
                 UserInfo(
-                    id = serverEntity.userId,
+                    id = userId,
                     name = "",
                     serverAddress = server.address,
                     accessToken = token,
                 )
             )
             preferencesStore.setActiveServer(serverId)
-            preferencesStore.setActiveUser(serverEntity.userId)
+            preferencesStore.setActiveUser(userId)
             serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
         }
     }

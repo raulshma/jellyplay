@@ -29,4 +29,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.paging.runtime)
     implementation(libs.work.runtime.ktx)
+    implementation(libs.media3.session)
 }

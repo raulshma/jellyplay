@@ -54,7 +54,7 @@ class ServerManagementViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.removeServer(serverId)
             if (activeServerId == serverId) {
-                val remaining = servers.first { it.id != serverId }
+                val remaining = servers.filter { it.id != serverId }
                 if (remaining.isNotEmpty()) {
                     switchServer(remaining.first().id) {}
                 }

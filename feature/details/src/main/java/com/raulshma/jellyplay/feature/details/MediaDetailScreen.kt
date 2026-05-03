@@ -38,8 +38,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import android.os.StatFs
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -63,6 +67,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun MediaDetailScreen(
@@ -81,7 +86,7 @@ fun MediaDetailScreen(
     val detail by viewModel.detail
     val isLoading by viewModel.isLoading
     val error by viewModel.error
-    val preferences by viewModel.preferences
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     val currentItem = detail?.item
     val backdropUrl = currentItem?.let { viewModel.getBackdropUrl(it.id) }
@@ -128,6 +133,7 @@ fun MediaDetailScreen(
             )
         }
     }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,6 +159,7 @@ private fun DetailContent(
     val item = detail.item
     val scrollState = rememberScrollState()
     val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
+    var showDownloadDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         MediaImage(
@@ -244,11 +251,10 @@ private fun DetailContent(
                                 text = it,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            }
-        }
-    }
-}
+                            )
+                        }
+                    }
+                }
                 Column {
                     IconButton(onClick = onToggleFavorite) {
                         Icon(
@@ -297,7 +303,7 @@ private fun DetailContent(
                 }
                 if (!isAudio && detail.mediaSources.isNotEmpty()) {
                     OutlinedButton(
-                        onClick = onDownloadClick,
+                        onClick = { showDownloadDialog = true },
                         enabled = !isDownloading && !downloadStarted,
                     ) {
                         if (isDownloading) {
@@ -401,6 +407,65 @@ private fun DetailContent(
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+
+    if (showDownloadDialog) {
+        val source = detail.mediaSources.firstOrNull()
+        val fileSize = source?.size
+        val context = LocalContext.current
+        val availableBytes = remember {
+            val stat = StatFs(context.filesDir.absolutePath)
+            stat.availableBlocksLong * stat.blockSizeLong
+        }
+        val fileSizeText = fileSize?.let { size ->
+            when {
+                size >= 1_000_000_000 -> "%.1f GB".format(size / 1_000_000_000.0)
+                size >= 1_000_000 -> "%.1f MB".format(size / 1_000_000.0)
+                size >= 1_000 -> "%.1f KB".format(size / 1_000.0)
+                else -> "$size B"
+            }
+        } ?: "Unknown"
+        val availableText = when {
+            availableBytes >= 1_000_000_000 -> "%.1f GB".format(availableBytes / 1_000_000_000.0)
+            availableBytes >= 1_000_000 -> "%.1f MB".format(availableBytes / 1_000_000.0)
+            else -> "%.1f KB".format(availableBytes / 1_000.0)
+        }
+        val enoughSpace = fileSize == null || fileSize <= availableBytes
+
+        AlertDialog(
+            onDismissRequest = { showDownloadDialog = false },
+            title = { Text("Download") },
+            text = {
+                Column {
+                    Text("Estimated size: $fileSizeText")
+                    Spacer(Modifier.height(8.dp))
+                    Text("Available storage: $availableText")
+                    if (!enoughSpace) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Not enough storage space available.",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDownloadDialog = false
+                        onDownloadClick()
+                    },
+                    enabled = enoughSpace,
+                ) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDownloadDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
