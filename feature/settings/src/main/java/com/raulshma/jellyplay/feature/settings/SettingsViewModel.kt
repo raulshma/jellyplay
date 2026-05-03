@@ -164,6 +164,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setKidsModeMaxRating(rating) }
     }
 
+    fun setDialogueBoostEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setDialogueBoostEnabled(enabled) }
+    }
+
     fun switchUser(userId: String, onComplete: () -> Unit) {
         viewModelScope.launch {
             authRepository.switchUser(userId)

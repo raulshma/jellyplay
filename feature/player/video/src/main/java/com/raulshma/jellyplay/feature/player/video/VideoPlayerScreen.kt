@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -366,6 +367,8 @@ fun VideoPlayerScreen(
                 onChapterClick = { showChapterPicker = true },
                 onInfoClick = { showPlaybackInfo = true },
                 onAspectRatioClick = { showAspectRatio = true },
+                onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
+                dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
                 isFullscreen = isFullscreen,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -641,6 +644,8 @@ private fun PlayerControls(
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
+    onDialogueBoostClick: () -> Unit,
+    dialogueBoostEnabled: Boolean,
     isFullscreen: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -785,6 +790,13 @@ private fun PlayerControls(
                     }
                     IconButton(onClick = onInfoClick) {
                         Icon(Icons.Default.Info, "Playback Info", tint = Color.White)
+                    }
+                    IconButton(onClick = onDialogueBoostClick) {
+                        Icon(
+                            Icons.Default.RecordVoiceOver,
+                            "Dialogue Boost",
+                            tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                        )
                     }
                 }
                 IconButton(onClick = onFullscreen) {

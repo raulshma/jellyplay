@@ -22,6 +22,7 @@ import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
+import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -124,10 +125,14 @@ class VideoPlayerViewModel @Inject constructor(
     private var _secondarySubtitleOffsetMs by mutableStateOf(0L)
     val secondarySubtitleOffsetMs get() = _secondarySubtitleOffsetMs
 
+    private var _dialogueBoostEnabled by mutableStateOf(false)
+    val dialogueBoostEnabled get() = _dialogueBoostEnabled
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var currentItemId: String? = null
+    private val dialogueBoost = DialogueBoostHelper()
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -234,6 +239,11 @@ class VideoPlayerViewModel @Inject constructor(
                     _exoPlayer?.play()
 
                     val prefs = preferencesStore.preferences.first()
+                    _dialogueBoostEnabled = prefs.dialogueBoostEnabled
+                    if (_dialogueBoostEnabled) {
+                        applyDialogueBoost()
+                    }
+
                     if (prefs.preferredSubtitleLanguage != null) {
                         val selector = _trackSelector ?: return@launch
                         val params = selector.buildUponParameters()
@@ -355,6 +365,22 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun updateSubtitleOffset(offsetMs: Long) {
         subtitleOffsetMs = offsetMs
+    }
+
+    fun toggleDialogueBoost() {
+        _dialogueBoostEnabled = !_dialogueBoostEnabled
+        applyDialogueBoost()
+        viewModelScope.launch {
+            preferencesStore.setDialogueBoostEnabled(_dialogueBoostEnabled)
+        }
+    }
+
+    private fun applyDialogueBoost() {
+        val player = _exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        dialogueBoost.attach(audioSessionId)
+        dialogueBoost.setEnabled(_dialogueBoostEnabled)
     }
 
     @Volatile
@@ -514,6 +540,7 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer?.release()
         _exoPlayer = null
         _trackSelector = null
+        dialogueBoost.detach()
     }
 
     override fun onCleared() {
@@ -525,6 +552,7 @@ class VideoPlayerViewModel @Inject constructor(
         _mediaSession?.release()
         _exoPlayer?.release()
         _exoPlayer = null
+        dialogueBoost.detach()
     }
 }
 

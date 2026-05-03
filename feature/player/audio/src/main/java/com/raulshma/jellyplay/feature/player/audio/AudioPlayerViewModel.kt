@@ -18,6 +18,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -30,6 +31,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -89,11 +91,15 @@ class AudioPlayerViewModel @Inject constructor(
     var nightModeEnabled by mutableStateOf(false)
         private set
 
+    var dialogueBoostEnabled by mutableStateOf(false)
+        private set
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private val dialogueBoost = DialogueBoostHelper()
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -144,6 +150,13 @@ class AudioPlayerViewModel @Inject constructor(
                     player.prepare()
                     if (nightModeEnabled) {
                         applyNightMode()
+                    }
+                    viewModelScope.launch {
+                        val prefs = preferencesStore.preferences.first()
+                        dialogueBoostEnabled = prefs.dialogueBoostEnabled
+                        if (dialogueBoostEnabled) {
+                            applyDialogueBoost()
+                        }
                     }
 
                     val resumeTicks = detail.item.playbackPositionTicks ?: 0L
@@ -268,6 +281,14 @@ class AudioPlayerViewModel @Inject constructor(
         applyNightMode()
     }
 
+    fun toggleDialogueBoost() {
+        dialogueBoostEnabled = !dialogueBoostEnabled
+        applyDialogueBoost()
+        viewModelScope.launch {
+            preferencesStore.setDialogueBoostEnabled(dialogueBoostEnabled)
+        }
+    }
+
     private fun applyNightMode() {
         val player = exoPlayer ?: return
         if (nightModeEnabled) {
@@ -279,6 +300,14 @@ class AudioPlayerViewModel @Inject constructor(
             loudnessEnhancer?.release()
             loudnessEnhancer = null
         }
+    }
+
+    private fun applyDialogueBoost() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        dialogueBoost.attach(audioSessionId)
+        dialogueBoost.setEnabled(dialogueBoostEnabled)
     }
 
     private fun attachLoudnessEnhancer(audioSessionId: Int) {
@@ -380,6 +409,9 @@ class AudioPlayerViewModel @Inject constructor(
         mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
+        dialogueBoost.detach()
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
     }
 
     override fun onCleared() {
@@ -391,5 +423,8 @@ class AudioPlayerViewModel @Inject constructor(
         mediaSession?.release()
         exoPlayer?.release()
         exoPlayer = null
+        dialogueBoost.detach()
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
     }
 }

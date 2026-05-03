@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -143,6 +144,19 @@ fun SettingsScreen(
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.RecordVoiceOver,
+                title = "Dialogue Boost",
+                subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Disabled",
+            ) {
+                Switch(
+                    checked = preferences.dialogueBoostEnabled,
+                    onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
                 )
             }
 

@@ -42,6 +42,7 @@ data class UserPreferences(
     val pinHash: String? = null,
     val kidsModeEnabled: Boolean = false,
     val kidsModeMaxRating: String = "PG",
+    val dialogueBoostEnabled: Boolean = false,
 )
 
 @Serializable

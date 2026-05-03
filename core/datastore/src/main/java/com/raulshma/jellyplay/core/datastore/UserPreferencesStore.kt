@@ -40,6 +40,7 @@ class UserPreferencesStore @Inject constructor(
         val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
         val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
         val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
+        val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -68,6 +69,7 @@ class UserPreferencesStore @Inject constructor(
             pinHash = prefs[Keys.PIN_HASH],
             kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
             kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
+            dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
         )
     }
 
@@ -156,6 +158,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setKidsModeMaxRating(rating: String) {
         context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
+    }
+
+    suspend fun setDialogueBoostEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
