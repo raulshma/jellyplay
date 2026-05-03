@@ -81,16 +81,34 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.apk_version }}"
           shopt -s nullglob
-          apks=(app/build/outputs/apk/release/*.apk)
+          apks=(app/build/outputs/apk/*/*/*.apk)
           if [ ${#apks[@]} -eq 0 ]; then
             echo "ERROR: No APK files found"
             exit 1
           fi
           for apk in "${apks[@]}"; do
             filename=$(basename "$apk")
-            stripped="${filename#app-}"
-            arch="${stripped%%-*}"
-            new_filename="jellyplay-v${VERSION}-${arch}.apk"
+            rest="${filename#app-}"
+            tmp="${rest%-release.apk}"
+            known_abis="arm64-v8a armeabi-v7a x86_64 universal"
+            matched=false
+            for known in $known_abis; do
+              if [[ "$tmp" == *"-$known" ]]; then
+                flavor="${tmp%-$known}"
+                abi="$known"
+                if [ -n "$flavor" ]; then
+                  new_filename="jellyplay-v${VERSION}-${flavor}-${abi}.apk"
+                else
+                  new_filename="jellyplay-v${VERSION}-${abi}.apk"
+                fi
+                matched=true
+                break
+              fi
+            done
+            if [ "$matched" = false ]; then
+              echo "Unknown APK naming format: $filename"
+              continue
+            fi
             mv "$apk" "$new_filename"
           done
 
