@@ -38,6 +38,8 @@ class UserPreferencesStore @Inject constructor(
         val PIN_LOCK_ENABLED = stringPreferencesKey("pin_lock_enabled")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
+        val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
+        val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -64,6 +66,8 @@ class UserPreferencesStore @Inject constructor(
             autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
             pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
             pinHash = prefs[Keys.PIN_HASH],
+            kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
+            kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
         )
     }
 
@@ -144,6 +148,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
         context.dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
+    }
+
+    suspend fun setKidsModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.KIDS_MODE_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setKidsModeMaxRating(rating: String) {
+        context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

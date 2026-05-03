@@ -1,14 +1,17 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.EpgGuide
+import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.model.HomeSection
-import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.Genre
 import kotlinx.coroutines.flow.Flow
 
 interface JellyfinApiClient {
@@ -141,4 +144,22 @@ interface JellyfinApiClient {
     fun getSubtitleDeliveryUrl(
         deliveryUrl: String,
     ): String
+
+    suspend fun getLiveTvChannels(
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<List<LiveTvChannel>>
+
+    suspend fun getLiveTvPrograms(
+        channelId: String,
+        startDateUtc: String? = null,
+        endDateUtc: String? = null,
+    ): Result<List<LiveTvProgram>>
+
+    suspend fun getLiveTvGuide(
+        startDateUtc: String,
+        endDateUtc: String,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<EpgGuide>
 }

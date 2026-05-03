@@ -13,6 +13,7 @@ sealed class Route : NavKey {
     @Serializable data object Home : Route()
     @Serializable data object Library : Route()
     @Serializable data object Search : Route()
+    @Serializable data object LiveTv : Route()
 
     @Serializable data class MediaDetail(val itemId: String) : Route()
     @Serializable data class PersonDetail(val personId: String) : Route()
@@ -43,10 +44,18 @@ sealed class Route : NavKey {
         val filePath: String,
         val title: String,
     ) : Route()
+
+    @Serializable data class LiveTvChannelPlayer(
+        val channelId: String,
+        val channelName: String,
+    ) : Route()
+
+    @Serializable data object LiveTvGuide : Route()
 }
 
 val TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Home to "Home",
     Route.Library to "Library",
     Route.Search to "Search",
+    Route.LiveTv to "Live TV",
 )

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -277,6 +278,24 @@ fun SettingsScreen(
                             viewModel.clearPin()
                         }
                     },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.ChildCare,
+                title = "Kids Mode",
+                subtitle = if (preferences.kidsModeEnabled) "Enabled (${preferences.kidsModeMaxRating})" else "Disabled",
+                onClick = {
+                    val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
+                    val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
+                    viewModel.setKidsModeMaxRating(nextRating)
+                },
+            ) {
+                Switch(
+                    checked = preferences.kidsModeEnabled,
+                    onCheckedChange = { viewModel.setKidsModeEnabled(it) },
                 )
             }
 

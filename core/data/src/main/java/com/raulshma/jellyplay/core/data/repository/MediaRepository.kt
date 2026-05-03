@@ -1,13 +1,16 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.model.EpgGuide
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.model.Genre
 import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository {
@@ -76,4 +79,22 @@ interface MediaRepository {
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
+
+    suspend fun getLiveTvChannels(
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<List<LiveTvChannel>>
+
+    suspend fun getLiveTvPrograms(
+        channelId: String,
+        startDateUtc: String? = null,
+        endDateUtc: String? = null,
+    ): Result<List<LiveTvProgram>>
+
+    suspend fun getLiveTvGuide(
+        startDateUtc: String,
+        endDateUtc: String,
+        startIndex: Int = 0,
+        limit: Int = 50,
+    ): Result<EpgGuide>
 }

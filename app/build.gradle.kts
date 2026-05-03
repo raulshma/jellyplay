@@ -57,6 +57,7 @@ dependencies {
     implementation(project(":feature:downloads"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:music"))
+    implementation(project(":feature:livetv"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

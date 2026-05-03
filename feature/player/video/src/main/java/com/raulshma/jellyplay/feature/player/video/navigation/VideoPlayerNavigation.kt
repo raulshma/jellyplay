@@ -17,4 +17,12 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             onBack = { navigator.goBack() },
         )
     }
+    entry<Route.LiveTvChannelPlayer> { key ->
+        VideoPlayerScreen(
+            itemId = key.channelId,
+            mediaSourceId = null,
+            startPositionTicks = 0L,
+            onBack = { navigator.goBack() },
+        )
+    }
 }

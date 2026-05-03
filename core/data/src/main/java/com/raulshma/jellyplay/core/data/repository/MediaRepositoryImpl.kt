@@ -5,9 +5,12 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -136,6 +139,24 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
         apiClient.toggleFavorite(itemId)
+
+    override suspend fun getLiveTvChannels(
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<LiveTvChannel>> = apiClient.getLiveTvChannels(startIndex, limit)
+
+    override suspend fun getLiveTvPrograms(
+        channelId: String,
+        startDateUtc: String?,
+        endDateUtc: String?,
+    ): Result<List<LiveTvProgram>> = apiClient.getLiveTvPrograms(channelId, startDateUtc, endDateUtc)
+
+    override suspend fun getLiveTvGuide(
+        startDateUtc: String,
+        endDateUtc: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<EpgGuide> = apiClient.getLiveTvGuide(startDateUtc, endDateUtc, startIndex, limit)
 
     companion object {
         private const val PAGE_SIZE = 50

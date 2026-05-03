@@ -35,10 +35,16 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
+            val prefs = preferencesStore.preferences.first()
             mediaRepository.getHomeSections()
                 .onSuccess { sections ->
-                    this@HomeViewModel.sections = sections
-                    val continueWatching = sections
+                    val filteredSections = if (prefs.kidsModeEnabled) {
+                        sections.map { section ->
+                            section.copy(items = section.items.filter { isAllowedForKids(it, prefs.kidsModeMaxRating) })
+                        }.filter { it.items.isNotEmpty() }
+                    } else sections
+                    this@HomeViewModel.sections = filteredSections
+                    val continueWatching = filteredSections
                         .find { it.type == com.raulshma.jellyplay.core.model.HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     preferencesStore.setContinueWatching(continueWatching)
@@ -51,6 +57,14 @@ class HomeViewModel @Inject constructor(
                 }
             isLoading = false
         }
+    }
+
+    private fun isAllowedForKids(item: com.raulshma.jellyplay.core.model.MediaItem, maxRating: String): Boolean {
+        if (item.officialRating == null) return true
+        val kidRatings = listOf("G", "TV-Y", "TV-Y7", "TV-G", "PG", "TV-PG")
+        val maxIndex = kidRatings.indexOf(maxRating)
+        val itemIndex = kidRatings.indexOf(item.officialRating)
+        return if (itemIndex >= 0 && maxIndex >= 0) itemIndex <= maxIndex else true
     }
 
     fun getImageUrl(itemId: String): String =

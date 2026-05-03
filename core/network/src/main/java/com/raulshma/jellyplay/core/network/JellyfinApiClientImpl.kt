@@ -519,6 +519,86 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         return if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
     }
 
+    override suspend fun getLiveTvChannels(
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<LiveTvChannel>> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
+            startIndex = startIndex,
+            limit = limit,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { it.toLiveTvChannel() }
+    }
+
+    override suspend fun getLiveTvPrograms(
+        channelId: String,
+        startDateUtc: String?,
+        endDateUtc: String?,
+    ): Result<List<LiveTvProgram>> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            parentId = java.util.UUID.fromString(channelId),
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
+            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+        ).content
+        response.items.map { it.toLiveTvProgram() }
+    }
+
+    override suspend fun getLiveTvGuide(
+        startDateUtc: String,
+        endDateUtc: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<EpgGuide> = runCatching {
+        val client = requireApi()
+        val channels = client.itemsApi.getItems(
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
+            startIndex = startIndex,
+            limit = limit,
+            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+        ).content.items.map { it.toLiveTvChannel() }
+
+        val programs = client.itemsApi.getItems(
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
+            limit = 500,
+            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+        ).content.items.map { it.toLiveTvProgram() }
+
+        EpgGuide(channels = channels, programs = programs)
+    }
+
+    private fun org.jellyfin.sdk.model.api.BaseItemDto.toLiveTvChannel() = LiveTvChannel(
+        id = id.toString(),
+        name = name ?: "",
+        number = channelNumber,
+        imageTag = imageTags?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)?.toString(),
+        currentProgram = currentProgram?.toLiveTvProgram(),
+        mediaType = MediaType.CHANNEL,
+    )
+
+    private fun org.jellyfin.sdk.model.api.BaseItemDto.toLiveTvProgram() = LiveTvProgram(
+        id = id.toString(),
+        name = name ?: "",
+        overview = overview,
+        channelId = channelId?.toString() ?: "",
+        startDate = startDate?.toString(),
+        endDate = endDate?.toString(),
+        durationTicks = runTimeTicks,
+        episodeTitle = episodeTitle,
+        officialRating = officialRating,
+        isMovie = isMovie ?: false,
+        isNews = isNews ?: false,
+        isSports = isSports ?: false,
+        isKids = isKids ?: false,
+        isLive = isLive ?: false,
+        isPremiere = isPremiere ?: false,
+        isSeries = isSeries ?: false,
+    )
+
     private fun org.jellyfin.sdk.model.api.BaseItemDto.toMediaItem() = MediaItem(
         id = id.toString(),
         name = name ?: "",

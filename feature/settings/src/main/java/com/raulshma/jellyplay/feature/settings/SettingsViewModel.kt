@@ -136,4 +136,12 @@ class SettingsViewModel @Inject constructor(
     fun verifyPin(pin: String): Boolean {
         return preferencesStore.verifyPin(pin, preferences.pinHash)
     }
+
+    fun setKidsModeEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setKidsModeEnabled(enabled) }
+    }
+
+    fun setKidsModeMaxRating(rating: String) {
+        viewModelScope.launch { preferencesStore.setKidsModeMaxRating(rating) }
+    }
 }

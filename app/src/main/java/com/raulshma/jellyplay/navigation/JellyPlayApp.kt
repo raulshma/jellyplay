@@ -1,22 +1,29 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
@@ -31,6 +38,7 @@ import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
+import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
@@ -97,11 +105,16 @@ private fun MainContent(
     val navigator = Navigator(navigationState)
     val currentTopLevel by navigationState.topLevelRoute
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
+    val configuration = LocalConfiguration.current
+    val isExpanded = configuration.screenWidthDp >= 600
+
+    if (isExpanded) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            NavigationRail(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ) {
                 TOP_LEVEL_ROUTES.forEach { (route, label) ->
-                    NavigationBarItem(
+                    NavigationRailItem(
                         selected = route == currentTopLevel,
                         onClick = { navigator.navigate(route) },
                         icon = {
@@ -109,6 +122,7 @@ private fun MainContent(
                                 Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
                                 Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
                                 Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
+                                Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
                                 else -> {}
                             }
                         },
@@ -116,25 +130,70 @@ private fun MainContent(
                     )
                 }
             }
-        },
-    ) { innerPadding ->
-        val currentBackStack = navigationState.backStacks[currentTopLevel] ?: return@Scaffold
-
-        NavDisplay(
-            backStack = currentBackStack,
-            onBack = { navigator.goBack() },
-            entryProvider = entryProvider {
-                homeSection(navigator)
-                librarySection(navigator)
-                searchSection(navigator)
-                detailsSection(navigator)
-                videoPlayerSection(navigator)
-                audioPlayerSection(navigator)
-                downloadsSection(navigator)
-                settingsSection(navigator, onLogout)
-                musicSection(navigator)
+            MainNavDisplay(
+                navigationState = navigationState,
+                navigator = navigator,
+                onLogout = onLogout,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    } else {
+        Scaffold(
+            bottomBar = {
+                NavigationBar {
+                    TOP_LEVEL_ROUTES.forEach { (route, label) ->
+                        NavigationBarItem(
+                            selected = route == currentTopLevel,
+                            onClick = { navigator.navigate(route) },
+                            icon = {
+                                when (route) {
+                                    Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
+                                    Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
+                                    Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
+                                    Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
+                                    else -> {}
+                                }
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
             },
-            modifier = Modifier.padding(innerPadding),
-        )
+        ) { innerPadding ->
+            MainNavDisplay(
+                navigationState = navigationState,
+                navigator = navigator,
+                onLogout = onLogout,
+                modifier = Modifier.padding(innerPadding),
+            )
+        }
     }
+}
+
+@Composable
+private fun MainNavDisplay(
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    navigator: Navigator,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
+
+    NavDisplay(
+        backStack = currentBackStack,
+        onBack = { navigator.goBack() },
+        entryProvider = entryProvider {
+            homeSection(navigator)
+            librarySection(navigator)
+            searchSection(navigator)
+            liveTvSection(navigator)
+            detailsSection(navigator)
+            videoPlayerSection(navigator)
+            audioPlayerSection(navigator)
+            downloadsSection(navigator)
+            settingsSection(navigator, onLogout)
+            musicSection(navigator)
+        },
+        modifier = modifier,
+    )
 }

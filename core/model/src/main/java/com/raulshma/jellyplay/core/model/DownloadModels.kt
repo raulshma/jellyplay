@@ -40,6 +40,8 @@ data class UserPreferences(
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,
+    val kidsModeEnabled: Boolean = false,
+    val kidsModeMaxRating: String = "PG",
 )
 
 @Serializable
