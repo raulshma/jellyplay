@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,7 @@ import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 @Composable
 fun LibraryScreen(
     onItemClick: (String) -> Unit,
+    onSmartPlaylistsClick: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
@@ -59,6 +61,12 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("Library") },
                 actions = {
+                    IconButton(onClick = onSmartPlaylistsClick) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Smart Playlists",
+                        )
+                    }
                     IconButton(onClick = { viewModel.toggleShowFilters() }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,

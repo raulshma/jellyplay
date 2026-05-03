@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeSection
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,8 +27,15 @@ class HomeViewModel @Inject constructor(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var kidsModeEnabled by mutableStateOf(false)
+        private set
 
     init {
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                kidsModeEnabled = prefs.kidsModeEnabled
+            }
+        }
         refresh()
     }
 

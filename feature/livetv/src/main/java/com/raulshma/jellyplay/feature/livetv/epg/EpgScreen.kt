@@ -107,9 +107,10 @@ private fun ProgramItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (program.overview != null) {
+        val overview = program.overview
+        if (overview != null) {
             Text(
-                text = program.overview,
+                text = overview,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -117,9 +118,10 @@ private fun ProgramItem(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        if (program.officialRating != null) {
+        val officialRating = program.officialRating
+        if (officialRating != null) {
             Text(
-                text = program.officialRating,
+                text = officialRating,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 4.dp),

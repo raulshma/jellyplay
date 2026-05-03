@@ -1,9 +1,12 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -41,6 +44,27 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
     private fun requireApi(): ApiClient =
         api ?: throw IllegalStateException("Not connected to server")
 
+    private val currentMaxParentalRating: Int?
+        get() = _currentUser.value?.maxParentalAgeRating
+
+    private fun ratingToAge(rating: String): Int? = when (rating.uppercase()) {
+        "G", "TV-Y", "TV-G" -> 0
+        "PG", "TV-Y7", "TV-PG" -> 7
+        "PG-13", "TV-14" -> 13
+        "R", "TV-MA" -> 17
+        "NC-17" -> 18
+        else -> null
+    }
+
+    private fun List<MediaItem>.filterByParentalRating(): List<MediaItem> {
+        val max = currentMaxParentalRating ?: return this
+        return filter { item ->
+            item.officialRating?.let { rating ->
+                ratingToAge(rating)?.let { age -> age <= max }
+            } != false
+        }
+    }
+
     override suspend fun connectToServer(address: String): Result<ServerInfo> = runCatching {
         val client = jellyfin.createApi(address)
         val systemInfo = client.systemApi.getPublicSystemInfo().content
@@ -74,12 +98,18 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         )
         api = authenticatedClient
         val userDto = authResult.user ?: throw Exception("Authentication failed")
+        val policy = userDto.policy
         val userInfo = UserInfo(
             id = userDto.id.toString(),
             name = userDto.name ?: username,
             serverAddress = server.address,
             accessToken = accessTokenValue,
-            isAdmin = userDto.policy?.isAdministrator ?: false,
+            isAdmin = policy?.isAdministrator ?: false,
+            maxParentalAgeRating = policy?.maxParentalRating,
+            primaryImageTag = userDto.primaryImageTag,
+            enabledFolderIds = if (policy?.enableAllFolders == false) {
+                policy.enabledFolders?.map { it.toString() } ?: emptyList()
+            } else emptyList(),
         )
         _currentUser.value = userInfo
         _currentServer.value = server.copy(
@@ -139,7 +169,13 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
                     org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                 ),
             ).content
-            response.map { it.toMediaItem() }
+            response.map { it.toMediaItem() }.filter { item ->
+                currentMaxParentalRating?.let { max ->
+                    item.officialRating?.let { rating ->
+                        ratingToAge(rating)?.let { age -> age <= max }
+                    } != false
+                } != false
+            }
         }
 
     override suspend fun getNextUp(limit: Int): Result<List<MediaItem>> = runCatching {
@@ -150,7 +186,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
                 org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
             ),
         ).content
-        response.items.map { it.toMediaItem() }
+        response.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = runCatching {
@@ -161,11 +197,12 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
                 org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
             ),
         ).content
-        response.items.map { it.toMediaItem() }
+        response.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = runCatching {
         val response = requireApi().libraryApi.getMediaFolders().content
+        val enabledFolders = _currentUser.value?.enabledFolderIds
         response.items.map { item ->
             LibraryFolder(
                 id = item.id.toString(),
@@ -173,6 +210,8 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
                 collectionType = item.collectionType?.serialName,
                 type = item.type?.serialName,
             )
+        }.filter { folder ->
+            enabledFolders.isNullOrEmpty() || folder.id in enabledFolders
         }
     }
 
@@ -208,7 +247,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             ),
         ).content
         SearchResult(
-            items = response.items.map { it.toMediaItem() },
+            items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -302,7 +341,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             ),
         ).content
         SearchResult(
-            items = response.items.map { it.toMediaItem() },
+            items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
             startIndex = 0,
         )
@@ -334,7 +373,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             recursive = true,
         ).content
         SearchResult(
-            items = response.items.map { it.toMediaItem() },
+            items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -345,7 +384,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             requireApi().libraryApi.getSimilarItems(
                 itemId = java.util.UUID.fromString(itemId),
                 limit = limit,
-            ).content.items.map { it.toMediaItem() }
+            ).content.items.map { it.toMediaItem() }.filterByParentalRating()
         }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
@@ -359,13 +398,13 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
                     org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                 ),
             ).content
-            response.items.map { it.toMediaItem() }
+            response.items.map { it.toMediaItem() }.filterByParentalRating()
         }
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = runCatching {
         requireApi().tvShowsApi.getSeasons(
             seriesId = java.util.UUID.fromString(seriesId),
-        ).content.items.map { it.toMediaItem() }
+        ).content.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
@@ -373,7 +412,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             requireApi().tvShowsApi.getEpisodes(
                 seriesId = java.util.UUID.fromString(seriesId),
                 seasonId = java.util.UUID.fromString(seasonId),
-            ).content.items.map { it.toMediaItem() }
+            ).content.items.map { it.toMediaItem() }.filterByParentalRating()
         }
 
     override suspend fun getCollectionItems(
@@ -392,7 +431,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
             ),
         ).content
         SearchResult(
-            items = response.items.map { it.toMediaItem() },
+            items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )

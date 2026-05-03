@@ -39,14 +39,19 @@ fun HomeScreen(
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
     val error = viewModel.error
+    val kidsMode = viewModel.kidsModeEnabled
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("JellyPlay") },
+                title = {
+                    Text(if (kidsMode) "Kids Corner" else "JellyPlay")
+                },
                 actions = {
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    if (!kidsMode) {
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
                     }
                 },
             )

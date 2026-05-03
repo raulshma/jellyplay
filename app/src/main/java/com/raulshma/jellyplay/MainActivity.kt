@@ -33,7 +33,10 @@ class MainActivity : ComponentActivity() {
                 preferences.pinHash != null &&
                 !isPinUnlocked
 
-            JellyPlayTheme(dynamicColor = preferences.dynamicTheming) {
+            JellyPlayTheme(
+                dynamicColor = preferences.dynamicTheming && !preferences.kidsModeEnabled,
+                kidsMode = preferences.kidsModeEnabled,
+            ) {
                 if (showPinLock) {
                     PinLockScreen(
                         onPinEntered = { pin ->

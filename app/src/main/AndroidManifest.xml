@@ -64,7 +64,7 @@
         <service
             android:name=".tile.JellyPlayTileService"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_foreground"
+            android:icon="@drawable/ic_launcher_foreground"
             android:label="JellyPlay"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

@@ -38,6 +38,8 @@ sealed class Route : NavKey {
     @Serializable data object Genres : Route()
     @Serializable data class ArtistDetail(val artistId: String) : Route()
     @Serializable data class AlbumDetail(val albumId: String) : Route()
+    @Serializable data object SmartPlaylists : Route()
+    @Serializable data class SmartPlaylistDetail(val playlistId: String) : Route()
     @Serializable data class CollectionDetail(val collectionId: String) : Route()
 
     @Serializable data class OfflinePlayer(

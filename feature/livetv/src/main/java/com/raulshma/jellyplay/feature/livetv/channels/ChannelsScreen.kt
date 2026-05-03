@@ -112,7 +112,7 @@ private fun ChannelItem(
         ) {
             if (imageUrl.isNotBlank()) {
                 MediaImage(
-                    imageUrl = imageUrl,
+                    url = imageUrl,
                     contentDescription = channel.name,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -135,20 +135,22 @@ private fun ChannelItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (channel.currentProgram != null) {
+            val currentProgram = channel.currentProgram
+            if (currentProgram != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = channel.currentProgram.name,
+                    text = currentProgram.name,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (channel.number != null) {
+            val number = channel.number
+            if (number != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Ch. ${channel.number}",
+                    text = "Ch. $number",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

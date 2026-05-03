@@ -5,7 +5,7 @@
     android:maxResizeWidth="1000dp"
     android:maxResizeHeight="200dp"
     android:updatePeriodMillis="0"
-    android:previewImage="@mipmap/ic_launcher_foreground"
+    android:previewImage="@drawable/ic_launcher_foreground"
     android:initialLayout="@layout/now_playing_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen|keyguard" />

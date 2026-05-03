@@ -21,4 +21,5 @@ data class UserInfo(
     val isAdmin: Boolean = false,
     val maxParentalAgeRating: Int? = null,
     val primaryImageTag: String? = null,
+    val enabledFolderIds: List<String> = emptyList(),
 )
