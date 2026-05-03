@@ -11,9 +11,12 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -35,6 +38,15 @@ class SettingsViewModel @Inject constructor(
     var cacheSizeMb by mutableStateOf(0L)
         private set
 
+    var currentUser by mutableStateOf<UserInfo?>(null)
+        private set
+
+    var currentServerUsers by mutableStateOf<List<UserInfo>>(emptyList())
+        private set
+
+    var isLoadingUsers by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -43,7 +55,14 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
+                currentUser = user
                 currentUserName = user?.name ?: ""
+            }
+        }
+        viewModelScope.launch {
+            authRepository.currentServerUsers.collect { users ->
+                currentServerUsers = users
+                isLoadingUsers = false
             }
         }
         calculateCacheSize()
@@ -143,5 +162,18 @@ class SettingsViewModel @Inject constructor(
 
     fun setKidsModeMaxRating(rating: String) {
         viewModelScope.launch { preferencesStore.setKidsModeMaxRating(rating) }
+    }
+
+    fun switchUser(userId: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            authRepository.switchUser(userId)
+            onComplete()
+        }
+    }
+
+    fun removeUser(userId: String) {
+        viewModelScope.launch {
+            authRepository.removeUser(userId)
+        }
     }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayCircle
@@ -61,6 +62,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
     onServerManagement: () -> Unit = {},
+    onUserManagement: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -106,6 +108,13 @@ fun SettingsScreen(
                 title = "Server Management",
                 subtitle = "Switch between servers or add new ones",
                 onClick = onServerManagement,
+            )
+
+            SettingItem(
+                icon = Icons.Default.Person,
+                title = "Switch User",
+                subtitle = if (userName.isNotBlank()) "Signed in as $userName" else "Manage users on this server",
+                onClick = onUserManagement,
             )
 
             HorizontalDivider()

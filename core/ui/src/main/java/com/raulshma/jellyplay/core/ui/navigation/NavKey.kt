@@ -9,6 +9,11 @@ sealed class Route : NavKey {
     @Serializable data object ServerList : Route()
     @Serializable data object AddServer : Route()
     @Serializable data class Login(val serverAddress: String) : Route()
+    @Serializable data class UserSelection(
+        val serverId: String,
+        val serverAddress: String,
+        val serverName: String,
+    ) : Route()
 
     @Serializable data object Home : Route()
     @Serializable data object Library : Route()
@@ -31,6 +36,7 @@ sealed class Route : NavKey {
     @Serializable data object Settings : Route()
 
     @Serializable data object ServerManagement : Route()
+    @Serializable data object UserManagement : Route()
 
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()

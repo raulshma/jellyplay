@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.auth.AddServerScreen
 import com.raulshma.jellyplay.feature.auth.LoginScreen
 import com.raulshma.jellyplay.feature.auth.ServerListScreen
+import com.raulshma.jellyplay.feature.auth.UserSelectionScreen
 
 fun EntryProviderScope<NavKey>.authSection(
     navigator: Navigator,
@@ -15,7 +16,15 @@ fun EntryProviderScope<NavKey>.authSection(
     entry<Route.ServerList> {
         ServerListScreen(
             onAddServer = { navigator.navigate(Route.AddServer) },
-            onServerSelected = { address -> navigator.navigate(Route.Login(address)) },
+            onServerSelected = { server ->
+                navigator.navigate(
+                    Route.UserSelection(
+                        serverId = server.id,
+                        serverAddress = server.address,
+                        serverName = server.name,
+                    )
+                )
+            },
         )
     }
     entry<Route.AddServer> {
@@ -31,6 +40,16 @@ fun EntryProviderScope<NavKey>.authSection(
         LoginScreen(
             serverAddress = key.serverAddress,
             onLoginSuccess = { onAuthenticated() },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.UserSelection> { key ->
+        UserSelectionScreen(
+            serverId = key.serverId,
+            serverAddress = key.serverAddress,
+            serverName = key.serverName,
+            onUserSelected = { onAuthenticated() },
+            onAddUser = { navigator.navigate(Route.Login(key.serverAddress)) },
             onBack = { navigator.goBack() },
         )
     }

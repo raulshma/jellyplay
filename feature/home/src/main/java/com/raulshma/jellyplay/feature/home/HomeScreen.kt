@@ -41,55 +41,64 @@ fun HomeScreen(
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(if (kidsMode) "Kids Corner" else "JellyPlay")
-                },
-                actions = {
-                    if (!kidsMode) {
+    if (kidsMode) {
+        KidsHomeScreen(
+            sections = sections,
+            isLoading = isLoading,
+            error = error,
+            imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
+            onItemClick = onItemClick,
+            onRefresh = { viewModel.refresh() },
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text("JellyPlay")
+                    },
+                    actions = {
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        when {
-            isLoading && sections.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            error != null && sections.isEmpty() -> {
-                ErrorScreen(
-                    message = error!!,
-                    onRetry = { viewModel.refresh() },
-                    modifier = Modifier.padding(padding),
+                    },
                 )
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = padding,
-                ) {
-                    items(count = sections.size) { index ->
-                        val section = sections[index]
-                        MediaRow(
-                            title = section.title,
-                            items = section.items,
-                            imageUrlBuilder = { item ->
-                                viewModel.getImageUrl(item.id)
-                            },
-                            onItemClick = { item -> onItemClick(item.id) },
-                        )
+            },
+        ) { padding ->
+            when {
+                isLoading && sections.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                error != null && sections.isEmpty() -> {
+                    ErrorScreen(
+                        message = error!!,
+                        onRetry = { viewModel.refresh() },
+                        modifier = Modifier.padding(padding),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = padding,
+                    ) {
+                        items(count = sections.size) { index ->
+                            val section = sections[index]
+                            MediaRow(
+                                title = section.title,
+                                items = section.items,
+                                imageUrlBuilder = { item ->
+                                    viewModel.getImageUrl(item.id)
+                                },
+                                onItemClick = { item -> onItemClick(item.id) },
+                            )
+                        }
                     }
                 }
             }

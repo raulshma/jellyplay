@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -125,6 +126,14 @@ fun AudioPlayerScreen(
                     }
                     IconButton(onClick = { showQueue = true }) {
                         Icon(Icons.Default.QueueMusic, "Queue")
+                    }
+                    IconButton(onClick = { viewModel.toggleNightMode() }) {
+                        Icon(
+                            Icons.Default.Nightlight,
+                            "Night Mode",
+                            tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     IconButton(
                         onClick = {

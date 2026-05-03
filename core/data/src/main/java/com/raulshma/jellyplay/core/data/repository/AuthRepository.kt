@@ -14,6 +14,8 @@ interface AuthRepository {
 
     val isAuthenticated: Flow<Boolean>
 
+    val currentServerUsers: Flow<List<UserInfo>>
+
     suspend fun addServer(address: String): Result<ServerInfo>
 
     suspend fun removeServer(serverId: String)
@@ -25,4 +27,10 @@ interface AuthRepository {
     suspend fun restoreSession(): Result<Unit>
 
     suspend fun logout()
+
+    suspend fun switchUser(userId: String): Result<Unit>
+
+    suspend fun removeUser(userId: String)
+
+    suspend fun getUsersForServer(serverId: String): List<UserInfo>
 }

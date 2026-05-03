@@ -18,6 +18,7 @@ data class UserInfo(
     val name: String,
     val serverAddress: String,
     val accessToken: String,
+    val serverId: String? = null,
     val isAdmin: Boolean = false,
     val maxParentalAgeRating: Int? = null,
     val primaryImageTag: String? = null,

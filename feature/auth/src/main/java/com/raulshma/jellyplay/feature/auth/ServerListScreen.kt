@@ -41,7 +41,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 @Composable
 fun ServerListScreen(
     onAddServer: () -> Unit,
-    onServerSelected: (String) -> Unit,
+    onServerSelected: (ServerInfo) -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
     val servers by viewModel.servers.collectAsState()
@@ -111,7 +111,7 @@ fun ServerListScreen(
                 items(servers, key = { it.id }) { server ->
                     ServerItem(
                         server = server,
-                        onClick = { onServerSelected(server.address) },
+                        onClick = { onServerSelected(server) },
                         onDelete = { viewModel.removeServer(server.id) },
                     )
                 }

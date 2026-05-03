@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
+import com.raulshma.jellyplay.feature.settings.UserManagementScreen
 
 fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
@@ -16,6 +17,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onBack = { navigator.goBack() },
             onLogout = onLogout,
             onServerManagement = { navigator.navigate(Route.ServerManagement) },
+            onUserManagement = { navigator.navigate(Route.UserManagement) },
         )
     }
 
@@ -24,6 +26,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onAddServer = { navigator.navigate(Route.AddServer) },
             onBack = { navigator.goBack() },
             onServerSwitched = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.UserManagement> {
+        UserManagementScreen(
+            onBack = { navigator.goBack() },
+            onAddUser = { navigator.navigate(Route.AddServer) },
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import android.content.Context
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -85,10 +86,14 @@ class AudioPlayerViewModel @Inject constructor(
     var currentIndex by mutableIntStateOf(-1)
         private set
 
+    var nightModeEnabled by mutableStateOf(false)
+        private set
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -137,6 +142,9 @@ class AudioPlayerViewModel @Inject constructor(
                         .build()
                     player.setMediaItem(mediaItem)
                     player.prepare()
+                    if (nightModeEnabled) {
+                        applyNightMode()
+                    }
 
                     val resumeTicks = detail.item.playbackPositionTicks ?: 0L
                     if (resumeTicks > 0) {
@@ -253,6 +261,37 @@ class AudioPlayerViewModel @Inject constructor(
         if (index < 0 || index >= queue.size) return
         currentIndex = index
         play(queue[index].id)
+    }
+
+    fun toggleNightMode() {
+        nightModeEnabled = !nightModeEnabled
+        applyNightMode()
+    }
+
+    private fun applyNightMode() {
+        val player = exoPlayer ?: return
+        if (nightModeEnabled) {
+            player.volume = 0.4f
+            attachLoudnessEnhancer(player.audioSessionId)
+        } else {
+            player.volume = 1.0f
+            loudnessEnhancer?.enabled = false
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
+        }
+    }
+
+    private fun attachLoudnessEnhancer(audioSessionId: Int) {
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        loudnessEnhancer?.release()
+        loudnessEnhancer = try {
+            LoudnessEnhancer(audioSessionId).apply {
+                setTargetGain(1200)
+                enabled = true
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun getImageUrl(itemId: String): String =

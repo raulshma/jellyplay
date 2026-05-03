@@ -13,6 +13,18 @@ data class ServerEntity(
     val lastConnected: Long = System.currentTimeMillis(),
 )
 
+@Entity(tableName = "users")
+data class UserEntity(
+    @PrimaryKey val userId: String,
+    val serverId: String,
+    val name: String,
+    val accessToken: String,
+    val primaryImageTag: String? = null,
+    val maxParentalAgeRating: Int? = null,
+    val enabledFolderIds: String? = null,
+    val lastConnected: Long = System.currentTimeMillis(),
+)
+
 @Entity(tableName = "downloads")
 data class DownloadEntity(
     @PrimaryKey val id: String,

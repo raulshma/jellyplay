@@ -1,22 +1,29 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.ServerDao
+import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
+import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val serverDao: ServerDao,
+    private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
 ) : AuthRepository {
 
@@ -33,6 +40,15 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.currentUser,
     ) { server, user -> server != null && user != null }
 
+    override val currentServerUsers: Flow<List<UserInfo>> =
+        apiClient.currentServer.flatMapLatest { server ->
+            server?.id?.let { sid ->
+                userDao.getUsersForServer(sid).map { list ->
+                    list.map { it.toUserInfo(server.address) }
+                }
+            } ?: flowOf(emptyList())
+        }
+
     override suspend fun addServer(address: String): Result<ServerInfo> {
         return apiClient.connectToServer(address).onSuccess { serverInfo ->
             serverDao.insertServer(
@@ -46,6 +62,7 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun removeServer(serverId: String) {
+        userDao.deleteUsersForServer(serverId)
         serverDao.deleteServerById(serverId)
     }
 
@@ -54,20 +71,17 @@ class AuthRepositoryImpl @Inject constructor(
         val server = serverEntity.toServerInfo()
         apiClient.disconnect()
         apiClient.setServer(server)
-        val token = serverEntity.accessToken
-        val userId = serverEntity.userId
-        if (token != null && userId != null) {
-            apiClient.setUser(
-                UserInfo(
-                    id = userId,
-                    name = "",
-                    serverAddress = server.address,
-                    accessToken = token,
-                )
-            )
+
+        val userEntity = userDao.getMostRecentUserForServer(serverId)
+            ?: serverEntity.userId?.let { userDao.getUserById(it) }
+
+        if (userEntity != null) {
+            val user = userEntity.toUserInfo(server.address)
+            apiClient.setUser(user)
             preferencesStore.setActiveServer(serverId)
-            preferencesStore.setActiveUser(userId)
+            preferencesStore.setActiveUser(userEntity.userId)
             serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
+            userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
         }
     }
 
@@ -79,6 +93,19 @@ class AuthRepositoryImpl @Inject constructor(
         return apiClient.authenticateUser(serverAddress, username, password).onSuccess { user ->
             val server = apiClient.currentServer as? ServerInfo
             if (server != null) {
+                val userEntity = UserEntity(
+                    userId = user.id,
+                    serverId = server.id,
+                    name = user.name.ifBlank { username },
+                    accessToken = user.accessToken,
+                    primaryImageTag = user.primaryImageTag,
+                    maxParentalAgeRating = user.maxParentalAgeRating,
+                    enabledFolderIds = kotlinx.serialization.json.Json.encodeToString(
+                        user.enabledFolderIds
+                    ),
+                    lastConnected = System.currentTimeMillis(),
+                )
+                userDao.insertUser(userEntity)
                 serverDao.updateServer(
                     ServerEntity(
                         id = server.id,
@@ -102,14 +129,24 @@ class AuthRepositoryImpl @Inject constructor(
             val serverEntity = serverDao.getServerById(serverId) ?: return Result.success(Unit)
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
-            val token = serverEntity.accessToken
+
+            val userEntity = userDao.getUserById(userId)
+            val token = userEntity?.accessToken ?: serverEntity.accessToken
             if (token != null) {
                 apiClient.setUser(
                     UserInfo(
                         id = userId,
-                        name = "",
+                        name = userEntity?.name ?: "",
                         serverAddress = server.address,
                         accessToken = token,
+                        serverId = serverId,
+                        maxParentalAgeRating = userEntity?.maxParentalAgeRating,
+                        primaryImageTag = userEntity?.primaryImageTag,
+                        enabledFolderIds = userEntity?.enabledFolderIds?.let {
+                            try {
+                                kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
+                            } catch (_: Exception) { emptyList() }
+                        } ?: emptyList(),
                     )
                 )
             }
@@ -121,6 +158,37 @@ class AuthRepositoryImpl @Inject constructor(
         preferencesStore.clearAll()
     }
 
+    override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
+        val userEntity = userDao.getUserById(userId) ?: return Result.success(Unit)
+        val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
+        apiClient.disconnect()
+        apiClient.setServer(server.toServerInfo())
+        apiClient.setUser(userEntity.toUserInfo(server.address))
+        preferencesStore.setActiveServer(server.id)
+        preferencesStore.setActiveUser(userId)
+        userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+        serverDao.updateServer(
+            server.copy(
+                userId = userId,
+                accessToken = userEntity.accessToken,
+                lastConnected = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    override suspend fun removeUser(userId: String) {
+        userDao.deleteUserById(userId)
+        val currentUserId = apiClient.currentUser.first()?.id
+        if (currentUserId == userId) {
+            apiClient.disconnect()
+            preferencesStore.setActiveUser("")
+        }
+    }
+
+    override suspend fun getUsersForServer(serverId: String): List<UserInfo> {
+        return userDao.getUsersForServer(serverId).first().map { it.toUserInfo() }
+    }
+
     private fun ServerEntity.toServerInfo() = ServerInfo(
         id = id,
         name = name,
@@ -128,5 +196,20 @@ class AuthRepositoryImpl @Inject constructor(
         userId = userId,
         accessToken = accessToken,
         isConnected = accessToken != null,
+    )
+
+    private fun UserEntity.toUserInfo(serverAddress: String = "") = UserInfo(
+        id = userId,
+        name = name,
+        serverAddress = serverAddress,
+        accessToken = accessToken,
+        serverId = serverId,
+        maxParentalAgeRating = maxParentalAgeRating,
+        primaryImageTag = primaryImageTag,
+        enabledFolderIds = enabledFolderIds?.let {
+            try {
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
+            } catch (_: Exception) { emptyList() }
+        } ?: emptyList(),
     )
 }
