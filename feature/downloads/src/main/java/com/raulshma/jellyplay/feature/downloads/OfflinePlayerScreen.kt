@@ -23,8 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
+
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -76,8 +75,6 @@ fun OfflinePlayerScreen(
     var currentPosition by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
-    var isFullscreen by remember { mutableStateOf(false) }
-
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.fromUri(filePath.toUri())
@@ -96,6 +93,7 @@ fun OfflinePlayerScreen(
         exoPlayer.addListener(listener)
 
         activity?.let {
+            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = it.window
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
@@ -107,6 +105,7 @@ fun OfflinePlayerScreen(
             exoPlayer.removeListener(listener)
             exoPlayer.release()
             activity?.let {
+                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 val window = it.window
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
@@ -115,11 +114,7 @@ fun OfflinePlayerScreen(
     }
 
     BackHandler {
-        if (isFullscreen) {
-            isFullscreen = false
-        } else {
-            onBack()
-        }
+        onBack()
     }
 
     LaunchedEffect(exoPlayer) {
@@ -269,27 +264,6 @@ fun OfflinePlayerScreen(
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        IconButton(onClick = {
-                            isFullscreen = !isFullscreen
-                            activity?.let { act ->
-                                act.requestedOrientation = if (isFullscreen) {
-                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                } else {
-                                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                                }
-                            }
-                        }) {
-                            Icon(
-                                if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                if (isFullscreen) "Exit fullscreen" else "Fullscreen",
-                                tint = Color.White,
-                            )
-                        }
-                    }
                 }
             }
         }

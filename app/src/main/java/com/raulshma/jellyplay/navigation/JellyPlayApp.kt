@@ -108,45 +108,23 @@ private fun MainContent(
     )
     val navigator = Navigator(navigationState)
     val currentTopLevel by navigationState.topLevelRoute
+    val currentRoute = navigator.currentRoute()
+
+    val isPlayerScreen = currentRoute is Route.VideoPlayer ||
+            currentRoute is Route.OfflinePlayer ||
+            currentRoute is Route.LiveTvChannelPlayer
 
     val configuration = LocalConfiguration.current
     val isExpanded = configuration.screenWidthDp >= 600
 
     if (isExpanded) {
         Row(modifier = Modifier.fillMaxSize()) {
-            NavigationRail(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ) {
-                TOP_LEVEL_ROUTES.forEach { (route, label) ->
-                    NavigationRailItem(
-                        selected = route == currentTopLevel,
-                        onClick = { navigator.navigate(route) },
-                        icon = {
-                            when (route) {
-                                Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-                                Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-                                Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-                                Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-                                else -> {}
-                            }
-                        },
-                        label = { Text(label) },
-                    )
-                }
-            }
-            MainNavDisplay(
-                navigationState = navigationState,
-                navigator = navigator,
-                onLogout = onLogout,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    } else {
-        Scaffold(
-            bottomBar = {
-                NavigationBar {
+            if (!isPlayerScreen) {
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ) {
                     TOP_LEVEL_ROUTES.forEach { (route, label) ->
-                        NavigationBarItem(
+                        NavigationRailItem(
                             selected = route == currentTopLevel,
                             onClick = { navigator.navigate(route) },
                             icon = {
@@ -160,6 +138,37 @@ private fun MainContent(
                             },
                             label = { Text(label) },
                         )
+                    }
+                }
+            }
+            MainNavDisplay(
+                navigationState = navigationState,
+                navigator = navigator,
+                onLogout = onLogout,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    } else {
+        Scaffold(
+            bottomBar = {
+                if (!isPlayerScreen) {
+                    NavigationBar {
+                        TOP_LEVEL_ROUTES.forEach { (route, label) ->
+                            NavigationBarItem(
+                                selected = route == currentTopLevel,
+                                onClick = { navigator.navigate(route) },
+                                icon = {
+                                    when (route) {
+                                        Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
+                                        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
+                                        Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
+                                        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
+                                        else -> {}
+                                    }
+                                },
+                                label = { Text(label) },
+                            )
+                        }
                     }
                 }
             },

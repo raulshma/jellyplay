@@ -1,5 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.os.StatFs
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +36,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,13 +45,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import android.os.StatFs
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,16 +58,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -69,7 +80,6 @@ import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun MediaDetailScreen(
@@ -163,264 +173,200 @@ private fun DetailContent(
     val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
+    val artworkColors = LocalArtworkColors.current
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        MediaImage(
-            url = getBackdropUrl(item.id),
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .then(
-                    if (sharedTransitionScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElementWithCallerManagedVisibility(
-                                rememberSharedContentState(key = "backdrop_${item.id}"),
-                                visible = true,
-                            )
-                        }
-                    } else {
-                        Modifier
-                    }
-                ),
-            contentScale = ContentScale.Crop,
-        )
+    val density = LocalDensity.current
+    val backdropHeight = 450.dp
+    val collapsedHeight = with(density) { backdropHeight.toPx() }
+    val scrollOffset = scrollState.value.toFloat()
+    val scrollFraction = (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
 
+    val baseOverlayColor = artworkColors?.darkMuted
+        ?: artworkColors?.dominant
+        ?: MaterialTheme.colorScheme.background
+        
+    // Darken the background to give text and content focus over the image
+    val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+
+    val appBarColor by animateFloatAsState(
+        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "appBarColor",
+    )
+
+    val animatedContainerColor = lerp(
+        Color.Transparent,
+        backgroundColor.copy(alpha = 0.95f),
+        appBarColor,
+    )
+
+    val animatedIconColor = lerp(
+        Color.White,
+        Color.White,
+        appBarColor,
+    )
+
+    val animatedTitleAlpha by animateFloatAsState(
+        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "titleAlpha",
+    )
+
+    var contentLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(detail) {
+        contentLoaded = true
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+        // Backdrop Image with Parallax & Fade
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                            MaterialTheme.colorScheme.surface,
+                .height(backdropHeight)
+                .graphicsLayer {
+                    translationY = -scrollOffset * 0.5f // Correct Parallax (moves up slowly)
+                    alpha = 1f - (scrollFraction * 0.8f) // Subtle fade out
+                }
+        ) {
+            MediaImage(
+                url = getBackdropUrl(item.id),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .then(
+                        if (sharedTransitionScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElementWithCallerManagedVisibility(
+                                    rememberSharedContentState(key = "backdrop_${item.id}"),
+                                    visible = true,
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    ),
+                contentScale = ContentScale.Crop,
+            )
+            
+            // Gradient overlay attached to the image, fading it cleanly into the background color
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                backgroundColor.copy(alpha = 0.3f),
+                                backgroundColor.copy(alpha = 0.8f),
+                                backgroundColor,
+                            ),
+                            startY = with(density) { (backdropHeight - 150.dp).toPx() },
+                            endY = with(density) { backdropHeight.toPx() }
                         )
                     )
-                )
-        )
+            )
+        }
 
-        TopAppBar(
-            title = {},
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            modifier = Modifier.statusBarsPadding(),
-        )
-
+        // Scrollable Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(top = 250.dp),
+                .verticalScroll(scrollState),
         ) {
-            Row(
+            Spacer(modifier = Modifier.height(backdropHeight - 150.dp))
+            
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                backgroundColor.copy(alpha = 0.9f),
+                                backgroundColor,
+                            ),
+                            startY = 0f,
+                            endY = with(density) { 150.dp.toPx() }
+                        )
+                    )
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                // The actual content starts here. We pad it so it starts when the background is solid.
+                Column(
+                    modifier = Modifier.padding(top = 100.dp) 
+                ) {
+                    AnimatedVisibility(
+                        visible = contentLoaded,
+                        enter = fadeIn(
+                            animationSpec = tween(600),
+                        ) + slideInVertically(
+                            initialOffsetY = { it / 4 },
+                            animationSpec = tween(600),
+                        ),
+                    ) {
+                        DetailContentBody(
+                            item = item,
+                            detail = detail,
+                            seasons = seasons,
+                            episodes = episodes,
+                            getImageUrl = getImageUrl,
+                            isAudio = isAudio,
+                            isDownloading = isDownloading,
+                            downloadStarted = downloadStarted,
+                            onPlayClick = onPlayClick,
+                            onAudioClick = onAudioClick,
+                            onDownloadClick = { showDownloadDialog = true },
+                            onToggleFavorite = onToggleFavorite,
+                            onMarkPlayed = onMarkPlayed,
+                            onMarkUnplayed = onMarkUnplayed,
+                            onItemClick = onItemClick,
+                            onPersonClick = onPersonClick,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Animated Top App Bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(animatedContainerColor)
+        ) {
+            TopAppBar(
+                title = {
                     Text(
                         text = item.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        color = Color.White.copy(alpha = animatedTitleAlpha),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                            )
                     ) {
-                        item.year?.let {
-                            Text(
-                                text = it.toString(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        item.runTimeTicks?.let { ticks ->
-                            val minutes = ticks / 600_000_000
-                            Text(
-                                text = "${minutes}min",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        item.communityRating?.let { rating ->
-                            Text(
-                                text = String.format("%.1f", rating),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        item.officialRating?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                Column {
-                    IconButton(onClick = onToggleFavorite) {
                         Icon(
-                            if (item.isPlayed) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = MaterialTheme.colorScheme.primary,
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = animatedIconColor,
                         )
                     }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = {
-                        if (isAudio) {
-                            onAudioClick()
-                        } else {
-                            val sourceId = detail.mediaSources.firstOrNull()?.id
-                            val startPos = item.playbackPositionTicks ?: 0L
-                            onPlayClick(sourceId, startPos)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        if (item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0)
-                            "Resume" else "Play"
-                    )
-                }
-                OutlinedButton(
-                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
-                ) {
-                    Icon(
-                        if (item.isPlayed) Icons.Default.Check else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                    )
-                }
-                if (!isAudio && detail.mediaSources.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = { showDownloadDialog = true },
-                        enabled = !isDownloading && !downloadStarted,
-                    ) {
-                        if (isDownloading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else if (downloadStarted) {
-                            Icon(Icons.Default.Check, contentDescription = null)
-                        } else {
-                            Icon(Icons.Default.Download, contentDescription = null)
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
-                Text(
-                    text = genres.joinToString(" \u2022 "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            item.overview?.let { overview ->
-                Text(
-                    text = "Overview",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = overview,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-
-            if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
-                SeasonsSection(
-                    seriesItem = item,
-                    seasons = seasons,
-                    episodes = episodes,
-                    getImageUrl = getImageUrl,
-                    onEpisodeClick = { episode ->
-                        val sourceId = null
-                        val startPos = episode.playbackPositionTicks ?: 0L
-                        onPlayClick(sourceId, startPos)
-                    },
-                )
-            }
-
-            if (detail.people.isNotEmpty()) {
-                Text(
-                    text = "Cast & Crew",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(detail.people, key = { "person_${it.id}" }) { person ->
-                        PersonItem(
-                            person = person,
-                            imageUrl = getImageUrl(person.id),
-                            onClick = { onPersonClick(person.id) },
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            if (detail.relatedItems.isNotEmpty()) {
-                Text(
-                    text = "More Like This",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
-                        PosterCard(
-                            item = related,
-                            imageUrl = getImageUrl(related.id),
-                            onClick = { onItemClick(related.id) },
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            Spacer(Modifier.height(32.dp))
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                modifier = Modifier.statusBarsPadding(),
+            )
         }
     }
 
@@ -481,6 +427,323 @@ private fun DetailContent(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun DetailContentBody(
+    item: MediaItem,
+    detail: MediaDetail,
+    seasons: List<MediaItem>,
+    episodes: Map<String, List<MediaItem>>,
+    getImageUrl: (String) -> String,
+    isAudio: Boolean,
+    isDownloading: Boolean,
+    downloadStarted: Boolean,
+    onPlayClick: (mediaSourceId: String?, startPosition: Long) -> Unit,
+    onAudioClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMarkPlayed: () -> Unit,
+    onMarkUnplayed: () -> Unit,
+    onItemClick: (String) -> Unit,
+    onPersonClick: (String) -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(item.id) {
+        visible = true
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        // Title & Metadata
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500)) + slideInVertically(tween(500), initialOffsetY = { 40 })
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item.year?.let {
+                        Text(
+                            text = it.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
+                    }
+                    item.runTimeTicks?.let { ticks ->
+                        val minutes = ticks / 600_000_000
+                        Text(
+                            text = "${minutes}m",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
+                    }
+                    item.officialRating?.let {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                    item.communityRating?.let { rating ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = String.format("%.1f", rating),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Actions
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(tween(500, delayMillis = 100), initialOffsetY = { 40 })
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = {
+                        if (isAudio) {
+                            onAudioClick()
+                        } else {
+                            val sourceId = detail.mediaSources.firstOrNull()?.id
+                            val startPos = item.playbackPositionTicks ?: 0L
+                            onPlayClick(sourceId, startPos)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        if (item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0)
+                            "Resume" else "Play",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                
+                IconButton(
+                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                ) {
+                    Icon(
+                        if (item.isPlayed) Icons.Default.Check else Icons.Default.PlayArrow,
+                        contentDescription = "Mark Played",
+                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                ) {
+                    Icon(
+                        if (item.isPlayed) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+
+                if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                    IconButton(
+                        onClick = onDownloadClick,
+                        enabled = !isDownloading && !downloadStarted,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.15f))
+                    ) {
+                        if (isDownloading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else if (downloadStarted) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Genres
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 150)) + slideInVertically(tween(500, delayMillis = 150), initialOffsetY = { 40 })
+        ) {
+            item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(genres) { genre ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = genre,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Overview
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 200)) + slideInVertically(tween(500, delayMillis = 200), initialOffsetY = { 40 })
+        ) {
+            item.overview?.let { overview ->
+                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Text(
+                        text = overview,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.85f),
+                        lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
+                    )
+                }
+            }
+        }
+
+        // Seasons
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 250)) + slideInVertically(tween(500, delayMillis = 250), initialOffsetY = { 40 })
+        ) {
+            if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
+                CompositionLocalProvider(LocalContentColor provides Color.White) {
+                    SeasonsSection(
+                        seriesItem = item,
+                        seasons = seasons,
+                        episodes = episodes,
+                        getImageUrl = getImageUrl,
+                        onEpisodeClick = { episode ->
+                            val sourceId = null
+                            val startPos = episode.playbackPositionTicks ?: 0L
+                            onPlayClick(sourceId, startPos)
+                        },
+                    )
+                }
+            }
+        }
+
+        // Cast & Crew
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 300)) + slideInVertically(tween(500, delayMillis = 300), initialOffsetY = { 40 })
+        ) {
+            if (detail.people.isNotEmpty()) {
+                Column {
+                    Text(
+                        text = "Cast & Crew",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    CompositionLocalProvider(LocalContentColor provides Color.White) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            items(detail.people, key = { "person_${it.id}" }) { person ->
+                                PersonItem(
+                                    person = person,
+                                    imageUrl = getImageUrl(person.id),
+                                    onClick = { onPersonClick(person.id) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Related Items
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(500, delayMillis = 350)) + slideInVertically(tween(500, delayMillis = 350), initialOffsetY = { 40 })
+        ) {
+            if (detail.relatedItems.isNotEmpty()) {
+                Column {
+                    Text(
+                        text = "More Like This",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
+                            PosterCard(
+                                item = related,
+                                imageUrl = getImageUrl(related.id),
+                                onClick = { onItemClick(related.id) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

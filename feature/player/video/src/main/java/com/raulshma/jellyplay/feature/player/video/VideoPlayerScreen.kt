@@ -152,7 +152,7 @@ fun VideoPlayerScreen(
         }
         onDispose {
             activity?.let {
-                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 val window = it.window
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
