@@ -132,10 +132,6 @@ fun HomeScreen(
 
                             items(count = sections.size) { index ->
                                 val section = sections[index]
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(tween(500, delayMillis = index * 100)) + slideInVertically(tween(500, delayMillis = index * 100), initialOffsetY = { 50 })
-                                ) {
                                     MediaRow(
                                         title = section.title,
                                         items = section.items,
@@ -143,7 +139,6 @@ fun HomeScreen(
                                         onItemClick = { item -> onItemClick(item.id) },
                                         modifier = Modifier.padding(top = if (index == 0 && featuredItem != null) 0.dp else 16.dp)
                                     )
-                                }
                             }
                         }
                     }

@@ -46,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -291,32 +293,40 @@ private fun DetailContent(
             ) {
                 // The actual content starts here. We pad it so it starts when the background is solid.
                 Column(
-                    modifier = Modifier.padding(top = 30.dp) 
+                    modifier = Modifier.padding(top = 0.dp) 
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.Bottom
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp) // 180dp poster - 100dp offset
                     ) {
-                        // Poster Image for seamless shared element transition
-                        MediaImage(
-                            url = getImageUrl(itemId),
-                            contentDescription = null,
+                        Row(
                             modifier = Modifier
-                                .width(120.dp)
-                                .aspectRatio(2f / 3f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .then(
-                                    if (sharedTransitionScope != null) {
-                                        with(sharedTransitionScope) {
-                                            Modifier.sharedElementWithCallerManagedVisibility(
-                                                rememberSharedContentState(key = "poster_$itemId"),
-                                                visible = true,
-                                            )
-                                        }
-                                    } else Modifier
-                                ),
-                            contentScale = ContentScale.Crop,
-                        )
+                                .padding(horizontal = 16.dp)
+                                .offset(y = (-40).dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            // Poster Image for seamless shared element transition
+                            MediaImage(
+                                url = getImageUrl(itemId),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .width(120.dp)
+                                    .aspectRatio(2f / 3f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .then(
+                                        if (sharedTransitionScope != null) {
+                                            with(sharedTransitionScope) {
+                                                Modifier.sharedElementWithCallerManagedVisibility(
+                                                    rememberSharedContentState(key = "poster_$itemId"),
+                                                    visible = true,
+                                                )
+                                            }
+                                        } else Modifier
+                                    ),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -705,11 +715,14 @@ private fun DetailContentBody(
                         seasons = seasons,
                         episodes = episodes,
                         getImageUrl = getImageUrl,
-                        onEpisodeClick = { episode ->
+                        onEpisodePlayClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
                             onPlayClick(episode.id, sourceId, startPos)
                         },
+                        onEpisodeDetailClick = { episode ->
+                            onItemClick(episode.id)
+                        }
                     )
                 }
             }
@@ -785,89 +798,102 @@ private fun SeasonsSection(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     getImageUrl: (String) -> String,
-    onEpisodeClick: (MediaItem) -> Unit,
+    onEpisodePlayClick: (MediaItem) -> Unit,
+    onEpisodeDetailClick: (MediaItem) -> Unit,
 ) {
     var selectedSeasonIndex by remember { mutableStateOf(0) }
 
     Text(
         text = "Seasons",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 16.dp),
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        modifier = Modifier.padding(horizontal = 24.dp),
+        color = Color.White
     )
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(16.dp))
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(seasons.indices.toList()) { index ->
             val season = seasons[index]
             val isSelected = index == selectedSeasonIndex
-            androidx.compose.material3.FilterChip(
-                selected = isSelected,
-                onClick = { selectedSeasonIndex = index },
-                label = {
-                    Text(
-                        season.name ?: "Season ${season.indexNumber ?: index + 1}",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-            )
-        }
-    }
-
-    Spacer(Modifier.height(12.dp))
-
-    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
-    val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
-
-    if (seasonEpisodes.isNotEmpty()) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            seasonEpisodes.forEach { episode ->
-                EpisodeRow(
-                    episode = episode,
-                    getImageUrl = getImageUrl,
-                    onClick = { onEpisodeClick(episode) },
+            Surface(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { selectedSeasonIndex = index },
+                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
+                contentColor = if (isSelected) Color.Black else Color.White,
+            ) {
+                Text(
+                    text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }
-    } else if (selectedSeason != null) {
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
+    val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
+
+    if (seasonEpisodes != null && seasonEpisodes.isNotEmpty()) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(seasonEpisodes, key = { "episode_${it.id}" }) { episode ->
+                EpisodeCard(
+                    episode = episode,
+                    getImageUrl = getImageUrl,
+                    onPlayClick = { onEpisodePlayClick(episode) },
+                    onDetailClick = { onEpisodeDetailClick(episode) },
+                )
+            }
+        }
+    } else if (seasonEpisodes == null && selectedSeason != null) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(32.dp),
             contentAlignment = Alignment.Center,
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
+        }
+    } else if (seasonEpisodes != null && seasonEpisodes.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("No episodes available", color = Color.White.copy(alpha = 0.7f))
         }
     }
-
-    Spacer(Modifier.height(16.dp))
 }
 
 @Composable
-private fun EpisodeRow(
+private fun EpisodeCard(
     episode: MediaItem,
     getImageUrl: (String) -> String,
-    onClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    onDetailClick: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .width(280.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .clickable(onClick = onDetailClick)
     ) {
         Box(
             modifier = Modifier
-                .width(120.dp)
+                .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(6.dp)),
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
             contentAlignment = Alignment.Center,
         ) {
             MediaImage(
@@ -876,6 +902,20 @@ private fun EpisodeRow(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+            // Dim overlay
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+            // Play icon
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Play",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .clickable(onClick = onPlayClick)
+                    .padding(8.dp)
+            )
+
             if (episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0) {
                 val progress = if (episode.runTimeTicks != null && episode.runTimeTicks!! > 0) {
                     (episode.playbackPositionTicks!!.toFloat() / episode.runTimeTicks!!).coerceIn(0f, 1f)
@@ -884,39 +924,41 @@ private fun EpisodeRow(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth(progress)
-                        .height(3.dp)
+                        .height(4.dp)
                         .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = buildString {
-                    episode.indexNumber?.let { append("E$it. ") }
+                    episode.indexNumber?.let { append("$it. ") }
                     append(episode.name)
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            episode.overview?.let { overview ->
-                Spacer(Modifier.height(2.dp))
+            if (episode.runTimeTicks != null) {
+                Text(
+                    text = "${episode.runTimeTicks!! / 600_000_000}m",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (episode.runTimeTicks != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "${episode.runTimeTicks!! / 600_000_000}min",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)
                 )
             }
         }
