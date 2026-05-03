@@ -136,9 +136,34 @@ fun VideoPlayerScreen(
     var seekDirection by remember { mutableIntStateOf(0) }
     var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
+    var externalLaunched by remember { mutableStateOf(false) }
 
     LaunchedEffect(itemId) {
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
+    }
+
+    // When a non-ExoPlayer backend is selected, launch the external player
+    // once the stream URL is resolved and navigate back.
+    val preferredPlayer = viewModel.preferredPlayerType
+    val streamUrl = viewModel.streamUrl
+
+    LaunchedEffect(preferredPlayer, streamUrl) {
+        if (preferredPlayer != com.raulshma.jellyplay.core.model.PlayerType.EXO_PLAYER
+            && streamUrl != null
+            && !externalLaunched
+        ) {
+            externalLaunched = true
+            val launched = ExternalPlayerLauncher.tryLaunch(
+                context = context,
+                playerType = preferredPlayer,
+                streamUrl = streamUrl,
+                title = viewModel.title,
+                startPositionMs = startPositionTicks / 10_000,
+            )
+            if (launched) {
+                onBack()
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -189,7 +214,6 @@ fun VideoPlayerScreen(
     }
 
     val exoPlayer = viewModel.exoPlayer
-    val streamUrl = viewModel.streamUrl
     val title = viewModel.title
     val subtitle = viewModel.subtitle
     val isPlaying = viewModel.isPlaying

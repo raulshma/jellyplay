@@ -45,7 +45,7 @@ class ModelSerializationTest {
     fun `user preferences default values`() {
         val defaults = UserPreferences()
 
-        assertEquals(PlayerType.INTERNAL, defaults.preferredPlayer)
+        assertEquals(PlayerType.EXO_PLAYER, defaults.preferredPlayer)
         assertEquals(null, defaults.preferredSubtitleLanguage)
         assertEquals(null, defaults.preferredAudioLanguage)
         assertEquals(true, defaults.dynamicTheming)
@@ -101,8 +101,13 @@ class ModelSerializationTest {
 
     @Test
     fun `player type enum serialization`() {
-        assertEquals("INTERNAL", PlayerType.INTERNAL.name)
+        assertEquals("EXO_PLAYER", PlayerType.EXO_PLAYER.name)
+        assertEquals("MPV", PlayerType.MPV.name)
+        assertEquals("LIBVLC", PlayerType.LIBVLC.name)
         assertEquals("EXTERNAL", PlayerType.EXTERNAL.name)
+        // Backward compatibility: old "INTERNAL" value migrates to EXO_PLAYER
+        assertEquals(PlayerType.EXO_PLAYER, PlayerType.fromStoredName("INTERNAL"))
+        assertEquals(PlayerType.MPV, PlayerType.fromStoredName("MPV"))
     }
 
     @Test

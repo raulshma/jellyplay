@@ -29,7 +29,7 @@ enum class DownloadStatus {
 
 @Serializable
 data class UserPreferences(
-    val preferredPlayer: PlayerType = PlayerType.INTERNAL,
+    val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val preferredSubtitleLanguage: String? = null,
     val preferredAudioLanguage: String? = null,
     val dynamicTheming: Boolean = true,
@@ -48,9 +48,20 @@ data class UserPreferences(
 )
 
 @Serializable
-enum class PlayerType {
-    INTERNAL,
-    EXTERNAL,
+enum class PlayerType(val displayName: String, val description: String) {
+    EXO_PLAYER("ExoPlayer", "Built-in Media3 player with full controls"),
+    MPV("mpv", "mpv-android with broad codec support"),
+    LIBVLC("LibVLC", "VLC media engine for maximum compatibility"),
+    EXTERNAL("External", "Open in an external app (e.g. MX Player)"),
+    ;
+
+    companion object {
+        /** Migrate legacy stored values from the old INTERNAL/EXTERNAL enum. */
+        fun fromStoredName(name: String): PlayerType = when (name) {
+            "INTERNAL" -> EXO_PLAYER
+            else -> entries.find { it.name == name } ?: EXO_PLAYER
+        }
+    }
 }
 
 @Serializable

@@ -63,8 +63,8 @@ class UserPreferencesStore @Inject constructor(
 
         UserPreferences(
             preferredPlayer = try {
-                PlayerType.valueOf(prefs[Keys.PREFERRED_PLAYER] ?: PlayerType.INTERNAL.name)
-            } catch (_: Exception) { PlayerType.INTERNAL },
+                PlayerType.fromStoredName(prefs[Keys.PREFERRED_PLAYER] ?: PlayerType.EXO_PLAYER.name)
+            } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,

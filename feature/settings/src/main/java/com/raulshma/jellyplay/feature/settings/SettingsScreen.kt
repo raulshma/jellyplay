@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -71,6 +72,7 @@ fun SettingsScreen(
     val userName = viewModel.currentUserName
 
     var showPinDialog by remember { mutableStateOf(false) }
+    var showPlayerPicker by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -126,23 +128,11 @@ fun SettingsScreen(
             SettingItem(
                 icon = Icons.Default.PlayCircle,
                 title = "Preferred Player",
-                subtitle = when (preferences.preferredPlayer) {
-                    PlayerType.INTERNAL -> "Internal (ExoPlayer)"
-                    PlayerType.EXTERNAL -> "External Player"
-                },
-                onClick = {
-                    val next = when (preferences.preferredPlayer) {
-                        PlayerType.INTERNAL -> PlayerType.EXTERNAL
-                        PlayerType.EXTERNAL -> PlayerType.INTERNAL
-                    }
-                    viewModel.setPreferredPlayer(next)
-                },
+                subtitle = preferences.preferredPlayer.displayName,
+                onClick = { showPlayerPicker = true },
             ) {
                 Text(
-                    when (preferences.preferredPlayer) {
-                        PlayerType.INTERNAL -> "Internal"
-                        PlayerType.EXTERNAL -> "External"
-                    },
+                    preferences.preferredPlayer.displayName,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -442,6 +432,54 @@ fun SettingsScreen(
                         pinError = null
                     },
                 ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showPlayerPicker) {
+        AlertDialog(
+            onDismissRequest = { showPlayerPicker = false },
+            title = { Text("Preferred Player") },
+            text = {
+                Column {
+                    PlayerType.entries.forEach { player ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setPreferredPlayer(player)
+                                    showPlayerPicker = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = preferences.preferredPlayer == player,
+                                onClick = {
+                                    viewModel.setPreferredPlayer(player)
+                                    showPlayerPicker = false
+                                },
+                            )
+                            Spacer(Modifier.size(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    player.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    player.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlayerPicker = false }) {
                     Text("Cancel")
                 }
             },

@@ -133,7 +133,7 @@ fun MediaDetailScreen(
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     isDownloading = viewModel.isDownloading,
                     downloadStarted = viewModel.downloadStarted,
-                onPlayClick = { sourceId, start -> onPlayClick(itemId, sourceId, start) },
+                onPlayClick = { playItemId, sourceId, start -> onPlayClick(playItemId, sourceId, start) },
                 onAudioClick = { onAudioClick(itemId) },
                 onDownloadClick = { viewModel.startDownload() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
@@ -158,7 +158,7 @@ private fun DetailContent(
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
     downloadStarted: Boolean,
-    onPlayClick: (mediaSourceId: String?, startPosition: Long) -> Unit,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -440,7 +440,7 @@ private fun DetailContentBody(
     isAudio: Boolean,
     isDownloading: Boolean,
     downloadStarted: Boolean,
-    onPlayClick: (mediaSourceId: String?, startPosition: Long) -> Unit,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -549,7 +549,7 @@ private fun DetailContentBody(
                         } else {
                             val sourceId = detail.mediaSources.firstOrNull()?.id
                             val startPos = item.playbackPositionTicks ?: 0L
-                            onPlayClick(sourceId, startPos)
+                            onPlayClick(item.id, sourceId, startPos)
                         }
                     },
                     modifier = Modifier.weight(1f).height(56.dp),
@@ -676,7 +676,7 @@ private fun DetailContentBody(
                         onEpisodeClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
-                            onPlayClick(sourceId, startPos)
+                            onPlayClick(episode.id, sourceId, startPos)
                         },
                     )
                 }

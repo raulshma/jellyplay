@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
@@ -63,6 +64,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
     val exoPlayer get() = _exoPlayer
+
+    private var _preferredPlayerType by mutableStateOf(PlayerType.EXO_PLAYER)
+    val preferredPlayerType get() = _preferredPlayerType
 
     private var _trackSelector by mutableStateOf<DefaultTrackSelector?>(null)
 
@@ -162,6 +166,12 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
+
+        // Load preferred player type from data store
+        viewModelScope.launch {
+            val prefs = preferencesStore.preferences.first()
+            _preferredPlayerType = prefs.preferredPlayer
+        }
 
         val trackSelector = DefaultTrackSelector(context)
         _trackSelector = trackSelector

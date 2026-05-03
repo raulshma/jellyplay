@@ -685,7 +685,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String {
         val server = _currentServer.value ?: return ""
         val user = _currentUser.value ?: return ""
-        return "${server.address}/Videos/$itemId/stream?mediaSourceId=$mediaSourceId&startTimeTicks=$startTimeTicks&api_key=${user.accessToken}"
+        return "${server.address}/Videos/$itemId/stream?static=true&mediaSourceId=$mediaSourceId&startTimeTicks=$startTimeTicks&api_key=${user.accessToken}"
     }
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
