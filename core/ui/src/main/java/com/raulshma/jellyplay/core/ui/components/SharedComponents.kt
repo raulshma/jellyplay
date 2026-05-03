@@ -41,6 +41,11 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
+
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -61,12 +66,25 @@ fun PosterCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 8.dp else 2.dp),
     ) {
         Box {
+            val sharedTransitionScope = LocalSharedTransitionScope.current
             MediaImage(
                 url = imageUrl,
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
+                    .aspectRatio(2f / 3f)
+                    .then(
+                        if (sharedTransitionScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElementWithCallerManagedVisibility(
+                                    rememberSharedContentState(key = "backdrop_${item.id}"),
+                                    visible = true,
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    ),
                 contentScale = ContentScale.Crop,
             )
 

@@ -203,6 +203,7 @@ private fun MainNavDisplay(
                     videoPlayerSection(navigator)
                     audioPlayerSection(navigator)
                     downloadsSection(navigator)
+                    authSection(navigator) { navigator.goBack() }
                     settingsSection(navigator, onLogout)
                     musicSection(navigator)
                     syncPlaySection(navigator)

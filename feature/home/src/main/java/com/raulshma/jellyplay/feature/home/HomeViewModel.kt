@@ -85,4 +85,7 @@ class HomeViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    fun getBackdropUrl(itemId: String): String =
+        playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
 }
