@@ -30,6 +30,7 @@ data class MediaItem(
     val runTimeTicks: Long? = null,
     val playbackPositionTicks: Long? = null,
     val isPlayed: Boolean = false,
+    val isFavorite: Boolean = false,
     val posterAspectRatio: Float = 2f / 3f,
     val backdropAspectRatio: Float = 16f / 9f,
     val premiereDate: String? = null,

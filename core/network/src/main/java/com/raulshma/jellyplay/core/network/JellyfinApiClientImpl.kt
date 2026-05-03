@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.model.DvrTimer
+import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -452,6 +455,81 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         response.items.flatMap { it.tags ?: emptyList() }.distinct().sorted()
     }
 
+    override suspend fun getFavorites(
+        mediaTypes: List<MediaType>?,
+        limit: Int,
+    ): Result<SearchResult> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
+            filters = listOf(org.jellyfin.sdk.model.api.ItemFilter.IS_FAVORITE),
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        SearchResult(
+            items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
+            totalRecordCount = response.totalRecordCount,
+            startIndex = 0,
+        )
+    }
+
+    override suspend fun getLyrics(itemId: String): Result<com.raulshma.jellyplay.core.model.LyricsResult> = runCatching {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        LyricsApi.fetchLyrics(server.address, itemId, user.accessToken)
+    }
+
+    override suspend fun getPlaylists(limit: Int): Result<List<com.raulshma.jellyplay.core.model.Playlist>> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.PLAYLIST),
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { item ->
+            com.raulshma.jellyplay.core.model.Playlist(
+                id = item.id.toString(),
+                name = item.name ?: "",
+                overview = item.overview,
+                itemCount = item.childCount ?: 0,
+                imageTag = item.imageTags?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)?.toString(),
+            )
+        }
+    }
+
+    override suspend fun getPlaylistItems(
+        playlistId: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<List<com.raulshma.jellyplay.core.model.PlaylistItem>> = runCatching {
+        val response = requireApi().itemsApi.getItems(
+            parentId = java.util.UUID.fromString(playlistId),
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { item ->
+            com.raulshma.jellyplay.core.model.PlaylistItem(
+                id = item.id.toString(),
+                name = item.name ?: "",
+                artist = item.albumArtist ?: item.artistItems?.firstOrNull()?.name,
+                album = item.album,
+                mediaType = item.type?.toMediaType() ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
+                runTimeTicks = item.runTimeTicks,
+            )
+        }
+    }
+
     override suspend fun markPlayed(itemId: String): Result<Unit> = runCatching {
         requireApi().playStateApi.markPlayedItem(
             userId = java.util.UUID.fromString(_currentUser.value?.id),
@@ -610,6 +688,79 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         EpgGuide(channels = channels, programs = programs)
     }
 
+    override suspend fun getTimers(): Result<List<DvrTimer>> = runCatching {
+        requireApi().liveTvApi.getTimers().content.items.map { it.toDvrTimer() }
+    }
+
+    override suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>> = runCatching {
+        requireApi().liveTvApi.getSeriesTimers().content.items.map { it.toDvrSeriesTimer() }
+    }
+
+    override suspend fun createTimer(
+        programId: String,
+        channelId: String,
+        startDate: String?,
+        endDate: String?,
+    ): Result<Unit> = runCatching {
+        requireApi().liveTvApi.createTimer(
+            org.jellyfin.sdk.model.api.TimerInfoDto(
+                programId = programId,
+                channelId = java.util.UUID.fromString(channelId),
+                startDate = startDate?.let { java.time.LocalDateTime.parse(it.replace("Z", "").replace("T", " ").substringBefore('+').replace(" ", "T")) },
+                endDate = endDate?.let { java.time.LocalDateTime.parse(it.replace("Z", "").replace("T", " ").substringBefore('+').replace(" ", "T")) },
+            )
+        )
+    }
+
+    override suspend fun cancelTimer(timerId: String): Result<Unit> = runCatching {
+        requireApi().liveTvApi.cancelTimer(timerId = timerId)
+    }
+
+    private fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(
+        id = id?.toString() ?: java.util.UUID.randomUUID().toString(),
+        programId = programId?.toString() ?: "",
+        programName = name ?: "",
+        channelId = channelId?.toString() ?: "",
+        channelName = channelName ?: "",
+        startDate = startDate?.toString(),
+        endDate = endDate?.toString(),
+        status = when (status) {
+            org.jellyfin.sdk.model.api.RecordingStatus.NEW -> DvrTimerStatus.NEW
+            org.jellyfin.sdk.model.api.RecordingStatus.IN_PROGRESS -> DvrTimerStatus.RECORDING
+            org.jellyfin.sdk.model.api.RecordingStatus.COMPLETED -> DvrTimerStatus.COMPLETED
+            org.jellyfin.sdk.model.api.RecordingStatus.CANCELLED -> DvrTimerStatus.CANCELLED
+            else -> {
+                // SDK version may not have SCHEDULED/CONFLICT_OK/CONFLICT_NOT_OK
+                val name = status?.serialName
+                when (name) {
+                    "SCHEDULED" -> DvrTimerStatus.SCHEDULED
+                    "RECORDING" -> DvrTimerStatus.RECORDING
+                    "CONFLICT_OK" -> DvrTimerStatus.CONFLICT_OK
+                    "CONFLICT_NOT_OK" -> DvrTimerStatus.CONFLICT_NOT_OK
+                    else -> DvrTimerStatus.NEW
+                }
+            }
+        },
+        isPrePaddingRequired = isPrePaddingRequired ?: false,
+        isPostPaddingRequired = isPostPaddingRequired ?: false,
+        prePaddingSeconds = prePaddingSeconds ?: 0,
+        postPaddingSeconds = postPaddingSeconds ?: 0,
+        priority = priority ?: 0,
+        seriesTimerId = seriesTimerId?.toString(),
+    )
+
+    private fun org.jellyfin.sdk.model.api.SeriesTimerInfoDto.toDvrSeriesTimer() = DvrSeriesTimer(
+        id = id?.toString() ?: java.util.UUID.randomUUID().toString(),
+        name = name ?: "",
+        channelId = channelId?.toString(),
+        channelName = channelName,
+        days = days?.map { it.serialName } ?: emptyList(),
+        priority = priority ?: 0,
+        recordAnyTime = recordAnyTime ?: true,
+        recordAnyChannel = recordAnyChannel ?: true,
+        keepUpTo = keepUpTo ?: 0,
+    )
+
     private fun org.jellyfin.sdk.model.api.BaseItemDto.toLiveTvChannel() = LiveTvChannel(
         id = id.toString(),
         name = name ?: "",
@@ -650,6 +801,7 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         runTimeTicks = runTimeTicks,
         playbackPositionTicks = userData?.playbackPositionTicks,
         isPlayed = userData?.played == true,
+        isFavorite = userData?.isFavorite == true,
         premiereDate = premiereDate?.toString(),
         genres = genres ?: emptyList(),
         studios = studios?.mapNotNull { it.name } ?: emptyList(),

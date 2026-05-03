@@ -19,10 +19,14 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.LyricsLine
+import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
@@ -94,12 +98,25 @@ class AudioPlayerViewModel @Inject constructor(
     var dialogueBoostEnabled by mutableStateOf(false)
         private set
 
+    var equalizerEnabled by mutableStateOf(false)
+        private set
+
+    var equalizerSettings by mutableStateOf(EqualizerSettings())
+        private set
+
+    var lyrics by mutableStateOf<List<LyricsLine>>(emptyList())
+        private set
+
+    var currentLyricIndex by mutableIntStateOf(-1)
+        private set
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private val dialogueBoost = DialogueBoostHelper()
+    private val equalizerHelper = EqualizerHelper()
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -157,6 +174,11 @@ class AudioPlayerViewModel @Inject constructor(
                         if (dialogueBoostEnabled) {
                             applyDialogueBoost()
                         }
+                        equalizerEnabled = prefs.equalizerEnabled
+                        equalizerSettings = prefs.equalizerSettings
+                        if (equalizerEnabled) {
+                            applyEqualizer()
+                        }
                     }
 
                     val resumeTicks = detail.item.playbackPositionTicks ?: 0L
@@ -187,6 +209,7 @@ class AudioPlayerViewModel @Inject constructor(
                         )
                     )
 
+                    fetchLyrics(itemId)
                     startPositionTracking()
                     startProgressReporting()
                 }
@@ -289,6 +312,32 @@ class AudioPlayerViewModel @Inject constructor(
         }
     }
 
+    fun toggleEqualizer() {
+        equalizerEnabled = !equalizerEnabled
+        applyEqualizer()
+        viewModelScope.launch {
+            preferencesStore.setEqualizerEnabled(equalizerEnabled)
+        }
+    }
+
+    fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
+        val newLevels = equalizerSettings.bandLevels.toMutableList()
+        newLevels[bandIndex] = levelDb
+        equalizerSettings = EqualizerSettings(newLevels)
+        equalizerHelper.setSettings(equalizerSettings)
+        viewModelScope.launch {
+            preferencesStore.setEqualizerSettings(equalizerSettings)
+        }
+    }
+
+    fun resetEqualizer() {
+        equalizerSettings = EqualizerSettings()
+        equalizerHelper.setSettings(equalizerSettings)
+        viewModelScope.launch {
+            preferencesStore.setEqualizerSettings(equalizerSettings)
+        }
+    }
+
     private fun applyNightMode() {
         val player = exoPlayer ?: return
         if (nightModeEnabled) {
@@ -308,6 +357,15 @@ class AudioPlayerViewModel @Inject constructor(
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         dialogueBoost.attach(audioSessionId)
         dialogueBoost.setEnabled(dialogueBoostEnabled)
+    }
+
+    private fun applyEqualizer() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        equalizerHelper.attach(audioSessionId)
+        equalizerHelper.setEnabled(equalizerEnabled)
+        equalizerHelper.setSettings(equalizerSettings)
     }
 
     private fun attachLoudnessEnhancer(audioSessionId: Int) {
@@ -359,6 +417,14 @@ class AudioPlayerViewModel @Inject constructor(
         return player
     }
 
+    private fun fetchLyrics(itemId: String) {
+        viewModelScope.launch {
+            mediaRepository.getLyrics(itemId)
+                .onSuccess { lyrics = it.lines }
+                .onFailure { lyrics = emptyList() }
+        }
+    }
+
     private fun startPositionTracking() {
         positionJob?.cancel()
         positionJob = viewModelScope.launch {
@@ -366,6 +432,9 @@ class AudioPlayerViewModel @Inject constructor(
                 exoPlayer?.let { player ->
                     currentPosition = player.currentPosition
                     duration = player.duration.coerceAtLeast(0L)
+                    if (lyrics.isNotEmpty()) {
+                        currentLyricIndex = com.raulshma.jellyplay.feature.player.audio.lyrics.LrcParser.findCurrentLine(lyrics, currentPosition)
+                    }
                 }
                 delay(250)
             }
@@ -410,6 +479,7 @@ class AudioPlayerViewModel @Inject constructor(
         exoPlayer?.release()
         exoPlayer = null
         dialogueBoost.detach()
+        equalizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
     }
@@ -424,6 +494,7 @@ class AudioPlayerViewModel @Inject constructor(
         exoPlayer?.release()
         exoPlayer = null
         dialogueBoost.detach()
+        equalizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
     }

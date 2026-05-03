@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 fun PosterCard(
@@ -47,12 +50,15 @@ fun PosterCard(
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
 ) {
+    val isTv = isTvDevice()
     Card(
         modifier = modifier
             .width(120.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .then(if (isTv) Modifier.tvFocusable() else Modifier)
+            .then(if (isTv) Modifier.shadow(8.dp, RoundedCornerShape(8.dp)) else Modifier),
         shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 8.dp else 2.dp),
     ) {
         Box {
             MediaImage(

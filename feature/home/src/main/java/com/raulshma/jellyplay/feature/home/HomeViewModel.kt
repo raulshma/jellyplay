@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -22,6 +23,8 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     var sections by mutableStateOf<List<HomeSection>>(emptyList())
+        private set
+    var favorites by mutableStateOf<List<MediaItem>>(emptyList())
         private set
     var isLoading by mutableStateOf(true)
         private set
@@ -59,6 +62,11 @@ class HomeViewModel @Inject constructor(
                     val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
                     intent.setPackage(context.packageName)
                     context.sendBroadcast(intent)
+
+                    if (prefs.kidsModeEnabled) {
+                        mediaRepository.getFavorites(limit = 20)
+                            .onSuccess { favorites = it.items.filter { item -> isAllowedForKids(item, prefs.kidsModeMaxRating) } }
+                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to load home sections"

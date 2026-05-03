@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.livetv.channels.ChannelsScreen
+import com.raulshma.jellyplay.feature.livetv.dvr.DvrScreen
 import com.raulshma.jellyplay.feature.livetv.epg.EpgScreen
 
 fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
@@ -16,6 +17,9 @@ fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
             onGuideClick = {
                 navigator.navigate(Route.LiveTvGuide)
             },
+            onDvrClick = {
+                navigator.navigate(Route.Dvr)
+            },
         )
     }
     entry<Route.LiveTvGuide> {
@@ -25,6 +29,16 @@ fun EntryProviderScope<NavKey>.liveTvSection(navigator: Navigator) {
                     Route.LiveTvChannelPlayer(program.channelId, program.name)
                 )
             },
+            onBack = { navigator.goBack() },
+            onRecordClick = { program ->
+                // Navigate to DVR and trigger recording creation
+                // For now we just navigate to DVR; a sheet could be added later
+                navigator.navigate(Route.Dvr)
+            },
+        )
+    }
+    entry<Route.Dvr> {
+        DvrScreen(
             onBack = { navigator.goBack() },
         )
     }

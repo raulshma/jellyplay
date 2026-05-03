@@ -1,13 +1,18 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -74,27 +79,14 @@ interface MediaRepository {
         limit: Int = 100,
     ): Result<List<String>>
 
-    suspend fun markPlayed(itemId: String): Result<Unit>
-
-    suspend fun markUnplayed(itemId: String): Result<Unit>
-
-    suspend fun toggleFavorite(itemId: String): Result<Boolean>
-
-    suspend fun getLiveTvChannels(
-        startIndex: Int = 0,
+    suspend fun getFavorites(
+        mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
-    ): Result<List<LiveTvChannel>>
+    ): Result<SearchResult>
 
-    suspend fun getLiveTvPrograms(
-        channelId: String,
-        startDateUtc: String? = null,
-        endDateUtc: String? = null,
-    ): Result<List<LiveTvProgram>>
+    suspend fun getLyrics(itemId: String): Result<LyricsResult>
 
-    suspend fun getLiveTvGuide(
-        startDateUtc: String,
-        endDateUtc: String,
-        startIndex: Int = 0,
-        limit: Int = 50,
-    ): Result<EpgGuide>
+    suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
+
+    suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
 }

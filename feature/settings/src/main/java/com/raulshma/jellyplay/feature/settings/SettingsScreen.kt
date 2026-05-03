@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -157,6 +158,19 @@ fun SettingsScreen(
                 Switch(
                     checked = preferences.dialogueBoostEnabled,
                     onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.Tune,
+                title = "Equalizer",
+                subtitle = if (preferences.equalizerEnabled) "Custom 10-band" else "Disabled",
+            ) {
+                Switch(
+                    checked = preferences.equalizerEnabled,
+                    onCheckedChange = { viewModel.setEqualizerEnabled(it) },
                 )
             }
 

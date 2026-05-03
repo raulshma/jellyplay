@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -36,6 +38,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,6 +85,8 @@ fun AudioPlayerScreen(
 ) {
     var showQueue by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
+    var showEqualizer by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
 
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
@@ -90,9 +97,11 @@ fun AudioPlayerScreen(
     }
 
     BackHandler {
-        if (showQueue || showSpeedPicker) {
+        if (showQueue || showSpeedPicker || showEqualizer || showLyrics) {
             showQueue = false
             showSpeedPicker = false
+            showEqualizer = false
+            showLyrics = false
         } else {
             onBack()
         }
@@ -143,6 +152,24 @@ fun AudioPlayerScreen(
                             tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                    IconButton(onClick = { showEqualizer = true }) {
+                        Icon(
+                            Icons.Default.Tune,
+                            "Equalizer",
+                            tint = if (viewModel.equalizerEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (viewModel.lyrics.isNotEmpty()) {
+                        IconButton(onClick = { showLyrics = true }) {
+                            Icon(
+                                Icons.Default.Mic,
+                                "Lyrics",
+                                tint = if (showLyrics) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     IconButton(
                         onClick = {
@@ -321,6 +348,25 @@ fun AudioPlayerScreen(
             onDismiss = { showSpeedPicker = false },
         )
     }
+
+    if (showEqualizer) {
+        EqualizerSheet(
+            enabled = viewModel.equalizerEnabled,
+            bandLevels = viewModel.equalizerSettings.bandLevels,
+            onToggle = { viewModel.toggleEqualizer() },
+            onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
+            onReset = { viewModel.resetEqualizer() },
+            onDismiss = { showEqualizer = false },
+        )
+    }
+
+    if (showLyrics) {
+        LyricsSheet(
+            lyrics = viewModel.lyrics,
+            currentIndex = viewModel.currentLyricIndex,
+            onDismiss = { showLyrics = false },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -423,6 +469,125 @@ private fun SpeedPickerSheet(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EqualizerSheet(
+    enabled: Boolean,
+    bandLevels: List<Int>,
+    onToggle: () -> Unit,
+    onBandChange: (Int, Int) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Equalizer", style = MaterialTheme.typography.titleMedium)
+                Row {
+                    androidx.compose.material3.TextButton(onClick = onReset) {
+                        Text("Reset")
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = enabled,
+                        onCheckedChange = { onToggle() },
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            val frequencies = listOf("60Hz", "170Hz", "310Hz", "600Hz", "1kHz", "3kHz", "6kHz", "12kHz", "14kHz", "16kHz")
+            frequencies.forEachIndexed { index, freq ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        freq,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(48.dp),
+                    )
+                    Slider(
+                        value = bandLevels.getOrElse(index) { 0 }.toFloat(),
+                        onValueChange = { onBandChange(index, it.toInt()) },
+                        valueRange = -1500f..1500f,
+                        steps = 30,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${bandLevels.getOrElse(index) { 0 } / 100}dB",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(48.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LyricsSheet(
+    lyrics: List<com.raulshma.jellyplay.core.model.LyricsLine>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text("Lyrics", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().height(400.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                items(lyrics.size) { index ->
+                    val line = lyrics[index]
+                    Text(
+                        text = line.text,
+                        style = if (index == currentIndex) {
+                            MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
+                        color = if (index == currentIndex) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+    LaunchedEffect(currentIndex) {
+        if (currentIndex >= 0) {
+            listState.animateScrollToItem(currentIndex.coerceAtMost(lyrics.lastIndex))
         }
     }
 }

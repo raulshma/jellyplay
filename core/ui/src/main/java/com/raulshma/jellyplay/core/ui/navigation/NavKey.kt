@@ -49,6 +49,8 @@ sealed class Route : NavKey {
     @Serializable data object MoodPlaylists : Route()
     @Serializable data class MoodPlaylistDetail(val playlistId: String) : Route()
     @Serializable data class CollectionDetail(val collectionId: String) : Route()
+    @Serializable data object Playlists : Route()
+    @Serializable data class PlaylistDetail(val playlistId: String) : Route()
 
     @Serializable data class OfflinePlayer(
         val filePath: String,
@@ -61,6 +63,8 @@ sealed class Route : NavKey {
     ) : Route()
 
     @Serializable data object LiveTvGuide : Route()
+
+    @Serializable data object Dvr : Route()
 
     @Serializable data class Ambient(
         val imageUrl: String? = null,

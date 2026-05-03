@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,10 +41,16 @@ fun HomeScreen(
     val isLoading = viewModel.isLoading
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
+    var showSurprise by remember { mutableStateOf(false) }
+    val allItems = remember(sections) { sections.flatMap { it.items } }
+    val surpriseItem = remember(allItems, showSurprise) {
+        if (allItems.isNotEmpty() && showSurprise) allItems.random() else null
+    }
 
     if (kidsMode) {
         KidsHomeScreen(
             sections = sections,
+            favorites = viewModel.favorites,
             isLoading = isLoading,
             error = error,
             imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
@@ -58,6 +65,13 @@ fun HomeScreen(
                         Text("JellyPlay")
                     },
                     actions = {
+                        IconButton(onClick = { showSurprise = !showSurprise }) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "Surprise Me",
+                                tint = if (showSurprise) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
@@ -88,6 +102,15 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = padding,
                     ) {
+                        if (surpriseItem != null) {
+                            item {
+                                com.raulshma.jellyplay.feature.home.SurpriseMeCard(
+                                    item = surpriseItem,
+                                    imageUrl = viewModel.getImageUrl(surpriseItem.id),
+                                    onClick = { onItemClick(surpriseItem.id) },
+                                )
+                            }
+                        }
                         items(count = sections.size) { index ->
                             val section = sections[index]
                             MediaRow(

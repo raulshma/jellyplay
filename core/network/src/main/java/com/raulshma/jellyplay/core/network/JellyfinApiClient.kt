@@ -1,12 +1,17 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -101,6 +106,17 @@ interface JellyfinApiClient {
         limit: Int = 100,
     ): Result<List<String>>
 
+    suspend fun getFavorites(
+        mediaTypes: List<MediaType>? = null,
+        limit: Int = 50,
+    ): Result<SearchResult>
+
+    suspend fun getLyrics(itemId: String): Result<LyricsResult>
+
+    suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
+
+    suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
+
     suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun markUnplayed(itemId: String): Result<Unit>
@@ -162,4 +178,17 @@ interface JellyfinApiClient {
         startIndex: Int = 0,
         limit: Int = 50,
     ): Result<EpgGuide>
+
+    suspend fun getTimers(): Result<List<DvrTimer>>
+
+    suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>>
+
+    suspend fun createTimer(
+        programId: String,
+        channelId: String,
+        startDate: String? = null,
+        endDate: String? = null,
+    ): Result<Unit>
+
+    suspend fun cancelTimer(timerId: String): Result<Unit>
 }

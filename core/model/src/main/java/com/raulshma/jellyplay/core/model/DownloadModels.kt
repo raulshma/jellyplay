@@ -43,6 +43,8 @@ data class UserPreferences(
     val kidsModeEnabled: Boolean = false,
     val kidsModeMaxRating: String = "PG",
     val dialogueBoostEnabled: Boolean = false,
+    val equalizerEnabled: Boolean = false,
+    val equalizerSettings: EqualizerSettings = EqualizerSettings(),
 )
 
 @Serializable
@@ -90,4 +92,13 @@ enum class StreamingQuality {
     HD_720P,
     FHD_1080P,
     UHD_4K,
+}
+
+@Serializable
+data class EqualizerSettings(
+    val bandLevels: List<Int> = List(10) { 0 },
+) {
+    companion object {
+        val BAND_FREQUENCIES = listOf(60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000)
+    }
 }

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -41,6 +42,8 @@ class UserPreferencesStore @Inject constructor(
         val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
         val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
         val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
+        val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
+        val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -53,6 +56,10 @@ class UserPreferencesStore @Inject constructor(
         val streamingQuality = try {
             StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
         } catch (_: Exception) { StreamingQuality.AUTO }
+
+        val equalizerSettings = try {
+            prefs[Keys.EQUALIZER_SETTINGS]?.let { json.decodeFromString<EqualizerSettings>(it) }
+        } catch (_: Exception) { null }
 
         UserPreferences(
             preferredPlayer = try {
@@ -70,6 +77,8 @@ class UserPreferencesStore @Inject constructor(
             kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
             kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
             dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
+            equalizerEnabled = prefs[Keys.EQUALIZER_ENABLED]?.toBoolean() ?: false,
+            equalizerSettings = equalizerSettings ?: EqualizerSettings(),
         )
     }
 
@@ -162,6 +171,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setEqualizerEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setEqualizerSettings(settings: EqualizerSettings) {
+        context.dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = json.encodeToString(settings) }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

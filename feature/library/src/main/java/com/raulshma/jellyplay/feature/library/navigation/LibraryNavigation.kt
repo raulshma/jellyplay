@@ -14,6 +14,7 @@ fun EntryProviderScope<NavKey>.librarySection(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
             onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
+            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
         )
     }
 }

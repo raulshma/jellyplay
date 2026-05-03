@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarViewWeek
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 fun ChannelsScreen(
     onChannelClick: (String, String) -> Unit,
     onGuideClick: () -> Unit,
+    onDvrClick: () -> Unit = {},
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
     Scaffold(
@@ -49,6 +51,9 @@ fun ChannelsScreen(
             TopAppBar(
                 title = { Text("Live TV") },
                 actions = {
+                    IconButton(onClick = onDvrClick) {
+                        Icon(Icons.Default.FiberManualRecord, contentDescription = "Recordings")
+                    }
                     IconButton(onClick = onGuideClick) {
                         Icon(Icons.Default.CalendarViewWeek, contentDescription = "Program Guide")
                     }

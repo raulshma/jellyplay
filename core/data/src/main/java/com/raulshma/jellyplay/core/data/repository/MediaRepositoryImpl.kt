@@ -5,13 +5,18 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -131,32 +136,17 @@ class MediaRepositoryImpl @Inject constructor(
         limit: Int,
     ): Result<List<String>> = apiClient.getTags(parentId, startIndex, limit)
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> =
-        apiClient.markPlayed(itemId)
-
-    override suspend fun markUnplayed(itemId: String): Result<Unit> =
-        apiClient.markUnplayed(itemId)
-
-    override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
-        apiClient.toggleFavorite(itemId)
-
-    override suspend fun getLiveTvChannels(
-        startIndex: Int,
+    override suspend fun getFavorites(
+        mediaTypes: List<MediaType>?,
         limit: Int,
-    ): Result<List<LiveTvChannel>> = apiClient.getLiveTvChannels(startIndex, limit)
+    ): Result<SearchResult> = apiClient.getFavorites(mediaTypes, limit)
 
-    override suspend fun getLiveTvPrograms(
-        channelId: String,
-        startDateUtc: String?,
-        endDateUtc: String?,
-    ): Result<List<LiveTvProgram>> = apiClient.getLiveTvPrograms(channelId, startDateUtc, endDateUtc)
+    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiClient.getLyrics(itemId)
 
-    override suspend fun getLiveTvGuide(
-        startDateUtc: String,
-        endDateUtc: String,
-        startIndex: Int,
-        limit: Int,
-    ): Result<EpgGuide> = apiClient.getLiveTvGuide(startDateUtc, endDateUtc, startIndex, limit)
+    override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = apiClient.getPlaylists(limit)
+
+    override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
+        apiClient.getPlaylistItems(playlistId, startIndex, limit)
 
     companion object {
         private const val PAGE_SIZE = 50

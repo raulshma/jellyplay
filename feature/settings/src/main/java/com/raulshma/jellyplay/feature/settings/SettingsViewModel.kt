@@ -168,6 +168,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setDialogueBoostEnabled(enabled) }
     }
 
+    fun setEqualizerEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setEqualizerEnabled(enabled) }
+    }
+
     fun switchUser(userId: String, onComplete: () -> Unit) {
         viewModelScope.launch {
             authRepository.switchUser(userId)

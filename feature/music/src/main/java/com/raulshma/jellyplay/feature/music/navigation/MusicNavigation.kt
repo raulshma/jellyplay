@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistDetailScree
 import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistsScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistDetailScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistsScreen
+import com.raulshma.jellyplay.feature.music.playlists.PlaylistDetailScreen
+import com.raulshma.jellyplay.feature.music.playlists.PlaylistsScreen
 import com.raulshma.jellyplay.feature.music.tracks.TracksScreen
 
 fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
@@ -97,6 +99,23 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
         MoodPlaylistDetailScreen(
             playlistId = key.playlistId,
             onTrackClick = { trackId ->
+                navigator.navigate(Route.AudioPlayer(trackId))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.Playlists> {
+        PlaylistsScreen(
+            onPlaylistClick = { playlistId ->
+                navigator.navigate(Route.PlaylistDetail(playlistId))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.PlaylistDetail> { key ->
+        PlaylistDetailScreen(
+            playlistId = key.playlistId,
+            onPlayItem = { trackId ->
                 navigator.navigate(Route.AudioPlayer(trackId))
             },
             onBack = { navigator.goBack() },
