@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.core.ui.components.MediaRow
 fun HomeScreen(
     onItemClick: (String) -> Unit,
     onSettingsClick: () -> Unit = {},
+    onSyncPlayClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val sections = viewModel.sections
@@ -71,6 +73,9 @@ fun HomeScreen(
                                 contentDescription = "Surprise Me",
                                 tint = if (showSurprise) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                        IconButton(onClick = onSyncPlayClick) {
+                            Icon(Icons.Default.Group, contentDescription = "SyncPlay")
                         }
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")

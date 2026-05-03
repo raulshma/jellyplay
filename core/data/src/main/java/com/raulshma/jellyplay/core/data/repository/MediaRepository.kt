@@ -16,6 +16,8 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository {
@@ -89,4 +91,42 @@ interface MediaRepository {
     suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
 
     suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
+
+    suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>>
+
+    suspend fun joinSyncPlayGroup(groupId: String): Result<Unit>
+
+    suspend fun leaveSyncPlayGroup(): Result<Unit>
+
+    suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
+
+    suspend fun getSyncPlayInfo(): Result<SyncPlayGroupInfo>
+
+    suspend fun syncPlayReady(): Result<Unit>
+
+    suspend fun syncPlayPause(): Result<Unit>
+
+    suspend fun syncPlayUnpause(): Result<Unit>
+
+    suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
+
+    suspend fun toggleFavorite(itemId: String): Result<Boolean>
+
+    suspend fun markPlayed(itemId: String): Result<Unit>
+
+    suspend fun markUnplayed(itemId: String): Result<Unit>
+
+    suspend fun getLiveTvChannels(startIndex: Int = 0, limit: Int = 50): Result<List<LiveTvChannel>>
+
+    suspend fun getLiveTvPrograms(channelId: String, startDateUtc: String? = null, endDateUtc: String? = null): Result<List<LiveTvProgram>>
+
+    suspend fun getLiveTvGuide(startDateUtc: String, endDateUtc: String, startIndex: Int = 0, limit: Int = 50): Result<EpgGuide>
+
+    suspend fun getTimers(): Result<List<DvrTimer>>
+
+    suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>>
+
+    suspend fun createTimer(programId: String, channelId: String, startDate: String? = null, endDate: String? = null): Result<Unit>
+
+    suspend fun cancelTimer(timerId: String): Result<Unit>
 }

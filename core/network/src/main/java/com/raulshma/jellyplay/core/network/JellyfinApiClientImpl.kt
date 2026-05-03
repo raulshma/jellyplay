@@ -716,6 +716,95 @@ class JellyfinApiClientImpl @Inject constructor() : JellyfinApiClient {
         requireApi().liveTvApi.cancelTimer(timerId = timerId)
     }
 
+    override suspend fun getSyncPlayGroups(): Result<List<com.raulshma.jellyplay.core.model.SyncPlayGroup>> = runCatching {
+        val response = requireApi().syncPlayApi.syncPlayGetGroups().content
+        response.map { groupInfo ->
+            com.raulshma.jellyplay.core.model.SyncPlayGroup(
+                groupId = groupInfo.groupId.toString(),
+                groupName = groupInfo.groupName ?: "",
+                participantCount = groupInfo.participants?.size ?: 0,
+                participants = groupInfo.participants ?: emptyList(),
+                isPlaying = groupInfo.state == org.jellyfin.sdk.model.api.GroupStateType.PLAYING,
+            )
+        }
+    }
+
+    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayJoinGroup(
+            org.jellyfin.sdk.model.api.JoinGroupRequestDto(
+                groupId = java.util.UUID.fromString(groupId),
+            )
+        )
+    }
+
+    override suspend fun leaveSyncPlayGroup(): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayLeaveGroup()
+    }
+
+    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayCreateGroup(
+            org.jellyfin.sdk.model.api.NewGroupRequestDto(
+                groupName = groupName,
+            )
+        )
+    }
+
+    override suspend fun syncPlayReady(): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayReady(
+            org.jellyfin.sdk.model.api.ReadyRequestDto(
+                `when` = java.time.LocalDateTime.now(),
+                positionTicks = 0L,
+                isPlaying = true,
+                playlistItemId = java.util.UUID.randomUUID(),
+            )
+        )
+    }
+
+    override suspend fun syncPlayBuffering(): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayBuffering(
+            org.jellyfin.sdk.model.api.BufferRequestDto(
+                `when` = java.time.LocalDateTime.now(),
+                positionTicks = 0L,
+                isPlaying = false,
+                playlistItemId = java.util.UUID.randomUUID(),
+            )
+        )
+    }
+
+    override suspend fun syncPlayPause(): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayPause()
+    }
+
+    override suspend fun syncPlayUnpause(): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlayUnpause()
+    }
+
+    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> = runCatching {
+        requireApi().syncPlayApi.syncPlaySeek(
+            org.jellyfin.sdk.model.api.SeekRequestDto(
+                positionTicks = positionTicks,
+            )
+        )
+    }
+
+    override suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = runCatching {
+        val groups = requireApi().syncPlayApi.syncPlayGetGroups().content
+        val groupInfo = groups.firstOrNull()
+            ?: throw IllegalStateException("Not in a SyncPlay group")
+        com.raulshma.jellyplay.core.model.SyncPlayGroupInfo(
+            groupId = groupInfo.groupId.toString(),
+            groupName = groupInfo.groupName ?: "",
+            participants = (groupInfo.participants ?: emptyList()).map { name ->
+                com.raulshma.jellyplay.core.model.SyncPlayParticipant(
+                    userId = name,
+                    userName = name,
+                    isConnected = true,
+                )
+            },
+            isPlaying = groupInfo.state == org.jellyfin.sdk.model.api.GroupStateType.PLAYING,
+        )
+    }
+
     private fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(
         id = id?.toString() ?: java.util.UUID.randomUUID().toString(),
         programId = programId?.toString() ?: "",

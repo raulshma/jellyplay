@@ -146,4 +146,57 @@ class ModelSerializationTest {
         assertEquals(DownloadStatus.FAILED, statuses[4])
         assertEquals(DownloadStatus.CANCELLED, statuses[5])
     }
+
+    @Test
+    fun `sync play group serialization roundtrip`() {
+        val original = SyncPlayGroup(
+            groupId = "group-1",
+            groupName = "Movie Night",
+            participantCount = 3,
+            participants = listOf("Alice", "Bob", "Charlie"),
+            playingItemId = "item-1",
+            playingItemName = "Test Movie",
+            isPlaying = true,
+            positionTicks = 500_000_000L,
+        )
+
+        val serialized = json.encodeToString(original)
+        val deserialized = json.decodeFromString<SyncPlayGroup>(serialized)
+
+        assertEquals(original, deserialized)
+    }
+
+    @Test
+    fun `sync play group info serialization roundtrip`() {
+        val original = SyncPlayGroupInfo(
+            groupId = "group-2",
+            groupName = "Anime Watch",
+            participants = listOf(
+                SyncPlayParticipant(userId = "u1", userName = "User1", isConnected = true),
+                SyncPlayParticipant(userId = "u2", userName = "User2", isConnected = false),
+            ),
+            playingItemId = "item-2",
+            playingItemName = "Episode 1",
+            isPlaying = false,
+            positionTicks = 1_200_000_000L,
+            playbackSpeed = 1.0f,
+        )
+
+        val serialized = json.encodeToString(original)
+        val deserialized = json.decodeFromString<SyncPlayGroupInfo>(serialized)
+
+        assertEquals(original, deserialized)
+    }
+
+    @Test
+    fun `sync play command type enum values`() {
+        val commands = SyncPlayCommandType.entries
+        assertEquals(6, commands.size)
+        assertEquals(SyncPlayCommandType.PLAY, commands[0])
+        assertEquals(SyncPlayCommandType.PAUSE, commands[1])
+        assertEquals(SyncPlayCommandType.STOP, commands[2])
+        assertEquals(SyncPlayCommandType.SEEK, commands[3])
+        assertEquals(SyncPlayCommandType.READY, commands[4])
+        assertEquals(SyncPlayCommandType.BUFFERING, commands[5])
+    }
 }

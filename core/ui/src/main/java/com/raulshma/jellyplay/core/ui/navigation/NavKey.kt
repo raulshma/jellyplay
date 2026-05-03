@@ -66,6 +66,8 @@ sealed class Route : NavKey {
 
     @Serializable data object Dvr : Route()
 
+    @Serializable data object SyncPlay : Route()
+
     @Serializable data class Ambient(
         val imageUrl: String? = null,
         val title: String = "",

@@ -8,19 +8,8 @@
         android:fillColor="#1A1A2E"
         android:pathData="M0,0h320v180h-320z" />
     <path
-        android:fillColor="#16213E"
-        android:pathData="M0,0h320v180h-320z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="160"
-                android:centerY="90"
-                android:gradientRadius="180">
-                <item android:offset="0" android:color="#FF1E3A5F" />
-                <item android:offset="1" android:color="#FF1A1A2E" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:fillColor="#FF1E3A5F"
+        android:pathData="M0,0h320v180h-320z" />
 
     <!-- Icon circle -->
     <path

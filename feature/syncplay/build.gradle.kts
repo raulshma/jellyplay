@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.raulshma.jellyplay.feature.player.video"
+    namespace = "com.raulshma.jellyplay.feature.syncplay"
     compileSdk = 36
 
     defaultConfig {
@@ -26,7 +26,6 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
-    implementation(project(":core:datastore"))
     implementation(project(":core:ui"))
 
     implementation(platform(libs.compose.bom))
@@ -39,22 +38,6 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
-
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
-    implementation(libs.media3.session)
-    implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.exoplayer.dash)
-    implementation(libs.media3.extractor)
-
-    implementation(libs.media3.cast)
-    implementation(libs.media3.datasource)
-    implementation(libs.play.services.cast.framework)
-
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-
-    implementation(libs.mlkit.text.recognition)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)

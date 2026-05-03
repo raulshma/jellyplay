@@ -191,4 +191,24 @@ interface JellyfinApiClient {
     ): Result<Unit>
 
     suspend fun cancelTimer(timerId: String): Result<Unit>
+
+    suspend fun getSyncPlayGroups(): Result<List<com.raulshma.jellyplay.core.model.SyncPlayGroup>>
+
+    suspend fun joinSyncPlayGroup(groupId: String): Result<Unit>
+
+    suspend fun leaveSyncPlayGroup(): Result<Unit>
+
+    suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
+
+    suspend fun syncPlayReady(): Result<Unit>
+
+    suspend fun syncPlayBuffering(): Result<Unit>
+
+    suspend fun syncPlayPause(): Result<Unit>
+
+    suspend fun syncPlayUnpause(): Result<Unit>
+
+    suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
+
+    suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo>
 }

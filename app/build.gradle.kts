@@ -91,6 +91,7 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":feature:music"))
     implementation(project(":feature:livetv"))
+    implementation(project(":feature:syncplay"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -110,6 +111,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    implementation(libs.play.services.cast.framework)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

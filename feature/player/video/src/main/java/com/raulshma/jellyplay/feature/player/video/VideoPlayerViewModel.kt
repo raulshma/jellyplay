@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -56,6 +57,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
+    private val castManager: CastManager,
 ) : ViewModel() {
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
@@ -127,6 +129,12 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var _dialogueBoostEnabled by mutableStateOf(false)
     val dialogueBoostEnabled get() = _dialogueBoostEnabled
+
+    private var _ocrText by mutableStateOf<String?>(null)
+    val ocrText get() = _ocrText
+
+    private var _isOcrRunning by mutableStateOf(false)
+    val isOcrRunning get() = _isOcrRunning
 
     private var progressJob: Job? = null
     private var positionJob: Job? = null
@@ -383,6 +391,42 @@ class VideoPlayerViewModel @Inject constructor(
         dialogueBoost.setEnabled(_dialogueBoostEnabled)
     }
 
+    val isCastAvailable: Boolean
+        get() = castManager.isCastAvailable
+
+    val isCastConnected: Boolean
+        get() = castManager.isConnected
+
+    fun castToDevice() {
+        val player = _exoPlayer ?: return
+        val currentMedia = player.currentMediaItem ?: return
+        castManager.loadMedia(currentMedia, player.currentPosition, playerListener)
+    }
+
+    fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
+        if (_isOcrRunning) return
+        if (bitmap == null) {
+            _ocrText = null
+            return
+        }
+        _isOcrRunning = true
+        viewModelScope.launch {
+            try {
+                val text = com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleOcrHelper
+                    .extractSubtitleTextFromFrame(bitmap)
+                _ocrText = text
+            } catch (_: Exception) {
+                _ocrText = null
+            } finally {
+                _isOcrRunning = false
+            }
+        }
+    }
+
+    fun clearOcrText() {
+        _ocrText = null
+    }
+
     @Volatile
     var subtitleOffsetMs: Long = 0L
         private set
@@ -541,6 +585,7 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer = null
         _trackSelector = null
         dialogueBoost.detach()
+        castManager.release()
     }
 
     override fun onCleared() {

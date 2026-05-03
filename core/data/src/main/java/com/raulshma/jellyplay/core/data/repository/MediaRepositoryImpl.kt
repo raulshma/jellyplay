@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -147,6 +149,63 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
         apiClient.getPlaylistItems(playlistId, startIndex, limit)
+
+    override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
+        apiClient.getSyncPlayGroups()
+
+    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> =
+        apiClient.joinSyncPlayGroup(groupId)
+
+    override suspend fun leaveSyncPlayGroup(): Result<Unit> =
+        apiClient.leaveSyncPlayGroup()
+
+    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
+        apiClient.createSyncPlayGroup(groupName)
+
+    override suspend fun getSyncPlayInfo(): Result<SyncPlayGroupInfo> =
+        apiClient.getSyncPlayInfo()
+
+    override suspend fun syncPlayReady(): Result<Unit> =
+        apiClient.syncPlayReady()
+
+    override suspend fun syncPlayPause(): Result<Unit> =
+        apiClient.syncPlayPause()
+
+    override suspend fun syncPlayUnpause(): Result<Unit> =
+        apiClient.syncPlayUnpause()
+
+    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> =
+        apiClient.syncPlaySeek(positionTicks)
+
+    override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
+        apiClient.toggleFavorite(itemId)
+
+    override suspend fun markPlayed(itemId: String): Result<Unit> =
+        apiClient.markPlayed(itemId)
+
+    override suspend fun markUnplayed(itemId: String): Result<Unit> =
+        apiClient.markUnplayed(itemId)
+
+    override suspend fun getLiveTvChannels(startIndex: Int, limit: Int): Result<List<LiveTvChannel>> =
+        apiClient.getLiveTvChannels(startIndex, limit)
+
+    override suspend fun getLiveTvPrograms(channelId: String, startDateUtc: String?, endDateUtc: String?): Result<List<LiveTvProgram>> =
+        apiClient.getLiveTvPrograms(channelId, startDateUtc, endDateUtc)
+
+    override suspend fun getLiveTvGuide(startDateUtc: String, endDateUtc: String, startIndex: Int, limit: Int): Result<EpgGuide> =
+        apiClient.getLiveTvGuide(startDateUtc, endDateUtc, startIndex, limit)
+
+    override suspend fun getTimers(): Result<List<DvrTimer>> =
+        apiClient.getTimers()
+
+    override suspend fun getSeriesTimers(): Result<List<DvrSeriesTimer>> =
+        apiClient.getSeriesTimers()
+
+    override suspend fun createTimer(programId: String, channelId: String, startDate: String?, endDate: String?): Result<Unit> =
+        apiClient.createTimer(programId, channelId, startDate, endDate)
+
+    override suspend fun cancelTimer(timerId: String): Result<Unit> =
+        apiClient.cancelTimer(timerId)
 
     companion object {
         private const val PAGE_SIZE = 50

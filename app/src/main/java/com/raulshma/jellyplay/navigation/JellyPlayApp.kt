@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
+import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 
 @Composable
 fun JellyPlayApp(
@@ -193,6 +194,7 @@ private fun MainNavDisplay(
             downloadsSection(navigator)
             settingsSection(navigator, onLogout)
             musicSection(navigator)
+            syncPlaySection(navigator)
         },
         modifier = modifier,
     )

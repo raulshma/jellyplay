@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
 import androidx.compose.material.icons.filled.Fullscreen
@@ -122,6 +124,9 @@ fun VideoPlayerScreen(
     var showSecondarySubtitlePicker by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
+    var isCasting by remember { mutableStateOf(false) }
+    var showOcrResult by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
 
     var secondarySubtitleText by remember { mutableStateOf<String?>(null) }
     var showTapToTranslate by remember { mutableStateOf(false) }
@@ -157,7 +162,7 @@ fun VideoPlayerScreen(
     BackHandler {
         if (showSpeedPicker || showAudioPicker || showSubtitlePicker || showChapterPicker ||
             showPlaybackInfo || showAspectRatio || showSubtitleStyle || showSecondarySubtitlePicker ||
-            showTapToTranslate
+            showTapToTranslate || showOcrResult
         ) {
             showSpeedPicker = false
             showAudioPicker = false
@@ -168,6 +173,7 @@ fun VideoPlayerScreen(
             showSubtitleStyle = false
             showSecondarySubtitlePicker = false
             showTapToTranslate = false
+            showOcrResult = false
         } else {
             onBack()
         }
@@ -230,6 +236,7 @@ fun VideoPlayerScreen(
                     PlayerView(ctx).apply {
                         this.player = player
                         useController = false
+                        playerViewRef = this
                         val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
                         val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
                         subtitleView?.setStyle(
@@ -370,6 +377,21 @@ fun VideoPlayerScreen(
                 onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
                 dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
                 isFullscreen = isFullscreen,
+                isCasting = isCasting,
+                onCastClick = { viewModel.castToDevice() },
+                onOcrClick = {
+                    val pv = playerViewRef
+                    val bitmap = if (pv != null && pv.width > 0 && pv.height > 0) {
+                        try {
+                            android.graphics.Bitmap.createBitmap(pv.width, pv.height, android.graphics.Bitmap.Config.ARGB_8888).also {
+                                pv.draw(android.graphics.Canvas(it))
+                            }
+                        } catch (_: Exception) { null }
+                    } else null
+                    viewModel.captureOcrSubtitle(bitmap)
+                    showOcrResult = true
+                },
+                isOcrRunning = viewModel.isOcrRunning,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -390,6 +412,18 @@ fun VideoPlayerScreen(
         if (showControls) {
             delay(5000)
             showControls = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                isCasting = castContext.sessionManager.currentCastSession?.isConnected == true
+            } catch (_: Exception) {
+                isCasting = false
+            }
+            delay(2000)
         }
     }
 
@@ -490,6 +524,71 @@ fun VideoPlayerScreen(
             text = tapToTranslateText,
             onDismiss = { showTapToTranslate = false },
         )
+    }
+
+    if (showOcrResult) {
+        val ocrText = viewModel.ocrText
+        ModalBottomSheet(
+            onDismissRequest = {
+                showOcrResult = false
+                viewModel.clearOcrText()
+            },
+            sheetState = rememberModalBottomSheetState(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Text("OCR Subtitle Text", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                if (viewModel.isOcrRunning) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
+                } else if (ocrText != null) {
+                    Text(
+                        ocrText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text(
+                        "No subtitle text detected in current frame.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (ocrText != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Copy") }
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, ocrText)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(intent, "Share"))
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Share") }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -647,6 +746,10 @@ private fun PlayerControls(
     onDialogueBoostClick: () -> Unit,
     dialogueBoostEnabled: Boolean,
     isFullscreen: Boolean,
+    isCasting: Boolean = false,
+    onCastClick: () -> Unit = {},
+    onOcrClick: () -> Unit = {},
+    isOcrRunning: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -796,6 +899,18 @@ private fun PlayerControls(
                             Icons.Default.RecordVoiceOver,
                             "Dialogue Boost",
                             tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
+                    CastButton(isCasting = isCasting, onCast = onCastClick)
+                    IconButton(
+                        onClick = onOcrClick,
+                        enabled = !isOcrRunning,
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "OCR Subtitle",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -1114,6 +1229,37 @@ private fun formatDuration(ms: Long): String {
         String.format("%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%d:%02d", minutes, seconds)
+    }
+}
+
+@Composable
+private fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
+    val context = LocalContext.current
+    IconButton(
+        onClick = {
+            if (isCasting) {
+                onCast()
+            } else {
+                try {
+                    val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                    val sessionManager = castContext.sessionManager
+                    val session = sessionManager.currentCastSession
+                    if (session?.isConnected == true) {
+                        sessionManager.endCurrentSession(true)
+                    } else {
+                        onCast()
+                    }
+                } catch (_: Exception) {
+                    onCast()
+                }
+            }
+        },
+    ) {
+        Icon(
+            if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+            contentDescription = "Cast",
+            tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
+        )
     }
 }
 
