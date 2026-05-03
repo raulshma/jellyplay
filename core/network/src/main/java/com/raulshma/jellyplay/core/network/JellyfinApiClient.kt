@@ -32,6 +32,12 @@ interface JellyfinApiClient {
         password: String,
     ): Result<UserInfo>
 
+    suspend fun authenticateUser(
+        serverInfo: ServerInfo,
+        username: String,
+        password: String,
+    ): Result<UserInfo>
+
     suspend fun setServer(serverInfo: ServerInfo)
 
     suspend fun setUser(userInfo: UserInfo)

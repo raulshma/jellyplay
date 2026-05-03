@@ -107,11 +107,20 @@ class JellyfinApiClientImpl @Inject constructor(
         serverAddress: String,
         username: String,
         password: String,
+    ): Result<UserInfo> = authenticateUser(
+        serverInfo = _currentServer.value ?: connectToServer(serverAddress).getOrThrow(),
+        username = username,
+        password = password,
+    )
+
+    override suspend fun authenticateUser(
+        serverInfo: ServerInfo,
+        username: String,
+        password: String,
     ): Result<UserInfo> = apiResult {
-        val server = _currentServer.value
-            ?: connectToServer(serverAddress).getOrThrow()
+        _currentServer.value = serverInfo
         withContext(Dispatchers.IO) {
-            val client = jellyfin.createApi(server.address)
+            val client = jellyfin.createApi(serverInfo.address)
             val authResult = client.userApi.authenticateUserByName(
                 org.jellyfin.sdk.model.api.AuthenticateUserByName(
                     username = username,
@@ -120,7 +129,7 @@ class JellyfinApiClientImpl @Inject constructor(
             ).content
             val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
             val authenticatedClient = jellyfin.createApi(
-                baseUrl = server.address,
+                baseUrl = serverInfo.address,
                 accessToken = accessTokenValue,
             )
             api = authenticatedClient
@@ -129,7 +138,7 @@ class JellyfinApiClientImpl @Inject constructor(
             val userInfo = UserInfo(
                 id = userDto.id.toString(),
                 name = userDto.name ?: username,
-                serverAddress = server.address,
+                serverAddress = serverInfo.address,
                 accessToken = accessTokenValue,
                 isAdmin = policy?.isAdministrator ?: false,
                 maxParentalAgeRating = policy?.maxParentalRating,
@@ -139,7 +148,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 } else emptyList(),
             )
             _currentUser.value = userInfo
-            _currentServer.value = server.copy(
+            _currentServer.value = serverInfo.copy(
                 userId = userInfo.id,
                 accessToken = userInfo.accessToken,
                 isConnected = true,

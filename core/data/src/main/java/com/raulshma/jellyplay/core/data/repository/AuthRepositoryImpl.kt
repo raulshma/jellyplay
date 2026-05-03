@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,9 +91,34 @@ class AuthRepositoryImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> {
-        return apiClient.authenticateUser(serverAddress, username, password).onSuccess { user ->
-            val server = apiClient.currentServer as? ServerInfo
+        val serverFromDb = serverDao.getAllServers().first()
+            .firstOrNull { server ->
+                val normalizedAddress = serverAddress.trim().trimEnd('/').let {
+                    if (it.startsWith("http://") || it.startsWith("https://")) it
+                    else "https://$it"
+                }
+                server.address == normalizedAddress
+            }
+
+        val existingServerInfo = serverFromDb?.toServerInfo()
+
+        return if (existingServerInfo != null) {
+            apiClient.authenticateUser(existingServerInfo, username, password)
+        } else {
+            apiClient.authenticateUser(serverAddress, username, password)
+        }.onSuccess { user ->
+            val server = apiClient.currentServer.first()
             if (server != null) {
+                val existingServer = serverDao.getServerById(server.id)
+                if (existingServer == null) {
+                    serverDao.insertServer(
+                        ServerEntity(
+                            id = server.id,
+                            name = server.name,
+                            address = server.address,
+                        )
+                    )
+                }
                 val userEntity = UserEntity(
                     userId = user.id,
                     serverId = server.id,
@@ -126,31 +152,46 @@ class AuthRepositoryImpl @Inject constructor(
         val serverId = preferencesStore.activeServerId.first()
         val userId = preferencesStore.activeUserId.first()
         if (serverId != null && userId != null) {
-            val serverEntity = serverDao.getServerById(serverId) ?: return Result.success(Unit)
+            val serverEntity = serverDao.getServerById(serverId)
+            if (serverEntity == null) {
+                Log.w("AuthRepository", "restoreSession: server not found in DB, id=$serverId")
+                preferencesStore.setActiveServer("")
+                preferencesStore.setActiveUser("")
+                return@runCatching
+            }
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
 
             val userEntity = userDao.getUserById(userId)
-            val token = userEntity?.accessToken ?: serverEntity.accessToken
+            if (userEntity == null) {
+                Log.w("AuthRepository", "restoreSession: user not found in DB, id=$userId")
+                preferencesStore.setActiveUser("")
+                return@runCatching
+            }
+            val token = userEntity.accessToken
             if (token != null) {
                 apiClient.setUser(
                     UserInfo(
                         id = userId,
-                        name = userEntity?.name ?: "",
+                        name = userEntity.name,
                         serverAddress = server.address,
                         accessToken = token,
                         serverId = serverId,
-                        maxParentalAgeRating = userEntity?.maxParentalAgeRating,
-                        primaryImageTag = userEntity?.primaryImageTag,
-                        enabledFolderIds = userEntity?.enabledFolderIds?.let {
+                        maxParentalAgeRating = userEntity.maxParentalAgeRating,
+                        primaryImageTag = userEntity.primaryImageTag,
+                        enabledFolderIds = userEntity.enabledFolderIds?.let {
                             try {
                                 kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
                             } catch (_: Exception) { emptyList() }
                         } ?: emptyList(),
                     )
                 )
+            } else {
+                Log.w("AuthRepository", "restoreSession: no access token for user id=$userId")
             }
         }
+    }.onFailure { e ->
+        Log.e("AuthRepository", "restoreSession failed", e)
     }
 
     override suspend fun logout() {
