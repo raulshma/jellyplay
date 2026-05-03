@@ -15,8 +15,13 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
+import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -110,6 +115,15 @@ class VideoPlayerViewModel @Inject constructor(
     private var _subtitleStyle by mutableStateOf(SubtitleStyle())
     val subtitleStyle get() = _subtitleStyle
 
+    private var _secondarySubtitleTrack by mutableStateOf<MediaStream?>(null)
+    val secondarySubtitleTrack get() = _secondarySubtitleTrack
+
+    private var _secondarySubtitleCues by mutableStateOf<List<TimedCue>>(emptyList())
+    val secondarySubtitleCues get() = _secondarySubtitleCues
+
+    private var _secondarySubtitleOffsetMs by mutableStateOf(0L)
+    val secondarySubtitleOffsetMs get() = _secondarySubtitleOffsetMs
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
@@ -135,7 +149,15 @@ class VideoPlayerViewModel @Inject constructor(
         val trackSelector = DefaultTrackSelector(context)
         _trackSelector = trackSelector
 
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setSubtitleParserFactory(
+                OffsettingSubtitleParserFactory(
+                    DefaultSubtitleParserFactory(),
+                ) { subtitleOffsetMs * 1000L }
+            )
+
         val player = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -271,16 +293,73 @@ class VideoPlayerViewModel @Inject constructor(
         updateTracks()
     }
 
+    fun selectSecondarySubtitleStream(stream: MediaStream?) {
+        _secondarySubtitleTrack = stream
+        if (stream == null || stream.deliveryUrl.isNullOrBlank()) {
+            _secondarySubtitleCues = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            loadSecondarySubtitle(stream)
+        }
+    }
+
+    fun setSecondarySubtitleOffset(offsetMs: Long) {
+        _secondarySubtitleOffsetMs = offsetMs
+    }
+
+    private suspend fun loadSecondarySubtitle(stream: MediaStream) {
+        try {
+            val url = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+            val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
+            val request = okhttp3.Request.Builder().url(url).build()
+            val response = okhttp3.OkHttpClient().newCall(request).execute()
+            val bytes = response.body?.bytes() ?: return
+            val cues = SubtitleParserHelper.parseSubtitles(bytes, mimeType)
+            _secondarySubtitleCues = cues
+        } catch (_: Exception) {
+            _secondarySubtitleCues = emptyList()
+        }
+    }
+
+    fun getSecondarySubtitleText(positionMs: Long): String? {
+        val cues = _secondarySubtitleCues
+        if (cues.isEmpty()) return null
+        val cue = SubtitleParserHelper.findActiveCue(
+            cues,
+            positionMs * 1000L,
+            _secondarySubtitleOffsetMs * 1000L,
+        ) ?: return null
+        return cue.text.toString().takeIf { it.isNotBlank() }
+    }
+
+    fun getCurrentPrimarySubtitleText(): String? {
+        val player = _exoPlayer ?: return null
+        val cues = player.currentCues.cues
+        if (cues.isEmpty()) return null
+        return cues.joinToString("\n") { it.text?.toString() ?: "" }
+            .takeIf { it.isNotBlank() }
+    }
+
     fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio = ratio
     }
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _subtitleStyle = style
+        subtitleOffsetMs = style.offsetMs
         viewModelScope.launch {
             preferencesStore.setSubtitleStyle(style)
         }
     }
+
+    fun updateSubtitleOffset(offsetMs: Long) {
+        subtitleOffsetMs = offsetMs
+    }
+
+    @Volatile
+    var subtitleOffsetMs: Long = 0L
+        private set
 
     fun getTrickplayImageUrl(positionMs: Long): String? {
         val itemId = currentItemId ?: return null

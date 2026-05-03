@@ -118,8 +118,13 @@ fun VideoPlayerScreen(
     var showPlaybackInfo by remember { mutableStateOf(false) }
     var showAspectRatio by remember { mutableStateOf(false) }
     var showSubtitleStyle by remember { mutableStateOf(false) }
+    var showSecondarySubtitlePicker by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
+
+    var secondarySubtitleText by remember { mutableStateOf<String?>(null) }
+    var showTapToTranslate by remember { mutableStateOf(false) }
+    var tapToTranslateText by remember { mutableStateOf("") }
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -150,7 +155,8 @@ fun VideoPlayerScreen(
 
     BackHandler {
         if (showSpeedPicker || showAudioPicker || showSubtitlePicker || showChapterPicker ||
-            showPlaybackInfo || showAspectRatio || showSubtitleStyle
+            showPlaybackInfo || showAspectRatio || showSubtitleStyle || showSecondarySubtitlePicker ||
+            showTapToTranslate
         ) {
             showSpeedPicker = false
             showAudioPicker = false
@@ -159,6 +165,8 @@ fun VideoPlayerScreen(
             showPlaybackInfo = false
             showAspectRatio = false
             showSubtitleStyle = false
+            showSecondarySubtitlePicker = false
+            showTapToTranslate = false
         } else {
             onBack()
         }
@@ -203,6 +211,14 @@ fun VideoPlayerScreen(
                                 if (exoPlayer?.isPlaying == true) exoPlayer.pause() else exoPlayer?.play()
                             }
                         }
+                    },
+                    onLongPress = {
+                        val primaryText = viewModel.getCurrentPrimarySubtitleText()
+                        val secondaryText = secondarySubtitleText
+                        tapToTranslateText = listOfNotNull(primaryText, secondaryText)
+                            .joinToString("\n")
+                            .takeIf { it.isNotBlank() } ?: "No subtitle available"
+                        showTapToTranslate = true
                     },
                 )
             },
@@ -280,6 +296,26 @@ fun VideoPlayerScreen(
             },
         )
 
+        secondarySubtitleText?.let { text ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(top = 60.dp, start = 16.dp, end = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = text,
+                    color = Color.Yellow,
+                    fontSize = (viewModel.subtitleStyle.fontSize - 4).sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn(),
@@ -326,6 +362,7 @@ fun VideoPlayerScreen(
                 onAudioClick = { showAudioPicker = true },
                 onSubtitleClick = { showSubtitlePicker = true },
                 onSubtitleStyleClick = { showSubtitleStyle = true },
+                onSecondarySubtitleClick = { showSecondarySubtitlePicker = true },
                 onChapterClick = { showChapterPicker = true },
                 onInfoClick = { showPlaybackInfo = true },
                 onAspectRatioClick = { showAspectRatio = true },
@@ -350,6 +387,15 @@ fun VideoPlayerScreen(
         if (showControls) {
             delay(5000)
             showControls = false
+        }
+    }
+
+    LaunchedEffect(exoPlayer, viewModel.secondarySubtitleTrack) {
+        val track = viewModel.secondarySubtitleTrack ?: return@LaunchedEffect
+        while (true) {
+            val pos = exoPlayer?.currentPosition ?: 0L
+            secondarySubtitleText = viewModel.getSecondarySubtitleText(pos)
+            delay(250)
         }
     }
 
@@ -421,6 +467,25 @@ fun VideoPlayerScreen(
             currentStyle = subtitleStyle,
             onStyleChange = { viewModel.setSubtitleStyle(it) },
             onDismiss = { showSubtitleStyle = false },
+        )
+    }
+
+    if (showSecondarySubtitlePicker) {
+        SecondarySubtitlePickerSheet(
+            mediaStreams = viewModel.mediaStreams,
+            currentSecondary = viewModel.secondarySubtitleTrack,
+            onSelect = { stream ->
+                viewModel.selectSecondarySubtitleStream(stream)
+                showSecondarySubtitlePicker = false
+            },
+            onDismiss = { showSecondarySubtitlePicker = false },
+        )
+    }
+
+    if (showTapToTranslate) {
+        TapToTranslateSheet(
+            text = tapToTranslateText,
+            onDismiss = { showTapToTranslate = false },
         )
     }
 }
@@ -572,6 +637,7 @@ private fun PlayerControls(
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onSubtitleStyleClick: () -> Unit,
+    onSecondarySubtitleClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -705,6 +771,9 @@ private fun PlayerControls(
                     }
                     IconButton(onClick = onSubtitleStyleClick) {
                         Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onSecondarySubtitleClick) {
+                        Icon(Icons.Default.ClosedCaptionOff, "Dual Subtitles", tint = Color.White)
                     }
                     if (hasChapters) {
                         IconButton(onClick = onChapterClick) {
@@ -877,6 +946,147 @@ private fun ChapterPickerSheet(
                             Text("►", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SecondarySubtitlePickerSheet(
+    mediaStreams: List<com.raulshma.jellyplay.core.model.MediaStream>,
+    currentSecondary: com.raulshma.jellyplay.core.model.MediaStream?,
+    onSelect: (com.raulshma.jellyplay.core.model.MediaStream?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val subtitleStreams = mediaStreams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Secondary Subtitle",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(null) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Off",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (currentSecondary == null) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                )
+                if (currentSecondary == null) {
+                    Text("\u2713", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            LazyColumn {
+                itemsIndexed(subtitleStreams) { _, stream ->
+                    val isSelected = currentSecondary?.index == stream.index
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(stream) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stream.displayTitle ?: stream.language ?: "Unknown",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                            stream.codec?.let { codec ->
+                                Text(
+                                    codec.uppercase(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        if (isSelected) {
+                            Text("\u2713", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TapToTranslateSheet(
+    text: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Subtitle Text",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Subtitle", text)
+                        clipboard.setPrimaryClip(clip)
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Copy")
+                }
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "Share subtitle"))
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Share")
                 }
             }
         }
