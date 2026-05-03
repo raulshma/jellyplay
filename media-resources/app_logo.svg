@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Jellyfin Signature Gradient Background -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#AA5CC3" />
+      <stop offset="100%" stop-color="#00A4DC" />
+    </linearGradient>
+
+    <!-- Subtle Premium Gradient for the Jellyfish -->
+    <linearGradient id="jelly-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F0F8FF" />
+    </linearGradient>
+
+    <!-- Material Design Drop Shadow -->
+    <filter id="drop-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+
+    <!-- Mask to punch out the Play Button -->
+    <mask id="play-mask">
+      <!-- White keeps the foreground visible -->
+      <rect x="0" y="0" width="512" height="512" fill="white" />
+      <!-- Black hides the foreground, creating the cutout. 
+           Stroke creates perfectly rounded corners for the triangle. -->
+      <polygon 
+        points="236,140 236,200 288,170" 
+        fill="black" 
+        stroke="black" 
+        stroke-width="14" 
+        stroke-linejoin="round" 
+      />
+    </mask>
+  </defs>
+
+  <!-- App Icon Base (Squircle) -->
+  <rect width="512" height="512" rx="115" ry="115" fill="url(#bg-grad)" />
+
+  <!-- Jellyfish Character / Play Logo -->
+  <g mask="url(#play-mask)" fill="url(#jelly-grad)" filter="url(#drop-shadow)">
+    
+    <!-- Jellyfish Dome (Perfect Semicircle) -->
+    <path d="M 131 235 A 125 125 0 0 1 381 235 Z" />
+    
+    <!-- Dome Base (Pill Shape) -->
+    <rect x="116" y="220" width="280" height="30" rx="15" />
+    
+    <!-- Tentacles (Variable Heights for dynamic modern feel) -->
+    <!-- Outer Left -->
+    <rect x="156" y="240" width="20" height="110" rx="10" />
+    
+    <!-- Inner Left -->
+    <rect x="201" y="240" width="20" height="140" rx="10" />
+    
+    <!-- Center -->
+    <rect x="246" y="240" width="20" height="170" rx="10" />
+    
+    <!-- Inner Right -->
+    <rect x="291" y="240" width="20" height="140" rx="10" />
+    
+    <!-- Outer Right -->
+    <rect x="336" y="240" width="20" height="110" rx="10" />
+    
+  </g>
+
+  <!-- Subtle Inner App Icon Highlight for depth -->
+  <rect 
+    width="512" 
+    height="512" 
+    rx="115" 
+    ry="115" 
+    fill="none" 
+    stroke="#FFFFFF" 
+    stroke-width="2" 
+    stroke-opacity="0.15" 
+  />
+</svg>
