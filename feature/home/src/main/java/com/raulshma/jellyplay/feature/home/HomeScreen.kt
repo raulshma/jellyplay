@@ -55,7 +55,7 @@ fun HomeScreen(
     musicContent: @Composable () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
-    if (homeMode == HomeMode.MUSIC) {
+    if (viewModel.homeMode == HomeMode.MUSIC) {
         musicContent()
         return
     }
@@ -196,7 +196,7 @@ fun HomeScreen(
                             modifier = Modifier.padding(start = 12.dp),
                         ) {
                             ModeSwitch(
-                                currentMode = homeMode,
+                                currentMode = viewModel.homeMode,
                                 onModeChange = onModeChange,
                             )
                             HeaderStatusIndicator(

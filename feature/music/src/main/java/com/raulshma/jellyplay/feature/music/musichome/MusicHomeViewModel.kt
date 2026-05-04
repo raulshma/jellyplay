@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ data class MusicHomeSection(
 class MusicHomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : ViewModel() {
 
     var sections by mutableStateOf<List<MusicHomeSection>>(emptyList())
@@ -30,8 +32,15 @@ class MusicHomeViewModel @Inject constructor(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var homeMode by mutableStateOf(HomeMode.VIDEO)
+        private set
 
     init {
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                homeMode = prefs.homeMode
+            }
+        }
         loadSections()
     }
 
