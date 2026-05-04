@@ -17,7 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @Composable
 fun ArtistCard(
@@ -25,6 +25,7 @@ fun ArtistCard(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    blurHash: String? = null,
 ) {
     Column(
         modifier = modifier
@@ -42,9 +43,10 @@ fun ArtistCard(
             contentAlignment = Alignment.Center,
         ) {
             if (imageUrl != null) {
-                AsyncImage(
-                    model = imageUrl,
+                MediaImage(
+                    url = imageUrl,
                     contentDescription = name,
+                    blurHash = blurHash,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()

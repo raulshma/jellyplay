@@ -105,6 +105,7 @@ private fun AlbumDetailContent(
         MediaImage(
             url = getBackdropUrl(item.id),
             contentDescription = null,
+            blurHash = item.blurHashes.backdrop,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(300.dp),
@@ -257,6 +258,7 @@ private fun TrackItem(
             MediaImage(
                 url = imageUrl,
                 contentDescription = track.name,
+                blurHash = track.blurHashes.primary,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )

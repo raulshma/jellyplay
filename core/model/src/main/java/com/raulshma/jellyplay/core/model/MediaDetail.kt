@@ -31,6 +31,7 @@ data class PersonInfo(
     val role: String? = null,
     val type: String,
     val primaryImageTag: String? = null,
+    val primaryBlurHash: String? = null,
 )
 
 @Serializable

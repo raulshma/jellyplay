@@ -226,6 +226,7 @@ internal fun SurpriseMeCard(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
+                blurHash = item.blurHashes.primary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
@@ -299,6 +300,7 @@ private fun KidsPosterCard(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
+                blurHash = item.blurHashes.primary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)

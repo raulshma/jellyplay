@@ -85,6 +85,7 @@ fun TracksScreen(
                                         },
                                         imageUrl = viewModel.getImageUrl(track.id),
                                         onClick = { onItemClick(track.id) },
+                                        blurHash = track.blurHashes.primary,
                                     )
                                 }
                             }

@@ -234,6 +234,7 @@ private fun DetailContent(
             MediaImage(
                 url = getBackdropUrl(targetBackdropId),
                 contentDescription = null,
+                blurHash = item?.blurHashes?.backdrop,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -317,6 +318,7 @@ private fun DetailContent(
                             MediaImage(
                                 url = getImageUrl(itemId),
                                 contentDescription = null,
+                                blurHash = item?.blurHashes?.primary,
                                 modifier = Modifier
                                     .width(120.dp)
                                     .aspectRatio(2f / 3f)
@@ -999,6 +1001,7 @@ private fun EpisodeCard(
             MediaImage(
                 url = getImageUrl(episode.id),
                 contentDescription = episode.name,
+                blurHash = episode.blurHashes.primary,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
@@ -1080,6 +1083,7 @@ private fun PersonItem(
         MediaImage(
             url = imageUrl,
             contentDescription = person.name,
+            blurHash = person.primaryBlurHash,
             modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape),

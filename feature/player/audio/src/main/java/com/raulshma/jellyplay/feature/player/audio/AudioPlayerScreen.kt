@@ -202,6 +202,7 @@ fun AudioPlayerScreen(
                     MediaImage(
                         url = viewModel.albumArtUrl,
                         contentDescription = viewModel.title,
+                        blurHash = viewModel.albumArtBlurHash,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )

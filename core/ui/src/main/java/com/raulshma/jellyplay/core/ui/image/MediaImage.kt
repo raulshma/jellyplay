@@ -31,41 +31,54 @@ fun MediaImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     fallbackUrls: List<String> = emptyList(),
+    blurHash: String? = null,
 ) {
     val allUrls = remember(url, fallbackUrls) { listOf(url) + fallbackUrls }
     var currentIndex by remember(url, fallbackUrls) { mutableIntStateOf(0) }
     var isError by remember(url, fallbackUrls) { mutableStateOf(false) }
 
-    if (!isError && currentIndex < allUrls.size) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(allUrls[currentIndex])
-                .crossfade(true)
-                .build(),
-            contentDescription = contentDescription,
-            modifier = modifier,
-            contentScale = contentScale,
-            onState = { state ->
-                if (state is AsyncImagePainter.State.Error) {
-                    if (currentIndex < allUrls.size - 1) {
-                        currentIndex++
-                    } else {
-                        isError = true
+    Box(modifier = modifier) {
+        if (!blurHash.isNullOrEmpty()) {
+            BlurHashImage(
+                blurHash = blurHash,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+            )
+        }
+
+        if (!isError && currentIndex < allUrls.size) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(allUrls[currentIndex])
+                    .crossfade(true)
+                    .build(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Error) {
+                        if (currentIndex < allUrls.size - 1) {
+                            currentIndex++
+                        } else {
+                            isError = true
+                        }
                     }
                 }
-            }
-        )
-    } else {
-        Box(
-            modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "Avatar Placeholder",
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        } else if (blurHash.isNullOrEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Avatar Placeholder",
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

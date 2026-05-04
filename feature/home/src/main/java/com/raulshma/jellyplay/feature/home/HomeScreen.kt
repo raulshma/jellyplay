@@ -219,6 +219,7 @@ fun HeroHeader(
         com.raulshma.jellyplay.core.ui.image.MediaImage(
             url = backdropUrl,
             contentDescription = item.name,
+            blurHash = item.blurHashes.backdrop,
             modifier = Modifier
                 .fillMaxSize()
                 .then(

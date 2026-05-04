@@ -85,6 +85,7 @@ fun ArtistsScreen(
                                         name = artist.name,
                                         imageUrl = viewModel.getImageUrl(artist.id),
                                         onClick = { onItemClick(artist.id) },
+                                        blurHash = artist.blurHashes.primary,
                                     )
                                 }
                             }

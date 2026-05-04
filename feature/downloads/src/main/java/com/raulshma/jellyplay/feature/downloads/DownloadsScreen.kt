@@ -156,6 +156,7 @@ private fun DownloadItemRow(
                 MediaImage(
                     url = imageUrl,
                         contentDescription = item.name,
+                        blurHash = item.imageBlurHash,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )

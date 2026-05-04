@@ -158,6 +158,7 @@ class DetailViewModel @Inject constructor(
                 mediaSourceId = source.id,
                 downloadUrl = streamUrl,
                 imageUrl = imageUrl,
+                imageBlurHash = item.blurHashes.primary,
             ).onSuccess { downloadItem ->
                 downloadStarted = true
                 enqueueDownloadWorker(downloadItem.id)

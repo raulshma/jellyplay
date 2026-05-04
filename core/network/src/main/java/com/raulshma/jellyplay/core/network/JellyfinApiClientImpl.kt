@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -977,6 +978,9 @@ class JellyfinApiClientImpl @Inject constructor(
         imageTag = imageTags?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)?.toString(),
         currentProgram = currentProgram?.toLiveTvProgram(),
         mediaType = MediaType.CHANNEL,
+        primaryBlurHash = imageBlurHashes
+            ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
+            ?.values?.firstOrNull(),
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemDto.toLiveTvProgram() = LiveTvProgram(
@@ -1023,6 +1027,14 @@ class JellyfinApiClientImpl @Inject constructor(
         childCount = childCount,
         albumArtist = albumArtist,
         album = album,
+        blurHashes = ImageBlurHashes(
+            primary = imageBlurHashes
+                ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
+                ?.values?.firstOrNull(),
+            backdrop = imageBlurHashes
+                ?.get(org.jellyfin.sdk.model.api.ImageType.BACKDROP)
+                ?.values?.firstOrNull(),
+        ),
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {

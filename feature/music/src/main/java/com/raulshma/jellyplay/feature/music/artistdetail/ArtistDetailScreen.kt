@@ -214,6 +214,7 @@ private fun AlbumCard(
             MediaImage(
                 url = imageUrl,
                 contentDescription = album.name,
+                blurHash = album.blurHashes.primary,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )

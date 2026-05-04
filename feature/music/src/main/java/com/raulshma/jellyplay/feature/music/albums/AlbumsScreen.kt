@@ -87,6 +87,7 @@ fun AlbumsScreen(
                                         year = album.year,
                                         imageUrl = viewModel.getImageUrl(album.id),
                                         onClick = { onItemClick(album.id) },
+                                        blurHash = album.blurHashes.primary,
                                     )
                                 }
                             }

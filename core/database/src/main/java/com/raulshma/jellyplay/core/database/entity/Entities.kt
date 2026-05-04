@@ -38,5 +38,6 @@ data class DownloadEntity(
     val status: String,
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
+    val imageBlurHash: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )

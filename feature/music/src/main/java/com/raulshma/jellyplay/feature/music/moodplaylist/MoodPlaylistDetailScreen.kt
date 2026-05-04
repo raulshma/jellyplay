@@ -137,6 +137,7 @@ fun MoodPlaylistDetailScreen(
                             },
                             imageUrl = viewModel.getImageUrl(track.id),
                             onClick = { onTrackClick(track.id) },
+                            blurHash = track.blurHashes.primary,
                         )
                     }
                 }

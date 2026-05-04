@@ -28,10 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil3.compose.AsyncImage
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,8 +85,8 @@ fun CollectionDetailScreen(
                                 .fillMaxWidth()
                                 .height(200.dp),
                         ) {
-                            AsyncImage(
-                                model = viewModel.getBackdropUrl(collectionId),
+                            MediaImage(
+                                url = viewModel.getBackdropUrl(collectionId),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),

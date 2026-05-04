@@ -18,6 +18,12 @@ enum class MediaType {
 }
 
 @Serializable
+data class ImageBlurHashes(
+    val primary: String? = null,
+    val backdrop: String? = null,
+)
+
+@Serializable
 data class MediaItem(
     val id: String,
     val name: String,
@@ -52,6 +58,7 @@ data class MediaItem(
     val artistItems: List<NameGuidPair> = emptyList(),
     val container: String? = null,
     val videoType: String? = null,
+    val blurHashes: ImageBlurHashes = ImageBlurHashes(),
 )
 
 @Serializable

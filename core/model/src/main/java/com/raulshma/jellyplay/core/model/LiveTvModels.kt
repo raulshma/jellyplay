@@ -10,6 +10,7 @@ data class LiveTvChannel(
     val imageTag: String? = null,
     val currentProgram: LiveTvProgram? = null,
     val mediaType: MediaType = MediaType.CHANNEL,
+    val primaryBlurHash: String? = null,
 )
 
 @Serializable

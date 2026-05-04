@@ -55,6 +55,7 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
+    blurHash: String? = null,
 ) {
     val isTv = isTvDevice()
     Card(
@@ -72,6 +73,7 @@ fun PosterCard(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
+                blurHash = blurHash,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
@@ -148,6 +150,7 @@ fun MediaRow(
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
+    blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
 ) {
     Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
         Text(
@@ -169,6 +172,7 @@ fun MediaRow(
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
+                    blurHash = blurHashBuilder(item),
                 )
             }
         }

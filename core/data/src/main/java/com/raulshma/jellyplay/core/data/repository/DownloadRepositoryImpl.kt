@@ -36,6 +36,7 @@ class DownloadRepositoryImpl @Inject constructor(
         mediaSourceId: String?,
         downloadUrl: String,
         imageUrl: String?,
+        imageBlurHash: String?,
     ): Result<DownloadItem> = runCatching {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null && existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name) {
@@ -62,6 +63,7 @@ class DownloadRepositoryImpl @Inject constructor(
             status = DownloadStatus.PENDING.name,
             mediaSourceId = mediaSourceId,
             imageUrl = imageUrl,
+            imageBlurHash = imageBlurHash,
         )
         downloadDao.insertDownload(entity)
         entity.toDownloadItem()
@@ -112,5 +114,6 @@ class DownloadRepositoryImpl @Inject constructor(
         status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.FAILED },
         mediaSourceId = mediaSourceId,
         imageUrl = imageUrl,
+        imageBlurHash = imageBlurHash,
     )
 }

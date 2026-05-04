@@ -18,7 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @Composable
 fun TrackRow(
@@ -29,6 +29,7 @@ fun TrackRow(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    blurHash: String? = null,
 ) {
     Row(
         modifier = modifier
@@ -45,9 +46,10 @@ fun TrackRow(
             contentAlignment = Alignment.Center,
         ) {
             if (imageUrl != null) {
-                AsyncImage(
-                    model = imageUrl,
+                MediaImage(
+                    url = imageUrl,
                     contentDescription = name,
+                    blurHash = blurHash,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(48.dp)

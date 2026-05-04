@@ -16,6 +16,7 @@ interface DownloadRepository {
         mediaSourceId: String?,
         downloadUrl: String,
         imageUrl: String?,
+        imageBlurHash: String? = null,
     ): Result<DownloadItem>
 
     suspend fun cancelDownload(id: String): Result<Unit>

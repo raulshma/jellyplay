@@ -15,6 +15,7 @@ data class DownloadItem(
     val status: DownloadStatus,
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
+    val imageBlurHash: String? = null,
 )
 
 @Serializable

@@ -119,6 +119,7 @@ private fun ChannelItem(
                 MediaImage(
                     url = imageUrl,
                     contentDescription = channel.name,
+                    blurHash = channel.primaryBlurHash,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {

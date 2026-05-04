@@ -75,6 +75,8 @@ class AudioPlayerViewModel @Inject constructor(
         private set
     var albumArtUrl by mutableStateOf("")
         private set
+    var albumArtBlurHash by mutableStateOf<String?>(null)
+        private set
     var isPlaying by mutableStateOf(false)
         private set
     var currentPosition by mutableLongStateOf(0L)
@@ -144,6 +146,7 @@ class AudioPlayerViewModel @Inject constructor(
                         ?: ""
                     album = detail.item.album ?: ""
                     albumArtUrl = playbackRepository.getImageUrl(itemId, maxWidth = 600)
+                    albumArtBlurHash = detail.item.blurHashes.primary
 
                     val source = detail.mediaSources.firstOrNull()
                     val url = playbackRepository.getStreamUrl(
