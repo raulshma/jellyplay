@@ -37,11 +37,16 @@ class ArtistDetailViewModel @Inject constructor(
             mediaRepository.getMediaDetail(artistId)
                 .onSuccess { detail ->
                     artistName = detail.item.name
-                    albums = detail.relatedItems.filter {
-                        it.mediaType == MediaType.ALBUM
-                    }
                 }
-                .onFailure { error = it.message ?: "Failed to load artist" }
+                .onFailure {
+                    error = it.message ?: "Failed to load artist"
+                    isLoading = false
+                    return@launch
+                }
+            mediaRepository.getArtistAlbums(artistId)
+                .onSuccess { albumList ->
+                    albums = albumList
+                }
             isLoading = false
         }
     }

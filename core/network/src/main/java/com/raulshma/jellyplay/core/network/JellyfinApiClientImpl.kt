@@ -327,12 +327,16 @@ class JellyfinApiClientImpl @Inject constructor(
                 primaryImageTag = person.primaryImageTag,
             )
         } ?: emptyList()).distinctBy { it.id }
-        val relatedItems = client.libraryApi.getSimilarItems(
-            itemId = uuid,
-            limit = 12,
-        ).content.items.map { it.toMediaItem() }
-            .distinctBy { it.id }
-            .filter { it.id != itemId }
+        val relatedItems = try {
+            client.libraryApi.getSimilarItems(
+                itemId = uuid,
+                limit = 12,
+            ).content.items.map { it.toMediaItem() }
+                .distinctBy { it.id }
+                .filter { it.id != itemId }
+        } catch (_: Exception) {
+            emptyList()
+        }
         val chapters = item.chapters?.map { chapter ->
             ChapterInfo(
                 name = chapter.name ?: "",
@@ -440,6 +444,21 @@ class JellyfinApiClientImpl @Inject constructor(
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
+    }
+
+    override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = apiResult {
+        val response = requireApi().itemsApi.getItems(
+            albumArtistIds = listOf(java.util.UUID.fromString(artistId)),
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.MUSIC_ALBUM),
+            limit = limit,
+            recursive = true,
+            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME),
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =

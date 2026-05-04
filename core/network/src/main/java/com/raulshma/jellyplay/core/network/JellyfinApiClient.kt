@@ -88,6 +88,8 @@ interface JellyfinApiClient {
         limit: Int = 50,
     ): Result<SearchResult>
 
+    suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
+
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
     suspend fun getItemsByPerson(

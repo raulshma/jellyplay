@@ -170,7 +170,7 @@ fun LibraryScreen(
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(120.dp),
+                        columns = GridCells.Adaptive(150.dp),
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
@@ -195,6 +195,7 @@ fun LibraryScreen(
                                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                                     } else 0f,
+                                    blurHash = item.blurHashes.primary,
                                 )
                             }
                         }

@@ -114,6 +114,9 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getGenres(parentId: String?): Result<List<Genre>> =
         apiClient.getGenres(parentId)
 
+    override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
+        apiClient.getArtistAlbums(artistId, limit)
+
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getSimilarItems(itemId, limit)
 

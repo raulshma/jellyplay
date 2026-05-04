@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.compose.material.iconsExtended)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.palette.ktx)
     implementation(libs.paging.compose)
 
     implementation(libs.navigation3.runtime)
