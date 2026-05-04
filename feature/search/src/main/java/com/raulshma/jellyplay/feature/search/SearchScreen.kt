@@ -6,6 +6,15 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,32 +25,39 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,7 +90,9 @@ fun SearchScreen(
         networkStatus = networkStatus,
     )
 
-    BackHandler(enabled = query.isNotBlank() || filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()) {
+    val hasActiveFilters = filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()
+
+    BackHandler(enabled = query.isNotBlank() || hasActiveFilters) {
         viewModel.search("")
         viewModel.clearFilters()
     }
@@ -91,123 +109,327 @@ fun SearchScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Search")
-                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.toggleShowFilters() }) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filters",
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    val backgroundColor = lerp(
+        MaterialTheme.colorScheme.background,
+        Color.Black,
+        0.70f,
+    )
+
+    var headerVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { headerVisible = true }
+
+    val gridPadding = PaddingValues(
+        start = 16.dp,
+        end = 16.dp,
+        top = 8.dp,
+        bottom = 100.dp,
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .imePadding(),
         ) {
-            TextField(
-                value = query,
-                onValueChange = { viewModel.search(it) },
-                placeholder = { Text("Search movies, shows, music...") },
+            // ═══════════════════════════════════════════════════════════════
+            // ── Header Section (cinematic dark, white-on-dark text)
+            // ═══════════════════════════════════════════════════════════════
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                singleLine = true,
-                shape = MaterialTheme.shapes.large,
-                trailingIcon = {
-                    Box {
-                        if (query.isNotBlank()) {
-                            IconButton(onClick = { viewModel.search("") }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear search",
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                backgroundColor.copy(alpha = 0.95f),
+                                backgroundColor,
+                            ),
+                        )
+                    )
+                    .statusBarsPadding()
+                    .padding(top = 16.dp),
+            ) {
+                // ── Title + action row ──
+                AnimatedVisibility(
+                    visible = headerVisible,
+                    enter = fadeIn(tween(500)) + slideInVertically(
+                        tween(500),
+                        initialOffsetY = { -40 },
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Search",
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = Color.White,
+                            )
+                            com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                                status = headerStatus,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box {
+                                GlassIconButton(
+                                    onClick = { viewModel.toggleShowFilters() },
+                                    icon = Icons.Default.FilterList,
+                                    contentDescription = "Filters",
+                                    highlighted = hasActiveFilters,
                                 )
-                            }
-                        } else {
-                            IconButton(onClick = {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(
-                                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                if (hasActiveFilters) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(8.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(MaterialTheme.colorScheme.primary),
                                     )
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
                                 }
-                                speechLauncher.launch(intent)
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Voice search",
-                                )
                             }
                         }
                     }
-                },
-            )
+                }
 
-            if (filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()) {
-                FlowRow(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Spacer(Modifier.height(16.dp))
+
+                // ── Search field (glass style) ──
+                AnimatedVisibility(
+                    visible = headerVisible,
+                    enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(
+                        tween(500, delayMillis = 100),
+                        initialOffsetY = { 40 },
+                    ),
                 ) {
-                    filters.mediaTypes.forEach { mediaType ->
-                        InputChip(
-                            selected = true,
-                            onClick = { viewModel.toggleMediaType(mediaType) },
-                            label = { Text(mediaType.name) },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove filter",
-                                )
-                            },
-                        )
+                    TextField(
+                        value = query,
+                        onValueChange = { viewModel.search(it) },
+                        placeholder = {
+                            Text(
+                                "Search movies, shows, music...",
+                                color = Color.White.copy(alpha = 0.4f),
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        trailingIcon = {
+                            if (query.isNotBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.12f))
+                                        .clickable { viewModel.search("") },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear search",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.12f))
+                                        .clickable {
+                                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                                putExtra(
+                                                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                                )
+                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
+                                            }
+                                            speechLauncher.launch(intent)
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Voice search",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+
+                // ── Active filters bar (dismissible glass tags) ──
+                AnimatedVisibility(
+                    visible = hasActiveFilters,
+                    enter = fadeIn(tween(250)) + expandVertically(),
+                    exit = fadeOut(tween(200)) + shrinkVertically(),
+                ) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        filters.mediaTypes.forEach { mediaType ->
+                            GlassDismissTag(
+                                label = mediaType.name,
+                                onDismiss = { viewModel.toggleMediaType(mediaType) },
+                            )
+                        }
+                        filters.genres.forEach { genre ->
+                            GlassDismissTag(
+                                label = genre,
+                                onDismiss = {
+                                    viewModel.updateFilters(
+                                        filters.copy(genres = filters.genres - genre)
+                                    )
+                                },
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.clearFilters() }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        ) {
+                            Text(
+                                text = "Clear all",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                     }
-                    if (filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()) {
-                        FilterChip(
-                            selected = false,
-                            onClick = { viewModel.clearFilters() },
-                            label = { Text("Clear all") },
-                        )
-                    }
+                }
+
+                // ── Result count ──
+                AnimatedVisibility(
+                    visible = headerVisible && pagedResults.itemCount > 0,
+                    enter = fadeIn(tween(400, delayMillis = 200)),
+                ) {
+                    Text(
+                        text = "${pagedResults.itemCount} results",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(
+                            horizontal = 24.dp,
+                            vertical = 8.dp,
+                        ),
+                    )
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════════
+            // ── Grid Content
+            // ═══════════════════════════════════════════════════════════════
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
                     pagedResults.itemCount == 0 && query.isNotBlank() && !isSearching -> {
+                        // ── Empty state ──
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                "No results found",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = Color.White.copy(alpha = 0.3f),
+                                )
+                                Text(
+                                    text = "No results found",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                )
+                                if (hasActiveFilters) {
+                                    Text(
+                                        text = "Try adjusting your filters",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.3f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    pagedResults.itemCount == 0 && query.isBlank() -> {
+                        // ── Initial state ──
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = Color.White.copy(alpha = 0.15f),
+                                )
+                                Text(
+                                    text = "Search your library",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Color.White.copy(alpha = 0.4f),
+                                )
+                                Text(
+                                    text = "Movies, shows, music, and more",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.25f),
+                                )
+                            }
                         }
                     }
                     else -> {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(120.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = gridPadding,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             items(
@@ -220,38 +442,72 @@ fun SearchScreen(
                                         item = item,
                                         imageUrl = viewModel.getImageUrl(item.id),
                                         onClick = { onItemClick(item.id) },
+                                        showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                        progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                            (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                        } else 0f,
+                                        blurHash = item.blurHashes.primary,
                                     )
                                 }
                             }
                         }
 
-                        when (val appendState = pagedResults.loadState.append) {
-                            is LoadState.Loading -> {
-                                CircularProgressIndicator(
+                        // ── Append loading (gradient fade + progress bar) ──
+                        if (pagedResults.loadState.append is LoadState.Loading) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                backgroundColor,
+                                            ),
+                                        )
+                                    )
+                                    .padding(vertical = 20.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                androidx.compose.material3.LinearProgressIndicator(
                                     modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(16.dp),
+                                        .fillMaxWidth(0.4f)
+                                        .clip(RoundedCornerShape(4.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.White.copy(alpha = 0.1f),
                                 )
                             }
-                            is LoadState.Error -> {
-                                Text(
-                                    text = appendState.error.localizedMessage ?: "Failed to load more",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(16.dp)
-                                        .fillMaxWidth(),
-                                )
-                            }
-                            is LoadState.NotLoading -> Unit
                         }
 
+                        // ── Append error ──
+                        if (pagedResults.loadState.append is LoadState.Error) {
+                            val appendError = pagedResults.loadState.append as LoadState.Error
+                            Text(
+                                text = appendError.error.localizedMessage ?: "Failed to load more",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp)
+                                    .fillMaxWidth(),
+                            )
+                        }
+
+                        // ── Refresh loading ──
                         when (val refreshState = pagedResults.loadState.refresh) {
                             is LoadState.Loading -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.align(Alignment.Center),
-                                )
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    androidx.compose.material3.LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.4f)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = Color.White.copy(alpha = 0.1f),
+                                    )
+                                }
                             }
                             is LoadState.Error -> {
                                 ErrorScreen(
@@ -277,6 +533,64 @@ fun SearchScreen(
                 viewModel.toggleShowFilters()
             },
             onDismiss = { viewModel.toggleShowFilters() },
+        )
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun GlassIconButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    highlighted: Boolean = false,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(18.dp),
+            tint = if (highlighted) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
+        )
+    }
+}
+
+@Composable
+private fun GlassDismissTag(
+    label: String,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable(onClick = onDismiss)
+            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.85f),
+            fontWeight = FontWeight.Medium,
+        )
+        Icon(
+            Icons.Default.Close,
+            contentDescription = "Remove",
+            modifier = Modifier.size(14.dp),
+            tint = Color.White.copy(alpha = 0.5f),
         )
     }
 }
