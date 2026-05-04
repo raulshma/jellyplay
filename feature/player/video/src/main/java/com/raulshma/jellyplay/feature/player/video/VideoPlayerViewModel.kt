@@ -179,7 +179,9 @@ class VideoPlayerViewModel @Inject constructor(
             val ts = _introTimestamps ?: return false
             if (!ts.hasIntro) return false
             val posTicks = _currentPosition * 10_000
-            return posTicks >= ts.introStartTicks && posTicks < ts.introEndTicks
+            val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.introStartTicks
+            val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.introEndTicks
+            return posTicks >= promptStart && posTicks < promptEnd
         }
 
     val hdrType: String?
@@ -221,6 +223,10 @@ class VideoPlayerViewModel @Inject constructor(
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateTracks()
+            if (playbackState == Player.STATE_READY) {
+                if (_dialogueBoostEnabled) applyDialogueBoost()
+                if (_nightModeEnabled) applyNightMode()
+            }
         }
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -473,12 +479,13 @@ class VideoPlayerViewModel @Inject constructor(
                 val itemId = currentItemId ?: return
                 val sourceId = _currentMediaSource?.id ?: return
                 val codec = stream.codec ?: "srt"
-                val ext = when (codec.lowercase()) {
-                    "ass", "ssa" -> "ass"
-                    "vtt", "webvtt" -> "vtt"
-                    "ttml", "dfxp" -> "ttml"
-                    else -> "srt"
-                }
+                    val ext = when (codec.lowercase()) {
+                        "ass", "ssa" -> "ass"
+                        "vtt", "webvtt" -> "vtt"
+                        "ttml", "dfxp" -> "ttml"
+                        "mov_text" -> "vtt"
+                        else -> "srt"
+                    }
                 playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
             }
             val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
@@ -822,10 +829,23 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun buildSubtitleConfigurations(streams: List<MediaStream>): List<MediaItem.SubtitleConfiguration> {
         return streams
-            .filter { it.type == StreamType.SUBTITLE && it.isExternal && !it.deliveryUrl.isNullOrBlank() }
-            .map { stream ->
-                val mimeType = mapSubtitleCodecToMime(stream.codec)
-                val url = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+            .filter { it.type == StreamType.SUBTITLE }
+            .mapNotNull { stream ->
+                val mimeType = mapSubtitleCodecToMime(stream.codec) ?: return@mapNotNull null
+                val url = if (!stream.deliveryUrl.isNullOrBlank()) {
+                    playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                } else {
+                    val itemId = currentItemId ?: return@mapNotNull null
+                    val sourceId = _currentMediaSource?.id ?: return@mapNotNull null
+                    val ext = when (stream.codec?.lowercase()) {
+                        "ass", "ssa" -> "ass"
+                        "vtt", "webvtt" -> "vtt"
+                        "ttml", "dfxp" -> "ttml"
+                        "mov_text" -> "vtt"
+                        else -> "srt"
+                    }
+                    playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
+                }
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(url))
                     .setMimeType(mimeType)
                     .setLanguage(stream.language)
@@ -846,6 +866,7 @@ class VideoPlayerViewModel @Inject constructor(
             "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
+            "mov_text" -> MimeTypes.TEXT_VTT
             else -> null
         }
     }

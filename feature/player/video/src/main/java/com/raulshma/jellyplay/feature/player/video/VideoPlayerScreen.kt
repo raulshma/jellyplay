@@ -479,7 +479,7 @@ fun VideoPlayerScreen(
         }
 
         IntroSkipOverlay(
-            isVisible = isInIntro && !showControls,
+            isVisible = isInIntro,
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
