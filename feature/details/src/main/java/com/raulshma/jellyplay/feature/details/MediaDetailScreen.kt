@@ -836,6 +836,7 @@ private fun DetailContentBody(
                                 item = related,
                                 imageUrl = getImageUrl(related.id),
                                 onClick = { onItemClick(related.id) },
+                                modifier = Modifier.width(160.dp),
                             )
                         }
                     }

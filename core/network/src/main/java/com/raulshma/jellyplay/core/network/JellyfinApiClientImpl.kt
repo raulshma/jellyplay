@@ -294,6 +294,10 @@ class JellyfinApiClientImpl @Inject constructor(
         val response = requireApi().itemsApi.getItems(
             parentId = parentId?.let { java.util.UUID.fromString(it) },
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
+            excludeItemTypes = listOf(
+                org.jellyfin.sdk.model.api.BaseItemKind.SEASON,
+                org.jellyfin.sdk.model.api.BaseItemKind.EPISODE,
+            ),
             genres = genres,
             years = years,
             sortBy = listOfNotNull(sortByEnum),

@@ -61,7 +61,7 @@ fun PosterCard(
 
     Card(
         modifier = modifier
-            .width(160.dp)
+            .fillMaxWidth()
             .clickable(onClick = onClick)
             .then(if (isTv) Modifier.tvFocusable() else Modifier)
             .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier),
@@ -169,6 +169,7 @@ fun MediaRow(
                     imageUrl = imageUrlBuilder(item),
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item) },
+                    modifier = Modifier.width(160.dp),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
