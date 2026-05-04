@@ -51,6 +51,10 @@ class DetailViewModel @Inject constructor(
         private set
     var episodes by mutableStateOf<Map<String, List<MediaItem>>>(emptyMap())
         private set
+    // Tracks season IDs where a fetch was attempted (success or failure)
+    // so the UI knows when to stop showing the loading skeleton.
+    var fetchedSeasonIds by mutableStateOf<Set<String>>(emptySet())
+        private set
     var isDownloading by mutableStateOf(false)
         private set
     var downloadStarted by mutableStateOf(false)
@@ -60,6 +64,10 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            // Reset season/episode state on fresh load
+            seasons = emptyList()
+            episodes = emptyMap()
+            fetchedSeasonIds = emptySet()
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
@@ -92,6 +100,16 @@ class DetailViewModel @Inject constructor(
                         this[seasonId] = episodeList
                     }
                 }
+                .onFailure {
+                    // On failure store empty list so UI stops showing skeleton
+                    if (!episodes.containsKey(seasonId)) {
+                        episodes = episodes.toMutableMap().apply {
+                            this[seasonId] = emptyList()
+                        }
+                    }
+                }
+            // Always mark as fetched so UI never spins forever
+            fetchedSeasonIds = fetchedSeasonIds + seasonId
         }
     }
 

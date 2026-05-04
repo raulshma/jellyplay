@@ -3,7 +3,12 @@ package com.raulshma.jellyplay.feature.details
 import android.os.StatFs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -119,6 +124,7 @@ fun MediaDetailScreen(
             detail = detail,
             seasons = viewModel.seasons,
             episodes = viewModel.episodes,
+            fetchedSeasonIds = viewModel.fetchedSeasonIds,
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
@@ -146,6 +152,7 @@ private fun DetailContent(
     detail: MediaDetail?,
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
+    fetchedSeasonIds: Set<String>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
@@ -346,6 +353,7 @@ private fun DetailContent(
                                 detail = detail,
                                 seasons = seasons,
                                 episodes = episodes,
+                                fetchedSeasonIds = fetchedSeasonIds,
                                 getImageUrl = getImageUrl,
                                 isAudio = isAudio,
                                 isDownloading = isDownloading,
@@ -478,6 +486,7 @@ private fun DetailContentBody(
     detail: MediaDetail,
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
+    fetchedSeasonIds: Set<String>,
     getImageUrl: (String) -> String,
     isAudio: Boolean,
     isDownloading: Boolean,
@@ -714,6 +723,7 @@ private fun DetailContentBody(
                         seriesItem = item,
                         seasons = seasons,
                         episodes = episodes,
+                        fetchedSeasonIds = fetchedSeasonIds,
                         getImageUrl = getImageUrl,
                         onEpisodePlayClick = { episode ->
                             val sourceId = null
@@ -797,80 +807,170 @@ private fun SeasonsSection(
     seriesItem: MediaItem,
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
+    fetchedSeasonIds: Set<String>,
     getImageUrl: (String) -> String,
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
 ) {
     var selectedSeasonIndex by remember { mutableStateOf(0) }
 
-    Text(
-        text = "Seasons",
-        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        modifier = Modifier.padding(horizontal = 24.dp),
-        color = Color.White
-    )
-    Spacer(Modifier.height(16.dp))
+    Column {
+        // ── Section header ──────────────────────────────────────────────────
+        Text(
+            text = "Seasons",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = Color.White
+        )
 
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(seasons.indices.toList()) { index ->
-            val season = seasons[index]
-            val isSelected = index == selectedSeasonIndex
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { selectedSeasonIndex = index },
-                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
-                contentColor = if (isSelected) Color.Black else Color.White,
-            ) {
-                Text(
-                    text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+        Spacer(Modifier.height(16.dp))
+
+        // ── Season badge row ────────────────────────────────────────────────
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(seasons.indices.toList()) { index ->
+                val season = seasons[index]
+                val isSelected = index == selectedSeasonIndex
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { selectedSeasonIndex = index },
+                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
+                    contentColor = if (isSelected) Color.Black else Color.White,
+                ) {
+                    Text(
+                        text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ── Episode area ────────────────────────────────────────────────────
+        val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
+        val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
+        val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
+        val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
+
+        when {
+            isLoading -> {
+                // ── Shimmer skeleton while loading ──────────────────────────
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    userScrollEnabled = false,
+                ) {
+                    items(3) {
+                        EpisodeCardSkeleton()
+                    }
+                }
+            }
+            seasonEpisodes != null && seasonEpisodes.isNotEmpty() -> {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    items(seasonEpisodes, key = { "episode_${it.id}" }) { episode ->
+                        EpisodeCard(
+                            episode = episode,
+                            getImageUrl = getImageUrl,
+                            onPlayClick = { onEpisodePlayClick(episode) },
+                            onDetailClick = { onEpisodeDetailClick(episode) },
+                        )
+                    }
+                }
+            }
+            else -> {
+                // Fetched but genuinely empty
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No episodes available", color = Color.White.copy(alpha = 0.6f))
+                }
             }
         }
     }
+}
 
-    Spacer(Modifier.height(16.dp))
+@Composable
+private fun EpisodeCardSkeleton() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by transition.animateFloat(
+        initialValue = 0.08f,
+        targetValue = 0.20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shimmerAlpha",
+    )
 
-    val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
-    val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
+    val shimmerColor = Color.White.copy(alpha = shimmerAlpha)
 
-    if (seasonEpisodes != null && seasonEpisodes.isNotEmpty()) {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(seasonEpisodes, key = { "episode_${it.id}" }) { episode ->
-                EpisodeCard(
-                    episode = episode,
-                    getImageUrl = getImageUrl,
-                    onPlayClick = { onEpisodePlayClick(episode) },
-                    onDetailClick = { onEpisodeDetailClick(episode) },
-                )
-            }
-        }
-    } else if (seasonEpisodes == null && selectedSeason != null) {
+    Column(
+        modifier = Modifier
+            .width(280.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+    ) {
+        // Thumbnail placeholder
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
-        }
-    } else if (seasonEpisodes != null && seasonEpisodes.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("No episodes available", color = Color.White.copy(alpha = 0.7f))
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .background(shimmerColor)
+        )
+        // Text placeholders
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.75f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerColor)
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.35f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerColor)
+            )
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerColor)
+            )
+            Spacer(Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerColor)
+            )
+            Spacer(Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerColor)
+            )
         }
     }
 }
