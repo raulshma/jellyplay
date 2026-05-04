@@ -2,11 +2,11 @@ package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LiveTv
@@ -22,19 +22,23 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainViewModel
+import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
+import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.TOP_LEVEL_ROUTES
+import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
@@ -43,11 +47,13 @@ import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
+import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
+import kotlinx.coroutines.launch
 
 @Composable
 fun JellyPlayApp(
@@ -68,6 +74,7 @@ fun JellyPlayApp(
         isAuthenticated -> {
             MainContent(
                 onLogout = { viewModel.logout() },
+                viewModel = viewModel,
             )
         }
         else -> {
@@ -100,11 +107,14 @@ private fun AuthContent(
 @Composable
 private fun MainContent(
     onLogout: () -> Unit,
+    viewModel: MainViewModel,
 ) {
-    val topLevelRoutes = TOP_LEVEL_ROUTES.keys
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val homeMode = preferences.homeMode
+
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
-        topLevelRoutes = topLevelRoutes,
+        topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
     )
     val navigator = Navigator(navigationState)
     val currentTopLevel by navigationState.topLevelRoute
@@ -117,22 +127,26 @@ private fun MainContent(
     val configuration = LocalConfiguration.current
     val isExpanded = configuration.screenWidthDp >= 600
 
+    val activeTopLevelRoutes = when (homeMode) {
+        HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
+        HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+    }
+
+    val scope = rememberCoroutineScope()
+    val onModeChange: (HomeMode) -> Unit = { mode ->
+        scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
+    }
+
     Scaffold(
         bottomBar = {
             if (!isPlayerScreen && !isExpanded) {
                 NavigationBar {
-                    TOP_LEVEL_ROUTES.forEach { (route, label) ->
+                    activeTopLevelRoutes.forEach { (route, label) ->
                         NavigationBarItem(
                             selected = route == currentTopLevel,
                             onClick = { navigator.navigate(route) },
                             icon = {
-                                when (route) {
-                                    Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-                                    Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-                                    Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-                                    Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-                                    else -> {}
-                                }
+                                NavIcon(route, label)
                             },
                             label = { Text(label) },
                         )
@@ -150,18 +164,12 @@ private fun MainContent(
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
-                    TOP_LEVEL_ROUTES.forEach { (route, label) ->
+                    activeTopLevelRoutes.forEach { (route, label) ->
                         NavigationRailItem(
                             selected = route == currentTopLevel,
                             onClick = { navigator.navigate(route) },
                             icon = {
-                                when (route) {
-                                    Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-                                    Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-                                    Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-                                    Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-                                    else -> {}
-                                }
+                                NavIcon(route, label)
                             },
                             label = { Text(label) },
                         )
@@ -172,9 +180,23 @@ private fun MainContent(
                 navigationState = navigationState,
                 navigator = navigator,
                 onLogout = onLogout,
+                homeMode = homeMode,
+                onModeChange = onModeChange,
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+}
+
+@Composable
+private fun NavIcon(route: Route, label: String) {
+    when (route) {
+        Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
+        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
+        Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
+        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
+        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label)
+        else -> {}
     }
 }
 
@@ -183,6 +205,8 @@ private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
     navigator: Navigator,
     onLogout: () -> Unit,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
@@ -194,8 +218,26 @@ private fun MainNavDisplay(
             NavDisplay(
                 backStack = currentBackStack,
                 onBack = { navigator.goBack() },
-                entryProvider = entryProvider {
-                    homeSection(navigator)
+                entryProvider =                 entryProvider {
+                    homeSection(
+                        navigator = navigator,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        musicContent = {
+                            MusicHomeScreen(
+                                homeMode = homeMode,
+                                onModeChange = onModeChange,
+                                onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                                onSettingsClick = { navigator.navigate(Route.Settings) },
+                                onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
+                                onArtistsClick = { navigator.navigate(Route.Artists) },
+                                onAlbumsClick = { navigator.navigate(Route.Albums) },
+                                onTracksClick = { navigator.navigate(Route.Tracks) },
+                                onGenresClick = { navigator.navigate(Route.Genres) },
+                                onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                            )
+                        },
+                    )
                     librarySection(navigator)
                     searchSection(navigator)
                     liveTvSection(navigator)

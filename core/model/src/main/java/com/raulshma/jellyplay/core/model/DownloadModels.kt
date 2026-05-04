@@ -51,7 +51,14 @@ data class UserPreferences(
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
     val nightModeEnabled: Boolean = false,
+    val homeMode: HomeMode = HomeMode.VIDEO,
 )
+
+@Serializable
+enum class HomeMode {
+    VIDEO,
+    MUSIC,
+}
 
 @Serializable
 enum class PlayerType(val displayName: String, val description: String) {

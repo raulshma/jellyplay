@@ -73,11 +73,24 @@ sealed class Route : NavKey {
         val title: String = "",
         val artist: String = "",
     ) : Route()
+
+    @Serializable data object MusicBrowse : Route()
 }
 
-val TOP_LEVEL_ROUTES = linkedMapOf(
+val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Home to "Home",
     Route.Library to "Library",
     Route.Search to "Search",
     Route.LiveTv to "Live TV",
 )
+
+val MUSIC_TOP_LEVEL_ROUTES = linkedMapOf(
+    Route.Home to "Home",
+    Route.MusicBrowse to "Browse",
+    Route.Search to "Search",
+)
+
+val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
+
+val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
+    VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)

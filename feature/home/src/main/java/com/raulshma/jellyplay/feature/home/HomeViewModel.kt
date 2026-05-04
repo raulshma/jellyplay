@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,11 +33,14 @@ class HomeViewModel @Inject constructor(
         private set
     var kidsModeEnabled by mutableStateOf(false)
         private set
+    var homeMode by mutableStateOf(HomeMode.VIDEO)
+        private set
 
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
                 kidsModeEnabled = prefs.kidsModeEnabled
+                homeMode = prefs.homeMode
             }
         }
         refresh()

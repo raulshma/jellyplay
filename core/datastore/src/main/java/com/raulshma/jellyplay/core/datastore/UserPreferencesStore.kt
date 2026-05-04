@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -50,6 +51,7 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_PASSTHROUGH = stringPreferencesKey("audio_passthrough")
         val FRAME_RATE_MATCHING = stringPreferencesKey("frame_rate_matching")
         val NIGHT_MODE_ENABLED = stringPreferencesKey("night_mode_enabled")
+        val HOME_MODE = stringPreferencesKey("home_mode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -92,6 +94,9 @@ class UserPreferencesStore @Inject constructor(
             audioPassthrough = prefs[Keys.AUDIO_PASSTHROUGH]?.toBoolean() ?: false,
             frameRateMatching = prefs[Keys.FRAME_RATE_MATCHING]?.toBoolean() ?: false,
             nightModeEnabled = prefs[Keys.NIGHT_MODE_ENABLED]?.toBoolean() ?: false,
+            homeMode = try {
+                HomeMode.valueOf(prefs[Keys.HOME_MODE] ?: HomeMode.VIDEO.name)
+            } catch (_: Exception) { HomeMode.VIDEO },
         )
     }
 
@@ -212,6 +217,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setHomeMode(mode: HomeMode) {
+        context.dataStore.edit { it[Keys.HOME_MODE] = mode.name }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

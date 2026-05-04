@@ -13,11 +13,21 @@ import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistDetailScree
 import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistsScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistDetailScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistsScreen
+import com.raulshma.jellyplay.feature.music.browse.MusicBrowseScreen
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistDetailScreen
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistsScreen
 import com.raulshma.jellyplay.feature.music.tracks.TracksScreen
 
 fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
+    entry<Route.MusicBrowse> {
+        MusicBrowseScreen(
+            onArtistClick = { artistId -> navigator.navigate(Route.ArtistDetail(artistId)) },
+            onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+            onTrackClick = { trackId -> navigator.navigate(Route.AudioPlayer(trackId)) },
+            onGenreClick = { genreId -> },
+            onPlaylistClick = { playlistId -> navigator.navigate(Route.PlaylistDetail(playlistId)) },
+        )
+    }
     entry<Route.Artists> {
         ArtistsScreen(
             onItemClick = { artistId ->

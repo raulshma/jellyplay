@@ -33,10 +33,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.MediaRow
+import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -44,8 +46,16 @@ fun HomeScreen(
     onItemClick: (String) -> Unit,
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
+    homeMode: HomeMode = HomeMode.VIDEO,
+    onModeChange: (HomeMode) -> Unit = {},
+    musicContent: @Composable () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
+    if (homeMode == HomeMode.MUSIC) {
+        musicContent()
+        return
+    }
+
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
     val error = viewModel.error
@@ -172,6 +182,13 @@ fun HomeScreen(
                             "JellyPlay",
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = appBarAlpha),
                             fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        ModeSwitch(
+                            currentMode = homeMode,
+                            onModeChange = onModeChange,
+                            modifier = Modifier.padding(start = 12.dp),
                         )
                     },
                     actions = {
