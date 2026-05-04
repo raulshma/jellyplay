@@ -1,17 +1,15 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -22,32 +20,22 @@ fun ModeSwitch(
     onModeChange: (HomeMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    SingleChoiceSegmentedButtonRow(modifier = modifier.height(40.dp)) {
-        SegmentedButton(
-            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            selected = currentMode == HomeMode.VIDEO,
-            onClick = { onModeChange(HomeMode.VIDEO) },
-            icon = {
+    val isMusic = currentMode == HomeMode.MUSIC
+
+    Box(
+        modifier = modifier.padding(vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Switch(
+            checked = isMusic,
+            onCheckedChange = { onModeChange(if (it) HomeMode.MUSIC else HomeMode.VIDEO) },
+            thumbContent = {
                 Icon(
-                    Icons.Default.Movie,
-                    contentDescription = "Video",
-                    modifier = Modifier.size(SegmentedButtonDefaults.IconSize),
+                    imageVector = if (isMusic) Icons.Default.MusicNote else Icons.Default.Movie,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
                 )
             },
-            label = { Text("Video", style = MaterialTheme.typography.labelSmall) },
-        )
-        SegmentedButton(
-            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            selected = currentMode == HomeMode.MUSIC,
-            onClick = { onModeChange(HomeMode.MUSIC) },
-            icon = {
-                Icon(
-                    Icons.Default.MusicNote,
-                    contentDescription = "Music",
-                    modifier = Modifier.size(SegmentedButtonDefaults.IconSize),
-                )
-            },
-            label = { Text("Music", style = MaterialTheme.typography.labelSmall) },
         )
     }
 }
