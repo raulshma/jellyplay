@@ -75,6 +75,17 @@ fun HomeScreen(
         animationSpec = tween(300), label = "appBarAlpha"
     )
 
+    val fallbackImageUrlBuilder: (MediaItem) -> List<String> = { item ->
+        if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.AUDIO || item.mediaType == com.raulshma.jellyplay.core.model.MediaType.MUSIC) {
+            listOfNotNull(
+                item.parentId?.let { viewModel.getImageUrl(it) },
+                item.artistItems.firstOrNull()?.id?.let { viewModel.getImageUrl(it) }
+            )
+        } else {
+            emptyList()
+        }
+    }
+
     if (kidsMode) {
         KidsHomeScreen(
             sections = sections,
@@ -82,6 +93,7 @@ fun HomeScreen(
             isLoading = isLoading,
             error = error,
             imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
+            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
             onItemClick = onItemClick,
             onRefresh = { viewModel.refresh() },
         )
@@ -136,6 +148,7 @@ fun HomeScreen(
                                         title = section.title,
                                         items = section.items,
                                         imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
+                                        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                                         onItemClick = { item -> onItemClick(item.id) },
                                         modifier = Modifier.padding(top = if (index == 0 && featuredItem != null) 0.dp else 16.dp)
                                     )

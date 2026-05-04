@@ -57,6 +57,7 @@ fun KidsHomeScreen(
     isLoading: Boolean,
     error: String?,
     imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
@@ -156,6 +157,7 @@ fun KidsHomeScreen(
                                 title = "My Favorites",
                                 items = favorites,
                                 imageUrlBuilder = imageUrlBuilder,
+                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                                 onItemClick = onItemClick,
                             )
                         }
@@ -166,6 +168,7 @@ fun KidsHomeScreen(
                             SurpriseMeCard(
                                 item = surpriseItem,
                                 imageUrl = imageUrlBuilder(surpriseItem),
+                                fallbackUrls = fallbackImageUrlBuilder(surpriseItem),
                                 onClick = { onItemClick(surpriseItem.id) },
                             )
                         }
@@ -176,6 +179,7 @@ fun KidsHomeScreen(
                             title = section.title,
                             items = section.items,
                             imageUrlBuilder = imageUrlBuilder,
+                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                             onItemClick = onItemClick,
                         )
                     }
@@ -189,6 +193,7 @@ fun KidsHomeScreen(
 internal fun SurpriseMeCard(
     item: MediaItem,
     imageUrl: String,
+    fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
 ) {
     Column(
@@ -219,6 +224,7 @@ internal fun SurpriseMeCard(
         ) {
             MediaImage(
                 url = imageUrl,
+                fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -243,6 +249,7 @@ private fun KidsSection(
     title: String,
     items: List<MediaItem>,
     imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
 ) {
     Column(
@@ -262,6 +269,7 @@ private fun KidsSection(
                 KidsPosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
+                    fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item.id) },
                 )
             }
@@ -273,6 +281,7 @@ private fun KidsSection(
 private fun KidsPosterCard(
     item: MediaItem,
     imageUrl: String,
+    fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
 ) {
     Column(
@@ -288,6 +297,7 @@ private fun KidsPosterCard(
         ) {
             MediaImage(
                 url = imageUrl,
+                fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth()

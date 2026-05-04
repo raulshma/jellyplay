@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 fun PosterCard(
     item: MediaItem,
     imageUrl: String,
+    fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showProgress: Boolean = false,
@@ -58,17 +59,18 @@ fun PosterCard(
     val isTv = isTvDevice()
     Card(
         modifier = modifier
-            .width(120.dp)
+            .width(160.dp)
             .clickable(onClick = onClick)
             .then(if (isTv) Modifier.tvFocusable() else Modifier)
-            .then(if (isTv) Modifier.shadow(8.dp, RoundedCornerShape(8.dp)) else Modifier),
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 8.dp else 2.dp),
+            .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
     ) {
         Box {
             val sharedTransitionScope = LocalSharedTransitionScope.current
             MediaImage(
                 url = imageUrl,
+                fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -143,10 +145,11 @@ fun MediaRow(
     title: String,
     items: List<MediaItem>,
     imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
+    Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
@@ -160,6 +163,7 @@ fun MediaRow(
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
+                    fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item) },
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
