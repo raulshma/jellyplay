@@ -159,6 +159,42 @@ class LibVlcPlayerEngine(
         _passthroughEnabled = enabled
     }
 
+    override fun setAspectRatio(mode: Int, ratio: Float?) {
+        try {
+            val mp = mediaPlayer ?: return
+            mp.media?.apply {
+                when {
+                    mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
+                        addOption(":crop=fill")
+                    }
+                    mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
+                        addOption(":crop=none")
+                    }
+                    ratio != null && ratio > 0f -> {
+                        val w = (ratio * 100).toInt()
+                        val h = 100
+                        val gcd = gcd(w, h)
+                        addOption(":aspect-ratio=${w / gcd}:${h / gcd}")
+                    }
+                    else -> {
+                        addOption(":crop=none")
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun gcd(a: Int, b: Int): Int {
+        var x = a
+        var y = b
+        while (y != 0) {
+            val temp = y
+            y = x % y
+            x = temp
+        }
+        return x
+    }
+
     override val isPlaying: Boolean
         get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 enum class AspectRatio(val displayName: String, val ratio: Float?) {
+    AUTO("Auto", null),
     FIT("Fit", null),
     FILL("Fill", null),
     RATIO_16_9("16:9", 16f / 9f),
@@ -30,6 +31,7 @@ enum class AspectRatio(val displayName: String, val ratio: Float?) {
 @Composable
 fun AspectRatioSheet(
     currentRatio: AspectRatio,
+    detectedRatio: AspectRatio?,
     onSelect: (AspectRatio) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -49,6 +51,14 @@ fun AspectRatioSheet(
                 text = "Aspect Ratio",
                 style = MaterialTheme.typography.titleMedium,
             )
+            if (detectedRatio != null && detectedRatio != AspectRatio.FIT) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Detected: ${detectedRatio.displayName}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -61,7 +71,13 @@ fun AspectRatioSheet(
                             onSelect(ratio)
                             onDismiss()
                         },
-                        label = { Text(ratio.displayName) },
+                        label = {
+                            if (ratio == AspectRatio.AUTO && detectedRatio != null) {
+                                Text("Auto (${detectedRatio.displayName})")
+                            } else {
+                                Text(ratio.displayName)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }

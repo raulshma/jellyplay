@@ -57,6 +57,7 @@ data class TrackOption(
     val label: String,
     val language: String?,
     val isSelected: Boolean,
+    val trackGroup: androidx.media3.common.TrackGroup? = null,
 )
 
 @HiltViewModel
@@ -122,8 +123,11 @@ class VideoPlayerViewModel @Inject constructor(
     private var _mediaStreams by mutableStateOf<List<MediaStream>>(emptyList())
     val mediaStreams get() = _mediaStreams
 
-    private var _aspectRatio by mutableStateOf(AspectRatio.FIT)
+    private var _aspectRatio by mutableStateOf(AspectRatio.AUTO)
     val aspectRatio get() = _aspectRatio
+
+    private var _detectedAspectRatio by mutableStateOf<AspectRatio?>(null)
+    val detectedAspectRatio get() = _detectedAspectRatio
 
     private var _playMethod by mutableStateOf("Direct Play")
     val playMethod get() = _playMethod
@@ -258,6 +262,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
             _currentMediaSource = source
             _mediaStreams = source?.mediaStreams ?: emptyList()
+            detectBestAspectRatio()
 
             _playMethod = when {
                 source?.supportsDirectPlay == true -> "Direct Play"
@@ -401,39 +406,53 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun selectAudioTrack(option: TrackOption) {
-        val selector = _trackSelector ?: return
-        val params = selector.buildUponParameters()
-        if (option.index < 0) {
-            params.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-        } else {
-            val lang = option.language
-            if (lang != null) {
-                params.setPreferredAudioLanguage(lang)
-            }
+        val engine = _playerEngine
+        if (engine != null) {
+            engine.selectAudioTrack(option.index)
+            updateTracksFromEngine(engine)
+            return
         }
-        selector.setParameters(params)
-        updateTracks()
+        val selector = _trackSelector ?: return
+        if (option.index < 0) {
+            val params = selector.buildUponParameters()
+            params.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            selector.setParameters(params)
+        } else {
+            val group = option.trackGroup ?: return
+            val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
+            val params = selector.buildUponParameters()
+                .setOverrideForType(override)
+                .build()
+            selector.setParameters(params)
+        }
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
-        val selector = _trackSelector ?: return
-        val params = selector.buildUponParameters()
-        if (option.index < 0) {
-            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-        } else {
-            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            val lang = option.language
-            if (lang != null) {
-                params.setPreferredTextLanguage(lang)
-            }
+        val engine = _playerEngine
+        if (engine != null) {
+            engine.selectSubtitleTrack(option.index)
+            updateTracksFromEngine(engine)
+            return
         }
-        selector.setParameters(params)
-        updateTracks()
+        val selector = _trackSelector ?: return
+        if (option.index < 0) {
+            val params = selector.buildUponParameters()
+            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            selector.setParameters(params)
+        } else {
+            val group = option.trackGroup ?: return
+            val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
+            val params = selector.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(override)
+                .build()
+            selector.setParameters(params)
+        }
     }
 
     fun selectSecondarySubtitleStream(stream: MediaStream?) {
         _secondarySubtitleTrack = stream
-        if (stream == null || stream.deliveryUrl.isNullOrBlank()) {
+        if (stream == null) {
             _secondarySubtitleCues = emptyList()
             return
         }
@@ -448,7 +467,20 @@ class VideoPlayerViewModel @Inject constructor(
 
     private suspend fun loadSecondarySubtitle(stream: MediaStream) {
         try {
-            val url = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+            val url = if (!stream.deliveryUrl.isNullOrBlank()) {
+                playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+            } else {
+                val itemId = currentItemId ?: return
+                val sourceId = _currentMediaSource?.id ?: return
+                val codec = stream.codec ?: "srt"
+                val ext = when (codec.lowercase()) {
+                    "ass", "ssa" -> "ass"
+                    "vtt", "webvtt" -> "vtt"
+                    "ttml", "dfxp" -> "ttml"
+                    else -> "srt"
+                }
+                playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
+            }
             val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
             val request = okhttp3.Request.Builder().url(url).build()
             val client = okhttp3.OkHttpClient()
@@ -484,6 +516,24 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio = ratio
+        if (ratio == AspectRatio.AUTO) {
+            detectBestAspectRatio()
+        }
+    }
+
+    private fun detectBestAspectRatio() {
+        val videoStream = _mediaStreams.firstOrNull { it.type == StreamType.VIDEO } ?: return
+        val width = videoStream.width ?: return
+        val height = videoStream.height ?: return
+        if (height == 0) return
+
+        val nativeRatio = width.toFloat() / height.toFloat()
+        _detectedAspectRatio = when {
+            nativeRatio >= 2.3f -> AspectRatio.RATIO_21_9
+            nativeRatio >= 1.7f -> AspectRatio.RATIO_16_9
+            nativeRatio >= 1.3f -> AspectRatio.RATIO_4_3
+            else -> AspectRatio.FIT
+        }
     }
 
     fun setSubtitleStyle(style: SubtitleStyle) {
@@ -596,6 +646,7 @@ class VideoPlayerViewModel @Inject constructor(
                 val source = detail.mediaSources.firstOrNull()
                 _currentMediaSource = source
                 _mediaStreams = source?.mediaStreams ?: emptyList()
+                detectBestAspectRatio()
             }
         }
     }
@@ -626,9 +677,25 @@ class VideoPlayerViewModel @Inject constructor(
         get() = syncPlayManager.isInSyncPlaySession
 
     fun castToDevice() {
-        val player = _exoPlayer ?: return
-        val currentMedia = player.currentMediaItem ?: return
-        castManager.loadMedia(currentMedia, player.currentPosition, playerListener)
+        val currentMedia = _exoPlayer?.currentMediaItem
+            ?: run {
+                val url = _streamUrl ?: return
+                val artworkUri = currentItemId?.let {
+                    try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
+                }
+                MediaItem.Builder()
+                    .setUri(url)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(_title)
+                            .setSubtitle(_subtitle)
+                            .setArtworkUri(artworkUri)
+                            .build()
+                    )
+                    .build()
+            }
+        val positionMs = _exoPlayer?.currentPosition ?: _playerEngine?.currentPositionMs ?: 0L
+        castManager.loadMedia(currentMedia, positionMs, playerListener)
     }
 
     fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
@@ -681,7 +748,7 @@ class VideoPlayerViewModel @Inject constructor(
                         val format = group.getTrackFormat(i)
                         val isSelected = group.isTrackSelected(i)
                         val label = buildTrackLabel(format)
-                        audioOptions.add(TrackOption(i, label, format.language, isSelected))
+                        audioOptions.add(TrackOption(i, label, format.language, isSelected, group.mediaTrackGroup))
                     }
                 }
                 C.TRACK_TYPE_TEXT -> {
@@ -689,7 +756,7 @@ class VideoPlayerViewModel @Inject constructor(
                         val format = group.getTrackFormat(i)
                         val isSelected = group.isTrackSelected(i)
                         val label = buildTrackLabel(format)
-                        subtitleOptions.add(TrackOption(i, label, format.language, isSelected))
+                        subtitleOptions.add(TrackOption(i, label, format.language, isSelected, group.mediaTrackGroup))
                     }
                 }
             }

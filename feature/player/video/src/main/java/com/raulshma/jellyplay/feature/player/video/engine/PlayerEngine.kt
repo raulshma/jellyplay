@@ -23,6 +23,7 @@ interface PlayerEngine {
     fun setAudioDelay(ms: Long)
     fun setDecoderMode(mode: DecoderMode)
     fun setAudioPassthrough(enabled: Boolean)
+    fun setAspectRatio(mode: Int, ratio: Float? = null)
 
     val isPlaying: Boolean
     val currentPositionMs: Long

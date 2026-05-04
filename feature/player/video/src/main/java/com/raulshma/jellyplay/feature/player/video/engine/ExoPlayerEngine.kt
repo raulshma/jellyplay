@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.core.model.DecoderMode
 
@@ -115,6 +116,15 @@ class ExoPlayerEngine(
     override fun setAudioPassthrough(enabled: Boolean) {
         val p = player ?: return
         p.audioAttributes
+    }
+
+    override fun setAspectRatio(mode: Int, ratio: Float?) {
+        playerView?.setResizeMode(mode)
+        if (ratio != null && ratio > 0f) {
+            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(ratio)
+        } else if (ratio == null || ratio == 0f) {
+            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
+        }
     }
 
     override val isPlaying: Boolean get() = player?.isPlaying == true

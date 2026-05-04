@@ -262,6 +262,38 @@ fun VideoPlayerScreen(
     val currentMediaSource = viewModel.currentMediaSource
     val mediaStreams = viewModel.mediaStreams
     val aspectRatio = viewModel.aspectRatio
+    val detectedAspectRatio = viewModel.detectedAspectRatio
+
+    LaunchedEffect(aspectRatio, detectedAspectRatio) {
+        val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
+            detectedAspectRatio ?: AspectRatio.FIT
+        } else {
+            aspectRatio
+        }
+
+        val resizeMode = when (effectiveRatio) {
+            AspectRatio.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
+                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+            AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+        val targetRatio = effectiveRatio.ratio
+        val eng = viewModel.playerEngine
+        if (eng != null) {
+            eng.setAspectRatio(resizeMode, targetRatio)
+        } else {
+            val pv = playerViewRef ?: return@LaunchedEffect
+            pv.setResizeMode(resizeMode)
+            if (targetRatio != null) {
+                (pv as? AspectRatioFrameLayout)?.setAspectRatio(targetRatio)
+            } else {
+                (pv as? AspectRatioFrameLayout)?.setAspectRatio(0f)
+            }
+        }
+    }
+
     val playMethod = viewModel.playMethod
     val trickplayUrl = viewModel.trickplayUrl
     val subtitleStyle = viewModel.subtitleStyle
@@ -461,6 +493,38 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp, end = 16.dp),
         )
 
+        var showAutoAspectBadge by remember { mutableStateOf(false) }
+        LaunchedEffect(detectedAspectRatio, aspectRatio) {
+            if (detectedAspectRatio != null && detectedAspectRatio != AspectRatio.FIT && aspectRatio == AspectRatio.AUTO) {
+                showAutoAspectBadge = true
+                delay(5000L)
+                showAutoAspectBadge = false
+            } else {
+                showAutoAspectBadge = false
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showAutoAspectBadge,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 60.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.Black.copy(alpha = 0.7f),
+            ) {
+                Text(
+                    text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+
         if (viewModel.isInSyncPlaySession) {
             SyncPlayOverlay(
                 isVisible = true,
@@ -486,6 +550,8 @@ fun VideoPlayerScreen(
             audioPassthrough = viewModel.audioPassthrough,
             isCasting = isCasting,
             isOcrRunning = viewModel.isOcrRunning,
+            currentAspectRatio = aspectRatio,
+            detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls,
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
@@ -545,6 +611,14 @@ fun VideoPlayerScreen(
                     .align(Alignment.TopCenter)
                     .padding(top = 80.dp),
             )
+        }
+    }
+
+    LaunchedEffect(seekDirection) {
+        if (seekDirection != 0) {
+            delay(800)
+            seekDirection = 0
+            seekOffsetMs = 0L
         }
     }
 
@@ -635,6 +709,7 @@ fun VideoPlayerScreen(
     if (showAspectRatio) {
         AspectRatioSheet(
             currentRatio = aspectRatio,
+            detectedRatio = detectedAspectRatio,
             onSelect = { viewModel.setAspectRatio(it) },
             onDismiss = { showAspectRatio = false },
         )
@@ -899,6 +974,8 @@ private fun PlayerControls(
     audioPassthrough: Boolean,
     isCasting: Boolean,
     isOcrRunning: Boolean,
+    currentAspectRatio: AspectRatio,
+    detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
@@ -1087,7 +1164,20 @@ private fun PlayerControls(
                     if (hasChapters) {
                         LabeledControlButton(onClick = onChapterClick, icon = Icons.Default.List, label = "Chapters")
                     }
-                    LabeledControlButton(onClick = onAspectRatioClick, icon = Icons.Default.AspectRatio, label = "Aspect")
+                    LabeledControlButton(
+                        onClick = onAspectRatioClick,
+                        icon = Icons.Default.AspectRatio,
+                        label = if (currentAspectRatio == AspectRatio.AUTO && detectedAspectRatio != null) {
+                            "Auto"
+                        } else {
+                            currentAspectRatio.displayName
+                        },
+                        tint = if (currentAspectRatio != AspectRatio.FIT) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.White
+                        },
+                    )
                     LabeledControlButton(onClick = onInfoClick, icon = Icons.Default.Info, label = "Info")
                     LabeledControlButton(
                         onClick = onDialogueBoostClick,
@@ -1505,7 +1595,10 @@ private fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
         IconButton(
             onClick = {
                 if (isCasting) {
-                    onCast()
+                    try {
+                        val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                        castContext.sessionManager.endCurrentSession(true)
+                    } catch (_: Exception) {}
                 } else {
                     try {
                         val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
@@ -1514,7 +1607,11 @@ private fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
                         if (session?.isConnected == true) {
                             sessionManager.endCurrentSession(true)
                         } else {
-                            onCast()
+                            val activity = context as? android.app.Activity ?: return@IconButton
+                            val routeSelector = castContext.mergedSelector ?: return@IconButton
+                            val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(activity)
+                            dialog.routeSelector = routeSelector
+                            dialog.show()
                         }
                     } catch (_: Exception) {
                         onCast()

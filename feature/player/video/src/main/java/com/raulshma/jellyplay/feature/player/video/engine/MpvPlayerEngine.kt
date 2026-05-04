@@ -154,6 +154,32 @@ class MpvPlayerEngine(
         } catch (_: Exception) {}
     }
 
+    override fun setAspectRatio(mode: Int, ratio: Float?) {
+        val aspectValue = when {
+            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> "-1"
+            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "fit"
+            ratio != null && ratio > 0f -> {
+                val w = (ratio * 100).toInt()
+                val h = 100
+                val gcd = gcd(w, h)
+                "${w / gcd}:${h / gcd}"
+            }
+            else -> "fit"
+        }
+        try { mpvView?.mpv?.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
+    }
+
+    private fun gcd(a: Int, b: Int): Int {
+        var x = a
+        var y = b
+        while (y != 0) {
+            val temp = y
+            y = x % y
+            x = temp
+        }
+        return x
+    }
+
     override val isPlaying: Boolean get() = _isPlaying
 
     override val currentPositionMs: Long
