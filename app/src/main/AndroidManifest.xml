@@ -39,7 +39,8 @@
         <service
             android:name="com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
+            android:foregroundServiceType="mediaPlayback"
+            tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
                 <action android:name="android.media.browse.MediaBrowserService" />

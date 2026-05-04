@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -82,6 +84,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -187,7 +190,6 @@ fun VideoPlayerScreen(
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
             activity?.let {
@@ -200,6 +202,18 @@ fun VideoPlayerScreen(
             playerViewRef?.player = null
             playerViewRef = null
             viewModel.release()
+        }
+    }
+
+    LaunchedEffect(showControls) {
+        activity?.let {
+            val window = it.window
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            if (showControls) {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
@@ -1065,80 +1079,116 @@ private fun PlayerControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row {
-                        IconButton(onClick = onSpeedClick) {
-                            val speedText = if (playbackSpeed == 1.0f) "1x" else "${playbackSpeed}x"
-                            Text(speedText, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                        IconButton(onClick = onAudioClick) {
-                            Icon(Icons.Default.Audiotrack, "Audio", tint = Color.White)
-                        }
-                        IconButton(onClick = onSubtitleClick) {
-                            Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
-                        }
-                        IconButton(onClick = onSubtitleStyleClick) {
-                            Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(onClick = onSecondarySubtitleClick) {
-                            Icon(Icons.Default.ClosedCaptionOff, "Dual Subtitles", tint = Color.White)
-                        }
-                        if (hasChapters) {
-                            IconButton(onClick = onChapterClick) {
-                                Icon(Icons.Default.List, "Chapters", tint = Color.White)
-                            }
-                        }
-                        IconButton(onClick = onAspectRatioClick) {
-                            Icon(Icons.Default.AspectRatio, "Aspect Ratio", tint = Color.White)
-                        }
-                        IconButton(onClick = onInfoClick) {
-                            Icon(Icons.Default.Info, "Playback Info", tint = Color.White)
-                        }
-                        IconButton(onClick = onDialogueBoostClick) {
-                            Icon(
-                                Icons.Default.RecordVoiceOver,
-                                "Dialogue Boost",
-                                tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                            )
-                        }
-                        IconButton(onClick = onNightModeClick) {
-                            Icon(
-                                Icons.Default.Nightlight,
-                                "Night Mode",
-                                tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                            )
-                        }
-                        IconButton(onClick = onAudioDelayClick) {
-                            Icon(Icons.Default.GraphicEq, "Audio Delay", tint = Color.White)
-                        }
-                        IconButton(onClick = onDecoderClick) {
-                            Icon(Icons.Default.Monitor, "Decoder", tint = Color.White)
-                        }
-                        IconButton(onClick = onPassthroughClick) {
-                            Icon(
-                                Icons.Default.SurroundSound,
-                                "Passthrough",
-                                tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
-                            )
-                        }
-                        IconButton(onClick = onSubtitleDownloadClick) {
-                            Icon(Icons.Default.Download, "Download Subtitles", tint = Color.White)
-                        }
-                        CastButton(isCasting = isCasting, onCast = onCastClick)
-                        IconButton(
-                            onClick = onOcrClick,
-                            enabled = !isOcrRunning,
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "OCR Subtitle",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                    LabeledSpeedButton(onClick = onSpeedClick, speed = playbackSpeed)
+                    LabeledControlButton(onClick = onAudioClick, icon = Icons.Default.Audiotrack, label = "Audio")
+                    LabeledControlButton(onClick = onSubtitleClick, icon = Icons.Default.ClosedCaption, label = "Subs")
+                    LabeledControlButton(onClick = onSubtitleStyleClick, icon = Icons.Default.Settings, label = "Style", iconModifier = Modifier.size(20.dp))
+                    LabeledControlButton(onClick = onSecondarySubtitleClick, icon = Icons.Default.ClosedCaptionOff, label = "Dual Subs")
+                    if (hasChapters) {
+                        LabeledControlButton(onClick = onChapterClick, icon = Icons.Default.List, label = "Chapters")
                     }
+                    LabeledControlButton(onClick = onAspectRatioClick, icon = Icons.Default.AspectRatio, label = "Aspect")
+                    LabeledControlButton(onClick = onInfoClick, icon = Icons.Default.Info, label = "Info")
+                    LabeledControlButton(
+                        onClick = onDialogueBoostClick,
+                        icon = Icons.Default.RecordVoiceOver,
+                        label = "Boost",
+                        tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                    LabeledControlButton(
+                        onClick = onNightModeClick,
+                        icon = Icons.Default.Nightlight,
+                        label = "Night",
+                        tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                    LabeledControlButton(onClick = onAudioDelayClick, icon = Icons.Default.GraphicEq, label = "Delay")
+                    LabeledControlButton(onClick = onDecoderClick, icon = Icons.Default.Monitor, label = "Decoder")
+                    LabeledControlButton(
+                        onClick = onPassthroughClick,
+                        icon = Icons.Default.SurroundSound,
+                        label = "Passthrough",
+                        tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                    LabeledControlButton(onClick = onSubtitleDownloadClick, icon = Icons.Default.Download, label = "Download")
+                    CastButton(isCasting = isCasting, onCast = onCastClick)
+                    LabeledControlButton(
+                        onClick = onOcrClick,
+                        icon = Icons.Default.Info,
+                        label = "OCR",
+                        enabled = !isOcrRunning,
+                        iconModifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LabeledControlButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.White,
+    iconModifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = iconModifier,
+            )
+        }
+        Text(
+            label,
+            color = tint,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun LabeledSpeedButton(
+    onClick: () -> Unit,
+    speed: Float,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Text(
+                if (speed == 1.0f) "1x" else "${speed}x",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Text(
+            "Speed",
+            color = Color.White,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            maxLines = 1,
+        )
     }
 }
 
@@ -1451,30 +1501,40 @@ private fun formatDuration(ms: Long): String {
 @Composable
 private fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
     val context = LocalContext.current
-    IconButton(
-        onClick = {
-            if (isCasting) {
-                onCast()
-            } else {
-                try {
-                    val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                    val sessionManager = castContext.sessionManager
-                    val session = sessionManager.currentCastSession
-                    if (session?.isConnected == true) {
-                        sessionManager.endCurrentSession(true)
-                    } else {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(
+            onClick = {
+                if (isCasting) {
+                    onCast()
+                } else {
+                    try {
+                        val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                        val sessionManager = castContext.sessionManager
+                        val session = sessionManager.currentCastSession
+                        if (session?.isConnected == true) {
+                            sessionManager.endCurrentSession(true)
+                        } else {
+                            onCast()
+                        }
+                    } catch (_: Exception) {
                         onCast()
                     }
-                } catch (_: Exception) {
-                    onCast()
                 }
-            }
-        },
-    ) {
-        Icon(
-            if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
-            contentDescription = "Cast",
-            tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
+            },
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+                contentDescription = "Cast",
+                tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
+            )
+        }
+        Text(
+            "Cast",
+            color = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            maxLines = 1,
         )
     }
 }
