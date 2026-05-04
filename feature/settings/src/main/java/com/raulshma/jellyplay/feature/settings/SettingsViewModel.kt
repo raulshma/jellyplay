@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -170,6 +171,22 @@ class SettingsViewModel @Inject constructor(
 
     fun setEqualizerEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setEqualizerEnabled(enabled) }
+    }
+
+    fun setNightModeEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setNightModeEnabled(enabled) }
+    }
+
+    fun setDecoderMode(mode: DecoderMode) {
+        viewModelScope.launch { preferencesStore.setDecoderMode(mode) }
+    }
+
+    fun setAudioPassthrough(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAudioPassthrough(enabled) }
+    }
+
+    fun setFrameRateMatching(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setFrameRateMatching(enabled) }
     }
 
     fun switchUser(userId: String, onComplete: () -> Unit) {

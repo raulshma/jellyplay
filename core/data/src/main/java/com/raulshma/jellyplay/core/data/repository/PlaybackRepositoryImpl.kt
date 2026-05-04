@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,4 +41,13 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =
         apiClient.getSubtitleDeliveryUrl(deliveryUrl)
+
+    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
+        apiClient.getIntroTimestamps(itemId)
+
+    override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =
+        apiClient.getRemoteSubtitles(itemId)
+
+    override suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit> =
+        apiClient.downloadRemoteSubtitle(itemId, subtitleId)
 }

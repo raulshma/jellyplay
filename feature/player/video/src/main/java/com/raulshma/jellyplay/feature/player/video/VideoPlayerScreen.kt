@@ -49,6 +49,13 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.SurroundSound
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -90,11 +97,18 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
+import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
+import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
+import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import kotlinx.coroutines.delay
 
@@ -122,6 +136,9 @@ fun VideoPlayerScreen(
     var showAspectRatio by remember { mutableStateOf(false) }
     var showSubtitleStyle by remember { mutableStateOf(false) }
     var showSecondarySubtitlePicker by remember { mutableStateOf(false) }
+    var showAudioDelay by remember { mutableStateOf(false) }
+    var showDecoderPicker by remember { mutableStateOf(false) }
+    var showSubtitleDownload by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var isCasting by remember { mutableStateOf(false) }
@@ -142,7 +159,6 @@ fun VideoPlayerScreen(
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
     }
 
-    // When EXTERNAL player is selected, launch via intent and navigate back.
     val preferredPlayer = viewModel.preferredPlayerType
     val streamUrl = viewModel.streamUrl
 
@@ -180,6 +196,7 @@ fun VideoPlayerScreen(
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
+            activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
             playerViewRef?.player = null
             playerViewRef = null
             viewModel.release()
@@ -187,15 +204,21 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        // Wait for shared element transition to finish before forcing landscape
         kotlinx.coroutines.delay(400)
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    LaunchedEffect(viewModel.frameRateMatching, viewModel.videoFrameRate) {
+        if (viewModel.frameRateMatching && viewModel.videoFrameRate != null) {
+            activity?.let { FrameRateMatcher.matchFrameRate(it, viewModel.videoFrameRate) }
+        }
     }
 
     BackHandler {
         if (showSpeedPicker || showAudioPicker || showSubtitlePicker || showChapterPicker ||
             showPlaybackInfo || showAspectRatio || showSubtitleStyle || showSecondarySubtitlePicker ||
-            showTapToTranslate || showOcrResult
+            showTapToTranslate || showOcrResult || showAudioDelay || showDecoderPicker ||
+            showSubtitleDownload
         ) {
             showSpeedPicker = false
             showAudioPicker = false
@@ -207,6 +230,9 @@ fun VideoPlayerScreen(
             showSecondarySubtitlePicker = false
             showTapToTranslate = false
             showOcrResult = false
+            showAudioDelay = false
+            showDecoderPicker = false
+            showSubtitleDownload = false
         } else {
             onBack()
         }
@@ -225,9 +251,8 @@ fun VideoPlayerScreen(
     val playMethod = viewModel.playMethod
     val trickplayUrl = viewModel.trickplayUrl
     val subtitleStyle = viewModel.subtitleStyle
+    val isInIntro = viewModel.isInIntro
 
-    // Engine-aware playback helpers — delegate to mpv/LibVLC engine when active,
-    // otherwise fall through to ExoPlayer.
     val activeEngine = viewModel.playerEngine
     val doPlay: () -> Unit = { if (activeEngine != null) activeEngine.play() else exoPlayer?.play() }
     val doPause: () -> Unit = { if (activeEngine != null) activeEngine.pause() else exoPlayer?.pause() }
@@ -294,7 +319,6 @@ fun VideoPlayerScreen(
     ) {
         val engine = viewModel.playerEngine
         if (engine != null) {
-            // mpv or LibVLC engine — render the engine's custom surface
             AndroidView(
                 factory = { ctx -> engine.createPlayerView(ctx) },
                 modifier = Modifier.fillMaxSize(),
@@ -326,6 +350,13 @@ fun VideoPlayerScreen(
                                 )
                             )
                             subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
+                            val bottomPaddingPx = (subtitleStyle.verticalPosition * height).toInt()
+                            subtitleView?.setPadding(
+                                subtitleView?.paddingLeft ?: 0,
+                                subtitleView?.paddingTop ?: 0,
+                                subtitleView?.paddingRight ?: 0,
+                                bottomPaddingPx,
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
@@ -401,6 +432,33 @@ fun VideoPlayerScreen(
             }
         }
 
+        IntroSkipOverlay(
+            isVisible = isInIntro && !showControls,
+            onSkip = { viewModel.skipIntro() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 200.dp),
+        )
+
+        HdrBadge(
+            hdrType = viewModel.hdrType,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 60.dp, end = 16.dp),
+        )
+
+        if (viewModel.isInSyncPlaySession) {
+            SyncPlayOverlay(
+                isVisible = true,
+                groupName = viewModel.syncPlayGroupName ?: "Group",
+                participantCount = viewModel.syncPlayParticipantCount,
+                isSynced = viewModel.isSyncPlaySynced,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 60.dp, start = 16.dp),
+            )
+        }
+
         PlayerControls(
             title = title,
             subtitle = subtitle,
@@ -409,6 +467,11 @@ fun VideoPlayerScreen(
             duration = duration,
             playbackSpeed = playbackSpeed,
             hasChapters = viewModel.chapters.isNotEmpty(),
+            dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
+            nightModeEnabled = viewModel.nightModeEnabled,
+            audioPassthrough = viewModel.audioPassthrough,
+            isCasting = isCasting,
+            isOcrRunning = viewModel.isOcrRunning,
             isVisible = showControls,
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
@@ -418,15 +481,9 @@ fun VideoPlayerScreen(
                     doSeekTo((fraction * duration).toLong())
                 }
             },
-            onSeekStart = {
-                isSeeking = true
-            },
-            onSeekEnd = {
-                isSeeking = false
-            },
-            onSeekPositionChange = { positionMs ->
-                seekPositionMs = positionMs
-            },
+            onSeekStart = { isSeeking = true },
+            onSeekEnd = { isSeeking = false },
+            onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
             onBack = onBack,
             onSpeedClick = { showSpeedPicker = true },
             onAudioClick = { showAudioPicker = true },
@@ -437,8 +494,10 @@ fun VideoPlayerScreen(
             onInfoClick = { showPlaybackInfo = true },
             onAspectRatioClick = { showAspectRatio = true },
             onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
-            dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
-            isCasting = isCasting,
+            onNightModeClick = { viewModel.toggleNightMode() },
+            onAudioDelayClick = { showAudioDelay = true },
+            onDecoderClick = { showDecoderPicker = true },
+            onPassthroughClick = { viewModel.setAudioPassthrough(!viewModel.audioPassthrough) },
             onCastClick = { viewModel.castToDevice() },
             onOcrClick = {
                 val pv = playerViewRef
@@ -452,7 +511,10 @@ fun VideoPlayerScreen(
                 viewModel.captureOcrSubtitle(bitmap)
                 showOcrResult = true
             },
-            isOcrRunning = viewModel.isOcrRunning,
+            onSubtitleDownloadClick = {
+                viewModel.loadRemoteSubtitles()
+                showSubtitleDownload = true
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -547,6 +609,7 @@ fun VideoPlayerScreen(
                 mediaSource = currentMediaSource,
                 mediaStreams = mediaStreams,
                 playMethod = playMethod,
+                hdrType = viewModel.hdrType,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -587,6 +650,34 @@ fun VideoPlayerScreen(
         TapToTranslateSheet(
             text = tapToTranslateText,
             onDismiss = { showTapToTranslate = false },
+        )
+    }
+
+    if (showAudioDelay) {
+        AudioDelaySheet(
+            currentDelayMs = viewModel.audioDelayMs,
+            onDelayChange = { viewModel.setAudioDelay(it) },
+            onDismiss = { showAudioDelay = false },
+        )
+    }
+
+    if (showDecoderPicker) {
+        DecoderPickerSheet(
+            currentMode = viewModel.decoderMode,
+            onSelect = { viewModel.setDecoderMode(it) },
+            onDismiss = { showDecoderPicker = false },
+        )
+    }
+
+    if (showSubtitleDownload) {
+        SubtitleDownloadSheet(
+            subtitles = viewModel.remoteSubtitles,
+            isLoading = viewModel.isLoadingRemoteSubtitles,
+            onDownload = {
+                viewModel.downloadSubtitle(it)
+                showSubtitleDownload = false
+            },
+            onDismiss = { showSubtitleDownload = false },
         )
     }
 
@@ -667,8 +758,6 @@ private fun GestureOverlay(
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
 ) {
-    val activity = LocalContext.current.findActivity()
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -791,6 +880,11 @@ private fun PlayerControls(
     duration: Long,
     playbackSpeed: Float,
     hasChapters: Boolean,
+    dialogueBoostEnabled: Boolean,
+    nightModeEnabled: Boolean,
+    audioPassthrough: Boolean,
+    isCasting: Boolean,
+    isOcrRunning: Boolean,
     isVisible: Boolean,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
@@ -809,11 +903,13 @@ private fun PlayerControls(
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
-    dialogueBoostEnabled: Boolean,
-    isCasting: Boolean = false,
-    onCastClick: () -> Unit = {},
-    onOcrClick: () -> Unit = {},
-    isOcrRunning: Boolean = false,
+    onNightModeClick: () -> Unit,
+    onAudioDelayClick: () -> Unit,
+    onDecoderClick: () -> Unit,
+    onPassthroughClick: () -> Unit,
+    onCastClick: () -> Unit,
+    onOcrClick: () -> Unit,
+    onSubtitleDownloadClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -980,42 +1076,65 @@ private fun PlayerControls(
                         IconButton(onClick = onSubtitleClick) {
                             Icon(Icons.Default.ClosedCaption, "Subtitles", tint = Color.White)
                         }
-                    IconButton(onClick = onSubtitleStyleClick) {
-                        Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onSecondarySubtitleClick) {
-                        Icon(Icons.Default.ClosedCaptionOff, "Dual Subtitles", tint = Color.White)
-                    }
-                    if (hasChapters) {
-                        IconButton(onClick = onChapterClick) {
-                            Icon(Icons.Default.List, "Chapters", tint = Color.White)
+                        IconButton(onClick = onSubtitleStyleClick) {
+                            Icon(Icons.Default.Settings, "Subtitle Style", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
-                    }
-                    IconButton(onClick = onAspectRatioClick) {
-                        Icon(Icons.Default.AspectRatio, "Aspect Ratio", tint = Color.White)
-                    }
-                    IconButton(onClick = onInfoClick) {
-                        Icon(Icons.Default.Info, "Playback Info", tint = Color.White)
-                    }
-                    IconButton(onClick = onDialogueBoostClick) {
-                        Icon(
-                            Icons.Default.RecordVoiceOver,
-                            "Dialogue Boost",
-                            tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                        )
-                    }
-                    CastButton(isCasting = isCasting, onCast = onCastClick)
-                    IconButton(
-                        onClick = onOcrClick,
-                        enabled = !isOcrRunning,
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = "OCR Subtitle",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
+                        IconButton(onClick = onSecondarySubtitleClick) {
+                            Icon(Icons.Default.ClosedCaptionOff, "Dual Subtitles", tint = Color.White)
+                        }
+                        if (hasChapters) {
+                            IconButton(onClick = onChapterClick) {
+                                Icon(Icons.Default.List, "Chapters", tint = Color.White)
+                            }
+                        }
+                        IconButton(onClick = onAspectRatioClick) {
+                            Icon(Icons.Default.AspectRatio, "Aspect Ratio", tint = Color.White)
+                        }
+                        IconButton(onClick = onInfoClick) {
+                            Icon(Icons.Default.Info, "Playback Info", tint = Color.White)
+                        }
+                        IconButton(onClick = onDialogueBoostClick) {
+                            Icon(
+                                Icons.Default.RecordVoiceOver,
+                                "Dialogue Boost",
+                                tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                            )
+                        }
+                        IconButton(onClick = onNightModeClick) {
+                            Icon(
+                                Icons.Default.Nightlight,
+                                "Night Mode",
+                                tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                            )
+                        }
+                        IconButton(onClick = onAudioDelayClick) {
+                            Icon(Icons.Default.GraphicEq, "Audio Delay", tint = Color.White)
+                        }
+                        IconButton(onClick = onDecoderClick) {
+                            Icon(Icons.Default.Monitor, "Decoder", tint = Color.White)
+                        }
+                        IconButton(onClick = onPassthroughClick) {
+                            Icon(
+                                Icons.Default.SurroundSound,
+                                "Passthrough",
+                                tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
+                            )
+                        }
+                        IconButton(onClick = onSubtitleDownloadClick) {
+                            Icon(Icons.Default.Download, "Download Subtitles", tint = Color.White)
+                        }
+                        CastButton(isCasting = isCasting, onCast = onCastClick)
+                        IconButton(
+                            onClick = onOcrClick,
+                            enabled = !isOcrRunning,
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = "OCR Subtitle",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }

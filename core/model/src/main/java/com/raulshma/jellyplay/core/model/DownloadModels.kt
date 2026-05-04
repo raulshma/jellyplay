@@ -45,6 +45,11 @@ data class UserPreferences(
     val dialogueBoostEnabled: Boolean = false,
     val equalizerEnabled: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
+    val audioDelayMs: Long = 0L,
+    val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
+    val audioPassthrough: Boolean = false,
+    val frameRateMatching: Boolean = false,
+    val nightModeEnabled: Boolean = false,
 )
 
 @Serializable
@@ -73,7 +78,15 @@ data class SubtitleStyle(
     val edgeType: SubtitleEdgeType = SubtitleEdgeType.NONE,
     val edgeColor: SubtitleColor = SubtitleColor.BLACK,
     val offsetMs: Long = 0L,
+    val verticalPosition: Float = 0.05f,
 )
+
+@Serializable
+enum class DecoderMode(val displayName: String) {
+    HW_PREFERRED("Hardware (Preferred)"),
+    HW_ONLY("Hardware Only"),
+    SW_ONLY("Software Only"),
+}
 
 @Serializable
 enum class SubtitleColor(val value: Int) {

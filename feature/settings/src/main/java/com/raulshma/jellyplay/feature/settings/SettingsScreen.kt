@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 
@@ -161,6 +162,65 @@ fun SettingsScreen(
                 Switch(
                     checked = preferences.equalizerEnabled,
                     onCheckedChange = { viewModel.setEqualizerEnabled(it) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.Speed,
+                title = "Night Mode Audio",
+                subtitle = if (preferences.nightModeEnabled) "Dynamic range compression" else "Disabled",
+            ) {
+                Switch(
+                    checked = preferences.nightModeEnabled,
+                    onCheckedChange = { viewModel.setNightModeEnabled(it) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.HighQuality,
+                title = "Decoder Mode",
+                subtitle = preferences.decoderMode.displayName,
+                onClick = {
+                    val modes = DecoderMode.entries
+                    val currentIndex = modes.indexOf(preferences.decoderMode)
+                    val nextIndex = (currentIndex + 1) % modes.size
+                    viewModel.setDecoderMode(modes[nextIndex])
+                },
+            ) {
+                Text(
+                    preferences.decoderMode.displayName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.PlayCircle,
+                title = "Audio Passthrough",
+                subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Disabled",
+            ) {
+                Switch(
+                    checked = preferences.audioPassthrough,
+                    onCheckedChange = { viewModel.setAudioPassthrough(it) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingItem(
+                icon = Icons.Default.Speed,
+                title = "Frame Rate Matching",
+                subtitle = if (preferences.frameRateMatching) "Match display to content" else "Disabled",
+            ) {
+                Switch(
+                    checked = preferences.frameRateMatching,
+                    onCheckedChange = { viewModel.setFrameRateMatching(it) },
                 )
             }
 

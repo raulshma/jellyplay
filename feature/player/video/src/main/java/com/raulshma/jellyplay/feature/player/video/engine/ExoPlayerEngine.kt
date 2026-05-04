@@ -8,14 +8,13 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.core.model.DecoderMode
 
-/**
- * [PlayerEngine] backed by Media3 ExoPlayer — the default, full-featured player.
- */
 class ExoPlayerEngine(
     private val context: Context,
 ) : PlayerEngine {
@@ -25,6 +24,7 @@ class ExoPlayerEngine(
     private var playerView: PlayerView? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -38,10 +38,7 @@ class ExoPlayerEngine(
         }
     }
 
-    /** Provides raw access to the ExoPlayer for features that need it directly. */
     val rawPlayer: ExoPlayer? get() = player
-
-    /** Provides raw access to the track selector. */
     val rawTrackSelector: DefaultTrackSelector? get() = trackSelector
 
     override fun initialize(url: String, title: String, startPositionMs: Long) {
@@ -49,6 +46,14 @@ class ExoPlayerEngine(
 
         val selector = DefaultTrackSelector(context)
         trackSelector = selector
+
+        val rendererMode = when (currentDecoderMode) {
+            DecoderMode.HW_PREFERRED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+            DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+            DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+        }
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(rendererMode)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
 
@@ -58,6 +63,7 @@ class ExoPlayerEngine(
             .build()
 
         val exo = ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(selector)
             .setAudioAttributes(audioAttrs, true)
@@ -97,6 +103,19 @@ class ExoPlayerEngine(
     override fun seekForward(amountMs: Long) { player?.seekForward() }
     override fun seekBack(amountMs: Long) { player?.seekBack() }
     override fun setPlaybackSpeed(speed: Float) { player?.setPlaybackSpeed(speed) }
+
+    override fun setAudioDelay(ms: Long) {
+        // ExoPlayer doesn't natively support audio delay adjustment
+    }
+
+    override fun setDecoderMode(mode: DecoderMode) {
+        currentDecoderMode = mode
+    }
+
+    override fun setAudioPassthrough(enabled: Boolean) {
+        val p = player ?: return
+        p.audioAttributes
+    }
 
     override val isPlaying: Boolean get() = player?.isPlaying == true
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
@@ -145,8 +164,6 @@ class ExoPlayerEngine(
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
     }
-
-    // ── Private helpers ────────────────────────────────────
 
     private fun buildTracks(trackType: Int, type: PlayerEngine.TrackType): List<PlayerEngine.TrackInfo> {
         val p = player ?: return emptyList()

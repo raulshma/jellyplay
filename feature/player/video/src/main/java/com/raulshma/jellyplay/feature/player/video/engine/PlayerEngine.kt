@@ -2,27 +2,17 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import com.raulshma.jellyplay.core.model.DecoderMode
 
-/**
- * Unified abstraction over different video player backends (ExoPlayer, mpv, LibVLC).
- * Each implementation provides its own rendering surface via [createPlayerView] and
- * exposes common playback controls through a single interface.
- */
 interface PlayerEngine {
 
-    // ── Lifecycle ──────────────────────────────────────────
-
-    /** Prepare the engine and start playback of [url]. */
     fun initialize(
         url: String,
         title: String,
         startPositionMs: Long = 0,
     )
 
-    /** Release all resources (player, surface, codecs). */
     fun release()
-
-    // ── Playback Controls ──────────────────────────────────
 
     fun play()
     fun pause()
@@ -30,15 +20,14 @@ interface PlayerEngine {
     fun seekForward(amountMs: Long = 10_000)
     fun seekBack(amountMs: Long = 10_000)
     fun setPlaybackSpeed(speed: Float)
-
-    // ── State Queries ──────────────────────────────────────
+    fun setAudioDelay(ms: Long)
+    fun setDecoderMode(mode: DecoderMode)
+    fun setAudioPassthrough(enabled: Boolean)
 
     val isPlaying: Boolean
     val currentPositionMs: Long
     val durationMs: Long
     val playbackSpeed: Float
-
-    // ── Track Management ───────────────────────────────────
 
     data class TrackInfo(
         val index: Int,
@@ -55,15 +44,7 @@ interface PlayerEngine {
     fun selectAudioTrack(index: Int)
     fun selectSubtitleTrack(index: Int)
 
-    // ── Rendering Surface ──────────────────────────────────
-
-    /**
-     * Creates the native Android [View] that this engine renders into.
-     * The returned view should be hosted inside an `AndroidView` in Compose.
-     */
     fun createPlayerView(context: Context): View
-
-    // ── Callbacks ──────────────────────────────────────────
 
     fun setOnStateChanged(callback: ((isPlaying: Boolean) -> Unit)?)
     fun setOnTracksChanged(callback: (() -> Unit)?)

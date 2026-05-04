@@ -24,12 +24,16 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitlePa
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -63,13 +67,13 @@ class VideoPlayerViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
+    private val syncPlayManager: SyncPlayManager,
 ) : ViewModel() {
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
     val exoPlayer get() = _exoPlayer
 
     private var _playerEngine by mutableStateOf<PlayerEngine?>(null)
-    /** The active player engine (ExoPlayer, mpv, or LibVLC). */
     val playerEngine: PlayerEngine? get() = _playerEngine
 
     private var _preferredPlayerType by mutableStateOf(PlayerType.EXO_PLAYER)
@@ -142,17 +146,69 @@ class VideoPlayerViewModel @Inject constructor(
     private var _dialogueBoostEnabled by mutableStateOf(false)
     val dialogueBoostEnabled get() = _dialogueBoostEnabled
 
+    private var _nightModeEnabled by mutableStateOf(false)
+    val nightModeEnabled get() = _nightModeEnabled
+
+    private var _audioDelayMs by mutableLongStateOf(0L)
+    val audioDelayMs get() = _audioDelayMs
+
+    private var _decoderMode by mutableStateOf(DecoderMode.HW_PREFERRED)
+    val decoderMode get() = _decoderMode
+
+    private var _audioPassthrough by mutableStateOf(false)
+    val audioPassthrough get() = _audioPassthrough
+
+    private var _frameRateMatching by mutableStateOf(false)
+    val frameRateMatching get() = _frameRateMatching
+
     private var _ocrText by mutableStateOf<String?>(null)
     val ocrText get() = _ocrText
 
     private var _isOcrRunning by mutableStateOf(false)
     val isOcrRunning get() = _isOcrRunning
 
+    private var _introTimestamps by mutableStateOf<IntroTimestamps?>(null)
+    val introTimestamps get() = _introTimestamps
+
+    val isInIntro: Boolean
+        get() {
+            val ts = _introTimestamps ?: return false
+            if (!ts.hasIntro) return false
+            val posTicks = _currentPosition * 10_000
+            return posTicks >= ts.introStartTicks && posTicks < ts.introEndTicks
+        }
+
+    val hdrType: String?
+        get() {
+            val videoStream = _mediaStreams.firstOrNull { it.type == StreamType.VIDEO } ?: return null
+            val range = videoStream.videoRange ?: return null
+            return if (range.equals("SDR", ignoreCase = true)) null else range
+        }
+
+    val videoFrameRate: Float?
+        get() = _mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
+
+    private var _remoteSubtitles by mutableStateOf<List<com.raulshma.jellyplay.core.model.RemoteSubtitleInfo>>(emptyList())
+    val remoteSubtitles get() = _remoteSubtitles
+
+    private var _isLoadingRemoteSubtitles by mutableStateOf(false)
+    val isLoadingRemoteSubtitles get() = _isLoadingRemoteSubtitles
+
+    private var _syncPlayGroupName by mutableStateOf<String?>(null)
+    val syncPlayGroupName get() = _syncPlayGroupName
+
+    private var _syncPlayParticipantCount by mutableStateOf(0)
+    val syncPlayParticipantCount get() = _syncPlayParticipantCount
+
+    private var _isSyncPlaySynced by mutableStateOf(false)
+    val isSyncPlaySynced get() = _isSyncPlaySynced
+
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private val dialogueBoost = DialogueBoostHelper()
+    private val nightMode = NightModeHelper()
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -175,12 +231,15 @@ class VideoPlayerViewModel @Inject constructor(
         currentItemId = itemId
 
         viewModelScope.launch {
-            // Load preferred player type and subtitle style
             val prefs = preferencesStore.preferences.first()
             _preferredPlayerType = prefs.preferredPlayer
             _subtitleStyle = prefs.subtitleStyle
+            _audioDelayMs = prefs.audioDelayMs
+            _decoderMode = prefs.decoderMode
+            _audioPassthrough = prefs.audioPassthrough
+            _frameRateMatching = prefs.frameRateMatching
+            _nightModeEnabled = prefs.nightModeEnabled
 
-            // Fetch media detail first (needed by all engines)
             val detailResult = mediaRepository.getMediaDetail(itemId)
             val detail = detailResult.getOrElse {
                 _title = "Error loading media"
@@ -221,14 +280,9 @@ class VideoPlayerViewModel @Inject constructor(
                 PlayerType.MPV, PlayerType.LIBVLC -> initializeAlternativeEngine(
                     url, detail.item.name, startPositionTicks
                 )
-                PlayerType.EXTERNAL -> {
-                    // External launching is handled by the Screen layer.
-                    // Fall through — we don't init any in-app player.
-                    return@launch
-                }
+                PlayerType.EXTERNAL -> return@launch
             }
 
-            // Start server-side reporting (common to all in-app engines)
             playbackRepository.reportPlaybackStart(
                 com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                     itemId = itemId,
@@ -239,12 +293,12 @@ class VideoPlayerViewModel @Inject constructor(
 
             startPositionTracking()
             startProgressReporting()
+            fetchIntroTimestamps(itemId)
         }
     }
 
-    /** Full-featured ExoPlayer init path — keeps all existing logic. */
     private suspend fun initializeExoPlayer(
-        detail: com.raulshma.jellyplay.core.model.MediaDetail,
+        detail: MediaDetail,
         source: MediaSource?,
         url: String,
         startPositionTicks: Long,
@@ -305,6 +359,9 @@ class VideoPlayerViewModel @Inject constructor(
         _dialogueBoostEnabled = prefs.dialogueBoostEnabled
         if (_dialogueBoostEnabled) applyDialogueBoost()
 
+        _nightModeEnabled = prefs.nightModeEnabled
+        if (_nightModeEnabled) applyNightMode()
+
         if (prefs.preferredSubtitleLanguage != null) {
             val params = trackSelector.buildUponParameters()
             params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
@@ -312,7 +369,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    /** Lightweight init path for mpv / LibVLC engines. */
     private fun initializeAlternativeEngine(
         url: String,
         title: String,
@@ -320,6 +376,10 @@ class VideoPlayerViewModel @Inject constructor(
     ) {
         val engine = PlayerEngineFactory.create(context, _preferredPlayerType)
         _playerEngine = engine
+
+        engine.setDecoderMode(_decoderMode)
+        engine.setAudioDelay(_audioDelayMs)
+        engine.setAudioPassthrough(_audioPassthrough)
 
         engine.setOnStateChanged { playing ->
             _isPlaying = playing
@@ -454,11 +514,116 @@ class VideoPlayerViewModel @Inject constructor(
         dialogueBoost.setEnabled(_dialogueBoostEnabled)
     }
 
+    fun toggleNightMode() {
+        _nightModeEnabled = !_nightModeEnabled
+        applyNightMode()
+        viewModelScope.launch {
+            preferencesStore.setNightModeEnabled(_nightModeEnabled)
+        }
+    }
+
+    private fun applyNightMode() {
+        val player = _exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        nightMode.attach(audioSessionId)
+        nightMode.setEnabled(_nightModeEnabled)
+    }
+
+    fun setAudioDelay(ms: Long) {
+        _audioDelayMs = ms
+        _playerEngine?.setAudioDelay(ms)
+        viewModelScope.launch {
+            preferencesStore.setAudioDelay(ms)
+        }
+    }
+
+    fun setDecoderMode(mode: DecoderMode) {
+        _decoderMode = mode
+        _playerEngine?.setDecoderMode(mode)
+        viewModelScope.launch {
+            preferencesStore.setDecoderMode(mode)
+        }
+    }
+
+    fun setAudioPassthrough(enabled: Boolean) {
+        _audioPassthrough = enabled
+        _playerEngine?.setAudioPassthrough(enabled)
+        viewModelScope.launch {
+            preferencesStore.setAudioPassthrough(enabled)
+        }
+    }
+
+    fun setFrameRateMatching(enabled: Boolean) {
+        _frameRateMatching = enabled
+        viewModelScope.launch {
+            preferencesStore.setFrameRateMatching(enabled)
+        }
+    }
+
+    fun skipIntro() {
+        val ts = _introTimestamps ?: return
+        val targetMs = ts.introEndTicks / 10_000
+        if (_playerEngine != null) {
+            _playerEngine?.seekTo(targetMs)
+        } else {
+            _exoPlayer?.seekTo(targetMs)
+        }
+    }
+
+    private fun fetchIntroTimestamps(itemId: String) {
+        viewModelScope.launch {
+            _introTimestamps = playbackRepository.getIntroTimestamps(itemId).getOrNull()
+        }
+    }
+
+    fun loadRemoteSubtitles() {
+        val itemId = currentItemId ?: return
+        _isLoadingRemoteSubtitles = true
+        viewModelScope.launch {
+            _remoteSubtitles = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
+            _isLoadingRemoteSubtitles = false
+        }
+    }
+
+    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) {
+        val itemId = currentItemId ?: return
+        viewModelScope.launch {
+            playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
+            val detailResult = mediaRepository.getMediaDetail(itemId)
+            detailResult.getOrNull()?.let { detail ->
+                _mediaDetail = detail
+                val source = detail.mediaSources.firstOrNull()
+                _currentMediaSource = source
+                _mediaStreams = source?.mediaStreams ?: emptyList()
+            }
+        }
+    }
+
+    fun joinSyncPlay(groupId: String) {
+        viewModelScope.launch {
+            syncPlayManager.joinGroup(groupId)
+            _syncPlayGroupName = groupId
+        }
+    }
+
+    fun leaveSyncPlay() {
+        viewModelScope.launch {
+            syncPlayManager.leaveGroup()
+            _syncPlayGroupName = null
+            _syncPlayParticipantCount = 0
+            _isSyncPlaySynced = false
+        }
+    }
+
     val isCastAvailable: Boolean
         get() = castManager.isCastAvailable
 
     val isCastConnected: Boolean
         get() = castManager.isConnected
+
+    val isInSyncPlaySession: Boolean
+        get() = syncPlayManager.isInSyncPlaySession
 
     fun castToDevice() {
         val player = _exoPlayer ?: return
@@ -543,7 +708,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    /** Updates track lists using data from a non-ExoPlayer engine. */
     private fun updateTracksFromEngine(engine: PlayerEngine) {
         val audioOptions = engine.audioTracks.map { t ->
             TrackOption(t.index, t.label, t.language, t.isSelected)
@@ -679,7 +843,11 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer?.release()
         _exoPlayer = null
         _trackSelector = null
+        _introTimestamps = null
+        _remoteSubtitles = emptyList()
         dialogueBoost.detach()
+        nightMode.detach()
+        syncPlayManager.reset()
     }
 
     fun release() {

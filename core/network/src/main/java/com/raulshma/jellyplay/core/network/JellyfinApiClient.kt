@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -14,6 +15,7 @@ import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -217,4 +219,10 @@ interface JellyfinApiClient {
     suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
 
     suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo>
+
+    suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
+
+    suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
+
+    suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
 }

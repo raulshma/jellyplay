@@ -59,6 +59,7 @@ fun SubtitleStyleSheet(
     var edgeType by remember { mutableStateOf(currentStyle.edgeType) }
     var edgeColor by remember { mutableStateOf(currentStyle.edgeColor) }
     var offsetMs by remember { mutableLongStateOf(currentStyle.offsetMs) }
+    var verticalPosition by remember { mutableFloatStateOf(currentStyle.verticalPosition) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -214,6 +215,22 @@ fun SubtitleStyleSheet(
                 },
                 valueRange = -10000f..10000f,
                 steps = 199,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Text("Vertical Position: ${(verticalPosition * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = verticalPosition,
+                onValueChange = { verticalPosition = it },
+                onValueChangeFinished = {
+                    onStyleChange(currentStyle.copy(verticalPosition = verticalPosition))
+                },
+                valueRange = 0f..0.4f,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,

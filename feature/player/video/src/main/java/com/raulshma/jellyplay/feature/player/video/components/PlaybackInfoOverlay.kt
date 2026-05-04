@@ -27,6 +27,7 @@ fun PlaybackInfoOverlay(
     mediaSource: MediaSource?,
     mediaStreams: List<MediaStream>,
     playMethod: String,
+    hdrType: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -65,6 +66,12 @@ fun PlaybackInfoOverlay(
                         } else "Unknown"
                     )
                     InfoRow("Bitrate", videoStream.bitRate?.let { "${it / 1000} kbps" } ?: "Unknown")
+                    if (hdrType != null) {
+                        InfoRow("HDR", hdrType)
+                    }
+                    videoStream.realFrameRate?.let { fps ->
+                        InfoRow("Frame Rate", "${"%.2f".format(fps)} fps")
+                    }
                 }
             }
 

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -44,6 +45,11 @@ class UserPreferencesStore @Inject constructor(
         val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
         val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
         val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
+        val AUDIO_DELAY_MS = stringPreferencesKey("audio_delay_ms")
+        val DECODER_MODE = stringPreferencesKey("decoder_mode")
+        val AUDIO_PASSTHROUGH = stringPreferencesKey("audio_passthrough")
+        val FRAME_RATE_MATCHING = stringPreferencesKey("frame_rate_matching")
+        val NIGHT_MODE_ENABLED = stringPreferencesKey("night_mode_enabled")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -79,6 +85,13 @@ class UserPreferencesStore @Inject constructor(
             dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
             equalizerEnabled = prefs[Keys.EQUALIZER_ENABLED]?.toBoolean() ?: false,
             equalizerSettings = equalizerSettings ?: EqualizerSettings(),
+            audioDelayMs = prefs[Keys.AUDIO_DELAY_MS]?.toLongOrNull() ?: 0L,
+            decoderMode = try {
+                DecoderMode.valueOf(prefs[Keys.DECODER_MODE] ?: DecoderMode.HW_PREFERRED.name)
+            } catch (_: Exception) { DecoderMode.HW_PREFERRED },
+            audioPassthrough = prefs[Keys.AUDIO_PASSTHROUGH]?.toBoolean() ?: false,
+            frameRateMatching = prefs[Keys.FRAME_RATE_MATCHING]?.toBoolean() ?: false,
+            nightModeEnabled = prefs[Keys.NIGHT_MODE_ENABLED]?.toBoolean() ?: false,
         )
     }
 
@@ -179,6 +192,26 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) {
         context.dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = json.encodeToString(settings) }
+    }
+
+    suspend fun setAudioDelay(ms: Long) {
+        context.dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms.toString() }
+    }
+
+    suspend fun setDecoderMode(mode: DecoderMode) {
+        context.dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
+    }
+
+    suspend fun setAudioPassthrough(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled.toString() }
+    }
+
+    suspend fun setFrameRateMatching(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled.toString() }
+    }
+
+    suspend fun setNightModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

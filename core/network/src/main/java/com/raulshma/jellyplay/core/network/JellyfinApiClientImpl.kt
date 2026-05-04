@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -15,6 +16,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -860,6 +862,67 @@ class JellyfinApiClientImpl @Inject constructor(
             },
             isPlaying = groupInfo.state == org.jellyfin.sdk.model.api.GroupStateType.PLAYING,
         )
+    }
+
+    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = java.net.URL("${server.address}/Items/$itemId/IntroSkipTimestamps")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("X-Emby-Token", user.accessToken)
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        try {
+            if (conn.responseCode !in 200..299) {
+                IntroTimestamps(itemId)
+            } else {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                json.decodeFromString<IntroTimestamps>(body)
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("X-Emby-Token", user.accessToken)
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        try {
+            if (conn.responseCode !in 200..299) return@apiResult emptyList<RemoteSubtitleInfo>()
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            json.decodeFromString<List<RemoteSubtitleInfo>>(body)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("X-Emby-Token", user.accessToken)
+        conn.doOutput = true
+        conn.outputStream.use { it.write(byteArrayOf()) }
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        try {
+            if (conn.responseCode !in 200..299) {
+                throw Exception("Failed to download subtitle: ${conn.responseCode}")
+            }
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun org.jellyfin.sdk.model.api.TimerInfoDto.toDvrTimer() = DvrTimer(

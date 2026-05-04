@@ -67,6 +67,13 @@ data class MediaStream(
     val sampleRate: Int? = null,
     val channels: Int? = null,
     val deliveryUrl: String? = null,
+    val videoRange: String? = null,
+    val videoRangeType: String? = null,
+    val realFrameRate: Float? = null,
+    val videoDoViTitle: String? = null,
+    val audioBitRate: Long? = null,
+    val audioSampleRate: Int? = null,
+    val keyFrames: List<Long>? = null,
 )
 
 @Serializable

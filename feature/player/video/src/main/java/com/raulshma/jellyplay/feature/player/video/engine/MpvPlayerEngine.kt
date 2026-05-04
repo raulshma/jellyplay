@@ -8,13 +8,8 @@ import android.view.View
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
+import com.raulshma.jellyplay.core.model.DecoderMode
 
-/**
- * [PlayerEngine] backed by libmpv via [io.github.abdallahmehiz:mpv-android-lib].
- *
- * Uses the instance-based [MPV] class and the ready-made [BaseMPVView]
- * which handles surface lifecycle (create/change/destroy) automatically.
- */
 class MpvPlayerEngine(
     private val context: Context,
 ) : PlayerEngine {
@@ -28,11 +23,13 @@ class MpvPlayerEngine(
     private var onTracksChanged: (() -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
+    @Volatile private var _audioDelayMs = 0L
     private var pendingUrl: String? = null
+    private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
+    private var _passthroughEnabled = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    /** Concrete [BaseMPVView] that configures mpv options and observes properties. */
     private inner class PlayerMPVView(
         ctx: Context,
     ) : BaseMPVView(ctx, null) {
@@ -59,22 +56,22 @@ class MpvPlayerEngine(
         }
 
         override fun initOptions() {
-            mpv.setOptionString("hwdec", "auto")
+            mpv.setOptionString("hwdec", when (currentDecoderMode) {
+                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.SW_ONLY -> "no"
+            })
             mpv.setOptionString("ao", "audiotrack,opensles")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
         }
 
         override fun postInitOptions() {
-            // Called after init(), add observer and observe properties
             mpv.addObserver(observer)
             mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
         }
 
-        override fun observeProperties() {
-            // Already handled in postInitOptions
-        }
+        override fun observeProperties() {}
 
         fun removeObserver() {
             try { mpv.removeObserver(observer) } catch (_: Exception) {}
@@ -82,10 +79,8 @@ class MpvPlayerEngine(
     }
 
     override fun initialize(url: String, title: String, startPositionMs: Long) {
-        // Store the URL to play once the view is created and surface is ready
         pendingUrl = url
 
-        // If a view already exists and is initialized, play immediately
         mpvView?.let { view ->
             try {
                 if (startPositionMs > 0) {
@@ -133,6 +128,32 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (_: Exception) {}
     }
 
+    override fun setAudioDelay(ms: Long) {
+        _audioDelayMs = ms
+        try { mpvView?.mpv?.setPropertyDouble("audio-delay", ms / 1000.0) } catch (_: Exception) {}
+    }
+
+    override fun setDecoderMode(mode: DecoderMode) {
+        currentDecoderMode = mode
+        try {
+            mpvView?.mpv?.setPropertyString("hwdec", when (mode) {
+                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.SW_ONLY -> "no"
+            })
+        } catch (_: Exception) {}
+    }
+
+    override fun setAudioPassthrough(enabled: Boolean) {
+        _passthroughEnabled = enabled
+        try {
+            if (enabled) {
+                mpvView?.mpv?.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
+            } else {
+                mpvView?.mpv?.setOptionString("audio-spdif", "")
+            }
+        } catch (_: Exception) {}
+    }
+
     override val isPlaying: Boolean get() = _isPlaying
 
     override val currentPositionMs: Long
@@ -174,15 +195,12 @@ class MpvPlayerEngine(
             PlayerMPVView(context)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create PlayerMPVView", e)
-            // Return a plain black view as fallback
             return View(context).apply {
                 setBackgroundColor(android.graphics.Color.BLACK)
             }
         }
         mpvView = view
 
-        // BaseMPVView.initialize(vo, gpuContext) sets up the mpv instance,
-        // calling initOptions() before init() and postInitOptions() after.
         try {
             view.initialize("gpu", "android")
         } catch (e: Exception) {
@@ -190,7 +208,6 @@ class MpvPlayerEngine(
             return view
         }
 
-        // If we have a pending URL from initialize(), play it now
         pendingUrl?.let { url ->
             pendingUrl = null
             try {
@@ -210,8 +227,6 @@ class MpvPlayerEngine(
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
     }
-
-    // ── Private helpers ────────────────────────────────────
 
     private fun getTracksOfType(type: String, trackType: PlayerEngine.TrackType): List<PlayerEngine.TrackInfo> {
         val m = mpvView?.mpv ?: return emptyList()

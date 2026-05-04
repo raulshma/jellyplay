@@ -6,20 +6,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import com.raulshma.jellyplay.core.model.DecoderMode
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 
-/**
- * [PlayerEngine] backed by LibVLC — the VLC media engine with maximum format compatibility.
- *
- * Key lifecycle constraints:
- *  - [LibVLC] must be created with the Application context
- *  - [MediaPlayer.attachViews] must be called AFTER the [VLCVideoLayout] is in the view hierarchy
- *  - [MediaPlayer.play] is deferred until views are attached
- *  - All event callbacks are posted to the main thread for Compose safety
- */
 class LibVlcPlayerEngine(
     private val context: Context,
 ) : PlayerEngine {
@@ -35,13 +27,13 @@ class LibVlcPlayerEngine(
     private var onTracksChanged: (() -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
-
-    /** Play is deferred until VLCVideoLayout is attached to the window. */
     @Volatile private var pendingPlay = false
+    @Volatile private var _audioDelayMs = 0L
+    private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
+    private var _passthroughEnabled = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // VLC events fire on VLC's native thread — post to main for Compose safety.
     private val eventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
@@ -72,6 +64,15 @@ class LibVlcPlayerEngine(
             "--network-caching=1500",
         )
 
+        if (_audioDelayMs != 0L) {
+            options.add("--audio-desync=${_audioDelayMs.toInt()}")
+        }
+
+        if (_passthroughEnabled) {
+            options.add("--aout=android_audiotrack")
+            options.add("--codec=ac3,eac3,dts,dtshd,truehd")
+        }
+
         val vlc = try {
             LibVLC(context.applicationContext, options)
         } catch (e: Exception) {
@@ -85,16 +86,16 @@ class LibVlcPlayerEngine(
         mediaPlayer = mp
 
         val media = Media(vlc, Uri.parse(url))
-        media.setHWDecoderEnabled(true, false)
+        val hwDecoding = currentDecoderMode != DecoderMode.SW_ONLY
+        media.setHWDecoderEnabled(hwDecoding, false)
 
         if (startPositionMs > 0) {
             media.addOption(":start-time=${startPositionMs / 1000.0}")
         }
 
         mp.media = media
-        media.release() // MediaPlayer retains its own reference
+        media.release()
 
-        // Don't play yet — wait until VLCVideoLayout is attached to the window hierarchy
         pendingPlay = true
     }
 
@@ -140,6 +141,22 @@ class LibVlcPlayerEngine(
     override fun setPlaybackSpeed(speed: Float) {
         _speed = speed
         try { mediaPlayer?.rate = speed } catch (_: Exception) {}
+    }
+
+    override fun setAudioDelay(ms: Long) {
+        _audioDelayMs = ms
+        try {
+            val mp = mediaPlayer ?: return
+            mp.media?.addOption(":audio-desync=${ms.toInt()}")
+        } catch (_: Exception) {}
+    }
+
+    override fun setDecoderMode(mode: DecoderMode) {
+        currentDecoderMode = mode
+    }
+
+    override fun setAudioPassthrough(enabled: Boolean) {
+        _passthroughEnabled = enabled
     }
 
     override val isPlaying: Boolean
@@ -210,8 +227,6 @@ class LibVlcPlayerEngine(
         val layout = VLCVideoLayout(context)
         videoLayout = layout
 
-        // Defer attachViews + play until the layout is actually in the window hierarchy.
-        // Calling attachViews before that crashes because VLC needs a valid surface.
         layout.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 val mp = mediaPlayer ?: return
