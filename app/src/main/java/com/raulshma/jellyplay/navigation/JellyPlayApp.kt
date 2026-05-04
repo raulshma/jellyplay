@@ -21,6 +21,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,10 +73,14 @@ fun JellyPlayApp(
             }
         }
         isAuthenticated -> {
-            MainContent(
-                onLogout = { viewModel.logout() },
-                viewModel = viewModel,
-            )
+            CompositionLocalProvider(
+                com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
+            ) {
+                MainContent(
+                    onLogout = { viewModel.logout() },
+                    viewModel = viewModel,
+                )
+            }
         }
         else -> {
             AuthContent(

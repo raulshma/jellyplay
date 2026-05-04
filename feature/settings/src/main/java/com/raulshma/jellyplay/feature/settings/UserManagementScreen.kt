@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.UserInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,11 +52,26 @@ fun UserManagementScreen(
     val currentUser = viewModel.currentUser
     val serverUsers = viewModel.currentServerUsers
     val isLoading = viewModel.isLoadingUsers
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = false,
+        networkStatus = networkStatus,
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Switch User") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Switch User")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -70,20 +86,7 @@ fun UserManagementScreen(
         },
     ) { padding ->
         when {
-            isLoading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Loading users...")
-                }
-            }
-            serverUsers.isEmpty() -> {
+            serverUsers.isEmpty() && !isLoading -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()

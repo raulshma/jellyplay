@@ -6,9 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -59,11 +63,26 @@ fun LibraryScreen(
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = error != null,
+        networkStatus = networkStatus,
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Library") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Library")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = onSmartPlaylistsClick) {
                         Icon(
@@ -93,16 +112,7 @@ fun LibraryScreen(
             )
         },
     ) { padding ->
-        if (isLoading && pagedItems.itemCount == 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (error != null && pagedItems.itemCount == 0) {
+        if (error != null && pagedItems.itemCount == 0) {
             ErrorScreen(
                 message = error!!,
                 onRetry = { viewModel.refresh() },

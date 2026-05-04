@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
@@ -52,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,11 +66,25 @@ fun SyncPlayScreen(
     val error = viewModel.error
     val isInGroup = viewModel.isInGroup
     val showCreateDialog = viewModel.showCreateDialog
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = error != null,
+        networkStatus = networkStatus,
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SyncPlay") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("SyncPlay")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -101,12 +115,6 @@ fun SyncPlayScreen(
                 .padding(innerPadding),
         ) {
             when {
-                isLoading && groups.isEmpty() -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                }
-
                 error != null && groups.isEmpty() -> {
                     Column(
                         modifier = Modifier.align(Alignment.Center),

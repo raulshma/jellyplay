@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
@@ -62,6 +66,13 @@ fun SearchScreen(
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = isSearching,
+        hasError = false,
+        networkStatus = networkStatus,
+    )
 
     BackHandler(enabled = query.isNotBlank() || filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()) {
         viewModel.search("")
@@ -83,7 +94,15 @@ fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Search") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Search")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.toggleShowFilters() }) {
                         Icon(
@@ -171,11 +190,6 @@ fun SearchScreen(
 
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                    isSearching && pagedResults.itemCount == 0 -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                    }
                     pagedResults.itemCount == 0 && query.isNotBlank() && !isSearching -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),

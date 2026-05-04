@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,8 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -59,11 +57,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
+import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
@@ -86,6 +88,13 @@ fun MusicHomeScreen(
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
     val error = viewModel.error
+    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+
+    val headerStatus = resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = error != null,
+        networkStatus = networkStatus,
+    )
 
     val listState = rememberLazyListState()
     val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
@@ -102,11 +111,6 @@ fun MusicHomeScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when {
-            isLoading && sections.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
             error != null && sections.isEmpty() -> {
                 ErrorScreen(message = error, onRetry = { viewModel.loadSections() })
             }
@@ -174,11 +178,19 @@ fun MusicHomeScreen(
                     )
                 },
                 navigationIcon = {
-                    ModeSwitch(
-                        currentMode = homeMode,
-                        onModeChange = onModeChange,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(start = 12.dp),
-                    )
+                    ) {
+                        ModeSwitch(
+                            currentMode = homeMode,
+                            onModeChange = onModeChange,
+                        )
+                        HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
                 },
                 actions = {
                     IconButton(onClick = { /* surprise me */ }) {

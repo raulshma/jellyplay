@@ -2,6 +2,7 @@ package com.raulshma.jellyplay
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.UserPreferences
@@ -17,6 +18,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
+    val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)

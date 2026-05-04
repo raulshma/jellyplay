@@ -29,11 +29,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.CriterionOperator
 import com.raulshma.jellyplay.core.model.CriterionType
 import com.raulshma.jellyplay.core.model.PlaylistCriterion
@@ -48,11 +50,26 @@ fun SmartPlaylistsScreen(
     viewModel: SmartPlaylistsViewModel = hiltViewModel(),
 ) {
     val playlists = viewModel.playlists
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = viewModel.isLoading,
+        hasError = false,
+        networkStatus = networkStatus,
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Smart Playlists") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Smart Playlists")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

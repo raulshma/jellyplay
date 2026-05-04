@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
 
@@ -45,10 +47,26 @@ fun MoodPlaylistsScreen(
     onBack: () -> Unit,
     viewModel: MoodPlaylistsViewModel = hiltViewModel(),
 ) {
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = viewModel.isLoading,
+        hasError = false,
+        networkStatus = networkStatus,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mood Playlists") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Mood Playlists")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

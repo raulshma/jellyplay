@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,11 +26,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
@@ -43,10 +44,26 @@ fun DvrScreen(
     onBack: () -> Unit,
     viewModel: DvrViewModel = hiltViewModel(),
 ) {
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = viewModel.isLoading,
+        hasError = false,
+        networkStatus = networkStatus,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recordings") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Recordings")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -56,16 +73,6 @@ fun DvrScreen(
         },
     ) { padding ->
         when {
-            viewModel.isLoading && viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
             viewModel.error != null && viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty() -> {
                 ErrorScreen(
                     message = viewModel.error!!,

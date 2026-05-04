@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
@@ -63,6 +64,13 @@ fun KidsHomeScreen(
 ) {
     var selectedGenre by remember { mutableStateOf<String?>(null) }
     var showSurprise by remember { mutableStateOf(false) }
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = error != null,
+        networkStatus = networkStatus,
+    )
 
     val allItems = remember(sections) { sections.flatMap { it.items } }
     val genres = remember(allItems) {
@@ -91,6 +99,10 @@ fun KidsHomeScreen(
                             modifier = Modifier.padding(end = 8.dp),
                         )
                         Text("Kids Corner")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
                     }
                 },
                 actions = {
@@ -109,16 +121,6 @@ fun KidsHomeScreen(
         },
     ) { padding ->
         when {
-            isLoading && sections.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
             error != null && sections.isEmpty() -> {
                 ErrorScreen(
                     message = error,

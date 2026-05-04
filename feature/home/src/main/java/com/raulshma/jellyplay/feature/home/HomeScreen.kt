@@ -31,14 +31,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.MediaRow
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
+import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -60,6 +64,13 @@ fun HomeScreen(
     val isLoading = viewModel.isLoading
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
+    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+
+    val headerStatus = resolveHeaderStatus(
+        isLoading = isLoading,
+        hasError = error != null,
+        networkStatus = networkStatus,
+    )
 
     var showSurprise by remember { mutableStateOf(false) }
     val allItems = remember(sections) { sections.flatMap { it.items } }
@@ -110,11 +121,6 @@ fun HomeScreen(
     } else {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             when {
-                isLoading && sections.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
                 error != null && sections.isEmpty() -> {
                     ErrorScreen(
                         message = error!!,
@@ -125,7 +131,7 @@ fun HomeScreen(
                     if (sections.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
-                                "No content available. Check your Jellyfin libraries.",
+                                if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -185,11 +191,19 @@ fun HomeScreen(
                         )
                     },
                     navigationIcon = {
-                        ModeSwitch(
-                            currentMode = homeMode,
-                            onModeChange = onModeChange,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(start = 12.dp),
-                        )
+                        ) {
+                            ModeSwitch(
+                                currentMode = homeMode,
+                                onModeChange = onModeChange,
+                            )
+                            HeaderStatusIndicator(
+                                status = headerStatus,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
                     },
                     actions = {
                         IconButton(onClick = { showSurprise = !showSurprise }) {

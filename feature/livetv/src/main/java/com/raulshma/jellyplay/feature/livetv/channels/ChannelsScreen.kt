@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.CalendarViewWeek
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,11 +28,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -46,10 +47,26 @@ fun ChannelsScreen(
     onDvrClick: () -> Unit = {},
     viewModel: ChannelsViewModel = hiltViewModel(),
 ) {
+    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+        .collectAsStateWithLifecycle()
+    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+        isLoading = viewModel.isLoading,
+        hasError = viewModel.error != null,
+        networkStatus = networkStatus,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Live TV") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Live TV")
+                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = onDvrClick) {
                         Icon(Icons.Default.FiberManualRecord, contentDescription = "Recordings")
@@ -62,16 +79,6 @@ fun ChannelsScreen(
         },
     ) { padding ->
         when {
-            viewModel.isLoading && viewModel.channels.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
             viewModel.error != null && viewModel.channels.isEmpty() -> {
                 ErrorScreen(
                     message = viewModel.error!!,
