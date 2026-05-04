@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -50,6 +51,7 @@ fun HomeScreen(
     onItemClick: (String) -> Unit,
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
+    onDownloadsClick: () -> Unit = {},
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit = {},
     musicContent: @Composable () -> Unit = {},
@@ -65,6 +67,7 @@ fun HomeScreen(
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
 
     val headerStatus = resolveHeaderStatus(
         isLoading = isLoading,
@@ -215,6 +218,19 @@ fun HomeScreen(
                         }
                         IconButton(onClick = onSyncPlayClick) {
                             Icon(Icons.Default.Group, contentDescription = "SyncPlay", tint = MaterialTheme.colorScheme.onBackground)
+                        }
+                        BadgedBox(
+                            badge = {
+                                if (activeDownloadCount > 0) {
+                                    Badge {
+                                        Text(activeDownloadCount.toString())
+                                    }
+                                }
+                            }
+                        ) {
+                            IconButton(onClick = onDownloadsClick) {
+                                Icon(Icons.Default.Download, contentDescription = "Downloads", tint = MaterialTheme.colorScheme.onBackground)
+                            }
                         }
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onBackground)

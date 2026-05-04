@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,33 +27,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.palette.graphics.Palette
-import coil3.ImageLoader
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.size.Size
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -73,23 +58,13 @@ fun PosterCard(
     blurHash: String? = null,
 ) {
     val isTv = isTvDevice()
-    val borderColor = rememberPortraitBorderColor(imageUrl)
 
     Card(
         modifier = modifier
             .width(160.dp)
             .clickable(onClick = onClick)
             .then(if (isTv) Modifier.tvFocusable() else Modifier)
-            .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier)
-            .then(
-                if (borderColor != null) {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = borderColor.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                } else Modifier
-            ),
+            .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
     ) {
@@ -166,43 +141,6 @@ fun PosterCard(
             }
         }
     }
-}
-
-@Composable
-private fun rememberPortraitBorderColor(imageUrl: String): Color? {
-    val context = LocalContext.current
-    var borderColor by remember { mutableStateOf<Color?>(null) }
-
-    LaunchedEffect(imageUrl) {
-        if (imageUrl.isBlank()) return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            try {
-                val loader = ImageLoader(context)
-                val request = ImageRequest.Builder(context)
-                    .data(imageUrl)
-                    .size(Size(64, 96))
-                    .allowHardware(false)
-                    .build()
-                val result = loader.execute(request)
-                if (result is SuccessResult) {
-                    val bitmap = (result.image as? coil3.BitmapImage)?.bitmap
-                        ?: return@withContext
-                    val palette = Palette.from(bitmap)
-                        .maximumColorCount(8)
-                        .generate()
-                    borderColor = (
-                        palette.dominantSwatch
-                            ?: palette.vibrantSwatch
-                            ?: palette.mutedSwatch
-                    )?.let { Color(it.rgb) }
-                }
-            } catch (_: Exception) {
-                borderColor = null
-            }
-        }
-    }
-
-    return borderColor
 }
 
 @Composable

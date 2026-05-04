@@ -21,6 +21,12 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId")
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
+    @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId LIMIT 1")
+    fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadEntity?>
+
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'DOWNLOADING', 'PAUSED')")
+    fun getActiveDownloadCount(): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownload(download: DownloadEntity)
 

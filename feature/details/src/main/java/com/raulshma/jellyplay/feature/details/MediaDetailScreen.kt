@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,6 +81,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -119,6 +121,8 @@ fun MediaDetailScreen(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
     ) {
+        val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
+
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -128,7 +132,7 @@ fun MediaDetailScreen(
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
-            downloadStarted = viewModel.downloadStarted,
+            activeDownload = activeDownload,
             isLoading = isLoading,
             error = error,
             onRetry = { viewModel.loadItem(itemId) },
@@ -156,7 +160,7 @@ private fun DetailContent(
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
-    downloadStarted: Boolean,
+    activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     isLoading: Boolean,
     error: String?,
     onRetry: () -> Unit,
@@ -359,7 +363,7 @@ private fun DetailContent(
                                 getImageUrl = getImageUrl,
                                 isAudio = isAudio,
                                 isDownloading = isDownloading,
-                                downloadStarted = downloadStarted,
+                                activeDownload = activeDownload,
                                 onPlayClick = onPlayClick,
                                 onAudioClick = onAudioClick,
                                 onDownloadClick = { showDownloadDialog = true },
@@ -492,7 +496,7 @@ private fun DetailContentBody(
     getImageUrl: (String) -> String,
     isAudio: Boolean,
     isDownloading: Boolean,
-    downloadStarted: Boolean,
+    activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onDownloadClick: () -> Unit,
@@ -595,26 +599,46 @@ private fun DetailContentBody(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Button(
-                    onClick = {
-                        if (isAudio) {
-                            onAudioClick()
-                        } else {
-                            val sourceId = detail.mediaSources.firstOrNull()?.id
-                            val startPos = item.playbackPositionTicks ?: 0L
-                            onPlayClick(item.id, sourceId, startPos)
-                        }
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
+                val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+                val progress = if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                    (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+                } else 0f
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            if (isAudio) {
+                                onAudioClick()
+                            } else {
+                                val sourceId = detail.mediaSources.firstOrNull()?.id
+                                val startPos = item.playbackPositionTicks ?: 0L
+                                onPlayClick(item.id, sourceId, startPos)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        if (item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0)
-                            "Resume" else "Play",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    if (hasProgress) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress)
+                                .align(Alignment.CenterStart)
+                                .background(Color.White.copy(alpha = 0.15f))
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            if (hasProgress) "Resume" else "Play",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                        )
+                    }
                 }
                 
                 IconButton(
@@ -639,27 +663,44 @@ private fun DetailContentBody(
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
                     Icon(
-                        if (item.isPlayed) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
                     )
                 }
 
                 if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                    val downloadStatus = activeDownload?.status
+                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
+                            downloadStatus == DownloadStatus.DOWNLOADING ||
+                            downloadStatus == DownloadStatus.PAUSED
+                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
+                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+                    } else 0f
+
                     IconButton(
                         onClick = onDownloadClick,
-                        enabled = !isDownloading && !downloadStarted,
+                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
                         modifier = Modifier
                             .size(56.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color.White.copy(alpha = 0.15f))
                     ) {
-                        if (isDownloading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else if (downloadStarted) {
+                        if (isDownloading || isDownloadActive) {
+                            if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                CircularProgressIndicator(
+                                    progress = { downloadProgress },
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
+                        } else if (isDownloadCompleted) {
                             Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         } else {
                             Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)

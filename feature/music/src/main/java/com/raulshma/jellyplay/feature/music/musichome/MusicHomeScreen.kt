@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MusicNote
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,6 +80,7 @@ fun MusicHomeScreen(
     onItemClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
+    onDownloadsClick: () -> Unit = {},
     onArtistsClick: () -> Unit,
     onAlbumsClick: () -> Unit,
     onTracksClick: () -> Unit,
@@ -88,6 +92,7 @@ fun MusicHomeScreen(
     val isLoading = viewModel.isLoading
     val error = viewModel.error
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
 
     val headerStatus = resolveHeaderStatus(
         isLoading = isLoading,
@@ -205,6 +210,23 @@ fun MusicHomeScreen(
                             contentDescription = "SyncPlay",
                             tint = MaterialTheme.colorScheme.onBackground,
                         )
+                    }
+                    BadgedBox(
+                        badge = {
+                            if (activeDownloadCount > 0) {
+                                Badge {
+                                    Text(activeDownloadCount.toString())
+                                }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onDownloadsClick) {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = "Downloads",
+                                tint = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
                     }
                     IconButton(onClick = onSettingsClick) {
                         Icon(

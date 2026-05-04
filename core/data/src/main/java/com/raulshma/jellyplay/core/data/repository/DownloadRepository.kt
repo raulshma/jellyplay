@@ -7,6 +7,10 @@ interface DownloadRepository {
 
     fun getAllDownloads(): Flow<List<DownloadItem>>
 
+    fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?>
+
+    fun getActiveDownloadCount(): Flow<Int>
+
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem?
 
     suspend fun startDownload(

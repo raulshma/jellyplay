@@ -42,8 +42,8 @@ class DownloadWorker(
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
 
         return try {
-            val url = URL(entity.downloadUrl)
-            val connection = url.openConnection() as HttpURLConnection
+            val url = java.net.URL(entity.downloadUrl)
+            val connection = url.openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
             connection.setRequestProperty("User-Agent", "JellyPlay/1.0.0")
@@ -53,8 +53,8 @@ class DownloadWorker(
             }
 
             val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK &&
-                responseCode != HttpURLConnection.HTTP_PARTIAL &&
+            if (responseCode != java.net.HttpURLConnection.HTTP_OK &&
+                responseCode != java.net.HttpURLConnection.HTTP_PARTIAL &&
                 responseCode != 206
             ) {
                 if (entity.status != DownloadStatus.PAUSED.name) {
@@ -80,13 +80,15 @@ class DownloadWorker(
                 dao.updateTotalSize(downloadId, totalSize)
             }
 
-            val file = File(entity.downloadPath)
+            val file = java.io.File(entity.downloadPath)
             file.parentFile?.mkdirs()
 
             val buffer = ByteArray(8192)
             var downloadedBytes = existingBytes
+            var lastProgressUpdate = System.currentTimeMillis()
+            val progressUpdateIntervalMs = 500L // Update progress every 500ms
 
-            val inputStream = if (responseCode == HttpURLConnection.HTTP_PARTIAL || responseCode == 206) {
+            val inputStream = if (responseCode == java.net.HttpURLConnection.HTTP_PARTIAL || responseCode == 206) {
                 connection.inputStream
             } else {
                 downloadedBytes = 0
@@ -95,8 +97,8 @@ class DownloadWorker(
             }
 
             inputStream.buffered().use { input ->
-                val outputStream = if (responseCode == HttpURLConnection.HTTP_PARTIAL || responseCode == 206) {
-                    file.appendOutputStream()
+                val outputStream = if (responseCode == java.net.HttpURLConnection.HTTP_PARTIAL || responseCode == 206) {
+                    java.io.FileOutputStream(file, true)
                 } else {
                     file.outputStream()
                 }
@@ -117,12 +119,21 @@ class DownloadWorker(
 
                         output.write(buffer, 0, bytesRead)
                         downloadedBytes += bytesRead
-                        dao.updateProgress(downloadId, downloadedBytes, DownloadStatus.DOWNLOADING.name)
+
+                        // Throttle progress updates to avoid excessive DB writes
+                        val now = System.currentTimeMillis()
+                        if (now - lastProgressUpdate >= progressUpdateIntervalMs) {
+                            dao.updateProgress(downloadId, downloadedBytes, DownloadStatus.DOWNLOADING.name)
+                            lastProgressUpdate = now
+                        }
                     }
                 }
             }
 
             connection.disconnect()
+
+            // Final progress update
+            dao.updateProgress(downloadId, downloadedBytes, DownloadStatus.DOWNLOADING.name)
 
             if (totalSize > 0L && downloadedBytes < totalSize) {
                 dao.updateProgress(downloadId, downloadedBytes, DownloadStatus.FAILED.name)
@@ -139,8 +150,6 @@ class DownloadWorker(
             Result.failure()
         }
     }
-
-    private fun File.appendOutputStream() = java.io.FileOutputStream(this, true)
 
     companion object {
         const val KEY_DOWNLOAD_ID = "download_id"

@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,6 +25,7 @@ data class MusicHomeSection(
 class MusicHomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : ViewModel() {
 
@@ -34,6 +37,9 @@ class MusicHomeViewModel @Inject constructor(
         private set
     var homeMode by mutableStateOf(HomeMode.VIDEO)
         private set
+
+    val activeDownloadCount = downloadRepository.getActiveDownloadCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
         viewModelScope.launch {

@@ -235,6 +235,7 @@ private fun MainNavDisplay(
                                 onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
                                 onSettingsClick = { navigator.navigate(Route.Settings) },
                                 onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
+                                onDownloadsClick = { navigator.navigate(Route.Downloads) },
                                 onArtistsClick = { navigator.navigate(Route.Artists) },
                                 onAlbumsClick = { navigator.navigate(Route.Albums) },
                                 onTracksClick = { navigator.navigate(Route.Tracks) },

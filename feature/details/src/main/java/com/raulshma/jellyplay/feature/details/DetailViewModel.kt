@@ -23,7 +23,12 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -57,8 +62,19 @@ class DetailViewModel @Inject constructor(
         private set
     var isDownloading by mutableStateOf(false)
         private set
-    var downloadStarted by mutableStateOf(false)
-        private set
+
+    private var currentMediaItemId: String? = null
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeDownload: Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
+        _detail.let { detailState ->
+            detailState.value?.item?.id?.let { itemId ->
+                downloadRepository.getDownloadByMediaItemIdFlow(itemId)
+            } ?: flowOf(null)
+        }
+
+    fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
+        downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
         viewModelScope.launch {
@@ -160,7 +176,6 @@ class DetailViewModel @Inject constructor(
                 imageUrl = imageUrl,
                 imageBlurHash = item.blurHashes.primary,
             ).onSuccess { downloadItem ->
-                downloadStarted = true
                 enqueueDownloadWorker(downloadItem.id)
             }
             isDownloading = false

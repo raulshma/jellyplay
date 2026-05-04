@@ -26,6 +26,12 @@ class DownloadRepositoryImpl @Inject constructor(
             entities.map { it.toDownloadItem() }
         }
 
+    override fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?> =
+        downloadDao.getDownloadByMediaItemIdFlow(mediaItemId).map { it?.toDownloadItem() }
+
+    override fun getActiveDownloadCount(): Flow<Int> =
+        downloadDao.getActiveDownloadCount()
+
     override suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem? =
         downloadDao.getDownloadByMediaItemId(mediaItemId)?.toDownloadItem()
 
