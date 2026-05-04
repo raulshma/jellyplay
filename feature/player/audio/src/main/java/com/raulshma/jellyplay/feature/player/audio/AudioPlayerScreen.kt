@@ -1,7 +1,16 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -22,14 +32,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Repeat
@@ -39,17 +52,18 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -60,8 +74,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -87,9 +108,19 @@ fun AudioPlayerScreen(
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+
+    // Entrance animations
+    val artworkScale = remember { Animatable(0.8f) }
+    val contentAlpha = remember { Animatable(0f) }
 
     LaunchedEffect(itemId) {
         viewModel.play(itemId)
+        artworkScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
+    }
+
+    LaunchedEffect(Unit) {
+        contentAlpha.animateTo(1f, tween(600, delayMillis = 200))
     }
 
     DisposableEffect(Unit) {
@@ -113,222 +144,322 @@ fun AudioPlayerScreen(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
     ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp)
-                .padding(WindowInsets.navigationBars.asPaddingValues()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            TopAppBar(
-                title = { Text("Now Playing") },
-                navigationIcon = {
+        val surfaceColor = MaterialTheme.colorScheme.surface
+        val scrimColor = MaterialTheme.colorScheme.scrim
+
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // ── Blurred background artwork ──
+            if (viewModel.albumArtUrl.isNotBlank()) {
+                MediaImage(
+                    url = viewModel.albumArtUrl,
+                    contentDescription = null,
+                    blurHash = viewModel.albumArtBlurHash,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(60.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        .scale(1.3f)
+                        .graphicsLayer { alpha = 0.55f },
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            // ── Gradient overlays ──
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.4f),
+                                Color.Black.copy(alpha = 0.15f),
+                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.85f),
+                            ),
+                            startY = 0f,
+                            endY = Float.POSITIVE_INFINITY,
+                        )
+                    ),
+            )
+
+            // ── Main content ──
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(WindowInsets.navigationBars.asPaddingValues()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // ── Top bar ──
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showSpeedPicker = true }) {
-                        val speedText = if (viewModel.speed == 1.0f) "1x"
-                        else "${viewModel.speed}x"
-                        Text(speedText, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                    IconButton(onClick = { showQueue = true }) {
-                        Icon(Icons.Default.QueueMusic, "Queue")
-                    }
-                    IconButton(onClick = { viewModel.toggleDialogueBoost() }) {
                         Icon(
-                            Icons.Default.RecordVoiceOver,
-                            "Dialogue Boost",
-                            tint = if (viewModel.dialogueBoostEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                            tint = Color.White,
                         )
                     }
-                    IconButton(onClick = { viewModel.toggleNightMode() }) {
-                        Icon(
-                            Icons.Default.Nightlight,
-                            "Night Mode",
-                            tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "NOW PLAYING",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.7f),
+                            letterSpacing = 2.sp,
                         )
                     }
-                    IconButton(onClick = { showEqualizer = true }) {
-                        Icon(
-                            Icons.Default.Tune,
-                            "Equalizer",
-                            tint = if (viewModel.equalizerEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (viewModel.lyrics.isNotEmpty()) {
-                        IconButton(onClick = { showLyrics = true }) {
-                            Icon(
-                                Icons.Default.Mic,
-                                "Lyrics",
-                                tint = if (showLyrics) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "More", tint = Color.White)
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Queue") },
+                                onClick = { showMenu = false; showQueue = true },
+                                leadingIcon = { Icon(Icons.Default.QueueMusic, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Speed (${if (viewModel.speed == 1.0f) "1x" else "${viewModel.speed}x"})") },
+                                onClick = { showMenu = false; showSpeedPicker = true },
+                                leadingIcon = { Icon(Icons.Default.Speed, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Equalizer") },
+                                onClick = { showMenu = false; showEqualizer = true },
+                                leadingIcon = { Icon(Icons.Default.Tune, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (viewModel.dialogueBoostEnabled) "Dialogue Boost ✓" else "Dialogue Boost") },
+                                onClick = { showMenu = false; viewModel.toggleDialogueBoost() },
+                                leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (viewModel.nightModeEnabled) "Night Mode ✓" else "Night Mode") },
+                                onClick = { showMenu = false; viewModel.toggleNightMode() },
+                                leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                            )
+                            if (viewModel.lyrics.isNotEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("Lyrics") },
+                                    onClick = { showMenu = false; showLyrics = true },
+                                    leadingIcon = { Icon(Icons.Default.Mic, null) },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Ambient Mode") },
+                                onClick = {
+                                    showMenu = false
+                                    onAmbientClick(
+                                        viewModel.albumArtUrl.ifBlank { null },
+                                        viewModel.title,
+                                        viewModel.artist,
+                                    )
+                                },
+                                leadingIcon = { Icon(Icons.Default.NightsStay, null) },
                             )
                         }
                     }
-                    IconButton(
-                        onClick = {
-                            onAmbientClick(
-                                viewModel.albumArtUrl.ifBlank { null },
-                                viewModel.title,
-                                viewModel.artist,
+                }
+
+                Spacer(Modifier.weight(0.6f))
+
+                // ── Album art ──
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.75f)
+                        .aspectRatio(1f)
+                        .scale(artworkScale.value)
+                        .shadow(
+                            elevation = 24.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                        )
+                        .clip(RoundedCornerShape(24.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (viewModel.albumArtUrl.isNotBlank()) {
+                        MediaImage(
+                            url = viewModel.albumArtUrl,
+                            contentDescription = viewModel.title,
+                            blurHash = viewModel.albumArtBlurHash,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            MaterialTheme.colorScheme.surface,
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = null,
+                                modifier = Modifier.size(72.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             )
-                        },
-                    ) {
-                        Icon(Icons.Default.NightsStay, "Ambient Mode")
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                ),
-                modifier = Modifier.statusBarsPadding(),
-            )
+                }
 
-            Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.weight(0.5f))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (viewModel.albumArtUrl.isNotBlank()) {
-                    MediaImage(
-                        url = viewModel.albumArtUrl,
-                        contentDescription = viewModel.title,
-                        blurHash = viewModel.albumArtBlurHash,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
+                // ── Track info + controls (faded in) ──
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer { alpha = contentAlpha.value }
+                        .padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Title & artist
+                    Text(
+                        viewModel.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start,
                     )
-                } else {
-                    Box(
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        viewModel.artist,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.65f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start,
+                    )
+
+                    Spacer(Modifier.height(28.dp))
+
+                    // Progress slider
+                    Slider(
+                        value = if (viewModel.duration > 0) viewModel.currentPosition.toFloat() / viewModel.duration else 0f,
+                        onValueChange = { fraction ->
+                            if (viewModel.duration > 0) {
+                                viewModel.seekTo((fraction * viewModel.duration).toLong())
+                            }
+                        },
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.2f),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(16.dp)),
-                        contentAlignment = Alignment.Center,
+                            .fillMaxWidth()
+                            .offset(y = (-4).dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Icon(
-                            Icons.Default.MusicNote,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Text(
+                            formatDuration(viewModel.currentPosition),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.5f),
+                        )
+                        Text(
+                            if (viewModel.duration > 0) formatDuration(viewModel.duration) else "--:--",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.5f),
                         )
                     }
-                }
-            }
 
-            Spacer(Modifier.height(32.dp))
+                    Spacer(Modifier.height(12.dp))
 
-            Text(
-                viewModel.title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                viewModel.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            Slider(
-                value = if (viewModel.duration > 0) viewModel.currentPosition.toFloat() / viewModel.duration else 0f,
-                onValueChange = { fraction ->
-                    if (viewModel.duration > 0) {
-                        viewModel.seekTo((fraction * viewModel.duration).toLong())
+                    // Transport controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { viewModel.toggleShuffle() }) {
+                            Icon(
+                                Icons.Default.Shuffle,
+                                "Shuffle",
+                                tint = if (viewModel.shuffleMode) MaterialTheme.colorScheme.primary
+                                else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.skipToPrevious() },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.SkipPrevious, "Previous",
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White,
+                            )
+                        }
+                        // Large play/pause button
+                        FilledIconButton(
+                            onClick = { viewModel.togglePlayPause() },
+                            modifier = Modifier.size(68.dp),
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black,
+                            ),
+                        ) {
+                            Icon(
+                                if (viewModel.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                if (viewModel.isPlaying) "Pause" else "Play",
+                                modifier = Modifier.size(36.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.skipToNext() },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.SkipNext, "Next",
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White,
+                            )
+                        }
+                        IconButton(onClick = { viewModel.cycleRepeatMode() }) {
+                            Icon(
+                                if (viewModel.repeatMode == 2) Icons.Default.RepeatOne
+                                else Icons.Default.Repeat,
+                                when (viewModel.repeatMode) {
+                                    0 -> "Repeat off"
+                                    1 -> "Repeat all"
+                                    else -> "Repeat one"
+                                },
+                                tint = if (viewModel.repeatMode > 0) MaterialTheme.colorScheme.primary
+                                else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                     }
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    formatDuration(viewModel.currentPosition),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    if (viewModel.duration > 0) formatDuration(viewModel.duration) else "--:--",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { viewModel.toggleShuffle() }) {
-                    Icon(
-                        Icons.Default.Shuffle,
-                        "Shuffle",
-                        tint = if (viewModel.shuffleMode) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.weight(0.5f))
-                IconButton(onClick = { viewModel.skipToPrevious() }) {
-                    Icon(Icons.Default.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
-                }
-                Spacer(Modifier.weight(0.3f))
-                IconButton(
-                    onClick = { viewModel.togglePlayPause() },
-                    modifier = Modifier.size(64.dp),
-                ) {
-                    Icon(
-                        if (viewModel.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        if (viewModel.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.weight(0.3f))
-                IconButton(onClick = { viewModel.skipToNext() }) {
-                    Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(36.dp))
-                }
-                Spacer(Modifier.weight(0.5f))
-                IconButton(onClick = { viewModel.cycleRepeatMode() }) {
-                    Icon(
-                        if (viewModel.repeatMode == 2) Icons.Default.RepeatOne
-                        else Icons.Default.Repeat,
-                        when (viewModel.repeatMode) {
-                            0 -> "Repeat off"
-                            1 -> "Repeat all"
-                            else -> "Repeat one"
-                        },
-                        tint = if (viewModel.repeatMode > 0) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Spacer(Modifier.height(16.dp))
                 }
             }
         }
     }
-    }
 
+    // ── Bottom sheets (unchanged functionality) ──
     if (showQueue && viewModel.queue.isNotEmpty()) {
         QueueSheet(
             queue = viewModel.queue,
@@ -547,7 +678,7 @@ private fun LyricsSheet(
     currentIndex: Int,
     onDismiss: () -> Unit,
 ) {
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberLazyListState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -560,7 +691,7 @@ private fun LyricsSheet(
         ) {
             Text("Lyrics", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
-            androidx.compose.foundation.lazy.LazyColumn(
+            LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().height(400.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -580,7 +711,7 @@ private fun LyricsSheet(
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                         modifier = Modifier.padding(vertical = 6.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }

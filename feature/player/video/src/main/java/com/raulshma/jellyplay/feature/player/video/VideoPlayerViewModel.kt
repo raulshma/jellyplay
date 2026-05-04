@@ -373,6 +373,12 @@ class VideoPlayerViewModel @Inject constructor(
         _nightModeEnabled = prefs.nightModeEnabled
         if (_nightModeEnabled) applyNightMode()
 
+        if (prefs.preferredAudioLanguage != null) {
+            val params = trackSelector.buildUponParameters()
+            params.setPreferredAudioLanguage(prefs.preferredAudioLanguage!!)
+            trackSelector.setParameters(params)
+        }
+
         if (prefs.preferredSubtitleLanguage != null) {
             val params = trackSelector.buildUponParameters()
             params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)

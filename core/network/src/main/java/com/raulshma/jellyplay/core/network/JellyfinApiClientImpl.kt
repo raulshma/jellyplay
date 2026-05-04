@@ -201,7 +201,7 @@ class JellyfinApiClientImpl @Inject constructor(
 
         getLibraryFolders()
             .onSuccess { folders ->
-                for (folder in folders) {
+                for (folder in folders.filter { it.collectionType != "music" }) {
                     getLatestMedia(folder.id, limit = 16)
                         .onSuccess { latest ->
                             if (latest.isNotEmpty()) {

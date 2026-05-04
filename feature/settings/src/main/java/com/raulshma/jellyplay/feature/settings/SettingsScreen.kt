@@ -46,6 +46,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +76,8 @@ fun SettingsScreen(
 
     var showPinDialog by remember { mutableStateOf(false) }
     var showPlayerPicker by remember { mutableStateOf(false) }
+    var showAudioLanguagePicker by remember { mutableStateOf(false) }
+    var showSubtitleLanguagePicker by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -266,7 +270,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Language,
                 title = "Preferred Audio Language",
                 subtitle = preferences.preferredAudioLanguage ?: "Default",
-                onClick = { viewModel.setPreferredAudioLanguage(null) },
+                onClick = { showAudioLanguagePicker = true },
             )
 
             HorizontalDivider()
@@ -275,7 +279,7 @@ fun SettingsScreen(
                 icon = Icons.Default.ClosedCaption,
                 title = "Preferred Subtitle Language",
                 subtitle = preferences.preferredSubtitleLanguage ?: "Default",
-                onClick = { viewModel.setPreferredSubtitleLanguage(null) },
+                onClick = { showSubtitleLanguagePicker = true },
             )
 
             HorizontalDivider()
@@ -545,6 +549,28 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (showAudioLanguagePicker) {
+        LanguagePickerDialog(
+            currentLanguage = preferences.preferredAudioLanguage,
+            onDismiss = { showAudioLanguagePicker = false },
+            onSelect = { language ->
+                viewModel.setPreferredAudioLanguage(language)
+                showAudioLanguagePicker = false
+            },
+        )
+    }
+
+    if (showSubtitleLanguagePicker) {
+        LanguagePickerDialog(
+            currentLanguage = preferences.preferredSubtitleLanguage,
+            onDismiss = { showSubtitleLanguagePicker = false },
+            onSelect = { language ->
+                viewModel.setPreferredSubtitleLanguage(language)
+                showSubtitleLanguagePicker = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -554,6 +580,237 @@ private fun SettingsSectionHeader(title: String) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+    )
+}
+
+private val languages = listOf(
+    null to "Default",
+    "aar" to "Afar",
+    "abk" to "Abkhazian",
+    "afr" to "Afrikaans",
+    "aka" to "Akan",
+    "alb" to "Albanian",
+    "amh" to "Amharic",
+    "ara" to "Arabic",
+    "arg" to "Aragonese",
+    "arm" to "Armenian",
+    "asm" to "Assamese",
+    "ava" to "Avaric",
+    "ave" to "Avestan",
+    "aym" to "Aymara",
+    "aze" to "Azerbaijani",
+    "bak" to "Bashkir",
+    "bam" to "Bambara",
+    "baq" to "Basque",
+    "bel" to "Belarusian",
+    "ben" to "Bengali",
+    "bih" to "Bihari",
+    "bis" to "Bislama",
+    "bos" to "Bosnian",
+    "bre" to "Breton",
+    "bul" to "Bulgarian",
+    "bur" to "Burmese",
+    "cat" to "Catalan",
+    "cha" to "Chamorro",
+    "che" to "Chechen",
+    "chi" to "Chinese",
+    "chu" to "Church Slavic",
+    "chv" to "Chuvash",
+    "cor" to "Cornish",
+    "cos" to "Corsican",
+    "cre" to "Cree",
+    "cze" to "Czech",
+    "dan" to "Danish",
+    "div" to "Divehi",
+    "dut" to "Dutch",
+    "dzo" to "Dzongkha",
+    "eng" to "English",
+    "epo" to "Esperanto",
+    "est" to "Estonian",
+    "ewe" to "Ewe",
+    "fao" to "Faroese",
+    "fij" to "Fijian",
+    "fin" to "Finnish",
+    "fre" to "French",
+    "fry" to "Western Frisian",
+    "ful" to "Fulah",
+    "geo" to "Georgian",
+    "ger" to "German",
+    "gla" to "Scottish Gaelic",
+    "gle" to "Irish",
+    "glg" to "Galician",
+    "glv" to "Manx",
+    "grn" to "Guarani",
+    "guj" to "Gujarati",
+    "hat" to "Haitian",
+    "hau" to "Hausa",
+    "heb" to "Hebrew",
+    "her" to "Herero",
+    "hin" to "Hindi",
+    "hmo" to "Hiri Motu",
+    "hrv" to "Croatian",
+    "hun" to "Hungarian",
+    "ibo" to "Igbo",
+    "ice" to "Icelandic",
+    "ido" to "Ido",
+    "iii" to "Sichuan Yi",
+    "iku" to "Inuktitut",
+    "ile" to "Interlingue",
+    "ina" to "Interlingua",
+    "ind" to "Indonesian",
+    "ipk" to "Inupiaq",
+    "ita" to "Italian",
+    "jav" to "Javanese",
+    "jpn" to "Japanese",
+    "kal" to "Kalaallisut",
+    "kan" to "Kannada",
+    "kas" to "Kashmiri",
+    "kau" to "Kanuri",
+    "kaz" to "Kazakh",
+    "khm" to "Central Khmer",
+    "kik" to "Kikuyu",
+    "kin" to "Kinyarwanda",
+    "kir" to "Kirghiz",
+    "kom" to "Komi",
+    "kon" to "Kongo",
+    "kor" to "Korean",
+    "kua" to "Kuanyama",
+    "kur" to "Kurdish",
+    "lao" to "Lao",
+    "lat" to "Latin",
+    "lav" to "Latvian",
+    "lim" to "Limburgan",
+    "lin" to "Lingala",
+    "lit" to "Lithuanian",
+    "ltz" to "Luxembourgish",
+    "lub" to "Luba-Katanga",
+    "lug" to "Ganda",
+    "mac" to "Macedonian",
+    "mah" to "Marshallese",
+    "mal" to "Malayalam",
+    "mao" to "Maori",
+    "mar" to "Marathi",
+    "may" to "Malay",
+    "mlg" to "Malagasy",
+    "mlt" to "Maltese",
+    "mon" to "Mongolian",
+    "nau" to "Nauru",
+    "nav" to "Navajo",
+    "nbl" to "South Ndebele",
+    "nde" to "North Ndebele",
+    "ndo" to "Ndonga",
+    "nep" to "Nepali",
+    "nno" to "Norwegian Nynorsk",
+    "nob" to "Norwegian Bokmål",
+    "nor" to "Norwegian",
+    "nya" to "Chichewa",
+    "oci" to "Occitan",
+    "oji" to "Ojibwa",
+    "ori" to "Oriya",
+    "orm" to "Oromo",
+    "oss" to "Ossetian",
+    "pan" to "Panjabi",
+    "per" to "Persian",
+    "pli" to "Pali",
+    "pol" to "Polish",
+    "por" to "Portuguese",
+    "pus" to "Pushto",
+    "que" to "Quechua",
+    "roh" to "Romansh",
+    "rum" to "Romanian",
+    "run" to "Rundi",
+    "rus" to "Russian",
+    "sag" to "Sango",
+    "san" to "Sanskrit",
+    "sin" to "Sinhala",
+    "slo" to "Slovak",
+    "slv" to "Slovenian",
+    "sme" to "Northern Sami",
+    "smo" to "Samoan",
+    "sna" to "Shona",
+    "snd" to "Sindhi",
+    "som" to "Somali",
+    "sot" to "Southern Sotho",
+    "spa" to "Spanish",
+    "srd" to "Sardinian",
+    "srp" to "Serbian",
+    "ssw" to "Swati",
+    "sun" to "Sundanese",
+    "swa" to "Swahili",
+    "swe" to "Swedish",
+    "tah" to "Tahitian",
+    "tam" to "Tamil",
+    "tat" to "Tatar",
+    "tel" to "Telugu",
+    "tgk" to "Tajik",
+    "tgl" to "Tagalog",
+    "tha" to "Thai",
+    "tib" to "Tibetan",
+    "tir" to "Tigrinya",
+    "ton" to "Tonga",
+    "tsn" to "Tswana",
+    "tso" to "Tsonga",
+    "tuk" to "Turkmen",
+    "tur" to "Turkish",
+    "twi" to "Twi",
+    "uig" to "Uighur",
+    "ukr" to "Ukrainian",
+    "urd" to "Urdu",
+    "uzb" to "Uzbek",
+    "ven" to "Venda",
+    "vie" to "Vietnamese",
+    "vol" to "Volapük",
+    "wel" to "Welsh",
+    "wln" to "Walloon",
+    "wol" to "Wolof",
+    "xho" to "Xhosa",
+    "yid" to "Yiddish",
+    "yor" to "Yoruba",
+    "zha" to "Zhuang",
+    "zul" to "Zulu",
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanguagePickerDialog(
+    currentLanguage: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String?) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Language") },
+        text = {
+            LazyColumn {
+                items(languages) { (code, name) ->
+                    val isSelected = code == currentLanguage
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelect(code)
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSelect(code) },
+                        )
+                        Spacer(Modifier.size(12.dp))
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
     )
 }
 

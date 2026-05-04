@@ -154,6 +154,7 @@ fun VideoPlayerScreen(
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
+    var seekTimestamp by remember { mutableLongStateOf(0L) }
     var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
     var externalLaunched by remember { mutableStateOf(false) }
@@ -340,11 +341,13 @@ fun VideoPlayerScreen(
                             offset.x < width * 0.35 -> {
                                 seekDirection = -1
                                 seekOffsetMs = 10_000L
+                                seekTimestamp++
                                 doSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
                                 seekOffsetMs = 10_000L
+                                seekTimestamp++
                                 doSeekForward()
                             }
                             else -> {
@@ -614,7 +617,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(seekDirection) {
+    LaunchedEffect(seekTimestamp) {
         if (seekDirection != 0) {
             delay(800)
             seekDirection = 0
