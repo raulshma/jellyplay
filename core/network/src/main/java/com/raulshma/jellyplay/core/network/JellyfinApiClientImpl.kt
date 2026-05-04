@@ -470,7 +470,7 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
-        runCatching {
+        apiResult {
             requireApi().tvShowsApi.getEpisodes(
                 seriesId = java.util.UUID.fromString(seriesId),
                 seasonId = java.util.UUID.fromString(seasonId),

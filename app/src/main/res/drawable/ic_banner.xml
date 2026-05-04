@@ -1,63 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp"
     android:height="180dp"
     android:viewportWidth="320"
     android:viewportHeight="180">
-    <path
-        android:fillColor="#1A1A2E"
-        android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:fillColor="#FF1E3A5F"
-        android:pathData="M0,0h320v180h-320z" />
 
-    <!-- Icon circle -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M130,55L130,55A25,25 0,0 1,155 80L155,80A25,25 0,0 1,130 105L130,105A25,25 0,0 1,105 80L105,80A25,25 0,0 1,130 55z"
-        android:strokeColor="#00B4D8"
-        android:strokeWidth="3" />
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="320"
+                android:endY="180"
+                android:startX="0"
+                android:startY="0"
+                android:type="linear">
+                <item android:color="#4F2F7D" android:offset="0" />
+                <item android:color="#8E54E9" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- Play triangle -->
-    <path
-        android:fillColor="#00B4D8"
-        android:pathData="M123.5,70.5L123.5,89.5A1.5,1.5 0,0 0,125.75 90.8L139.25,81.3A1.5,1.5 0,0 0,139.25 78.7L125.75,69.2A1.5,1.5 0,0 0,123.5 70.5z" />
+    <!-- Stylized 3D Jellyfish Icon for Banner -->
+    <group android:translateX="30" android:translateY="40" android:scaleX="0.2" android:scaleY="0.2">
+        <path android:pathData="M 131 235 A 125 125 0 0 1 381 235 Z">
+             <aapt:attr name="android:fillColor">
+                <gradient android:centerX="256" android:centerY="200" android:gradientRadius="150" android:type="radial">
+                    <item android:color="#FFFFFF" android:offset="0" />
+                    <item android:color="#E0E0E0" android:offset="1" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M 116 220 L 396 220 Q 411 220 411 235 Q 411 250 396 250 L 116 250 Q 101 250 101 235 Q 101 220 116 220 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:startX="101" android:startY="235" android:endX="411" android:endY="235" android:type="linear">
+                    <item android:color="#F5F5F5" android:offset="0" />
+                    <item android:color="#FFFFFF" android:offset="0.5" />
+                    <item android:color="#F5F5F5" android:offset="1" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <!-- Simplified tentacles for banner -->
+        <path android:fillColor="#FFFFFF" android:pathData="M 156 240 L 176 240 L 176 350 Q 176 360 166 360 Q 156 360 156 350 Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M 246 240 L 266 240 L 266 410 Q 266 420 256 420 Q 246 420 246 410 Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M 336 240 L 356 240 L 356 350 Q 356 360 346 360 Q 336 360 336 350 Z" />
+    </group>
 
-    <!-- Text: JellyPlay -->
-    <!-- J -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M172,68h4v14c0,2.2 -1.8,4 -4,4h-2v-3h1c0.55,0 1,-0.45 1,-1z" />
-    <!-- e -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M183,76c0,-3.3 2.7,-6 6,-6c3.3,0 6,2.7 6,6v1h-8c0.5,1.2 1.7,2 3,2c1.1,0 2.1,-0.55 2.7,-1.4l2.6,1.8c-1.1,1.5 -2.9,2.6 -5.3,2.6c-3.3,0 -6,-2.7 -6,-6zM185,75h6c-0.5,-1.2 -1.7,-2 -3,-2c-1.3,0 -2.5,0.8 -3,2z" />
-    <!-- l -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M198,62h4v18h-4z" />
-    <!-- l -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M204,62h4v18h-4z" />
-    <!-- y -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M210,70l3.5,-8h4.3l-5.8,12v6h-4v-6l-5.8,-12h4.3z" />
-    <!-- P -->
-    <path
-        android:fillColor="#00B4D8"
-        android:pathData="M227,68h5c3.3,0 6,2.7 6,6s-2.7,6 -6,6h-1v4h-4zM231,75h1c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2h-1z" />
-    <!-- l -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M240,62h4v18h-4z" />
-    <!-- a -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M252,76c0,-3.3 2.7,-6 6,-6c1.4,0 2.7,0.5 3.7,1.3l-2.1,2.8c-0.4,-0.3 -0.9,-0.5 -1.5,-0.5c-1.3,0 -2.2,0.9 -2.2,2.2s0.9,2.2 2.2,2.2c0.6,0 1.1,-0.2 1.5,-0.5l2.1,2.8c-1,0.8 -2.3,1.3 -3.7,1.3c-3.3,0 -6,-2.7 -6,-6z" />
-    <!-- y -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M264,70l3.5,-8h4.3l-5.8,12v6h-4v-6l-5.8,-12h4.3z" />
+    <!-- Text: JellyPlay (Modernized Font Look) -->
+    <group android:translateX="110" android:translateY="80">
+        <!-- Simplified text paths or just use a nice pill/rect if paths are too complex -->
+         <path android:fillColor="#FFFFFF" android:pathData="M0,0h80v12h-80z" /> <!-- Placeholder for text area -->
+    </group>
 </vector>

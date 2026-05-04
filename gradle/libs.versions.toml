@@ -21,6 +21,7 @@ kotlinxSerialization = "1.8.1"
 palette = "1.0.0"
 coreKtx = "1.18.0"
 activityCompose = "1.11.0-rc01"
+coreSplashScreen = "1.0.1"
 lifecycle = "2.10.0-rc01"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -34,6 +35,7 @@ libvlc = "3.7.0"
 [libraries]
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 # Compose BOM

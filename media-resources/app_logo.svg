@@ -1,77 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <!-- Jellyfin Signature Gradient Background -->
-    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#AA5CC3" />
-      <stop offset="100%" stop-color="#00A4DC" />
-    </linearGradient>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#4F2F7D;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#8E54E9;stop-opacity:1" />
+        </linearGradient>
+        <radialGradient id="domeGradient" cx="50%" cy="40%" r="50%" fx="50%" fy="30%">
+            <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#E0E0E0;stop-opacity:1" />
+        </radialGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="10" />
+            <feOffset dx="5" dy="10" result="offsetblur" />
+            <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3" />
+            </feComponentTransfer>
+            <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+    </defs>
+    
+    <!-- Background -->
+    <rect width="512" height="512" rx="100" fill="url(#bgGradient)" />
+    
+    <!-- Jellyfish with Shadow -->
+    <g filter="url(#shadow)">
+        <!-- Dome -->
+        <path d="M 131 235 A 125 125 0 0 1 381 235 Z" fill="url(#domeGradient)" />
 
-    <!-- Subtle Premium Gradient for the Jellyfish -->
-    <linearGradient id="jelly-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="100%" stop-color="#F0F8FF" />
-    </linearGradient>
+        <!-- Base -->
+        <path d="M 116 220 L 396 220 Q 411 220 411 235 Q 411 250 396 250 L 116 250 Q 101 250 101 235 Q 101 220 116 220 Z" fill="#FFFFFF" />
 
-    <!-- Material Design Drop Shadow -->
-    <filter id="drop-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.25" />
-    </filter>
-
-    <!-- Mask to punch out the Play Button -->
-    <mask id="play-mask">
-      <!-- White keeps the foreground visible -->
-      <rect x="0" y="0" width="512" height="512" fill="white" />
-      <!-- Black hides the foreground, creating the cutout. 
-           Stroke creates perfectly rounded corners for the triangle. -->
-      <polygon 
-        points="236,140 236,200 288,170" 
-        fill="black" 
-        stroke="black" 
-        stroke-width="14" 
-        stroke-linejoin="round" 
-      />
-    </mask>
-  </defs>
-
-  <!-- App Icon Base (Squircle) -->
-  <rect width="512" height="512" rx="115" ry="115" fill="url(#bg-grad)" />
-
-  <!-- Jellyfish Character / Play Logo -->
-  <g mask="url(#play-mask)" fill="url(#jelly-grad)" filter="url(#drop-shadow)">
-    
-    <!-- Jellyfish Dome (Perfect Semicircle) -->
-    <path d="M 131 235 A 125 125 0 0 1 381 235 Z" />
-    
-    <!-- Dome Base (Pill Shape) -->
-    <rect x="116" y="220" width="280" height="30" rx="15" />
-    
-    <!-- Tentacles (Variable Heights for dynamic modern feel) -->
-    <!-- Outer Left -->
-    <rect x="156" y="240" width="20" height="110" rx="10" />
-    
-    <!-- Inner Left -->
-    <rect x="201" y="240" width="20" height="140" rx="10" />
-    
-    <!-- Center -->
-    <rect x="246" y="240" width="20" height="170" rx="10" />
-    
-    <!-- Inner Right -->
-    <rect x="291" y="240" width="20" height="140" rx="10" />
-    
-    <!-- Outer Right -->
-    <rect x="336" y="240" width="20" height="110" rx="10" />
-    
-  </g>
-
-  <!-- Subtle Inner App Icon Highlight for depth -->
-  <rect 
-    width="512" 
-    height="512" 
-    rx="115" 
-    ry="115" 
-    fill="none" 
-    stroke="#FFFFFF" 
-    stroke-width="2" 
-    stroke-opacity="0.15" 
-  />
+        <!-- Tentacles -->
+        <path d="M 156 240 L 176 240 L 176 350 Q 176 360 166 360 Q 156 360 156 350 Z" fill="#F0F0F0" />
+        <path d="M 201 240 L 221 240 L 221 380 Q 221 390 211 390 Q 201 390 201 380 Z" fill="#F5F5F5" />
+        <path d="M 246 240 L 266 240 L 266 410 Q 266 420 256 420 Q 246 420 246 410 Z" fill="#FFFFFF" />
+        <path d="M 291 240 L 311 240 L 311 380 Q 311 390 301 390 Q 291 390 291 380 Z" fill="#F5F5F5" />
+        <path d="M 336 240 L 356 240 L 356 350 Q 356 360 346 360 Q 336 360 336 350 Z" fill="#F0F0F0" />
+    </g>
 </svg>
