@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.home
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -40,10 +39,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -68,14 +70,14 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -142,6 +144,13 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
+        val listState = rememberSaveable(saver = LazyListState.Saver) {
+            LazyListState()
+        }
+        val density = LocalDensity.current
+        val headerHeight = 520.dp
+        val headerHeightPx = with(density) { headerHeight.toPx() }
+
         ArtworkThemeWrapper(
             imageUrl = backdropUrl,
             dynamicTheming = viewModel.dynamicTheming,
@@ -153,10 +162,11 @@ fun HomeScreen(
                 ?: Color(0xFF1A1A2E)
             val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
 
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            val density = LocalDensity.current
-            val headerHeight = 520.dp
-            val headerHeightPx = with(density) { headerHeight.toPx() }
+            val navBarColor = LocalNavigationBarColor.current
+            LaunchedEffect(backgroundColor) {
+                navBarColor.value = backgroundColor
+            }
+
             val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
                     (listState.firstVisibleItemIndex * 1000f)
             val scrollFraction = (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
@@ -333,7 +343,6 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HeroHeader(
     item: MediaItem,
@@ -343,8 +352,6 @@ private fun HeroHeader(
     backgroundColor: Color,
     onClick: () -> Unit,
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -359,17 +366,7 @@ private fun HeroHeader(
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
             modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (sharedTransitionScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElementWithCallerManagedVisibility(
-                                rememberSharedContentState(key = "backdrop_${item.id}"),
-                                visible = true,
-                            )
-                        }
-                    } else Modifier
-                ),
+                .fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
 

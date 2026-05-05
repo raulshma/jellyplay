@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.os.StatFs
-import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -9,6 +9,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,9 +85,9 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 
 @Composable
 fun MediaDetailScreen(
@@ -175,7 +177,6 @@ private fun DetailContent(
     val scrollState = rememberScrollState()
     val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val artworkColors = LocalArtworkColors.current
 
     val density = LocalDensity.current
@@ -191,6 +192,17 @@ private fun DetailContent(
     // Darken the background to give text and content focus over the image
     val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
 
+    val navBarColor = LocalNavigationBarColor.current
+    LaunchedEffect(backgroundColor) {
+        navBarColor.value = backgroundColor
+    }
+
+    val contentVisible = detail != null && item != null
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (contentVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "contentAlpha",
+    )
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
         animationSpec = tween(durationMillis = 300),
@@ -242,19 +254,7 @@ private fun DetailContent(
                         val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
                         scaleX = scale
                         scaleY = scale
-                    }
-                    .then(
-                        if (sharedTransitionScope != null) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElementWithCallerManagedVisibility(
-                                    rememberSharedContentState(key = "backdrop_$itemId"),
-                                    visible = true,
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
-                    ),
+                    },
                 contentScale = ContentScale.Crop,
             )
             
@@ -315,7 +315,7 @@ private fun DetailContent(
                                 .offset(y = (-40).dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            // Poster Image for seamless shared element transition
+                            // Poster Image
                             MediaImage(
                                 url = getImageUrl(itemId),
                                 contentDescription = null,
@@ -324,16 +324,7 @@ private fun DetailContent(
                                     .width(120.dp)
                                     .aspectRatio(2f / 3f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .then(
-                                        if (sharedTransitionScope != null) {
-                                            with(sharedTransitionScope) {
-                                                Modifier.sharedElementWithCallerManagedVisibility(
-                                                    rememberSharedContentState(key = "poster_$itemId"),
-                                                    visible = true,
-                                                )
-                                            }
-                                        } else Modifier
-                                    ),
+                                    .graphicsLayer { alpha = contentAlpha },
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -342,7 +333,12 @@ private fun DetailContent(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     if (detail != null && item != null) {
-                        DetailContentBody(
+                        AnimatedVisibility(
+                            visible = contentVisible,
+                            enter = fadeIn(tween(400, delayMillis = 100)) +
+                                    slideInVertically(tween(400, delayMillis = 100, easing = FastOutSlowInEasing)) { it / 8 },
+                        ) {
+                            DetailContentBody(
                                 item = item,
                                 detail = detail,
                                 seasons = seasons,
@@ -361,6 +357,7 @@ private fun DetailContent(
                                 onItemClick = onItemClick,
                                 onPersonClick = onPersonClick,
                             )
+                        }
                     } else if (isLoading) {
                         SkeletonDetailBody()
                     } else if (error != null) {

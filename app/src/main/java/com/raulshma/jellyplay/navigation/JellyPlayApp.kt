@@ -1,6 +1,12 @@
 package com.raulshma.jellyplay.navigation
 
-import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,10 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,8 +43,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -142,10 +151,18 @@ private fun MainContent(
         scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
     }
 
+    val navBarColorState = remember { mutableStateOf<Color?>(null) }
+    val animatedNavBarColor by animateColorAsState(
+        targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainer,
+        animationSpec = tween(400),
+        label = "navBarColor",
+    )
+
+    CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
     Scaffold(
         bottomBar = {
             if (!isPlayerScreen && !isExpanded) {
-                NavigationBar {
+                NavigationBar(containerColor = animatedNavBarColor) {
                     activeTopLevelRoutes.forEach { (route, label) ->
                         NavigationBarItem(
                             selected = route == currentTopLevel,
@@ -154,6 +171,13 @@ private fun MainContent(
                                 NavIcon(route, label)
                             },
                             label = { Text(label) },
+                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                indicatorColor = Color.White.copy(alpha = 0.15f),
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedIconColor = Color.White.copy(alpha = 0.6f),
+                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                            ),
                         )
                     }
                 }
@@ -167,7 +191,7 @@ private fun MainContent(
         ) {
             if (!isPlayerScreen && isExpanded) {
                 NavigationRail(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = animatedNavBarColor,
                 ) {
                     activeTopLevelRoutes.forEach { (route, label) ->
                         NavigationRailItem(
@@ -190,6 +214,7 @@ private fun MainContent(
                 modifier = Modifier.weight(1f),
             )
         }
+    }
     }
 }
 
@@ -216,14 +241,16 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    SharedTransitionLayout {
-        androidx.compose.runtime.CompositionLocalProvider(
-            LocalSharedTransitionScope provides this@SharedTransitionLayout
-        ) {
-            NavDisplay(
-                backStack = currentBackStack,
-                onBack = { navigator.goBack() },
-                entryProvider =                 entryProvider {
+    NavDisplay(
+        backStack = currentBackStack,
+        onBack = { navigator.goBack() },
+        transitionSpec = {
+            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+        },
+        popTransitionSpec = {
+            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+        },
+        entryProvider =                 entryProvider {
                     homeSection(
                         navigator = navigator,
                         homeMode = homeMode,
@@ -258,6 +285,4 @@ private fun MainNavDisplay(
                 },
                 modifier = modifier,
             )
-        }
-    }
 }

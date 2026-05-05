@@ -7,7 +7,6 @@ import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -101,7 +100,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
-import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
@@ -128,7 +126,6 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
-    val sharedTransitionScope = LocalSharedTransitionScope.current
 
     var showControls by remember { mutableStateOf(true) }
     var showSpeedPicker by remember { mutableStateOf(false) }
@@ -320,18 +317,6 @@ fun VideoPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .then(
-                if (sharedTransitionScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedElementWithCallerManagedVisibility(
-                            rememberSharedContentState(key = "backdrop_$itemId"),
-                            visible = true,
-                        )
-                    }
-                } else {
-                    Modifier
-                }
-            )
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { showControls = !showControls },

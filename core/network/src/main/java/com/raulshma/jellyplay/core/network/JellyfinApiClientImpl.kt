@@ -183,9 +183,12 @@ class JellyfinApiClientImpl @Inject constructor(
         val sections = mutableListOf<HomeSection>()
         var firstError: Throwable? = null
 
+        var continueWatchingIds = emptySet<String>()
+
         getContinueWatching()
             .onSuccess { list ->
                 if (list.isNotEmpty()) {
+                    continueWatchingIds = list.map { it.id }.toSet()
                     sections.add(HomeSection("Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
                 }
             }
@@ -193,8 +196,9 @@ class JellyfinApiClientImpl @Inject constructor(
 
         getNextUp()
             .onSuccess { list ->
-                if (list.isNotEmpty()) {
-                    sections.add(HomeSection("Next Up", HomeSectionType.NEXT_UP, list))
+                val filtered = list.filter { it.id !in continueWatchingIds }
+                if (filtered.isNotEmpty()) {
+                    sections.add(HomeSection("Next Up", HomeSectionType.NEXT_UP, filtered))
                 }
             }
             .onFailure { if (firstError == null) firstError = it }
