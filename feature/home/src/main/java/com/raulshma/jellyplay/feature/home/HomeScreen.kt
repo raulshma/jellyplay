@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -194,12 +195,15 @@ fun HomeScreen(
             val baseOverlayColor = artworkColors?.darkMuted
                 ?: artworkColors?.dominant
                 ?: Color(0xFF1A1A2E)
-            val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+            val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+            val backgroundColor by animateColorAsState(
+                targetValue = targetBackgroundColor,
+                animationSpec = tween(600),
+                label = "backgroundColor",
+            )
 
             val navBarColor = LocalNavigationBarColor.current
-            LaunchedEffect(backgroundColor) {
-                navBarColor.value = backgroundColor
-            }
+            navBarColor.value = backgroundColor
 
             val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
                     (listState.firstVisibleItemIndex * 1000f)

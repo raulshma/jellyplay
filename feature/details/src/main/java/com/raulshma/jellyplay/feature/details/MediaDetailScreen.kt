@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import android.os.StatFs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -194,12 +195,15 @@ private fun DetailContent(
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
 
-    val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+    val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+    val backgroundColor by animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = tween(600),
+        label = "backgroundColor",
+    )
 
     val navBarColor = LocalNavigationBarColor.current
-    LaunchedEffect(backgroundColor) {
-        navBarColor.value = backgroundColor
-    }
+    navBarColor.value = backgroundColor
 
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(

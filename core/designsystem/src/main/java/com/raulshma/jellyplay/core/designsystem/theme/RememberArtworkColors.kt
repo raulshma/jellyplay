@@ -16,15 +16,19 @@ import coil3.size.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private val colorCache = mutableMapOf<String, ArtworkColors>()
+
 @Composable
 fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
     val context = LocalContext.current
-    var artworkColors by remember { mutableStateOf<ArtworkColors?>(null) }
+    val cached = imageUrl?.let { colorCache[it] }
+    var artworkColors by remember { mutableStateOf(cached) }
     val loader = remember { ImageLoader(context) }
 
     LaunchedEffect(imageUrl) {
-        if (imageUrl.isNullOrBlank()) {
-            artworkColors = null
+        if (imageUrl.isNullOrBlank()) return@LaunchedEffect
+        colorCache[imageUrl]?.let {
+            artworkColors = it
             return@LaunchedEffect
         }
         withContext(Dispatchers.IO) {
@@ -38,10 +42,11 @@ fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
                 if (result is SuccessResult) {
                     val bitmap = (result.image as? coil3.BitmapImage)?.bitmap
                         ?: return@withContext
-                    artworkColors = ArtworkColorExtractor.extractColors(bitmap)
+                    val colors = ArtworkColorExtractor.extractColors(bitmap)
+                    colorCache[imageUrl] = colors
+                    artworkColors = colors
                 }
             } catch (_: Exception) {
-                artworkColors = null
             }
         }
     }
