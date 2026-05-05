@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -47,7 +46,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,9 +69,6 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -115,8 +109,7 @@ fun LibraryScreen(
     val backgroundColor = lerp(baseColor, Color.Black, 0.70f)
 
     // Entrance animation for header
-    var headerVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { headerVisible = true }
+    var headerVisible by remember { mutableStateOf(true) }
 
     val gridPadding = PaddingValues(
         start = 16.dp,
@@ -401,50 +394,17 @@ fun LibraryScreen(
                                     ) { index ->
                                         val item = pagedItems[index]
                                         if (item != null) {
-                                            // Staggered entrance animation per card
-                                            val cardAlpha = remember { Animatable(0f) }
-                                            val cardOffset = remember { Animatable(30f) }
-                                            LaunchedEffect(item.id) {
-                                                val stagger = (index % 6) * 25L
-                                                delay(stagger)
-                                                coroutineScope {
-                                                    launch {
-                                                        cardAlpha.animateTo(
-                                                            1f,
-                                                            tween(400),
-                                                        )
-                                                    }
-                                                    launch {
-                                                        cardOffset.animateTo(
-                                                            0f,
-                                                            spring(
-                                                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                                                stiffness = Spring.StiffnessMediumLow,
-                                                            ),
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .graphicsLayer {
-                                                        alpha = cardAlpha.value
-                                                        translationY = cardOffset.value
-                                                    },
-                                            ) {
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = viewModel.getImageUrl(item.id),
-                                                    onClick = { onItemClick(item.id) },
-                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                        (item.playbackPositionTicks?.toFloat()
-                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                    } else 0f,
-                                                    blurHash = item.blurHashes.primary,
-                                                )
-                                            }
+                                            PosterCard(
+                                                item = item,
+                                                imageUrl = viewModel.getImageUrl(item.id),
+                                                onClick = { onItemClick(item.id) },
+                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                    (item.playbackPositionTicks?.toFloat()
+                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                } else 0f,
+                                                blurHash = item.blurHashes.primary,
+                                            )
                                         }
                                     }
                                 }

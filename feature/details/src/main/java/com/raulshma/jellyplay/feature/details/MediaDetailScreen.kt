@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.os.StatFs
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -10,8 +9,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -345,16 +342,7 @@ private fun DetailContent(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     if (detail != null && item != null) {
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(
-                                animationSpec = tween(600),
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 4 },
-                                animationSpec = tween(600),
-                            ),
-                        ) {
-                            DetailContentBody(
+                        DetailContentBody(
                                 item = item,
                                 detail = detail,
                                 seasons = seasons,
@@ -373,7 +361,6 @@ private fun DetailContent(
                                 onItemClick = onItemClick,
                                 onPersonClick = onPersonClick,
                             )
-                        }
                     } else if (isLoading) {
                         SkeletonDetailBody()
                     } else if (error != null) {
@@ -506,11 +493,6 @@ private fun DetailContentBody(
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(item.id) {
-        visible = true
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -518,295 +500,265 @@ private fun DetailContentBody(
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         // Title & Metadata
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500)) + slideInVertically(tween(500), initialOffsetY = { 40 })
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                color = Color.White
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    item.year?.let {
+                item.year?.let {
+                    Text(
+                        text = it.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+                item.runTimeTicks?.let { ticks ->
+                    val minutes = ticks / 600_000_000
+                    Text(
+                        text = "${minutes}m",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+                item.officialRating?.let {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
                         Text(
-                            text = it.toString(),
+                            text = it,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                        )
+                    }
+                }
+                item.communityRating?.let { rating ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = String.format("%.1f", rating),
                             style = MaterialTheme.typography.titleMedium,
                             color = Color.White.copy(alpha = 0.7f),
                         )
-                    }
-                    item.runTimeTicks?.let { ticks ->
-                        val minutes = ticks / 600_000_000
-                        Text(
-                            text = "${minutes}m",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.7f),
-                        )
-                    }
-                    item.officialRating?.let {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
-                            )
-                        }
-                    }
-                    item.communityRating?.let { rating ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Favorite,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = String.format("%.1f", rating),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.7f),
-                            )
-                        }
                     }
                 }
             }
         }
 
         // Actions
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(tween(500, delayMillis = 100), initialOffsetY = { 40 })
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
+            val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+            val progress = if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+            } else 0f
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .weight(1f)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable {
+                        if (isAudio) {
+                            onAudioClick()
+                        } else {
+                            val sourceId = detail.mediaSources.firstOrNull()?.id
+                            val startPos = item.playbackPositionTicks ?: 0L
+                            onPlayClick(item.id, sourceId, startPos)
+                        }
+                    },
+                contentAlignment = Alignment.Center,
             ) {
-                val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
-                val progress = if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                    (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+                if (hasProgress) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress)
+                            .align(Alignment.CenterStart)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        if (hasProgress) "Resume" else "Play",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                }
+            }
+            
+            IconButton(
+                onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    if (item.isPlayed) Icons.Default.Check else Icons.Default.PlayArrow,
+                    contentDescription = "Mark Played",
+                    tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
+
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
+
+            if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                val downloadStatus = activeDownload?.status
+                val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
+                        downloadStatus == DownloadStatus.DOWNLOADING ||
+                        downloadStatus == DownloadStatus.PAUSED
+                val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
+                val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+                    activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
                 } else 0f
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable {
-                            if (isAudio) {
-                                onAudioClick()
-                            } else {
-                                val sourceId = detail.mediaSources.firstOrNull()?.id
-                                val startPos = item.playbackPositionTicks ?: 0L
-                                onPlayClick(item.id, sourceId, startPos)
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (hasProgress) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progress)
-                                .align(Alignment.CenterStart)
-                                .background(Color.White.copy(alpha = 0.15f))
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            if (hasProgress) "Resume" else "Play",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                        )
-                    }
-                }
-                
                 IconButton(
-                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                    onClick = onDownloadClick,
+                    enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
-                    Icon(
-                        if (item.isPlayed) Icons.Default.Check else Icons.Default.PlayArrow,
-                        contentDescription = "Mark Played",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                }
-
-                IconButton(
-                    onClick = onToggleFavorite,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.15f))
-                ) {
-                    Icon(
-                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                }
-
-                if (!isAudio && detail.mediaSources.isNotEmpty()) {
-                    val downloadStatus = activeDownload?.status
-                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
-                            downloadStatus == DownloadStatus.DOWNLOADING ||
-                            downloadStatus == DownloadStatus.PAUSED
-                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-                    } else 0f
-
-                    IconButton(
-                        onClick = onDownloadClick,
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                    ) {
-                        if (isDownloading || isDownloadActive) {
-                            if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                CircularProgressIndicator(
-                                    progress = { downloadProgress },
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            }
-                        } else if (isDownloadCompleted) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    if (isDownloading || isDownloadActive) {
+                        if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                            CircularProgressIndicator(
+                                progress = { downloadProgress },
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
                         }
+                    } else if (isDownloadCompleted) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
                     }
                 }
             }
         }
 
         // Genres
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 150)) + slideInVertically(tween(500, delayMillis = 150), initialOffsetY = { 40 })
-        ) {
-            item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(genres) { genre ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = genre,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White
-                            )
-                        }
+        item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(genres) { genre ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = genre,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
                     }
                 }
             }
         }
 
         // Overview
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 200)) + slideInVertically(tween(500, delayMillis = 200), initialOffsetY = { 40 })
-        ) {
-            item.overview?.let { overview ->
-                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                    Text(
-                        text = overview,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.85f),
-                        lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
-                    )
-                }
+        item.overview?.let { overview ->
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.85f),
+                    lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
+                )
             }
         }
 
         // Seasons
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 250)) + slideInVertically(tween(500, delayMillis = 250), initialOffsetY = { 40 })
-        ) {
-            if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
-                CompositionLocalProvider(LocalContentColor provides Color.White) {
-                    SeasonsSection(
-                        seriesItem = item,
-                        seasons = seasons,
-                        episodes = episodes,
-                        fetchedSeasonIds = fetchedSeasonIds,
-                        getImageUrl = getImageUrl,
-                        onEpisodePlayClick = { episode ->
-                            val sourceId = null
-                            val startPos = episode.playbackPositionTicks ?: 0L
-                            onPlayClick(episode.id, sourceId, startPos)
-                        },
-                        onEpisodeDetailClick = { episode ->
-                            onItemClick(episode.id)
-                        }
-                    )
-                }
+        if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
+            CompositionLocalProvider(LocalContentColor provides Color.White) {
+                SeasonsSection(
+                    seriesItem = item,
+                    seasons = seasons,
+                    episodes = episodes,
+                    fetchedSeasonIds = fetchedSeasonIds,
+                    getImageUrl = getImageUrl,
+                    onEpisodePlayClick = { episode ->
+                        val sourceId = null
+                        val startPos = episode.playbackPositionTicks ?: 0L
+                        onPlayClick(episode.id, sourceId, startPos)
+                    },
+                    onEpisodeDetailClick = { episode ->
+                        onItemClick(episode.id)
+                    }
+                )
             }
         }
 
         // Cast & Crew
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 300)) + slideInVertically(tween(500, delayMillis = 300), initialOffsetY = { 40 })
-        ) {
-            if (detail.people.isNotEmpty()) {
-                Column {
-                    Text(
-                        text = "Cast & Crew",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    CompositionLocalProvider(LocalContentColor provides Color.White) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            items(detail.people, key = { "person_${it.id}" }) { person ->
-                                PersonItem(
-                                    person = person,
-                                    imageUrl = getImageUrl(person.id),
-                                    onClick = { onPersonClick(person.id) },
-                                )
-                            }
+        if (detail.people.isNotEmpty()) {
+            Column {
+                Text(
+                    text = "Cast & Crew",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    color = Color.White
+                )
+                Spacer(Modifier.height(16.dp))
+                CompositionLocalProvider(LocalContentColor provides Color.White) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(detail.people, key = { "person_${it.id}" }) { person ->
+                            PersonItem(
+                                person = person,
+                                imageUrl = getImageUrl(person.id),
+                                onClick = { onPersonClick(person.id) },
+                            )
                         }
                     }
                 }
@@ -814,31 +766,26 @@ private fun DetailContentBody(
         }
 
         // Related Items
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(500, delayMillis = 350)) + slideInVertically(tween(500, delayMillis = 350), initialOffsetY = { 40 })
-        ) {
-            if (detail.relatedItems.isNotEmpty()) {
-                Column {
-                    Text(
-                        text = "More Like This",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
-                            PosterCard(
-                                item = related,
-                                imageUrl = getImageUrl(related.id),
-                                onClick = { onItemClick(related.id) },
-                                modifier = Modifier.width(160.dp),
-                            )
-                        }
+        if (detail.relatedItems.isNotEmpty()) {
+            Column {
+                Text(
+                    text = "More Like This",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    color = Color.White
+                )
+                Spacer(Modifier.height(16.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
+                        PosterCard(
+                            item = related,
+                            imageUrl = getImageUrl(related.id),
+                            onClick = { onItemClick(related.id) },
+                            modifier = Modifier.width(160.dp),
+                        )
                     }
                 }
             }

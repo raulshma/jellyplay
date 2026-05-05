@@ -1,31 +1,58 @@
 package com.raulshma.jellyplay.feature.home
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -33,17 +60,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
+import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
-import com.raulshma.jellyplay.core.ui.components.MediaRow
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
+import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.navigation.LocalSharedTransitionScope
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -77,30 +107,18 @@ fun HomeScreen(
 
     var showSurprise by remember { mutableStateOf(false) }
     val allItems = remember(sections) { sections.flatMap { it.items } }
-    
-    // Pick a featured item for the hero header (random or first from continue watching/first section)
+
     val featuredItem = remember(allItems, showSurprise) {
         if (allItems.isNotEmpty()) {
-            if (showSurprise) allItems.random() 
-            else allItems.firstOrNull { it.mediaType == com.raulshma.jellyplay.core.model.MediaType.MOVIE || it.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES } ?: allItems.firstOrNull()
+            if (showSurprise) allItems.random()
+            else allItems.firstOrNull {
+                it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES
+            } ?: allItems.firstOrNull()
         } else null
     }
 
-    val listState = rememberLazyListState()
-    val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() + (listState.firstVisibleItemIndex * 1000f)
-    
-    val density = LocalDensity.current
-    val headerHeight = 500.dp
-    val headerHeightPx = with(density) { headerHeight.toPx() }
-    val scrollFraction = (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
-    
-    val appBarAlpha by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.8f) 1f else 0f,
-        animationSpec = tween(300), label = "appBarAlpha"
-    )
-
     val fallbackImageUrlBuilder: (MediaItem) -> List<String> = { item ->
-        if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.AUDIO || item.mediaType == com.raulshma.jellyplay.core.model.MediaType.MUSIC) {
+        if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
             listOfNotNull(
                 item.parentId?.let { viewModel.getImageUrl(it) },
                 item.artistItems.firstOrNull()?.id?.let { viewModel.getImageUrl(it) }
@@ -122,123 +140,194 @@ fun HomeScreen(
             onRefresh = { viewModel.refresh() },
         )
     } else {
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            when {
-                error != null && sections.isEmpty() -> {
-                    ErrorScreen(
-                        message = error!!,
-                        onRetry = { viewModel.refresh() },
-                    )
-                }
-                else -> {
-                    if (sections.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = 100.dp),
-                        ) {
-                            if (featuredItem != null) {
-                                item {
-                                    HeroHeader(
-                                        item = featuredItem,
-                                        backdropUrl = viewModel.getBackdropUrl(featuredItem.id),
-                                        scrollOffset = scrollOffset,
-                                        height = headerHeight,
-                                        onClick = { onItemClick(featuredItem.id) }
-                                    )
-                                }
-                            } else {
-                                item {
-                                    Spacer(modifier = Modifier.height(100.dp))
-                                }
-                            }
+        val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
-                            items(count = sections.size) { index ->
-                                val section = sections[index]
-                                    MediaRow(
-                                        title = section.title,
-                                        items = section.items,
-                                        imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
-                                        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                        onItemClick = { item -> onItemClick(item.id) },
-                                        modifier = Modifier.padding(top = if (index == 0 && featuredItem != null) 0.dp else 16.dp)
-                                    )
+        ArtworkThemeWrapper(
+            imageUrl = backdropUrl,
+            dynamicTheming = viewModel.dynamicTheming,
+            darkTheme = true,
+        ) {
+            val artworkColors = LocalArtworkColors.current
+            val baseOverlayColor = artworkColors?.darkMuted
+                ?: artworkColors?.dominant
+                ?: Color(0xFF1A1A2E)
+            val backgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val density = LocalDensity.current
+            val headerHeight = 520.dp
+            val headerHeightPx = with(density) { headerHeight.toPx() }
+            val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
+                    (listState.firstVisibleItemIndex * 1000f)
+            val scrollFraction = (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+
+            val appBarColor by animateFloatAsState(
+                targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+                animationSpec = tween(300),
+                label = "appBarColor",
+            )
+
+            val animatedContainerColor = lerp(
+                Color.Transparent,
+                backgroundColor.copy(alpha = 0.95f),
+                appBarColor,
+            )
+
+            Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+                when {
+                    error != null && sections.isEmpty() -> {
+                        ErrorScreen(
+                            message = error!!,
+                            onRetry = { viewModel.refresh() },
+                        )
+                    }
+                    else -> {
+                        if (sections.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 100.dp),
+                            ) {
+                                if (featuredItem != null) {
+                                    item {
+                                        HeroHeader(
+                                            item = featuredItem,
+                                            backdropUrl = viewModel.getBackdropUrl(featuredItem.id),
+                                            scrollOffset = scrollOffset,
+                                            height = headerHeight,
+                                            backgroundColor = backgroundColor,
+                                            onClick = { onItemClick(featuredItem.id) },
+                                        )
+                                    }
+                                } else {
+                                    item { Spacer(Modifier.height(100.dp)) }
+                                }
+
+                                items(count = sections.size, key = { sections[it].title }) { index ->
+                                    val section = sections[index]
+                                    val isFirstAfterHero = index == 0 && featuredItem != null
+                                    val sectionModifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(
+                                            if (isFirstAfterHero) {
+                                                Modifier.background(
+                                                    Brush.verticalGradient(
+                                                        colors = listOf(Color.Transparent, backgroundColor),
+                                                        startY = 0f,
+                                                        endY = with(density) { 10.dp.toPx() },
+                                                    )
+                                                )
+                                            } else {
+                                                Modifier.background(backgroundColor)
+                                            }
+                                        )
+                                        .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
+
+                                    if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                        section.type == HomeSectionType.NEXT_UP
+                                    ) {
+                                        ContinueWatchingRow(
+                                            title = section.title,
+                                            items = section.items,
+                                            imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                            backdropUrlBuilder = { viewModel.getBackdropUrl(it.id) },
+                                            onItemClick = { onItemClick(it.id) },
+                                            modifier = sectionModifier,
+                                        )
+                                    } else {
+                                        HomeMediaRow(
+                                            title = section.title,
+                                            items = section.items,
+                                            imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                            onItemClick = { onItemClick(it.id) },
+                                            modifier = sectionModifier,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Animated Top App Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.background.copy(alpha = appBarAlpha)
-                    )
-            ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "JellyPlay",
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = appBarAlpha),
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 12.dp),
-                        ) {
-                            ModeSwitch(
-                                currentMode = viewModel.homeMode,
-                                onModeChange = onModeChange,
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(animatedContainerColor)
+                ) {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                "JellyPlay",
+                                color = Color.White.copy(alpha = appBarColor),
+                                fontWeight = FontWeight.Bold,
                             )
-                            HeaderStatusIndicator(
-                                status = headerStatus,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showSurprise = !showSurprise }) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = "Surprise Me",
-                                tint = if (showSurprise) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        IconButton(onClick = onSyncPlayClick) {
-                            Icon(Icons.Default.Group, contentDescription = "SyncPlay", tint = MaterialTheme.colorScheme.onBackground)
-                        }
-                        BadgedBox(
-                            badge = {
-                                if (activeDownloadCount > 0) {
-                                    Badge {
-                                        Text(activeDownloadCount.toString())
+                        },
+                        navigationIcon = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 12.dp),
+                            ) {
+                                ModeSwitch(
+                                    currentMode = viewModel.homeMode,
+                                    onModeChange = onModeChange,
+                                )
+                                HeaderStatusIndicator(
+                                    status = headerStatus,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { showSurprise = !showSurprise }) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = "Surprise Me",
+                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White,
+                                )
+                            }
+                            IconButton(onClick = onSyncPlayClick) {
+                                Icon(
+                                    Icons.Default.Group,
+                                    contentDescription = "SyncPlay",
+                                    tint = Color.White,
+                                )
+                            }
+                            BadgedBox(
+                                badge = {
+                                    if (activeDownloadCount > 0) {
+                                        Badge { Text(activeDownloadCount.toString()) }
                                     }
                                 }
+                            ) {
+                                IconButton(onClick = onDownloadsClick) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Downloads",
+                                        tint = Color.White,
+                                    )
+                                }
                             }
-                        ) {
-                            IconButton(onClick = onDownloadsClick) {
-                                Icon(Icons.Default.Download, contentDescription = "Downloads", tint = MaterialTheme.colorScheme.onBackground)
+                            IconButton(onClick = onSettingsClick) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = Color.White,
+                                )
                             }
-                        }
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onBackground)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    modifier = Modifier.statusBarsPadding(),
-                )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        modifier = Modifier.statusBarsPadding(),
+                    )
+                }
             }
         }
     }
@@ -246,24 +335,26 @@ fun HomeScreen(
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun HeroHeader(
+private fun HeroHeader(
     item: MediaItem,
     backdropUrl: String,
     scrollOffset: Float,
     height: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
+    backgroundColor: Color,
+    onClick: () -> Unit,
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
             .clickable(onClick = onClick)
             .graphicsLayer {
-                translationY = scrollOffset * 0.5f // Parallax
+                translationY = scrollOffset * 0.5f
             }
     ) {
-        com.raulshma.jellyplay.core.ui.image.MediaImage(
+        MediaImage(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
@@ -277,55 +368,54 @@ fun HeroHeader(
                                 visible = true,
                             )
                         }
-                    } else {
-                        Modifier
-                    }
+                    } else Modifier
                 ),
             contentScale = ContentScale.Crop,
         )
 
-        // Gradient Overlays
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.4f), // Darker top for AppBar
+                            Color.Black.copy(alpha = 0.4f),
                             Color.Transparent,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.background
+                            backgroundColor.copy(alpha = 0.3f),
+                            backgroundColor.copy(alpha = 0.8f),
+                            backgroundColor,
                         ),
                         startY = 0f,
-                        endY = Float.POSITIVE_INFINITY
+                        endY = Float.POSITIVE_INFINITY,
                     )
                 )
         )
 
-        // Content
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 60.dp)
+                .padding(bottom = 32.dp)
         ) {
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                 color = Color.White,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(Modifier.height(8.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item.year?.let {
                     Text(
                         text = it.toString(),
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.8f),
                     )
                 }
                 item.runTimeTicks?.let { ticks ->
@@ -333,23 +423,280 @@ fun HeroHeader(
                     Text(
                         text = "${minutes}m",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
+                }
+                item.officialRating?.let {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                        )
+                    }
+                }
+                item.communityRating?.let { rating ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = String.format("%.1f", rating),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.8f),
+                        )
+                    }
+                }
+            }
+
+            if (item.genres.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(item.genres) { genre ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = genre,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.9f),
+                            )
+                        }
+                    }
+                }
+            }
+
+            item.overview?.let { overview ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+
+                Box(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(onClick = onClick)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (hasProgress) "Resume" else "Play",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .clickable(onClick = onClick)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Details",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onClick,
-                modifier = Modifier.height(48.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingRow(
+    title: String,
+    items: List<MediaItem>,
+    imageUrlBuilder: (MediaItem) -> String,
+    backdropUrlBuilder: (MediaItem) -> String,
+    onItemClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items, key = { "${title}_${it.id}" }) { item ->
+                WideMediaCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    backdropUrl = backdropUrlBuilder(item),
+                    onClick = { onItemClick(item) },
                 )
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Play", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            }
+        }
+    }
+}
+
+@Composable
+private fun WideMediaCard(
+    item: MediaItem,
+    imageUrl: String,
+    backdropUrl: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(260.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f),
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaImage(
+                url = backdropUrl,
+                fallbackUrls = listOf(imageUrl),
+                contentDescription = item.name,
+                blurHash = item.blurHashes.primary,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Play",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .padding(8.dp),
+            )
+
+            if (item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0) {
+                val progress = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                    (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+                } else 0f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+        }
+
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (item.mediaType == MediaType.EPISODE) {
+                item.seriesName?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            } else {
+                item.runTimeTicks?.let { ticks ->
+                    Text(
+                        text = "${ticks / 600_000_000}m",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeMediaRow(
+    title: String,
+    items: List<MediaItem>,
+    imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    onItemClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(items, key = { "${title}_${it.id}" }) { item ->
+                PosterCard(
+                    item = item,
+                    imageUrl = imageUrlBuilder(item),
+                    fallbackUrls = fallbackImageUrlBuilder(item),
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.width(140.dp),
+                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                    } else 0f,
+                    blurHash = item.blurHashes.primary,
+                )
             }
         }
     }

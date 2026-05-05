@@ -45,7 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,8 +114,7 @@ fun SearchScreen(
         0.70f,
     )
 
-    var headerVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { headerVisible = true }
+    var headerVisible by remember { mutableStateOf(true) }
 
     val gridPadding = PaddingValues(
         start = 16.dp,

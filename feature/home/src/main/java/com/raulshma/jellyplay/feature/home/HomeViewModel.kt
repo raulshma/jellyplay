@@ -38,6 +38,8 @@ class HomeViewModel @Inject constructor(
         private set
     var homeMode by mutableStateOf(HomeMode.VIDEO)
         private set
+    var dynamicTheming by mutableStateOf(true)
+        private set
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -45,8 +47,9 @@ class HomeViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
-                kidsModeEnabled = prefs.kidsModeEnabled
-                homeMode = prefs.homeMode
+            kidsModeEnabled = prefs.kidsModeEnabled
+            homeMode = prefs.homeMode
+            dynamicTheming = prefs.dynamicTheming
             }
         }
         refresh()
