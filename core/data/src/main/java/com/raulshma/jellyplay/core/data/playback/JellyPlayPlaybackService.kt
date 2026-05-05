@@ -45,10 +45,18 @@ class JellyPlayPlaybackService : MediaSessionService() {
             return
         }
         if (player.playbackState != Player.STATE_IDLE && player.playbackState != Player.STATE_ENDED) {
-            // Keep the service running if playback is active
             return
         }
         stopSelf()
+    }
+
+    override fun onDestroy() {
+        val session = sessionManager.currentSession
+        if (session != null) {
+            sessionManager.clearSession(session)
+            session.release()
+        }
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {

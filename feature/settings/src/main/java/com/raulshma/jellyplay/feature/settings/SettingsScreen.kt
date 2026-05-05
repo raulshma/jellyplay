@@ -53,6 +53,10 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -77,6 +81,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -89,9 +94,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.SubtitleColor
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,6 +128,14 @@ fun SettingsScreen(
     var showNightModeVolumePicker by remember { mutableStateOf(false) }
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
+    var showAudioDelayPicker by remember { mutableStateOf(false) }
+    var showSubtitleFontPicker by remember { mutableStateOf(false) }
+    var showSubtitleColorPicker by remember { mutableStateOf(false) }
+    var showSubtitleBgColorPicker by remember { mutableStateOf(false) }
+    var showSubtitleEdgePicker by remember { mutableStateOf(false) }
+    var showSubtitleOffsetPicker by remember { mutableStateOf(false) }
+    var showSubtitlePositionPicker by remember { mutableStateOf(false) }
+    var showEqualizerEditor by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -306,6 +323,13 @@ fun SettingsScreen(
                             viewModel.setStreamingQuality(qualities[nextIndex])
                         },
                     ),
+                    SettingsCardData(
+                        icon = Icons.Default.Audiotrack,
+                        title = "Audio Delay",
+                        subtitle = if (preferences.audioDelayMs == 0L) "None" else "${preferences.audioDelayMs}ms",
+                        valueBadge = "${preferences.audioDelayMs}ms",
+                        onClick = { showAudioDelayPicker = true },
+                    ),
                 ),
             )
 
@@ -355,6 +379,7 @@ fun SettingsScreen(
                         isToggle = true,
                         toggled = preferences.equalizerEnabled,
                         onToggle = { viewModel.setEqualizerEnabled(it) },
+                        onClick = { showEqualizerEditor = true },
                     ),
                     SettingsCardData(
                         icon = Icons.Default.RecordVoiceOver,
@@ -389,6 +414,53 @@ fun SettingsScreen(
                         title = "Subtitle Language",
                         subtitle = preferences.preferredSubtitleLanguage ?: "Default",
                         onClick = { showSubtitleLanguagePicker = true },
+                    ),
+                ),
+            )
+
+            SettingsCategoryRow(
+                title = "Subtitles",
+                cards = listOf(
+                    SettingsCardData(
+                        icon = Icons.Default.TextFields,
+                        title = "Font Size",
+                        subtitle = "${preferences.subtitleStyle.fontSize}sp",
+                        valueBadge = "${preferences.subtitleStyle.fontSize}",
+                        onClick = { showSubtitleFontPicker = true },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.Palette,
+                        title = "Text Color",
+                        subtitle = preferences.subtitleStyle.fontColor.name,
+                        valueBadge = preferences.subtitleStyle.fontColor.name,
+                        onClick = { showSubtitleColorPicker = true },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.ClosedCaption,
+                        title = "Background",
+                        subtitle = "${preferences.subtitleStyle.backgroundColor.name} ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
+                        onClick = { showSubtitleBgColorPicker = true },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.TextFields,
+                        title = "Edge Style",
+                        subtitle = preferences.subtitleStyle.edgeType.name,
+                        valueBadge = preferences.subtitleStyle.edgeType.name,
+                        onClick = { showSubtitleEdgePicker = true },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.Timer,
+                        title = "Sync Offset",
+                        subtitle = "${preferences.subtitleStyle.offsetMs}ms",
+                        valueBadge = "${preferences.subtitleStyle.offsetMs}ms",
+                        onClick = { showSubtitleOffsetPicker = true },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.ClosedCaption,
+                        title = "Position",
+                        subtitle = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                        valueBadge = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                        onClick = { showSubtitlePositionPicker = true },
                     ),
                 ),
             )
@@ -440,6 +512,16 @@ fun SettingsScreen(
                         isToggle = true,
                         toggled = preferences.dynamicTheming,
                         onToggle = { viewModel.setDynamicTheming(it) },
+                    ),
+                    SettingsCardData(
+                        icon = Icons.Default.Home,
+                        title = "Home Mode",
+                        subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video focus" else "Music focus",
+                        valueBadge = preferences.homeMode.name,
+                        onClick = {
+                            val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                            viewModel.setHomeMode(next)
+                        },
                     ),
                 ),
             )
@@ -732,6 +814,225 @@ fun SettingsScreen(
             onSelect = { index ->
                 viewModel.setAudioSkipPreviousThresholdMs(thresholds[index])
                 showSkipPrevThresholdPicker = false
+            },
+        )
+    }
+
+    if (showAudioDelayPicker) {
+        var sliderValue by remember { mutableStateOf(preferences.audioDelayMs.toFloat()) }
+        AlertDialog(
+            onDismissRequest = { showAudioDelayPicker = false },
+            title = { Text("Audio Delay") },
+            text = {
+                Column {
+                    val displayMs = sliderValue.toLong()
+                    Text(
+                        if (displayMs == 0L) "No delay" else "${displayMs}ms",
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        valueRange = -500f..500f,
+                        steps = 99,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setAudioDelayMs(sliderValue.toLong())
+                    showAudioDelayPicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAudioDelayPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showSubtitleFontPicker) {
+        val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
+        RadioPickerDialog(
+            title = "Subtitle Font Size",
+            options = sizes.map { RadioOption("${it}sp", "", it == preferences.subtitleStyle.fontSize) },
+            onDismiss = { showSubtitleFontPicker = false },
+            onSelect = { index ->
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = sizes[index]))
+                showSubtitleFontPicker = false
+            },
+        )
+    }
+
+    if (showSubtitleColorPicker) {
+        RadioPickerDialog(
+            title = "Subtitle Text Color",
+            options = SubtitleColor.entries.map { RadioOption(it.name, "", it == preferences.subtitleStyle.fontColor) },
+            onDismiss = { showSubtitleColorPicker = false },
+            onSelect = { index ->
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontColor = SubtitleColor.entries[index]))
+                showSubtitleColorPicker = false
+            },
+        )
+    }
+
+    if (showSubtitleBgColorPicker) {
+        var bgOpacity by remember { mutableStateOf(preferences.subtitleStyle.backgroundOpacity) }
+        AlertDialog(
+            onDismissRequest = { showSubtitleBgColorPicker = false },
+            title = { Text("Subtitle Background") },
+            text = {
+                Column {
+                    val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
+                    LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
+                        items(SubtitleColor.entries.size) { index ->
+                            val color = SubtitleColor.entries[index]
+                            val isSelected = color == preferences.subtitleStyle.backgroundColor
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundColor = color))
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = isSelected, onClick = {
+                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundColor = color))
+                                })
+                                Spacer(Modifier.size(12.dp))
+                                Text(color.name, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Opacity: ${(bgOpacity * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = bgOpacity,
+                        onValueChange = { bgOpacity = it },
+                        valueRange = 0f..1f,
+                        steps = 9,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundOpacity = bgOpacity))
+                    showSubtitleBgColorPicker = false
+                }) { Text("Done") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSubtitleBgColorPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showSubtitleEdgePicker) {
+        RadioPickerDialog(
+            title = "Subtitle Edge Style",
+            options = SubtitleEdgeType.entries.map { RadioOption(it.name, "", it == preferences.subtitleStyle.edgeType) },
+            onDismiss = { showSubtitleEdgePicker = false },
+            onSelect = { index ->
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(edgeType = SubtitleEdgeType.entries[index]))
+                showSubtitleEdgePicker = false
+            },
+        )
+    }
+
+    if (showSubtitleOffsetPicker) {
+        var sliderValue by remember { mutableStateOf(preferences.subtitleStyle.offsetMs.toFloat()) }
+        AlertDialog(
+            onDismissRequest = { showSubtitleOffsetPicker = false },
+            title = { Text("Subtitle Sync Offset") },
+            text = {
+                Column {
+                    Text("${sliderValue.toLong()}ms", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(16.dp))
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        valueRange = -5000f..5000f,
+                        steps = 99,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(offsetMs = sliderValue.toLong()))
+                    showSubtitleOffsetPicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSubtitleOffsetPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showSubtitlePositionPicker) {
+        var sliderValue by remember { mutableStateOf(preferences.subtitleStyle.verticalPosition) }
+        AlertDialog(
+            onDismissRequest = { showSubtitlePositionPicker = false },
+            title = { Text("Subtitle Vertical Position") },
+            text = {
+                Column {
+                    Text("${(sliderValue * 100).toInt()}%", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(16.dp))
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        valueRange = 0f..0.4f,
+                        steps = 7,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = sliderValue))
+                    showSubtitlePositionPicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSubtitlePositionPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showEqualizerEditor) {
+        val bandLevels = preferences.equalizerSettings.bandLevels.toMutableStateList()
+        AlertDialog(
+            onDismissRequest = { showEqualizerEditor = false },
+            title = { Text("Equalizer") },
+            text = {
+                val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
+                LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
+                    items(EqualizerSettings.BAND_FREQUENCIES.size) { i ->
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(
+                                "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("-15", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(28.dp))
+                                Slider(
+                                    value = (bandLevels[i] + 15).toFloat(),
+                                    onValueChange = { bandLevels[i] = (it - 15).toInt() },
+                                    valueRange = 0f..30f,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text("+15", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(28.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setEqualizerSettings(EqualizerSettings(bandLevels.toList()))
+                    showEqualizerEditor = false
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEqualizerEditor = false }) { Text("Cancel") }
             },
         )
     }

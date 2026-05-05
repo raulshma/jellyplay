@@ -63,10 +63,10 @@ class EqualizerHelper {
 
         settings.bandLevels.forEachIndexed { index, level ->
             if (index >= numBands) return@forEachIndexed
-            // level is in dB * 100, range [-1500, 1500]
-            val clamped = level.coerceIn(minLevel.toInt(), maxLevel.toInt())
+            // level is in dB, range [-15, 15]; convert to millibels (* 100)
+            val mB = (level * 100).coerceIn(minLevel.toInt(), maxLevel.toInt())
             try {
-                setBandLevel(index.toShort(), clamped.toShort())
+                setBandLevel(index.toShort(), mB.toShort())
             } catch (_: Exception) {
                 // ignore
             }

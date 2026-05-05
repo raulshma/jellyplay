@@ -34,7 +34,7 @@ object SubtitleParserHelper {
         val cues = mutableListOf<CuesWithTiming>()
         val collector = Consumer<CuesWithTiming> { cues.add(it) }
 
-        parser.parse(data, 0, data.size, SubtitleParser.OutputOptions.onlyCuesAfter(C.TIME_UNSET), collector)
+        parser.parse(data, 0, data.size, SubtitleParser.OutputOptions.allCues(), collector)
         parser.reset()
 
         return cues.flatMap { cuesWithTiming ->

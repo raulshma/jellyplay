@@ -14,7 +14,7 @@ class PlaybackRepositoryImpl @Inject constructor(
 ) : PlaybackRepository {
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
-        apiClient.reportPlaybackStart(info.itemId, info.sessionId)
+        apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
 
     override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> =
         apiClient.reportPlaybackProgress(
@@ -22,6 +22,7 @@ class PlaybackRepositoryImpl @Inject constructor(
             progress.sessionId,
             progress.positionTicks,
             progress.isPaused,
+            progress.playMethod,
         )
 
     override suspend fun reportPlaybackStopped(

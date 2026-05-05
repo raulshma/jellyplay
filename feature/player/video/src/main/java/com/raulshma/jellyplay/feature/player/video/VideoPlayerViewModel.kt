@@ -16,6 +16,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -24,20 +25,25 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitlePa
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -51,6 +57,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 data class TrackOption(
@@ -70,6 +77,8 @@ class VideoPlayerViewModel @Inject constructor(
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
     private val syncPlayManager: SyncPlayManager,
+    private val okHttpClient: OkHttpClient,
+    private val adaptiveBitrateManager: AdaptiveBitrateManager,
 ) : ViewModel() {
 
     private var _exoPlayer by mutableStateOf<ExoPlayer?>(null)
@@ -133,6 +142,8 @@ class VideoPlayerViewModel @Inject constructor(
     private var _playMethod by mutableStateOf("Direct Play")
     val playMethod get() = _playMethod
 
+    private var resolvedPlayMethod: PlayMethod = PlayMethod.DIRECT_PLAY
+
     private var _trickplayUrl by mutableStateOf<String?>(null)
     val trickplayUrl get() = _trickplayUrl
 
@@ -153,6 +164,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var _nightModeEnabled by mutableStateOf(false)
     val nightModeEnabled get() = _nightModeEnabled
+
+    private var _equalizerEnabled by mutableStateOf(false)
+    val equalizerEnabled get() = _equalizerEnabled
 
     var seekDurationMs by mutableLongStateOf(10_000L)
         private set
@@ -236,10 +250,14 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var progressJob: Job? = null
     private var positionJob: Job? = null
+    private var syncPlayCommandJob: Job? = null
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
+    private val equalizerHelper = EqualizerHelper()
+
+    private var autoplayNext by mutableStateOf(false)
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -251,6 +269,12 @@ class VideoPlayerViewModel @Inject constructor(
             if (playbackState == Player.STATE_READY) {
                 if (_dialogueBoostEnabled) applyDialogueBoost()
                 if (_nightModeEnabled) applyNightMode()
+                if (_equalizerEnabled) applyEqualizer()
+            }
+            if (playbackState == Player.STATE_ENDED) {
+                if (autoplayNext) {
+                    playNextEpisode()
+                }
             }
         }
 
@@ -269,6 +293,7 @@ class VideoPlayerViewModel @Inject constructor(
             val prefs = preferencesStore.preferences.first()
             _preferredPlayerType = prefs.preferredPlayer
             _subtitleStyle = prefs.subtitleStyle
+            subtitleOffsetMs = prefs.subtitleStyle.offsetMs
             _audioDelayMs = prefs.audioDelayMs
             _decoderMode = prefs.decoderMode
             _audioPassthrough = prefs.audioPassthrough
@@ -282,6 +307,7 @@ class VideoPlayerViewModel @Inject constructor(
             swipeSeekMaxMs = prefs.videoSwipeSeekMaxMs
             rememberBrightness = prefs.videoRememberBrightness
             brightnessLevel = prefs.videoBrightnessLevel
+            autoplayNext = prefs.videoAutoplayNext
 
             val defaultAspectName = prefs.videoDefaultAspectRatio
             try {
@@ -324,6 +350,12 @@ class VideoPlayerViewModel @Inject constructor(
                 source?.supportsTranscoding == true -> "Transcode"
                 else -> "Direct Play"
             }
+            resolvedPlayMethod = when {
+                source?.supportsDirectPlay == true -> PlayMethod.DIRECT_PLAY
+                source?.supportsDirectStream == true -> PlayMethod.DIRECT_STREAM
+                source?.supportsTranscoding == true -> PlayMethod.TRANSCODE
+                else -> PlayMethod.DIRECT_PLAY
+            }
 
             val url = playbackRepository.getStreamUrl(
                 itemId,
@@ -347,6 +379,7 @@ class VideoPlayerViewModel @Inject constructor(
                     itemId = itemId,
                     sessionId = playSessionId,
                     mediaSourceId = source?.id,
+                    playMethod = resolvedPlayMethod,
                 )
             )
 
@@ -378,7 +411,16 @@ class VideoPlayerViewModel @Inject constructor(
             .setUsage(androidx.media3.common.C.USAGE_MEDIA)
             .build()
 
+        val rendererMode = when (_decoderMode) {
+            DecoderMode.HW_PREFERRED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+            DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+            DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+        }
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(rendererMode)
+
         val player = ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setAudioAttributes(audioAttributes, true)
@@ -423,7 +465,14 @@ class VideoPlayerViewModel @Inject constructor(
         if (_dialogueBoostEnabled) applyDialogueBoost()
 
         _nightModeEnabled = prefs.nightModeEnabled
+        nightMode.setTargetGain(prefs.audioNightModeGain)
         if (_nightModeEnabled) applyNightMode()
+
+        _equalizerEnabled = prefs.equalizerEnabled
+        if (_equalizerEnabled) {
+            equalizerHelper.setSettings(prefs.equalizerSettings)
+            applyEqualizer()
+        }
 
         if (prefs.preferredAudioLanguage != null) {
             val params = trackSelector.buildUponParameters()
@@ -434,6 +483,13 @@ class VideoPlayerViewModel @Inject constructor(
         if (prefs.preferredSubtitleLanguage != null) {
             val params = trackSelector.buildUponParameters()
             params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
+            trackSelector.setParameters(params)
+        }
+
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
+        if (maxBitrate != null) {
+            val params = trackSelector.buildUponParameters()
+            params.setMaxVideoBitrate(maxBitrate.toInt())
             trackSelector.setParameters(params)
         }
     }
@@ -458,6 +514,10 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         engine.initialize(url, title, startPositionTicks / 10_000)
+        if (defaultSpeed != 1.0f) {
+            _playbackSpeed = defaultSpeed
+            engine.setPlaybackSpeed(defaultSpeed)
+        }
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -548,8 +608,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
             val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
             val request = okhttp3.Request.Builder().url(url).build()
-            val client = okhttp3.OkHttpClient()
-            val response = client.newCall(request).execute()
+            val response = okHttpClient.newCall(request).execute()
             response.use { resp ->
                 val bytes = resp.body?.bytes() ?: return
                 val cues = SubtitleParserHelper.parseSubtitles(bytes, mimeType)
@@ -607,10 +666,6 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesStore.setSubtitleStyle(style)
         }
-    }
-
-    fun updateSubtitleOffset(offsetMs: Long) {
-        subtitleOffsetMs = offsetMs
     }
 
     fun toggleDialogueBoost() {
@@ -676,6 +731,51 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    fun toggleEqualizer() {
+        _equalizerEnabled = !_equalizerEnabled
+        applyEqualizer()
+        viewModelScope.launch {
+            preferencesStore.setEqualizerEnabled(_equalizerEnabled)
+        }
+    }
+
+    fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
+        equalizerHelper.setSettings(settings)
+        viewModelScope.launch {
+            preferencesStore.setEqualizerSettings(settings)
+        }
+    }
+
+    private fun applyEqualizer() {
+        val player = _exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        equalizerHelper.attach(audioSessionId)
+        equalizerHelper.setEnabled(_equalizerEnabled)
+    }
+
+    private fun playNextEpisode() {
+        val detail = _mediaDetail ?: return
+        val seriesId = detail.item.seriesId ?: return
+        viewModelScope.launch {
+            val episodes = mediaRepository.getEpisodes(seriesId, detail.item.seasonId ?: return@launch)
+                .getOrElse { return@launch }
+            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+            if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
+            val next = episodes[currentIndex + 1]
+            initialize(next.id, null, 0L)
+        }
+    }
+
+    fun saveBrightness(level: Float) {
+        brightnessLevel = level
+        if (rememberBrightness) {
+            viewModelScope.launch {
+                preferencesStore.setVideoBrightnessLevel(level)
+            }
+        }
+    }
+
     fun skipIntro() {
         val ts = _introTimestamps ?: return
         val targetMs = ts.introEndTicks / 10_000
@@ -720,6 +820,7 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             syncPlayManager.joinGroup(groupId)
             _syncPlayGroupName = groupId
+            startSyncPlayCommandListener()
         }
     }
 
@@ -729,6 +830,64 @@ class VideoPlayerViewModel @Inject constructor(
             _syncPlayGroupName = null
             _syncPlayParticipantCount = 0
             _isSyncPlaySynced = false
+            syncPlayCommandJob?.cancel()
+        }
+    }
+
+    private fun startSyncPlayCommandListener() {
+        syncPlayCommandJob?.cancel()
+        syncPlayCommandJob = viewModelScope.launch {
+            syncPlayManager.commands.collect { command ->
+                when (command) {
+                    is SyncPlayCommand.Play -> {
+                        val posMs = command.positionTicks / 10_000
+                        _playerEngine?.let { engine ->
+                            engine.seekTo(posMs)
+                            engine.play()
+                        } ?: _exoPlayer?.let { player ->
+                            player.seekTo(posMs)
+                            player.play()
+                        }
+                        _isSyncPlaySynced = true
+                    }
+                    is SyncPlayCommand.Pause -> {
+                        val posMs = command.positionTicks / 10_000
+                        _playerEngine?.let { engine ->
+                            engine.seekTo(posMs)
+                            engine.pause()
+                        } ?: _exoPlayer?.let { player ->
+                            player.seekTo(posMs)
+                            player.pause()
+                        }
+                        _isSyncPlaySynced = true
+                    }
+                    is SyncPlayCommand.Seek -> {
+                        val posMs = command.positionTicks / 10_000
+                        _playerEngine?.seekTo(posMs) ?: _exoPlayer?.seekTo(posMs)
+                    }
+                    is SyncPlayCommand.PrepareSession -> {
+                        val posMs = command.positionTicks / 10_000
+                        if (!command.isPlaying) {
+                            _playerEngine?.let { engine ->
+                                engine.seekTo(posMs)
+                                engine.pause()
+                            } ?: _exoPlayer?.let { player ->
+                                player.seekTo(posMs)
+                                player.pause()
+                            }
+                        }
+                        viewModelScope.launch { syncPlayManager.reportReady() }
+                        _isSyncPlaySynced = false
+                    }
+                    is SyncPlayCommand.GroupUpdate -> {
+                        _syncPlayGroupName = command.groupName
+                        _syncPlayParticipantCount = command.participantCount
+                    }
+                    is SyncPlayCommand.WaitForGroup -> {
+                        _isSyncPlaySynced = false
+                    }
+                }
+            }
         }
     }
 
@@ -909,8 +1068,8 @@ class VideoPlayerViewModel @Inject constructor(
                     .setLanguage(stream.language)
                     .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
                     .setSelectionFlags(
-                        if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0 or
-                        if (stream.isForced) C.SELECTION_FLAG_FORCED else 0
+                        (if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
+                        (if (stream.isForced) C.SELECTION_FLAG_FORCED else 0)
                     )
                     .build()
             }
@@ -971,6 +1130,7 @@ class VideoPlayerViewModel @Inject constructor(
                         sessionId = playSessionId,
                         positionTicks = positionTicks,
                         isPaused = isPaused,
+                        playMethod = resolvedPlayMethod,
                     )
                 )
             }
@@ -980,6 +1140,7 @@ class VideoPlayerViewModel @Inject constructor(
     private fun releaseInternals() {
         progressJob?.cancel()
         positionJob?.cancel()
+        syncPlayCommandJob?.cancel()
         _playerEngine?.release()
         _playerEngine = null
         _exoPlayer?.removeListener(playerListener)
@@ -993,6 +1154,7 @@ class VideoPlayerViewModel @Inject constructor(
         _remoteSubtitles = emptyList()
         dialogueBoost.detach()
         nightMode.detach()
+        equalizerHelper.detach()
         syncPlayManager.reset()
     }
 

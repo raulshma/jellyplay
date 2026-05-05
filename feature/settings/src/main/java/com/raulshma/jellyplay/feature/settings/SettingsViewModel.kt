@@ -10,9 +10,14 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.SubtitleColor
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -257,5 +262,21 @@ class SettingsViewModel @Inject constructor(
 
     fun setAudioAutoplayNext(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setAudioAutoplayNext(enabled) }
+    }
+
+    fun setAudioDelayMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setAudioDelay(ms) }
+    }
+
+    fun setHomeMode(mode: HomeMode) {
+        viewModelScope.launch { preferencesStore.setHomeMode(mode) }
+    }
+
+    fun setSubtitleStyle(style: SubtitleStyle) {
+        viewModelScope.launch { preferencesStore.setSubtitleStyle(style) }
+    }
+
+    fun setEqualizerSettings(settings: EqualizerSettings) {
+        viewModelScope.launch { preferencesStore.setEqualizerSettings(settings) }
     }
 }

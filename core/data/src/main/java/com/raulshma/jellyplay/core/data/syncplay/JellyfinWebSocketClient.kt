@@ -1,0 +1,137 @@
+package com.raulshma.jellyplay.core.data.syncplay
+
+import android.util.Log
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicInteger
+import javax.inject.Inject
+import javax.inject.Singleton
+
+data class SyncPlayEvent(
+    val type: String,
+    val data: JSONObject,
+)
+
+@Singleton
+class JellyfinWebSocketClient @Inject constructor(
+    private val okHttpClient: OkHttpClient,
+) {
+    private var webSocket: WebSocket? = null
+    private val _events = MutableSharedFlow<SyncPlayEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<SyncPlayEvent> = _events.asSharedFlow()
+
+    private var serverUrl: String? = null
+    private var token: String? = null
+    private var deviceId: String? = null
+    private val reconnectAttempts = AtomicInteger(0)
+    private val maxReconnectAttempts = 5
+
+    fun connect(serverAddress: String, accessToken: String, device: String) {
+        disconnect()
+        serverUrl = serverAddress
+        token = accessToken
+        deviceId = device
+        reconnectAttempts.set(0)
+        connectInternal()
+    }
+
+    private fun connectInternal() {
+        val serverAddress = serverUrl ?: return
+        val accessToken = token ?: return
+        val device = deviceId ?: return
+
+        val wsUrl = buildWsUrl(serverAddress, accessToken, device)
+        val request = Request.Builder().url(wsUrl).build()
+        webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.d(TAG, "WebSocket connected")
+                reconnectAttempts.set(0)
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                handleMessage(text)
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.w(TAG, "WebSocket failure", t)
+                scheduleReconnect()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d(TAG, "WebSocket closed: $code $reason")
+            }
+        })
+    }
+
+    private fun scheduleReconnect() {
+        val attempts = reconnectAttempts.incrementAndGet()
+        if (attempts > maxReconnectAttempts) {
+            Log.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, giving up")
+            return
+        }
+        val delayMs = (1000L * attempts).coerceAtMost(30_000L)
+        Thread {
+            try {
+                Thread.sleep(delayMs)
+                if (serverUrl != null && token != null) {
+                    Log.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
+                    connectInternal()
+                }
+            } catch (_: InterruptedException) {}
+        }.start()
+    }
+
+    fun disconnect() {
+        serverUrl = null
+        token = null
+        deviceId = null
+        reconnectAttempts.set(maxReconnectAttempts + 1)
+        webSocket?.close(1000, "Client disconnecting")
+        webSocket = null
+    }
+
+    private fun buildWsUrl(serverAddress: String, accessToken: String, device: String): String {
+        val base = serverAddress.trim().trimEnd('/')
+            .replace("https://", "wss://")
+            .replace("http://", "ws://")
+        return "$base/socket?api_key=$accessToken&deviceId=$device"
+    }
+
+    private fun handleMessage(text: String) {
+        try {
+            val json = JSONObject(text)
+            val messageType = json.optString("MessageType", "")
+            val data = json.optJSONObject("Data") ?: JSONObject()
+
+            when (messageType) {
+                "SyncPlayCommand",
+                "SyncPlayGroupUpdate",
+                "KeepAlive",
+                "UserJoined",
+                "UserLeft",
+                "GroupLeft",
+                "GroupJoined" -> {
+                    _events.tryEmit(SyncPlayEvent(type = messageType, data = data))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse WebSocket message", e)
+        }
+    }
+
+    fun sendKeepAlive() {
+        val msg = JSONObject().put("MessageType", "KeepAlive")
+        webSocket?.send(msg.toString())
+    }
+
+    companion object {
+        private const val TAG = "JellyfinWS"
+    }
+}

@@ -133,13 +133,18 @@ interface JellyfinApiClient {
 
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
-    suspend fun reportPlaybackStart(itemId: String, sessionId: String): Result<Unit>
+    suspend fun reportPlaybackStart(
+        itemId: String,
+        sessionId: String,
+        playMethod: com.raulshma.jellyplay.core.model.PlayMethod = com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY,
+    ): Result<Unit>
 
     suspend fun reportPlaybackProgress(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
         isPaused: Boolean,
+        playMethod: com.raulshma.jellyplay.core.model.PlayMethod = com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY,
     ): Result<Unit>
 
     suspend fun reportPlaybackStopped(

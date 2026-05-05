@@ -8,6 +8,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -101,8 +102,12 @@ class ExoPlayerEngine(
     override fun play() { player?.play() }
     override fun pause() { player?.pause() }
     override fun seekTo(positionMs: Long) { player?.seekTo(positionMs) }
-    override fun seekForward(amountMs: Long) { player?.seekForward() }
-    override fun seekBack(amountMs: Long) { player?.seekBack() }
+    override fun seekForward(amountMs: Long) {
+        player?.let { it.seekTo((it.currentPosition + amountMs).coerceAtMost(it.duration)) }
+    }
+    override fun seekBack(amountMs: Long) {
+        player?.let { it.seekTo((it.currentPosition - amountMs).coerceAtLeast(0)) }
+    }
     override fun setPlaybackSpeed(speed: Float) { player?.setPlaybackSpeed(speed) }
 
     override fun setAudioDelay(ms: Long) {
@@ -114,8 +119,8 @@ class ExoPlayerEngine(
     }
 
     override fun setAudioPassthrough(enabled: Boolean) {
-        val p = player ?: return
-        p.audioAttributes
+        // ExoPlayer does not support raw audio passthrough (AC3/DTS/etc).
+        // Use mpv or LibVLC engine for passthrough support.
     }
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {
@@ -131,6 +136,8 @@ class ExoPlayerEngine(
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
     override val durationMs: Long get() = player?.duration?.coerceAtLeast(0L) ?: 0L
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
+    override val supportsAudioDelay: Boolean get() = false
+    override val supportsAudioPassthrough: Boolean get() = false
 
     override val audioTracks: List<PlayerEngine.TrackInfo>
         get() = buildTracks(C.TRACK_TYPE_AUDIO, PlayerEngine.TrackType.AUDIO)
@@ -140,20 +147,40 @@ class ExoPlayerEngine(
 
     override fun selectAudioTrack(index: Int) {
         val selector = trackSelector ?: return
+        val p = player ?: return
         val params = selector.buildUponParameters()
         if (index < 0) {
             params.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        } else {
+            val groups = p.currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+            val groupIndex = index.coerceIn(groups.indices)
+            if (groupIndex in groups.indices) {
+                val group = groups[groupIndex].mediaTrackGroup
+                params.setOverrideForType(
+                    TrackSelectionOverride(group, (0 until group.length).toList())
+                )
+            }
         }
         selector.setParameters(params)
     }
 
     override fun selectSubtitleTrack(index: Int) {
         val selector = trackSelector ?: return
+        val p = player ?: return
         val params = selector.buildUponParameters()
         if (index < 0) {
             params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            params.clearOverridesOfType(C.TRACK_TYPE_TEXT)
         } else {
             params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            val groups = p.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            val groupIndex = index.coerceIn(groups.indices)
+            if (groupIndex in groups.indices) {
+                val group = groups[groupIndex].mediaTrackGroup
+                params.setOverrideForType(
+                    TrackSelectionOverride(group, (0 until group.length).toList())
+                )
+            }
         }
         selector.setParameters(params)
     }

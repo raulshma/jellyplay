@@ -12,6 +12,14 @@ class NightModeHelper {
     var isEnabled: Boolean = false
         private set
 
+    var targetGain: Int = 3000
+        private set
+
+    fun setTargetGain(gain: Int) {
+        targetGain = gain
+        enhancer?.setTargetGain(gain.toInt())
+    }
+
     fun attach(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         if (audioSessionId == currentAudioSessionId && enhancer != null) return
@@ -21,7 +29,7 @@ class NightModeHelper {
 
         enhancer = try {
             LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(3000)
+                setTargetGain(targetGain.toInt())
                 enabled = isEnabled
             }
         } catch (e: Exception) {

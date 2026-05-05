@@ -64,9 +64,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -76,9 +80,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -126,6 +133,8 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     var showControls by remember { mutableStateOf(true) }
     var showSpeedPicker by remember { mutableStateOf(false) }
@@ -234,6 +243,17 @@ fun VideoPlayerScreen(
     LaunchedEffect(viewModel.frameRateMatching, viewModel.videoFrameRate) {
         if (viewModel.frameRateMatching && viewModel.videoFrameRate != null) {
             activity?.let { FrameRateMatcher.matchFrameRate(it, viewModel.videoFrameRate) }
+        }
+    }
+
+    LaunchedEffect(viewModel.rememberBrightness) {
+        if (viewModel.rememberBrightness && viewModel.brightnessLevel != 0.5f) {
+            activity?.let { act ->
+                val layout = act.window.attributes
+                layout.screenBrightness = viewModel.brightnessLevel
+                act.window.attributes = layout
+                brightnessOverlay = viewModel.brightnessLevel
+            }
         }
     }
 
@@ -406,6 +426,34 @@ fun VideoPlayerScreen(
                             )
                         }
                     },
+                    update = { view ->
+                        val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
+                        val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
+                        view.subtitleView?.setStyle(
+                            androidx.media3.ui.CaptionStyleCompat(
+                                subtitleStyle.fontColor.value,
+                                bgColorWithAlpha,
+                                android.graphics.Color.TRANSPARENT,
+                                when (subtitleStyle.edgeType) {
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
+                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
+                                    else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+                                },
+                                subtitleStyle.edgeColor.value,
+                                null,
+                            )
+                        )
+                        view.subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
+                        val bottomPaddingPx = (subtitleStyle.verticalPosition * view.height).toInt()
+                        view.subtitleView?.setPadding(
+                            view.subtitleView?.paddingLeft ?: 0,
+                            view.subtitleView?.paddingTop ?: 0,
+                            view.subtitleView?.paddingRight ?: 0,
+                            bottomPaddingPx,
+                        )
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -454,6 +502,9 @@ fun VideoPlayerScreen(
                 }
             },
             onClearOverlays = {
+                if (brightnessOverlay in 0f..1f) {
+                    viewModel.saveBrightness(brightnessOverlay)
+                }
                 seekDirection = 0
                 seekOffsetMs = 0L
                 brightnessOverlay = -1f
@@ -540,6 +591,19 @@ fun VideoPlayerScreen(
             )
         }
 
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 200.dp),
+        ) { data ->
+            Snackbar(
+                snackbarData = data,
+                containerColor = Color.DarkGray.copy(alpha = 0.9f),
+                contentColor = Color.White,
+            )
+        }
+
         PlayerControls(
             title = title,
             subtitle = subtitle,
@@ -578,9 +642,33 @@ fun VideoPlayerScreen(
             onAspectRatioClick = { showAspectRatio = true },
             onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
             onNightModeClick = { viewModel.toggleNightMode() },
-            onAudioDelayClick = { showAudioDelay = true },
+            onAudioDelayClick = {
+                val engine = viewModel.playerEngine
+                if (engine == null || engine.supportsAudioDelay) {
+                    showAudioDelay = true
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "Audio delay requires mpv or LibVLC player engine",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+            },
             onDecoderClick = { showDecoderPicker = true },
-            onPassthroughClick = { viewModel.setAudioPassthrough(!viewModel.audioPassthrough) },
+            onPassthroughClick = {
+                val engine = viewModel.playerEngine
+                if (engine == null || engine.supportsAudioPassthrough) {
+                    viewModel.setAudioPassthrough(!viewModel.audioPassthrough)
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "Audio passthrough requires mpv or LibVLC player engine",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+            },
             onCastClick = { viewModel.castToDevice() },
             onOcrClick = {
                 val pv = playerViewRef
@@ -1653,5 +1741,3 @@ private fun Context.findActivity(): Activity? {
     }
     return null
 }
-
-private fun mutableLongStateOf(initial: Long) = mutableStateOf(initial)

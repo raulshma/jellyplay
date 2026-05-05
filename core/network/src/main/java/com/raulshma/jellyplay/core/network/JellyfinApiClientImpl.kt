@@ -387,6 +387,10 @@ class JellyfinApiClientImpl @Inject constructor(
                         sampleRate = stream.sampleRate,
                         channels = stream.channels,
                         deliveryUrl = stream.deliveryUrl,
+                        videoRange = stream.videoRange?.serialName,
+                        videoRangeType = stream.videoRangeType?.serialName,
+                        realFrameRate = stream.realFrameRate,
+                        videoDoViTitle = stream.videoDoViTitle,
                     )
                 } ?: emptyList(),
             )
@@ -649,9 +653,18 @@ class JellyfinApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun reportPlaybackStart(itemId: String, sessionId: String): Result<Unit> =
+    override suspend fun reportPlaybackStart(
+        itemId: String,
+        sessionId: String,
+        playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
+    ): Result<Unit> =
         runCatching {
             val uuid = java.util.UUID.fromString(itemId)
+            val sdkPlayMethod = when (playMethod) {
+                com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
+                com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
+                com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE -> org.jellyfin.sdk.model.api.PlayMethod.TRANSCODE
+            }
             requireApi().playStateApi.reportPlaybackStart(
                 org.jellyfin.sdk.model.api.PlaybackStartInfo(
                     canSeek = true,
@@ -659,7 +672,7 @@ class JellyfinApiClientImpl @Inject constructor(
                     sessionId = sessionId,
                     isPaused = false,
                     isMuted = false,
-                    playMethod = org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY,
+                    playMethod = sdkPlayMethod,
                     repeatMode = org.jellyfin.sdk.model.api.RepeatMode.REPEAT_NONE,
                     playbackOrder = org.jellyfin.sdk.model.api.PlaybackOrder.DEFAULT,
                 )
@@ -671,8 +684,14 @@ class JellyfinApiClientImpl @Inject constructor(
         sessionId: String,
         positionTicks: Long,
         isPaused: Boolean,
+        playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
     ): Result<Unit> = apiResult {
         val uuid = java.util.UUID.fromString(itemId)
+        val sdkPlayMethod = when (playMethod) {
+            com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
+            com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
+            com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE -> org.jellyfin.sdk.model.api.PlayMethod.TRANSCODE
+        }
         requireApi().playStateApi.reportPlaybackProgress(
             org.jellyfin.sdk.model.api.PlaybackProgressInfo(
                 canSeek = true,
@@ -681,7 +700,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 positionTicks = positionTicks,
                 isPaused = isPaused,
                 isMuted = false,
-                playMethod = org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY,
+                playMethod = sdkPlayMethod,
                 repeatMode = org.jellyfin.sdk.model.api.RepeatMode.REPEAT_NONE,
                 playbackOrder = org.jellyfin.sdk.model.api.PlaybackOrder.DEFAULT,
             )

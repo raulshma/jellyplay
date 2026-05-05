@@ -9,6 +9,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -18,20 +20,27 @@ object SubtitleOcrHelper {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
+    private val semaphore = Semaphore(1)
+
     suspend fun recognizeTextFromBitmap(bitmap: Bitmap): String =
-        suspendCancellableCoroutine { continuation ->
-            val image = InputImage.fromBitmap(bitmap, 0)
-            recognizer.process(image)
-                .addOnSuccessListener { visionText ->
-                    val text = visionText.textBlocks
-                        .flatMap { block -> block.lines }
-                        .joinToString("\n") { line -> line.text }
-                        .trim()
-                    continuation.resume(text)
+        semaphore.withPermit {
+            suspendCancellableCoroutine { continuation ->
+                val image = InputImage.fromBitmap(bitmap, 0)
+                val task = recognizer.process(image)
+                    .addOnSuccessListener { visionText ->
+                        val text = visionText.textBlocks
+                            .flatMap { block -> block.lines }
+                            .joinToString("\n") { line -> line.text }
+                            .trim()
+                        continuation.resume(text)
+                    }
+                    .addOnFailureListener { e ->
+                        continuation.resumeWithException(e)
+                    }
+                continuation.invokeOnCancellation {
+                    task.exception
                 }
-                .addOnFailureListener { e ->
-                    continuation.resumeWithException(e)
-                }
+            }
         }
 
     suspend fun extractSubtitleTextFromFrame(

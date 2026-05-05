@@ -1,7 +1,7 @@
 [versions]
-agp = "9.2.0"
-kotlin = "2.1.21"
-ksp = "2.1.21-2.0.2"
+agp = "9.2.1"
+kotlin = "2.2.10"
+ksp = "2.3.2"
 composeBom = "2025.05.00"
 composeMaterial3 = "1.4.0-alpha14"
 composeMaterial3Adaptive = "1.1.0"
@@ -31,6 +31,7 @@ mlkitTextRecognition = "16.0.1"
 slf4j = "2.0.13"
 libmpv = "0.1.12"
 libvlc = "3.7.0"
+okhttp = "4.12.0"
 
 [libraries]
 # AndroidX Core
@@ -122,6 +123,9 @@ slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 # Player Engines
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
+
+# OkHttp
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

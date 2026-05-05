@@ -1,11 +1,17 @@
 package com.raulshma.jellyplay.core.network.di
 
+import android.content.Context
+import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -17,4 +23,21 @@ abstract class NetworkModule {
     abstract fun bindJellyfinApiClient(
         impl: JellyfinApiClientImpl,
     ): JellyfinApiClient
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideConnectivityManager(
+            @ApplicationContext context: Context,
+        ): ConnectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        @Provides
+        @Singleton
+        fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
 }

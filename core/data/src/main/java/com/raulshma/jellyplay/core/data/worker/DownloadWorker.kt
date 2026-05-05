@@ -9,6 +9,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.firstOrNull
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -22,6 +23,9 @@ class DownloadWorker(
     @InstallIn(SingletonComponent::class)
     interface DownloadWorkerEntryPoint {
         fun downloadDao(): DownloadDao
+        fun serverDao(): com.raulshma.jellyplay.core.database.dao.ServerDao
+        fun userDao(): com.raulshma.jellyplay.core.database.dao.UserDao
+        fun preferencesStore(): com.raulshma.jellyplay.core.datastore.UserPreferencesStore
     }
 
     override suspend fun doWork(): Result {
@@ -31,6 +35,7 @@ class DownloadWorker(
             DownloadWorkerEntryPoint::class.java,
         )
         val dao = entryPoint.downloadDao()
+        val prefs = entryPoint.preferencesStore()
 
         val entity = dao.getDownloadById(downloadId) ?: return Result.failure()
 
@@ -41,12 +46,21 @@ class DownloadWorker(
         val existingBytes = entity.downloadedBytes
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
 
+        val activeUserId = prefs.activeUserId.firstOrNull()
+        val accessToken = activeUserId?.let { uid ->
+            entryPoint.userDao().getUserById(uid)?.accessToken
+        }
+
         return try {
             val url = java.net.URL(entity.downloadUrl)
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
             connection.setRequestProperty("User-Agent", "JellyPlay/1.0.0")
+
+            if (!accessToken.isNullOrBlank()) {
+                connection.setRequestProperty("X-Emby-Token", accessToken)
+            }
 
             if (existingBytes > 0) {
                 connection.setRequestProperty("Range", "bytes=$existingBytes-")

@@ -37,6 +37,8 @@ class CastManager @Inject constructor(
             false
         }
 
+    private var currentListener: Player.Listener? = null
+
     fun getCastPlayer(listener: Player.Listener): CastPlayer? {
         if (!isConnected) return null
         if (castPlayer == null) {
@@ -45,16 +47,21 @@ class CastManager @Inject constructor(
                 sessionListener = object : SessionAvailabilityListener {
                     override fun onCastSessionAvailable() {}
                     override fun onCastSessionUnavailable() {
-                        listener.onPlaybackStateChanged(Player.STATE_ENDED)
+                        currentListener?.onPlaybackStateChanged(Player.STATE_ENDED)
                     }
                 }
                 castPlayer = CastPlayer(castContext).apply {
                     addListener(listener)
                     setSessionAvailabilityListener(sessionListener!!)
                 }
+                currentListener = listener
             } catch (_: Exception) {
                 return null
             }
+        } else if (currentListener !== listener) {
+            currentListener?.let { castPlayer?.removeListener(it) }
+            castPlayer?.addListener(listener)
+            currentListener = listener
         }
         return castPlayer
     }
@@ -63,6 +70,7 @@ class CastManager @Inject constructor(
         castPlayer?.release()
         castPlayer = null
         sessionListener = null
+        currentListener = null
     }
 
     fun loadMedia(

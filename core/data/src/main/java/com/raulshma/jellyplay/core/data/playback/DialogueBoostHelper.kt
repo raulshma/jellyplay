@@ -16,14 +16,11 @@ class DialogueBoostHelper {
 
     private var equalizer: Equalizer? = null
     private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+    private var savedBandLevels: Map<Int, Short> = emptyMap()
 
     var isEnabled: Boolean = false
         private set
 
-    /**
-     * Attaches the equalizer to the given [audioSessionId].
-     * If already attached to the same session this is a no-op.
-     */
     fun attach(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         if (audioSessionId == currentAudioSessionId && equalizer != null) return
@@ -33,14 +30,14 @@ class DialogueBoostHelper {
 
         equalizer = try {
             Equalizer(0, audioSessionId).apply {
-                // Boost mid-range bands that cover human voice frequencies
+                savedBandLevels = (0 until numberOfBands.toInt()).associateWith { band ->
+                    getBandLevel(band.toShort())
+                }
                 val bandLevels = boostVocalBands()
                 bandLevels.forEach { (band, level) ->
                     try {
                         setBandLevel(band.toShort(), level.toShort())
-                    } catch (_: Exception) {
-                        // Band may not exist on this device
-                    }
+                    } catch (_: Exception) {}
                 }
                 enabled = isEnabled
             }
@@ -50,20 +47,31 @@ class DialogueBoostHelper {
         }
     }
 
-    /**
-     * Enables or disables the effect. If the equalizer has not yet been
-     * attached this simply updates the pending state.
-     */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        equalizer?.enabled = enabled
+        if (enabled) {
+            equalizer?.apply {
+                val bandLevels = boostVocalBands()
+                bandLevels.forEach { (band, level) ->
+                    try { setBandLevel(band.toShort(), level.toShort()) } catch (_: Exception) {}
+                }
+                this.enabled = true
+            }
+        } else {
+            equalizer?.apply {
+                savedBandLevels.forEach { (band, level) ->
+                    try { setBandLevel(band.toShort(), level) } catch (_: Exception) {}
+                }
+                this.enabled = false
+            }
+        }
     }
 
-    /** Releases the underlying audio effect. */
     fun detach() {
         equalizer?.release()
         equalizer = null
         currentAudioSessionId = C.AUDIO_SESSION_ID_UNSET
+        savedBandLevels = emptyMap()
     }
 
     /**

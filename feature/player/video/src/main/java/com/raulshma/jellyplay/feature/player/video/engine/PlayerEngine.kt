@@ -30,6 +30,9 @@ interface PlayerEngine {
     val durationMs: Long
     val playbackSpeed: Float
 
+    val supportsAudioDelay: Boolean get() = false
+    val supportsAudioPassthrough: Boolean get() = false
+
     data class TrackInfo(
         val index: Int,
         val label: String,

@@ -254,6 +254,7 @@ fun SubtitleStyleSheet(
                         edgeType = default.edgeType
                         edgeColor = default.edgeColor
                         offsetMs = default.offsetMs
+                        verticalPosition = default.verticalPosition
                         onStyleChange(default)
                     },
                     label = { Text("Reset", fontSize = 12.sp) },

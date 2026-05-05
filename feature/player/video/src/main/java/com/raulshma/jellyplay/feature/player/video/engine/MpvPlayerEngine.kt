@@ -84,7 +84,7 @@ class MpvPlayerEngine(
         mpvView?.let { view ->
             try {
                 if (startPositionMs > 0) {
-                    view.mpv.setOptionString("start", "+${startPositionMs / 1000}")
+                    view.mpv.setOptionString("start", "+${startPositionMs / 1000.0}")
                 }
                 view.playFile(url)
                 pendingUrl = null
@@ -181,6 +181,8 @@ class MpvPlayerEngine(
     }
 
     override val isPlaying: Boolean get() = _isPlaying
+    override val supportsAudioDelay: Boolean get() = true
+    override val supportsAudioPassthrough: Boolean get() = true
 
     override val currentPositionMs: Long
         get() = try {

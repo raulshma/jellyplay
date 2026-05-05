@@ -27,10 +27,12 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.kotlinx.serialization.json)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(libs.paging.runtime)
     implementation(libs.work.runtime.ktx)
     implementation(libs.media3.session)
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
     implementation(libs.play.services.cast.framework)
+    implementation(libs.okhttp)
 }
