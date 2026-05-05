@@ -36,6 +36,7 @@ data class DownloadEntity(
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
     val status: String,
+    val speedBytesPerSec: Long = 0L,
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
     val imageBlurHash: String? = null,

@@ -769,6 +769,7 @@ private fun DetailContentBody(
                     }
                 }
             }
+
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 2) {
@@ -854,9 +855,10 @@ private fun DetailContentBody(
                                     imageUrl = getImageUrl(person.id),
                                     onClick = { onPersonClick(person.id) },
                                 )
-                            }
-                        }
-                    }
+                }
+            }
+
+        }
                 }
             }
         }

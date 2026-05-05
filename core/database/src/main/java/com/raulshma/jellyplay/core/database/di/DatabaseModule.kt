@@ -36,6 +36,12 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN speedBytesPerSec INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(
@@ -45,7 +51,7 @@ object DatabaseModule {
         JellyPlayDatabase::class.java,
         "jellyplay.db",
     )
-        .addMigrations(MIGRATION_2_3)
+        .addMigrations(MIGRATION_2_3, MIGRATION_4_5)
         .fallbackToDestructiveMigration(true)
         .build()
 

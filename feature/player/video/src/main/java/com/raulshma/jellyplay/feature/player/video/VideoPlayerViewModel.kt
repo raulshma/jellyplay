@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
@@ -75,6 +76,7 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
@@ -388,11 +390,23 @@ class VideoPlayerViewModel @Inject constructor(
                 else -> PlayMethod.DIRECT_PLAY
             }
 
-            val url = playbackRepository.getStreamUrl(
-                itemId,
-                source?.id ?: "",
-                startPositionTicks,
-            )
+            val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+            val file = localDownload?.let {
+                java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+            }
+            val url = if (localDownload != null && file != null &&
+                localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
+            ) {
+                _playMethod = "Offline"
+                resolvedPlayMethod = PlayMethod.DIRECT_PLAY
+                Uri.fromFile(file).toString()
+            } else {
+                playbackRepository.getStreamUrl(
+                    itemId,
+                    source?.id ?: "",
+                    startPositionTicks,
+                )
+            }
             _streamUrl = url
 
             when (_preferredPlayerType) {

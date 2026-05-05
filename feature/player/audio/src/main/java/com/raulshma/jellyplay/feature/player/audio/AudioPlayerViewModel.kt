@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -57,6 +58,7 @@ class AudioPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
 ) : ViewModel() {
@@ -156,10 +158,20 @@ class AudioPlayerViewModel @Inject constructor(
                     albumArtBlurHash = detail.item.blurHashes.primary
 
                     val source = detail.mediaSources.firstOrNull()
-                    val url = playbackRepository.getStreamUrl(
-                        itemId,
-                        source?.id ?: "",
-                    )
+                    val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+                    val file = localDownload?.let {
+                        java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+                    }
+                    val url = if (localDownload != null && file != null &&
+                        localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
+                    ) {
+                        Uri.fromFile(file).toString()
+                    } else {
+                        playbackRepository.getStreamUrl(
+                            itemId,
+                            source?.id ?: "",
+                        )
+                    }
 
                     val artworkUri = Uri.parse(albumArtUrl)
 

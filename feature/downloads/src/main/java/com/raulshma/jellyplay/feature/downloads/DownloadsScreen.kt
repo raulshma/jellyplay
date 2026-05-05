@@ -112,6 +112,8 @@ fun DownloadsScreen(
                     DownloadItemRow(
                         item = download,
                         formatBytes = { viewModel.formatBytes(it) },
+                        formatSpeed = { viewModel.formatSpeed(it) },
+                        formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
                         onClick = {
                             if (download.status == DownloadStatus.COMPLETED) {
                                 onPlayOffline(download.downloadPath, download.name)
@@ -133,6 +135,8 @@ fun DownloadsScreen(
 private fun DownloadItemRow(
     item: DownloadItem,
     formatBytes: (Long) -> String,
+    formatSpeed: (Long) -> String,
+    formatEta: (Long, Long, Long) -> String,
     onClick: () -> Unit,
     onCancel: () -> Unit,
     onPause: () -> Unit,
@@ -200,8 +204,15 @@ private fun DownloadItemRow(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(2.dp))
+                        val sizeText = "${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalSizeBytes.coerceAtLeast(1))}"
+                        val speedText = formatSpeed(item.speedBytesPerSec)
+                        val etaText = formatEta(item.downloadedBytes, item.totalSizeBytes, item.speedBytesPerSec)
                         Text(
-                            "${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalSizeBytes.coerceAtLeast(1))}",
+                            buildString {
+                                append(sizeText)
+                                if (speedText.isNotEmpty()) append(" · $speedText")
+                                if (etaText.isNotEmpty()) append(" · $etaText")
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

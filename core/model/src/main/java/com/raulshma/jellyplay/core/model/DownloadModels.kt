@@ -13,6 +13,7 @@ data class DownloadItem(
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
     val status: DownloadStatus,
+    val speedBytesPerSec: Long = 0L,
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
     val imageBlurHash: String? = null,

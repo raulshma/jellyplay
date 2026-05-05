@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         UserEntity::class,
         DownloadEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class JellyPlayDatabase : RoomDatabase() {

@@ -118,6 +118,7 @@ class DownloadRepositoryImpl @Inject constructor(
         totalSizeBytes = totalSizeBytes,
         downloadedBytes = downloadedBytes,
         status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.FAILED },
+        speedBytesPerSec = speedBytesPerSec,
         mediaSourceId = mediaSourceId,
         imageUrl = imageUrl,
         imageBlurHash = imageBlurHash,

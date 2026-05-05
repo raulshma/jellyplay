@@ -109,4 +109,28 @@ class DownloadsViewModel @Inject constructor(
         bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
         else -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))
     }
+
+    fun formatSpeed(speedBytesPerSec: Long): String = when {
+        speedBytesPerSec <= 0 -> ""
+        speedBytesPerSec < 1024 -> "$speedBytesPerSec B/s"
+        speedBytesPerSec < 1024 * 1024 -> "%.1f KB/s".format(speedBytesPerSec / 1024.0)
+        speedBytesPerSec < 1024 * 1024 * 1024 -> "%.1f MB/s".format(speedBytesPerSec / (1024.0 * 1024))
+        else -> "%.1f GB/s".format(speedBytesPerSec / (1024.0 * 1024 * 1024))
+    }
+
+    fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String {
+        if (totalBytes <= 0 || speedBytesPerSec <= 0) return ""
+        val remainingBytes = totalBytes - downloadedBytes
+        if (remainingBytes <= 0) return ""
+        val secondsRemaining = remainingBytes / speedBytesPerSec
+        return when {
+            secondsRemaining < 60 -> "${secondsRemaining}s left"
+            secondsRemaining < 3600 -> "${secondsRemaining / 60}m ${secondsRemaining % 60}s left"
+            else -> {
+                val hours = secondsRemaining / 3600
+                val minutes = (secondsRemaining % 3600) / 60
+                "${hours}h ${minutes}m left"
+            }
+        }
+    }
 }
