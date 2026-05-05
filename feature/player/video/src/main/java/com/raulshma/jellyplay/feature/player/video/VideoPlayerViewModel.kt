@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -153,6 +154,30 @@ class VideoPlayerViewModel @Inject constructor(
     private var _nightModeEnabled by mutableStateOf(false)
     val nightModeEnabled get() = _nightModeEnabled
 
+    var seekDurationMs by mutableLongStateOf(10_000L)
+        private set
+
+    var defaultOrientation by mutableStateOf(OrientationMode.SENSOR_LANDSCAPE)
+        private set
+
+    var controlsTimeoutMs by mutableLongStateOf(5_000L)
+        private set
+
+    var gesturesEnabled by mutableStateOf(true)
+        private set
+
+    var defaultSpeed by mutableFloatStateOf(1.0f)
+        private set
+
+    var swipeSeekMaxMs by mutableLongStateOf(120_000L)
+        private set
+
+    var rememberBrightness by mutableStateOf(false)
+        private set
+
+    var brightnessLevel by mutableFloatStateOf(0.5f)
+        private set
+
     private var _audioDelayMs by mutableLongStateOf(0L)
     val audioDelayMs get() = _audioDelayMs
 
@@ -249,6 +274,29 @@ class VideoPlayerViewModel @Inject constructor(
             _audioPassthrough = prefs.audioPassthrough
             _frameRateMatching = prefs.frameRateMatching
             _nightModeEnabled = prefs.nightModeEnabled
+            seekDurationMs = prefs.videoSeekDurationMs
+            defaultOrientation = prefs.videoDefaultOrientation
+            controlsTimeoutMs = prefs.videoControlsTimeoutMs
+            gesturesEnabled = prefs.videoGesturesEnabled
+            defaultSpeed = prefs.videoDefaultSpeed
+            swipeSeekMaxMs = prefs.videoSwipeSeekMaxMs
+            rememberBrightness = prefs.videoRememberBrightness
+            brightnessLevel = prefs.videoBrightnessLevel
+
+            val defaultAspectName = prefs.videoDefaultAspectRatio
+            try {
+                _aspectRatio = when (defaultAspectName) {
+                    "FIT" -> AspectRatio.FIT
+                    "FILL" -> AspectRatio.FILL
+                    "CROP" -> AspectRatio.CROP
+                    "16:9" -> AspectRatio.RATIO_16_9
+                    "4:3" -> AspectRatio.RATIO_4_3
+                    "21:9" -> AspectRatio.RATIO_21_9
+                    else -> AspectRatio.AUTO
+                }
+            } catch (_: Exception) {
+                _aspectRatio = AspectRatio.AUTO
+            }
 
             val detailResult = mediaRepository.getMediaDetail(itemId)
             val detail = detailResult.getOrElse {
@@ -365,6 +413,10 @@ class VideoPlayerViewModel @Inject constructor(
         player.setMediaItem(mediaItem)
         player.prepare()
         if (startPositionTicks > 0) player.seekTo(startPositionTicks / 10_000)
+        if (defaultSpeed != 1.0f) {
+            _playbackSpeed = defaultSpeed
+            player.setPlaybackSpeed(defaultSpeed)
+        }
         player.play()
 
         _dialogueBoostEnabled = prefs.dialogueBoostEnabled

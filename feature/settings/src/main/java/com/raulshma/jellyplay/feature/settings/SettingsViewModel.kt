@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -200,5 +201,61 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.removeUser(userId)
         }
+    }
+
+    fun setVideoSeekDurationMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setVideoSeekDurationMs(ms) }
+    }
+
+    fun setVideoDefaultOrientation(mode: OrientationMode) {
+        viewModelScope.launch { preferencesStore.setVideoDefaultOrientation(mode) }
+    }
+
+    fun setVideoControlsTimeoutMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setVideoControlsTimeoutMs(ms) }
+    }
+
+    fun setVideoGesturesEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVideoGesturesEnabled(enabled) }
+    }
+
+    fun setVideoDefaultSpeed(speed: Float) {
+        viewModelScope.launch { preferencesStore.setVideoDefaultSpeed(speed) }
+    }
+
+    fun setVideoDefaultAspectRatio(ratio: String) {
+        viewModelScope.launch { preferencesStore.setVideoDefaultAspectRatio(ratio) }
+    }
+
+    fun setVideoAutoplayNext(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVideoAutoplayNext(enabled) }
+    }
+
+    fun setVideoSwipeSeekMaxMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setVideoSwipeSeekMaxMs(ms) }
+    }
+
+    fun setVideoRememberBrightness(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVideoRememberBrightness(enabled) }
+    }
+
+    fun setAudioDefaultSpeed(speed: Float) {
+        viewModelScope.launch { preferencesStore.setAudioDefaultSpeed(speed) }
+    }
+
+    fun setAudioNightModeVolume(volume: Float) {
+        viewModelScope.launch { preferencesStore.setAudioNightModeVolume(volume) }
+    }
+
+    fun setAudioNightModeGain(gain: Int) {
+        viewModelScope.launch { preferencesStore.setAudioNightModeGain(gain) }
+    }
+
+    fun setAudioSkipPreviousThresholdMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setAudioSkipPreviousThresholdMs(ms) }
+    }
+
+    fun setAudioAutoplayNext(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAudioAutoplayNext(enabled) }
     }
 }

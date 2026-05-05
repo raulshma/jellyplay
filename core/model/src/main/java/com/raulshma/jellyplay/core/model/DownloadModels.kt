@@ -52,6 +52,21 @@ data class UserPreferences(
     val frameRateMatching: Boolean = false,
     val nightModeEnabled: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
+    val videoSeekDurationMs: Long = 10_000L,
+    val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
+    val videoControlsTimeoutMs: Long = 5_000L,
+    val videoGesturesEnabled: Boolean = true,
+    val videoDefaultSpeed: Float = 1.0f,
+    val videoDefaultAspectRatio: String = "AUTO",
+    val videoAutoplayNext: Boolean = false,
+    val videoSwipeSeekMaxMs: Long = 120_000L,
+    val videoRememberBrightness: Boolean = false,
+    val videoBrightnessLevel: Float = 0.5f,
+    val audioDefaultSpeed: Float = 1.0f,
+    val audioNightModeVolume: Float = 0.4f,
+    val audioNightModeGain: Int = 1200,
+    val audioSkipPreviousThresholdMs: Long = 3_000L,
+    val audioAutoplayNext: Boolean = true,
 )
 
 @Serializable
@@ -133,4 +148,13 @@ data class EqualizerSettings(
     companion object {
         val BAND_FREQUENCIES = listOf(60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000)
     }
+}
+
+@Serializable
+enum class OrientationMode(val displayName: String, val constant: String) {
+    SENSOR_LANDSCAPE("Landscape", "sensor_landscape"),
+    SENSOR_PORTRAIT("Portrait", "sensor_portrait"),
+    SENSOR("Auto Rotate", "sensor"),
+    LOCKED_LANDSCAPE("Locked Landscape", "locked_landscape"),
+    LOCKED_PORTRAIT("Locked Portrait", "locked_portrait"),
 }

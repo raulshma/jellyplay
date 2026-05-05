@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -52,6 +53,21 @@ class UserPreferencesStore @Inject constructor(
         val FRAME_RATE_MATCHING = stringPreferencesKey("frame_rate_matching")
         val NIGHT_MODE_ENABLED = stringPreferencesKey("night_mode_enabled")
         val HOME_MODE = stringPreferencesKey("home_mode")
+        val VIDEO_SEEK_DURATION_MS = stringPreferencesKey("video_seek_duration_ms")
+        val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
+        val VIDEO_CONTROLS_TIMEOUT_MS = stringPreferencesKey("video_controls_timeout_ms")
+        val VIDEO_GESTURES_ENABLED = stringPreferencesKey("video_gestures_enabled")
+        val VIDEO_DEFAULT_SPEED = stringPreferencesKey("video_default_speed")
+        val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
+        val VIDEO_AUTOPLAY_NEXT = stringPreferencesKey("video_autoplay_next")
+        val VIDEO_SWIPE_SEEK_MAX_MS = stringPreferencesKey("video_swipe_seek_max_ms")
+        val VIDEO_REMEMBER_BRIGHTNESS = stringPreferencesKey("video_remember_brightness")
+        val VIDEO_BRIGHTNESS_LEVEL = stringPreferencesKey("video_brightness_level")
+        val AUDIO_DEFAULT_SPEED = stringPreferencesKey("audio_default_speed")
+        val AUDIO_NIGHT_MODE_VOLUME = stringPreferencesKey("audio_night_mode_volume")
+        val AUDIO_NIGHT_MODE_GAIN = stringPreferencesKey("audio_night_mode_gain")
+        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS = stringPreferencesKey("audio_skip_previous_threshold_ms")
+        val AUDIO_AUTOPLAY_NEXT = stringPreferencesKey("audio_autoplay_next")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -97,6 +113,23 @@ class UserPreferencesStore @Inject constructor(
             homeMode = try {
                 HomeMode.valueOf(prefs[Keys.HOME_MODE] ?: HomeMode.VIDEO.name)
             } catch (_: Exception) { HomeMode.VIDEO },
+            videoSeekDurationMs = prefs[Keys.VIDEO_SEEK_DURATION_MS]?.toLongOrNull() ?: 10_000L,
+            videoDefaultOrientation = try {
+                OrientationMode.valueOf(prefs[Keys.VIDEO_DEFAULT_ORIENTATION] ?: OrientationMode.SENSOR_LANDSCAPE.name)
+            } catch (_: Exception) { OrientationMode.SENSOR_LANDSCAPE },
+            videoControlsTimeoutMs = prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS]?.toLongOrNull() ?: 5_000L,
+            videoGesturesEnabled = prefs[Keys.VIDEO_GESTURES_ENABLED]?.toBoolean() ?: true,
+            videoDefaultSpeed = prefs[Keys.VIDEO_DEFAULT_SPEED]?.toFloatOrNull() ?: 1.0f,
+            videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
+            videoAutoplayNext = prefs[Keys.VIDEO_AUTOPLAY_NEXT]?.toBoolean() ?: false,
+            videoSwipeSeekMaxMs = prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS]?.toLongOrNull() ?: 120_000L,
+            videoRememberBrightness = prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS]?.toBoolean() ?: false,
+            videoBrightnessLevel = prefs[Keys.VIDEO_BRIGHTNESS_LEVEL]?.toFloatOrNull() ?: 0.5f,
+            audioDefaultSpeed = prefs[Keys.AUDIO_DEFAULT_SPEED]?.toFloatOrNull() ?: 1.0f,
+            audioNightModeVolume = prefs[Keys.AUDIO_NIGHT_MODE_VOLUME]?.toFloatOrNull() ?: 0.4f,
+            audioNightModeGain = prefs[Keys.AUDIO_NIGHT_MODE_GAIN]?.toIntOrNull() ?: 1200,
+            audioSkipPreviousThresholdMs = prefs[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS]?.toLongOrNull() ?: 3_000L,
+            audioAutoplayNext = prefs[Keys.AUDIO_AUTOPLAY_NEXT]?.toBoolean() ?: true,
         )
     }
 
@@ -221,6 +254,66 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setHomeMode(mode: HomeMode) {
         context.dataStore.edit { it[Keys.HOME_MODE] = mode.name }
+    }
+
+    suspend fun setVideoSeekDurationMs(ms: Long) {
+        context.dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms.toString() }
+    }
+
+    suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
+        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
+    }
+
+    suspend fun setVideoControlsTimeoutMs(ms: Long) {
+        context.dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms.toString() }
+    }
+
+    suspend fun setVideoGesturesEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setVideoDefaultSpeed(speed: Float) {
+        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed.toString() }
+    }
+
+    suspend fun setVideoDefaultAspectRatio(ratio: String) {
+        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
+    }
+
+    suspend fun setVideoAutoplayNext(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled.toString() }
+    }
+
+    suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
+        context.dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms.toString() }
+    }
+
+    suspend fun setVideoRememberBrightness(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled.toString() }
+    }
+
+    suspend fun setVideoBrightnessLevel(level: Float) {
+        context.dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level.toString() }
+    }
+
+    suspend fun setAudioDefaultSpeed(speed: Float) {
+        context.dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed.toString() }
+    }
+
+    suspend fun setAudioNightModeVolume(volume: Float) {
+        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume.toString() }
+    }
+
+    suspend fun setAudioNightModeGain(gain: Int) {
+        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain.toString() }
+    }
+
+    suspend fun setAudioSkipPreviousThresholdMs(ms: Long) {
+        context.dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms.toString() }
+    }
+
+    suspend fun setAudioAutoplayNext(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

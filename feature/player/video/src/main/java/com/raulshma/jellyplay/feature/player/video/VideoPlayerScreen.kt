@@ -217,7 +217,18 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(400)
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        activity?.requestedOrientation = when (viewModel.defaultOrientation) {
+            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR_LANDSCAPE ->
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR_PORTRAIT ->
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR ->
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            com.raulshma.jellyplay.core.model.OrientationMode.LOCKED_LANDSCAPE ->
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            com.raulshma.jellyplay.core.model.OrientationMode.LOCKED_PORTRAIT ->
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
     }
 
     LaunchedEffect(viewModel.frameRateMatching, viewModel.videoFrameRate) {
@@ -317,7 +328,8 @@ fun VideoPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(viewModel.gesturesEnabled, viewModel.seekDurationMs) {
+                if (!viewModel.gesturesEnabled) return@pointerInput
                 detectTapGestures(
                     onTap = { showControls = !showControls },
                     onDoubleTap = { offset ->
@@ -325,13 +337,13 @@ fun VideoPlayerScreen(
                         when {
                             offset.x < width * 0.35 -> {
                                 seekDirection = -1
-                                seekOffsetMs = 10_000L
+                                seekOffsetMs = viewModel.seekDurationMs
                                 seekTimestamp++
                                 doSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
-                                seekOffsetMs = 10_000L
+                                seekOffsetMs = viewModel.seekDurationMs
                                 seekTimestamp++
                                 doSeekForward()
                             }
@@ -341,6 +353,7 @@ fun VideoPlayerScreen(
                         }
                     },
                     onLongPress = {
+                        if (!viewModel.gesturesEnabled) return@detectTapGestures
                         val primaryText = viewModel.getCurrentPrimarySubtitleText()
                         val secondaryText = secondarySubtitleText
                         tapToTranslateText = listOfNotNull(primaryText, secondaryText)
@@ -403,6 +416,8 @@ fun VideoPlayerScreen(
             seekOffsetMs = seekOffsetMs,
             brightnessValue = brightnessOverlay,
             volumeValue = volumeOverlay,
+            gesturesEnabled = viewModel.gesturesEnabled,
+            swipeSeekMaxMs = viewModel.swipeSeekMaxMs,
             onSeekGesture = { delta ->
                 val eng = viewModel.playerEngine
                 if (eng != null) {
@@ -612,7 +627,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(showControls) {
         if (showControls) {
-            delay(5000)
+            delay(viewModel.controlsTimeoutMs)
             showControls = false
         }
     }
@@ -830,6 +845,8 @@ private fun GestureOverlay(
     seekOffsetMs: Long,
     brightnessValue: Float,
     volumeValue: Float,
+    gesturesEnabled: Boolean,
+    swipeSeekMaxMs: Long,
     onSeekGesture: (Long) -> Unit,
     onBrightnessGesture: (Float) -> Unit,
     onVolumeGesture: (Float) -> Unit,
@@ -838,38 +855,42 @@ private fun GestureOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = {},
-                    onDragEnd = { onClearOverlays() },
-                    onDragCancel = { onClearOverlays() },
-                    onHorizontalDrag = { _, dragAmount ->
-                        if (kotlin.math.abs(dragAmount) > 20) {
-                            val seekDelta = ((dragAmount / size.width) * 120_000L).toLong()
-                            onSeekGesture(seekDelta)
-                        }
-                    },
-                )
-            }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = {},
-                    onDragEnd = { onClearOverlays() },
-                    onDragCancel = { onClearOverlays() },
-                    onVerticalDrag = { change, dragAmount ->
-                        if (kotlin.math.abs(dragAmount) > 10) {
-                            val halfWidth = size.width / 2f
-                            if (change.position.x > halfWidth) {
-                                val delta = -(dragAmount / size.height) * 0.5f
-                                onVolumeGesture(delta)
-                            } else {
-                                val delta = -(dragAmount / size.height) * 0.5f
-                                onBrightnessGesture(delta)
+            .then(
+                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {},
+                        onDragEnd = { onClearOverlays() },
+                        onDragCancel = { onClearOverlays() },
+                        onHorizontalDrag = { _, dragAmount ->
+                            if (kotlin.math.abs(dragAmount) > 20) {
+                                val seekDelta = ((dragAmount / size.width) * swipeSeekMaxMs).toLong()
+                                onSeekGesture(seekDelta)
                             }
-                        }
-                    },
-                )
-            },
+                        },
+                    )
+                } else Modifier
+            )
+            .then(
+                if (gesturesEnabled) Modifier.pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = {},
+                        onDragEnd = { onClearOverlays() },
+                        onDragCancel = { onClearOverlays() },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (kotlin.math.abs(dragAmount) > 10) {
+                                val halfWidth = size.width / 2f
+                                if (change.position.x > halfWidth) {
+                                    val delta = -(dragAmount / size.height) * 0.5f
+                                    onVolumeGesture(delta)
+                                } else {
+                                    val delta = -(dragAmount / size.height) * 0.5f
+                                    onBrightnessGesture(delta)
+                                }
+                            }
+                        },
+                    )
+                } else Modifier
+            ),
     ) {
         if (seekDirection != 0 && seekOffsetMs > 0) {
             Box(

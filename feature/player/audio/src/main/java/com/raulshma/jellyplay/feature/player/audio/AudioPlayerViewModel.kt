@@ -90,6 +90,13 @@ class AudioPlayerViewModel @Inject constructor(
     var repeatMode by mutableIntStateOf(0)
         private set
 
+    var nightModeVolume by mutableFloatStateOf(0.4f)
+        private set
+    var nightModeGain by mutableStateOf(1200)
+        private set
+    var skipPreviousThresholdMs by mutableLongStateOf(3_000L)
+        private set
+
     var queue by mutableStateOf<List<AudioQueueItem>>(emptyList())
         private set
     var currentIndex by mutableIntStateOf(-1)
@@ -183,6 +190,13 @@ class AudioPlayerViewModel @Inject constructor(
                         if (equalizerEnabled) {
                             applyEqualizer()
                         }
+                        nightModeVolume = prefs.audioNightModeVolume
+                        nightModeGain = prefs.audioNightModeGain
+                        skipPreviousThresholdMs = prefs.audioSkipPreviousThresholdMs
+                        if (prefs.audioDefaultSpeed != 1.0f) {
+                            speed = prefs.audioDefaultSpeed
+                            player.setPlaybackSpeed(prefs.audioDefaultSpeed)
+                        }
                     }
 
                     val resumeTicks = detail.item.playbackPositionTicks ?: 0L
@@ -261,7 +275,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun skipToPrevious() {
         if (queue.isEmpty()) return
         val player = exoPlayer ?: return
-        if (player.currentPosition > 3000) {
+        if (player.currentPosition > skipPreviousThresholdMs) {
             player.seekTo(0)
             return
         }
@@ -345,7 +359,7 @@ class AudioPlayerViewModel @Inject constructor(
     private fun applyNightMode() {
         val player = exoPlayer ?: return
         if (nightModeEnabled) {
-            player.volume = 0.4f
+            player.volume = nightModeVolume
             attachLoudnessEnhancer(player.audioSessionId)
         } else {
             player.volume = 1.0f
@@ -374,10 +388,11 @@ class AudioPlayerViewModel @Inject constructor(
 
     private fun attachLoudnessEnhancer(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        val currentGain = nightModeGain
         loudnessEnhancer?.release()
         loudnessEnhancer = try {
             LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(1200)
+                setTargetGain(currentGain)
                 enabled = true
             }
         } catch (_: Exception) {
