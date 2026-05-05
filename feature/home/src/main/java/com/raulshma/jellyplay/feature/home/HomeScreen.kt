@@ -1,9 +1,19 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -39,10 +50,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -72,12 +83,16 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -109,14 +124,33 @@ fun HomeScreen(
 
     var showSurprise by remember { mutableStateOf(false) }
     val allItems = remember(sections) { sections.flatMap { it.items } }
+    val featuredCandidates = remember(allItems) {
+        allItems.filter {
+            it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES
+        }.ifEmpty { allItems }
+    }
 
-    val featuredItem = remember(allItems, showSurprise) {
-        if (allItems.isNotEmpty()) {
-            if (showSurprise) allItems.random()
-            else allItems.firstOrNull {
-                it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES
-            } ?: allItems.firstOrNull()
-        } else null
+    var featuredIndex by remember { mutableIntStateOf(0) }
+    var autoRotateEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(showSurprise) {
+        if (showSurprise && featuredCandidates.isNotEmpty()) {
+            featuredIndex = (0 until featuredCandidates.size).random()
+            autoRotateEnabled = false
+        }
+    }
+
+    if (featuredCandidates.isNotEmpty() && autoRotateEnabled) {
+        LaunchedEffect(featuredCandidates) {
+            while (true) {
+                delay(8000)
+                featuredIndex = (featuredIndex + 1) % featuredCandidates.size
+            }
+        }
+    }
+
+    val featuredItem = remember(featuredCandidates, featuredIndex) {
+        featuredCandidates.getOrNull(featuredIndex)
     }
 
     val fallbackImageUrlBuilder: (MediaItem) -> List<String> = { item ->
@@ -183,6 +217,8 @@ fun HomeScreen(
                 appBarColor,
             )
 
+            val sectionsVisible = sections.isNotEmpty()
+
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
                     error != null && sections.isEmpty() -> {
@@ -208,14 +244,22 @@ fun HomeScreen(
                             ) {
                                 if (featuredItem != null) {
                                     item {
-                                        HeroHeader(
-                                            item = featuredItem,
-                                            backdropUrl = viewModel.getBackdropUrl(featuredItem.id),
-                                            scrollOffset = scrollOffset,
-                                            height = headerHeight,
-                                            backgroundColor = backgroundColor,
-                                            onClick = { onItemClick(featuredItem.id) },
-                                        )
+                                        AnimatedContent(
+                                            targetState = featuredItem,
+                                            transitionSpec = {
+                                                fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+                                            },
+                                            label = "heroRotation",
+                                        ) { currentFeatured ->
+                                            HeroHeader(
+                                                item = currentFeatured,
+                                                backdropUrl = viewModel.getBackdropUrl(currentFeatured.id),
+                                                scrollOffset = scrollOffset,
+                                                height = headerHeight,
+                                                backgroundColor = backgroundColor,
+                                                onClick = { onItemClick(currentFeatured.id) },
+                                            )
+                                        }
                                     }
                                 } else {
                                     item { Spacer(Modifier.height(100.dp)) }
@@ -241,26 +285,31 @@ fun HomeScreen(
                                         )
                                         .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
 
-                                    if (section.type == HomeSectionType.CONTINUE_WATCHING ||
-                                        section.type == HomeSectionType.NEXT_UP
+                                    StaggeredSection(
+                                        visible = sectionsVisible,
+                                        index = index,
                                     ) {
-                                        ContinueWatchingRow(
-                                            title = section.title,
-                                            items = section.items,
-                                            imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                            backdropUrlBuilder = { viewModel.getBackdropUrl(it.id) },
-                                            onItemClick = { onItemClick(it.id) },
-                                            modifier = sectionModifier,
-                                        )
-                                    } else {
-                                        HomeMediaRow(
-                                            title = section.title,
-                                            items = section.items,
-                                            imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                            onItemClick = { onItemClick(it.id) },
-                                            modifier = sectionModifier,
-                                        )
+                                        if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                            section.type == HomeSectionType.NEXT_UP
+                                        ) {
+                                            ContinueWatchingRow(
+                                                title = section.title,
+                                                items = section.items,
+                                                imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                                backdropUrlBuilder = { viewModel.getBackdropUrl(it.id) },
+                                                onItemClick = { onItemClick(it.id) },
+                                                modifier = sectionModifier,
+                                            )
+                                        } else {
+                                            HomeMediaRow(
+                                                title = section.title,
+                                                items = section.items,
+                                                imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                                onItemClick = { onItemClick(it.id) },
+                                                modifier = sectionModifier,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -297,7 +346,10 @@ fun HomeScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { showSurprise = !showSurprise }) {
+                            IconButton(onClick = {
+                                showSurprise = !showSurprise
+                                if (!showSurprise) autoRotateEnabled = true
+                            }) {
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = "Surprise Me",
@@ -343,6 +395,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HeroHeader(
     item: MediaItem,
@@ -352,21 +405,47 @@ private fun HeroHeader(
     backgroundColor: Color,
     onClick: () -> Unit,
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(150),
+        label = "heroPress",
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .clickable(onClick = onClick)
             .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
                 translationY = scrollOffset * 0.5f
             }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
     ) {
+        val imageModifier = Modifier.fillMaxSize()
+        val resolvedModifier = if (sharedTransitionScope != null) {
+            with(sharedTransitionScope) {
+                imageModifier.sharedElement(
+                    rememberSharedContentState(key = "backdrop_${item.id}"),
+                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                )
+            }
+        } else {
+            imageModifier
+        }
+
         MediaImage(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
-            modifier = Modifier
-                .fillMaxSize(),
+            modifier = resolvedModifier,
             contentScale = ContentScale.Crop,
         )
 
@@ -540,6 +619,7 @@ private fun HeroHeader(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ContinueWatchingRow(
     title: String,
@@ -572,6 +652,7 @@ private fun ContinueWatchingRow(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
@@ -579,12 +660,29 @@ private fun WideMediaCard(
     backdropUrl: String,
     onClick: () -> Unit,
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(150),
+        label = "wideCardScale",
+    )
+
     Column(
         modifier = Modifier
             .width(260.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.08f))
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -592,12 +690,24 @@ private fun WideMediaCard(
                 .aspectRatio(16f / 9f),
             contentAlignment = Alignment.Center,
         ) {
+            val imageModifier = Modifier.fillMaxSize()
+            val resolvedModifier = if (sharedTransitionScope != null) {
+                with(sharedTransitionScope) {
+                    imageModifier.sharedElement(
+                        rememberSharedContentState(key = "backdrop_${item.id}"),
+                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                    )
+                }
+            } else {
+                imageModifier
+            }
+
             MediaImage(
                 url = backdropUrl,
                 fallbackUrls = listOf(imageUrl),
                 contentDescription = item.name,
                 blurHash = item.blurHashes.primary,
-                modifier = Modifier.fillMaxSize(),
+                modifier = resolvedModifier,
                 contentScale = ContentScale.Crop,
             )
 
@@ -661,6 +771,7 @@ private fun WideMediaCard(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HomeMediaRow(
     title: String,
@@ -693,6 +804,8 @@ private fun HomeMediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = item.blurHashes.primary,
+                    sharedElementKey = "poster_${item.id}",
+                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
                 )
             }
         }

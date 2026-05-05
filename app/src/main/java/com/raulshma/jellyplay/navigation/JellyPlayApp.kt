@@ -1,11 +1,15 @@
 package com.raulshma.jellyplay.navigation
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -44,6 +48,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -230,6 +235,7 @@ private fun NavIcon(route: Route, label: String) {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
@@ -241,48 +247,67 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    NavDisplay(
-        backStack = currentBackStack,
-        onBack = { navigator.goBack() },
-        transitionSpec = {
-            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-        },
-        popTransitionSpec = {
-            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-        },
-        entryProvider =                 entryProvider {
-                    homeSection(
-                        navigator = navigator,
-                        homeMode = homeMode,
-                        onModeChange = onModeChange,
-                        musicContent = {
-                            MusicHomeScreen(
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
+            NavDisplay(
+                backStack = currentBackStack,
+                onBack = { navigator.goBack() },
+                transitionSpec = {
+                    slideInHorizontally(
+                        initialOffsetX = { it / 3 },
+                        animationSpec = tween(350),
+                    ) + fadeIn(tween(350)) togetherWith
+                            slideOutHorizontally(
+                                targetOffsetX = { -it / 3 },
+                                animationSpec = tween(350),
+                            ) + fadeOut(tween(350))
+                },
+                popTransitionSpec = {
+                    slideInHorizontally(
+                        initialOffsetX = { -it / 3 },
+                        animationSpec = tween(350),
+                    ) + fadeIn(tween(350)) togetherWith
+                            slideOutHorizontally(
+                                targetOffsetX = { it / 3 },
+                                animationSpec = tween(350),
+                            ) + fadeOut(tween(350))
+                },
+                sharedTransitionScope = this@SharedTransitionLayout,
+                entryProvider =                 entryProvider {
+                            homeSection(
+                                navigator = navigator,
                                 homeMode = homeMode,
                                 onModeChange = onModeChange,
-                                onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                                onSettingsClick = { navigator.navigate(Route.Settings) },
-                                onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-                                onDownloadsClick = { navigator.navigate(Route.Downloads) },
-                                onArtistsClick = { navigator.navigate(Route.Artists) },
-                                onAlbumsClick = { navigator.navigate(Route.Albums) },
-                                onTracksClick = { navigator.navigate(Route.Tracks) },
-                                onGenresClick = { navigator.navigate(Route.Genres) },
-                                onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                                musicContent = {
+                                    MusicHomeScreen(
+                                        homeMode = homeMode,
+                                        onModeChange = onModeChange,
+                                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                                        onSettingsClick = { navigator.navigate(Route.Settings) },
+                                        onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
+                                        onDownloadsClick = { navigator.navigate(Route.Downloads) },
+                                        onArtistsClick = { navigator.navigate(Route.Artists) },
+                                        onAlbumsClick = { navigator.navigate(Route.Albums) },
+                                        onTracksClick = { navigator.navigate(Route.Tracks) },
+                                        onGenresClick = { navigator.navigate(Route.Genres) },
+                                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                                    )
+                                },
                             )
+                            librarySection(navigator)
+                            searchSection(navigator)
+                            liveTvSection(navigator)
+                            detailsSection(navigator)
+                            videoPlayerSection(navigator)
+                            audioPlayerSection(navigator)
+                            downloadsSection(navigator)
+                            authSection(navigator) { navigator.goBack() }
+                            settingsSection(navigator, onLogout)
+                            musicSection(navigator)
+                            syncPlaySection(navigator)
                         },
+                        modifier = modifier,
                     )
-                    librarySection(navigator)
-                    searchSection(navigator)
-                    liveTvSection(navigator)
-                    detailsSection(navigator)
-                    videoPlayerSection(navigator)
-                    audioPlayerSection(navigator)
-                    downloadsSection(navigator)
-                    authSection(navigator) { navigator.goBack() }
-                    settingsSection(navigator, onLogout)
-                    musicSection(navigator)
-                    syncPlaySection(navigator)
-                },
-                modifier = modifier,
-            )
+        }
+    }
 }

@@ -1,7 +1,16 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +36,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -51,27 +63,62 @@ fun PosterCard(
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
     blurHash: String? = null,
+    sharedElementKey: String? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
 ) {
     val isTv = isTvDevice()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(150),
+        label = "cardScale",
+    )
+    val sharedTransitionScope = LocalSharedTransitionScope.current
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
             .then(if (isTv) Modifier.tvFocusable() else Modifier)
             .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
     ) {
         Box {
+            val imageModifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+
+            val resolvedModifier = if (
+                sharedElementKey != null &&
+                sharedTransitionScope != null &&
+                animatedVisibilityScope != null
+            ) {
+                with(sharedTransitionScope) {
+                    imageModifier.sharedElement(
+                        rememberSharedContentState(key = sharedElementKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
+                }
+            } else {
+                imageModifier
+            }
+
             MediaImage(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 blurHash = blurHash,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
+                modifier = resolvedModifier,
                 contentScale = ContentScale.Crop,
             )
 
@@ -198,5 +245,24 @@ fun ErrorScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun StaggeredSection(
+    visible: Boolean,
+    index: Int,
+    content: @Composable () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(
+            animationSpec = tween(250, delayMillis = index * 80)
+        ) + slideInVertically(
+            initialOffsetY = { it / 8 },
+            animationSpec = tween(250, delayMillis = index * 80),
+        ),
+    ) {
+        content()
     }
 }
