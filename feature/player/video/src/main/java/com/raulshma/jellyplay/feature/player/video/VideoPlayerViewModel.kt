@@ -601,6 +601,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun selectSubtitleTrack(option: TrackOption) {
         val engine = _playerEngine
         if (engine != null) {
+            if (option.trackGroup == null && option.index >= 0) {
+                val serverSubs = _mediaStreams.filter { it.type == StreamType.SUBTITLE }
+                val stream = serverSubs.getOrNull(option.index)
+                if (stream != null) {
+                    selectSecondarySubtitleStream(stream)
+                    return
+                }
+            }
             engine.selectSubtitleTrack(option.index)
             updateTracksFromEngine(engine)
             return
@@ -610,14 +618,23 @@ class VideoPlayerViewModel @Inject constructor(
             val params = selector.buildUponParameters()
             params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             selector.setParameters(params)
+            selectSecondarySubtitleStream(null)
         } else {
-            val group = option.trackGroup ?: return
-            val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
-            val params = selector.buildUponParameters()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .setOverrideForType(override)
-                .build()
-            selector.setParameters(params)
+            val group = option.trackGroup
+            if (group != null) {
+                val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
+                val params = selector.buildUponParameters()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(override)
+                    .build()
+                selector.setParameters(params)
+            } else {
+                val serverSubs = _mediaStreams.filter { it.type == StreamType.SUBTITLE }
+                val stream = serverSubs.getOrNull(option.index)
+                if (stream != null) {
+                    selectSecondarySubtitleStream(stream)
+                }
+            }
         }
     }
 
@@ -1073,7 +1090,14 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         _subtitleTracks = if (subtitleOptions.isEmpty()) {
-            listOf(TrackOption(-1, "None", null, true))
+            val serverSubs = _mediaStreams.filter { it.type == StreamType.SUBTITLE }
+            if (serverSubs.isNotEmpty()) {
+                listOf(TrackOption(-1, "Off", null, true)) + serverSubs.mapIndexed { index, stream ->
+                    TrackOption(index, stream.displayTitle ?: stream.language ?: "Unknown", stream.language, false)
+                }
+            } else {
+                listOf(TrackOption(-1, "None", null, true))
+            }
         } else {
             listOf(TrackOption(-1, "Off", null, true)) + subtitleOptions
         }
@@ -1094,7 +1118,14 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         _subtitleTracks = if (subtitleOptions.isEmpty()) {
-            listOf(TrackOption(-1, "None", null, true))
+            val serverSubs = _mediaStreams.filter { it.type == StreamType.SUBTITLE }
+            if (serverSubs.isNotEmpty()) {
+                listOf(TrackOption(-1, "Off", null, true)) + serverSubs.mapIndexed { index, stream ->
+                    TrackOption(index, stream.displayTitle ?: stream.language ?: "Unknown", stream.language, false)
+                }
+            } else {
+                listOf(TrackOption(-1, "None", null, true))
+            }
         } else {
             listOf(TrackOption(-1, "Off", null, true)) + subtitleOptions
         }

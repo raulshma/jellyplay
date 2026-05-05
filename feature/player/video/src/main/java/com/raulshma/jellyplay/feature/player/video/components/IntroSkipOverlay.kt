@@ -66,21 +66,22 @@ private fun SkipButtonOverlay(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = 0.7f))
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.White.copy(alpha = 0.15f))
                 .clickable(onClick = onSkip)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Icon(
                 imageVector = Icons.Default.FastForward,
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.padding(end = 6.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 8.dp),
             )
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             )
         }
     }

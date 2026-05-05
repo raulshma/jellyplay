@@ -42,14 +42,14 @@ fun HdrBadge(
 
     val bgColor = when (hdrType.lowercase()) {
         "dolbyvision", "dolby_vision", "dovi" -> Color(0xFF1A1A2E)
-        else -> Color.Black.copy(alpha = 0.6f)
+        else -> Color.White.copy(alpha = 0.15f)
     }
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {

@@ -30,9 +30,9 @@ fun TrickplayOverlay(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = Color.Black.copy(alpha = 0.9f),
-        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White.copy(alpha = 0.15f),
+        shadowElevation = 12.dp,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -41,7 +41,7 @@ fun TrickplayOverlay(
                 modifier = Modifier
                     .width(192.dp)
                     .height(108.dp)
-                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)),
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (imageUrl != null) {
@@ -58,13 +58,13 @@ fun TrickplayOverlay(
                         modifier = Modifier
                             .width(192.dp)
                             .height(108.dp)
-                            .background(Color.DarkGray),
+                            .background(Color.White.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = formatTime(positionMs),
                             color = Color.White,
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                 }
@@ -72,8 +72,8 @@ fun TrickplayOverlay(
             Text(
                 text = formatTime(positionMs),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }

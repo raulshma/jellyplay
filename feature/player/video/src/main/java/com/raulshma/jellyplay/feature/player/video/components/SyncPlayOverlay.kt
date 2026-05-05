@@ -40,31 +40,31 @@ fun SyncPlayOverlay(
         modifier = modifier,
     ) {
         Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color.Black.copy(alpha = 0.7f),
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White.copy(alpha = 0.15f),
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = if (isSynced) "Synced" else "Buffering",
                     color = if (isSynced) Color.Green else Color.Yellow,
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = groupName,
                     color = Color.White,
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelMedium,
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = "$participantCount",
                     color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
         }

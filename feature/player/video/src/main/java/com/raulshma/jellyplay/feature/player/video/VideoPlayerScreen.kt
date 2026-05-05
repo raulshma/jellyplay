@@ -600,12 +600,12 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color.Black.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White.copy(alpha = 0.15f),
             ) {
                 Text(
                     text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -632,7 +632,8 @@ fun VideoPlayerScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                containerColor = Color.DarkGray.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(12.dp),
+                containerColor = Color.White.copy(alpha = 0.15f),
                 contentColor = Color.White,
             )
         }
@@ -906,10 +907,14 @@ fun VideoPlayerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp),
             ) {
-                Text("OCR Subtitle Text", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "OCR Subtitle Text",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Spacer(Modifier.height(12.dp))
                 if (viewModel.isOcrRunning) {
                     androidx.compose.material3.CircularProgressIndicator(
@@ -1021,11 +1026,11 @@ private fun GestureOverlay(
                 contentAlignment = Alignment.Center,
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.15f),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         val icon = if (seekDirection < 0) Icons.Default.SkipPrevious else Icons.Default.SkipNext
@@ -1034,7 +1039,7 @@ private fun GestureOverlay(
                         Text(
                             "${if (seekDirection < 0) "-" else "+"}${seekOffsetMs / 1000}s",
                             color = Color.White,
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
                 }
@@ -1049,16 +1054,20 @@ private fun GestureOverlay(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.15f),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("☀", fontSize = 14.sp, color = Color.White)
                         Spacer(Modifier.width(6.dp))
-                        Text("${(brightnessValue * 100).toInt()}%", color = Color.White, fontSize = 13.sp)
+                        Text(
+                            "${(brightnessValue * 100).toInt()}%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
             }
@@ -1072,16 +1081,20 @@ private fun GestureOverlay(
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.15f),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Default.VolumeUp, null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("${(volumeValue * 100).toInt()}%", color = Color.White, fontSize = 13.sp)
+                        Text(
+                            "${(volumeValue * 100).toInt()}%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
             }
@@ -1145,7 +1158,12 @@ private fun PlayerControls(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.85f),
+                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.2f),
+                                Color.Transparent,
+                            )
                         )
                     )
                     .statusBarsPadding()
@@ -1155,7 +1173,7 @@ private fun PlayerControls(
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
@@ -1172,7 +1190,7 @@ private fun PlayerControls(
                             Text(
                                 subtitle,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = Color.White.copy(alpha = 0.7f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -1196,7 +1214,7 @@ private fun PlayerControls(
                     onClick = { onSeekBack() },
                     modifier = Modifier
                         .size(56.dp)
-                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape)
                 ) {
                     Icon(
                         Icons.Default.SkipPrevious, "Rewind",
@@ -1208,7 +1226,7 @@ private fun PlayerControls(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), androidx.compose.foundation.shape.CircleShape)
+                        .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
                 ) {
                     androidx.compose.animation.Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
                         Icon(
@@ -1224,7 +1242,7 @@ private fun PlayerControls(
                     onClick = { onSeekForward() },
                     modifier = Modifier
                         .size(56.dp)
-                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape)
                 ) {
                     Icon(
                         Icons.Default.SkipNext, "Forward",
@@ -1245,7 +1263,12 @@ private fun PlayerControls(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.2f),
+                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.85f),
+                            )
                         )
                     )
                     .padding(horizontal = 24.dp, vertical = 24.dp),
@@ -1256,12 +1279,12 @@ private fun PlayerControls(
                 ) {
                     Text(
                         formatDuration(currentPosition),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelLarge,
                         color = Color.White,
                     )
                     Text(
                         if (duration > 0) formatDuration(duration) else "--:--",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelLarge,
                         color = Color.White,
                     )
                 }
@@ -1276,13 +1299,15 @@ private fun PlayerControls(
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1354,27 +1379,35 @@ private fun LabeledControlButton(
     tint: Color = Color.White,
     iconModifier: Modifier = Modifier,
 ) {
+    val isActive = tint != Color.White
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier,
     ) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled,
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            else Color.White.copy(alpha = 0.1f),
             modifier = Modifier.size(40.dp),
         ) {
-            Icon(
-                icon,
-                contentDescription = label,
-                tint = tint,
-                modifier = iconModifier,
-            )
+            IconButton(
+                onClick = onClick,
+                enabled = enabled,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = label,
+                    tint = tint,
+                    modifier = iconModifier,
+                )
+            }
         }
+        Spacer(Modifier.height(2.dp))
         Text(
             label,
             color = tint,
-            fontSize = 9.sp,
-            lineHeight = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1391,22 +1424,28 @@ private fun LabeledSpeedButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier,
     ) {
-        IconButton(
-            onClick = onClick,
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color.White.copy(alpha = 0.1f),
             modifier = Modifier.size(40.dp),
         ) {
-            Text(
-                if (speed == 1.0f) "1x" else "${speed}x",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Text(
+                    if (speed == 1.0f) "1x" else "${speed}x",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
+        Spacer(Modifier.height(2.dp))
         Text(
             "Speed",
             color = Color.White,
-            fontSize = 9.sp,
-            lineHeight = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
         )
     }
@@ -1426,11 +1465,15 @@ private fun SpeedPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text("Playback Speed", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+            Text(
+                "Playback Speed",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1468,9 +1511,10 @@ private fun TrackPickerSheet(
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(tracks) { _, track ->
                     Row(
@@ -1480,7 +1524,7 @@ private fun TrackPickerSheet(
                                 onSelect(track)
                                 onDismiss()
                             }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1520,9 +1564,10 @@ private fun ChapterPickerSheet(
             Text(
                 "Chapters",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             LazyColumn {
                 itemsIndexed(chapters) { index, chapter ->
                     val chapterMs = chapter.startPositionTicks / 10_000
@@ -1537,7 +1582,7 @@ private fun ChapterPickerSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(chapter.startPositionTicks) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1587,15 +1632,16 @@ private fun SecondarySubtitlePickerSheet(
             Text(
                 "Secondary Subtitle",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onSelect(null) }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1617,7 +1663,7 @@ private fun SecondarySubtitlePickerSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(stream) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1661,12 +1707,13 @@ private fun TapToTranslateSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
             Text(
                 "Subtitle Text",
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(12.dp))
             Text(
@@ -1721,46 +1768,54 @@ private fun formatDuration(ms: Long): String {
 @Composable
 private fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
     val context = LocalContext.current
+    val isActive = isCasting
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(
-            onClick = {
-                if (isCasting) {
-                    try {
-                        val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                        castContext.sessionManager.endCurrentSession(true)
-                    } catch (_: Exception) {}
-                } else {
-                    try {
-                        val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                        val sessionManager = castContext.sessionManager
-                        val session = sessionManager.currentCastSession
-                        if (session?.isConnected == true) {
-                            sessionManager.endCurrentSession(true)
-                        } else {
-                            val activity = context as? android.app.Activity ?: return@IconButton
-                            val routeSelector = castContext.mergedSelector ?: return@IconButton
-                            val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(activity)
-                            dialog.routeSelector = routeSelector
-                            dialog.show()
-                        }
-                    } catch (_: Exception) {
-                        onCast()
-                    }
-                }
-            },
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            else Color.White.copy(alpha = 0.1f),
             modifier = Modifier.size(40.dp),
         ) {
-            Icon(
-                if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
-                contentDescription = "Cast",
-                tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
-            )
+            IconButton(
+                onClick = {
+                    if (isCasting) {
+                        try {
+                            val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                            castContext.sessionManager.endCurrentSession(true)
+                        } catch (_: Exception) {}
+                    } else {
+                        try {
+                            val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
+                            val sessionManager = castContext.sessionManager
+                            val session = sessionManager.currentCastSession
+                            if (session?.isConnected == true) {
+                                sessionManager.endCurrentSession(true)
+                            } else {
+                                val activity = context as? android.app.Activity ?: return@IconButton
+                                val routeSelector = castContext.mergedSelector ?: return@IconButton
+                                val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(activity)
+                                dialog.routeSelector = routeSelector
+                                dialog.show()
+                            }
+                        } catch (_: Exception) {
+                            onCast()
+                        }
+                    }
+                },
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+                    contentDescription = "Cast",
+                    tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
         }
+        Spacer(Modifier.height(2.dp))
         Text(
             "Cast",
             color = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
-            fontSize = 9.sp,
-            lineHeight = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
         )
     }

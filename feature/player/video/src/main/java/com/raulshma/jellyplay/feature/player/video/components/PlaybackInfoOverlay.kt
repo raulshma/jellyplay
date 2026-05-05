@@ -32,11 +32,11 @@ fun PlaybackInfoOverlay(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Black.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.1f),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(

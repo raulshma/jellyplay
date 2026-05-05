@@ -85,116 +85,117 @@ fun NextEpisodeOverlay(
         exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
         modifier = modifier,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black.copy(alpha = 0.85f))
-                .padding(12.dp),
-        ) {
-            if (!thumbnailUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = thumbnailUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(width = 120.dp, height = 68.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-            }
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center,
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .padding(12.dp),
             ) {
-                Text(
-                    text = "Next Episode",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
-                )
-                if (seasonNumber != null && episodeNumber != null) {
-                    Text(
-                        text = "S${String.format("%02d", seasonNumber)}E${String.format("%02d", episodeNumber)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
+                if (!thumbnailUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 120.dp, height = 68.dp)
+                            .clip(RoundedCornerShape(12.dp)),
                     )
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
-                Text(
-                    text = episodeTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!seriesName.isNullOrBlank()) {
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center,
+                ) {
                     Text(
-                        text = seriesName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f),
+                        text = "Next Episode",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (seasonNumber != null && episodeNumber != null) {
+                        Text(
+                            text = "S${String.format("%02d", seasonNumber)}E${String.format("%02d", episodeNumber)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
+                    }
+                    Text(
+                        text = episodeTitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable(onClick = onPlayNext),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play Next",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(24.dp),
-                    )
+                    if (!seriesName.isNullOrBlank()) {
+                        Text(
+                            text = seriesName,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = {
-                            dismissed = true
-                            onCancel()
-                        }),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cancel",
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable(onClick = onPlayNext),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play Next",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .clickable(onClick = {
+                                dismissed = true
+                                onCancel()
+                            }),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
-        }
 
-        if (show && countdown > 0) {
-            LinearProgressIndicator(
-                progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(1.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = Color.Transparent,
-            )
+            if (show && countdown > 0) {
+                LinearProgressIndicator(
+                    progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.White.copy(alpha = 0.1f),
+                )
+            }
         }
     }
 }
