@@ -89,6 +89,8 @@ class DetailViewModel @Inject constructor(
                     _detail.value = detail
                     if (detail.item.mediaType == MediaType.SERIES) {
                         loadSeasons(itemId)
+                    } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
+                        loadSeasons(detail.item.seriesId!!)
                     }
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load details" }

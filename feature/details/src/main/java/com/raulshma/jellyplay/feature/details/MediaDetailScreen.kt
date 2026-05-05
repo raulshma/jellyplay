@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,6 +102,7 @@ fun MediaDetailScreen(
     onAudioClick: (itemId: String) -> Unit,
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
+    onNavigateToSeries: (seriesId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -147,6 +150,7 @@ fun MediaDetailScreen(
             onMarkUnplayed = { viewModel.markUnplayed() },
             onItemClick = onItemClick,
             onPersonClick = onPersonClick,
+            onNavigateToSeries = onNavigateToSeries,
             onBack = onBack,
         )
     }
@@ -175,6 +179,7 @@ private fun DetailContent(
     onMarkUnplayed: () -> Unit,
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
+    onNavigateToSeries: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val item = detail?.item
@@ -385,6 +390,7 @@ private fun DetailContent(
                                 onMarkUnplayed = onMarkUnplayed,
                                 onItemClick = onItemClick,
                                 onPersonClick = onPersonClick,
+                                onNavigateToSeries = onNavigateToSeries,
                             )
                         }
                     } else if (isLoading) {
@@ -536,6 +542,7 @@ private fun DetailContentBody(
     onMarkUnplayed: () -> Unit,
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
+    onNavigateToSeries: (String) -> Unit,
 ) {
     val showContent = detail != null
 
@@ -551,6 +558,40 @@ private fun DetailContentBody(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp),
             ) {
+                if (item.mediaType == MediaType.EPISODE && item.seriesId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onNavigateToSeries(item.seriesId!!) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = item.seriesName ?: "Series",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        item.seasonName?.let { season ->
+                            Text(
+                                text = " › ",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White.copy(alpha = 0.5f),
+                            )
+                            Text(
+                                text = season,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
@@ -669,8 +710,8 @@ private fun DetailContentBody(
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
                     Icon(
-                        if (item.isPlayed) Icons.Default.Check else Icons.Default.PlayArrow,
-                        contentDescription = "Mark Played",
+                        if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
                         tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
                     )
                 }
@@ -768,7 +809,8 @@ private fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 4) {
-            if (item.mediaType == MediaType.SERIES && seasons.isNotEmpty()) {
+            val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
+            if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides Color.White) {
                     SeasonsSection(
                         seriesItem = item,
@@ -776,6 +818,8 @@ private fun DetailContentBody(
                         episodes = episodes,
                         fetchedSeasonIds = fetchedSeasonIds,
                         getImageUrl = getImageUrl,
+                        currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
+                        currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
                         onEpisodePlayClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
@@ -853,10 +897,15 @@ private fun SeasonsSection(
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
     getImageUrl: (String) -> String,
+    currentItemId: String? = null,
+    currentSeasonId: String? = null,
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
 ) {
-    var selectedSeasonIndex by remember { mutableStateOf(0) }
+    val initialSeasonIndex = if (currentSeasonId != null) {
+        seasons.indexOfFirst { it.id == currentSeasonId }.coerceAtLeast(0)
+    } else 0
+    var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
 
     Column {
         Text(
@@ -920,6 +969,7 @@ private fun SeasonsSection(
                         EpisodeCard(
                             episode = episode,
                             getImageUrl = getImageUrl,
+                            isCurrentEpisode = episode.id == currentItemId,
                             onPlayClick = { onEpisodePlayClick(episode) },
                             onDetailClick = { onEpisodeDetailClick(episode) },
                         )
@@ -1016,6 +1066,7 @@ private fun EpisodeCardSkeleton() {
 private fun EpisodeCard(
     episode: MediaItem,
     getImageUrl: (String) -> String,
+    isCurrentEpisode: Boolean = false,
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
 ) {
@@ -1023,7 +1074,14 @@ private fun EpisodeCard(
         modifier = Modifier
             .width(280.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(
+                if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else Color.White.copy(alpha = 0.05f)
+            )
+            .then(
+                if (isCurrentEpisode) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                else Modifier
+            )
             .clickable(onClick = onDetailClick)
     ) {
         Box(
