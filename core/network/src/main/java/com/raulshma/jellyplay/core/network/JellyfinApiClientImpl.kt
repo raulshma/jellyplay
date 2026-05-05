@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -927,6 +928,28 @@ class JellyfinApiClientImpl @Inject constructor(
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
                 json.decodeFromString<IntroTimestamps>(body)
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = java.net.URL("${server.address}/Items/$itemId/CreditTimestamps")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("X-Emby-Token", user.accessToken)
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        try {
+            if (conn.responseCode !in 200..299) {
+                CreditTimestamps(itemId)
+            } else {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                json.decodeFromString<CreditTimestamps>(body)
             }
         } finally {
             conn.disconnect()

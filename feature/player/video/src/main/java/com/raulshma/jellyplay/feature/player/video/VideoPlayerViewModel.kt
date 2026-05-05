@@ -38,7 +38,9 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -213,6 +215,12 @@ class VideoPlayerViewModel @Inject constructor(
     private var _introTimestamps by mutableStateOf<IntroTimestamps?>(null)
     val introTimestamps get() = _introTimestamps
 
+    private var _creditTimestamps by mutableStateOf<CreditTimestamps?>(null)
+    val creditTimestamps get() = _creditTimestamps
+
+    private var _nextEpisode by mutableStateOf<JellyfinMediaItem?>(null)
+    val nextEpisode get() = _nextEpisode
+
     val isInIntro: Boolean
         get() {
             val ts = _introTimestamps ?: return false
@@ -221,6 +229,29 @@ class VideoPlayerViewModel @Inject constructor(
             val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.introStartTicks
             val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.introEndTicks
             return posTicks >= promptStart && posTicks < promptEnd
+        }
+
+    val isInCredits: Boolean
+        get() {
+            val ts = _creditTimestamps ?: return false
+            if (!ts.hasCredits) return false
+            val posTicks = _currentPosition * 10_000
+            val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.creditStartTicks
+            val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.creditEndTicks
+            return posTicks >= promptStart && posTicks < promptEnd
+        }
+
+    val shouldShowUpNext: Boolean
+        get() {
+            if (_nextEpisode == null) return false
+            val detail = _mediaDetail ?: return false
+            if (detail.item.seriesId == null) return false
+            if (isInCredits) return true
+            val ct = _creditTimestamps
+            if (ct == null || !ct.hasCredits) {
+                if (_duration > 0 && _currentPosition >= _duration - 30_000) return true
+            }
+            return false
         }
 
     val hdrType: String?
@@ -386,6 +417,8 @@ class VideoPlayerViewModel @Inject constructor(
             startPositionTracking()
             startProgressReporting()
             fetchIntroTimestamps(itemId)
+            fetchCreditTimestamps(itemId)
+            fetchNextEpisode(detail)
         }
     }
 
@@ -754,7 +787,7 @@ class VideoPlayerViewModel @Inject constructor(
         equalizerHelper.setEnabled(_equalizerEnabled)
     }
 
-    private fun playNextEpisode() {
+    fun playNextEpisode() {
         val detail = _mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
         viewModelScope.launch {
@@ -791,6 +824,39 @@ class VideoPlayerViewModel @Inject constructor(
             _introTimestamps = playbackRepository.getIntroTimestamps(itemId).getOrNull()
         }
     }
+
+    private fun fetchCreditTimestamps(itemId: String) {
+        viewModelScope.launch {
+            _creditTimestamps = playbackRepository.getCreditTimestamps(itemId).getOrNull()
+        }
+    }
+
+    private fun fetchNextEpisode(currentDetail: MediaDetail) {
+        val seriesId = currentDetail.item.seriesId ?: return
+        val seasonId = currentDetail.item.seasonId ?: return
+        viewModelScope.launch {
+            val episodes = mediaRepository.getEpisodes(seriesId, seasonId).getOrElse { return@launch }
+            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+            if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
+                _nextEpisode = episodes[currentIndex + 1]
+            } else {
+                _nextEpisode = null
+            }
+        }
+    }
+
+    fun skipCredits() {
+        val ts = _creditTimestamps ?: return
+        val targetMs = ts.creditEndTicks / 10_000
+        if (_playerEngine != null) {
+            _playerEngine?.seekTo(targetMs)
+        } else {
+            _exoPlayer?.seekTo(targetMs)
+        }
+    }
+
+    fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
+        playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
 
     fun loadRemoteSubtitles() {
         val itemId = currentItemId ?: return
@@ -1151,6 +1217,8 @@ class VideoPlayerViewModel @Inject constructor(
         _exoPlayer = null
         _trackSelector = null
         _introTimestamps = null
+        _creditTimestamps = null
+        _nextEpisode = null
         _remoteSubtitles = emptyList()
         dialogueBoost.detach()
         nightMode.detach()

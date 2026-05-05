@@ -14,6 +14,17 @@ data class IntroTimestamps(
 }
 
 @Serializable
+data class CreditTimestamps(
+    val itemId: String,
+    val creditStartTicks: Long = 0,
+    val creditEndTicks: Long = 0,
+    val showSkipPromptAtTicks: Long = 0,
+    val hideSkipPromptAtTicks: Long = 0,
+) {
+    val hasCredits: Boolean get() = creditEndTicks > creditStartTicks
+}
+
+@Serializable
 data class RemoteSubtitleInfo(
     val id: String,
     val language: String? = null,

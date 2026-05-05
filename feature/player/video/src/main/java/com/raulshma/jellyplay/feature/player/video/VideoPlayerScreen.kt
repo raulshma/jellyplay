@@ -111,8 +111,10 @@ import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.CreditsSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
+import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
@@ -327,6 +329,10 @@ fun VideoPlayerScreen(
     val trickplayUrl = viewModel.trickplayUrl
     val subtitleStyle = viewModel.subtitleStyle
     val isInIntro = viewModel.isInIntro
+    val isInCredits = viewModel.isInCredits
+    val shouldShowUpNext = viewModel.shouldShowUpNext
+    val nextEpisode = viewModel.nextEpisode
+    val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
 
     val activeEngine = viewModel.playerEngine
     val doPlay: () -> Unit = { if (activeEngine != null) activeEngine.play() else exoPlayer?.play() }
@@ -539,6 +545,33 @@ fun VideoPlayerScreen(
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 200.dp),
         )
+
+        CreditsSkipOverlay(
+            isVisible = isInCredits && !shouldShowUpNext,
+            onSkip = { viewModel.skipCredits() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 200.dp),
+        )
+
+        if (nextEpisode != null) {
+            NextEpisodeOverlay(
+                isVisible = shouldShowUpNext,
+                episodeTitle = nextEpisode.name,
+                seriesName = nextEpisode.seriesName,
+                seasonNumber = nextEpisode.seasonNumber,
+                episodeNumber = nextEpisode.episodeNumber,
+                thumbnailUrl = nextEpisodeImageUrl,
+                countdownSeconds = 10,
+                onPlayNext = { viewModel.playNextEpisode() },
+                onCancel = {},
+                isPlaying = isPlaying,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 200.dp)
+                    .fillMaxWidth(0.7f),
+            )
+        }
 
         HdrBadge(
             hdrType = viewModel.hdrType,

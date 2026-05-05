@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
@@ -22,6 +23,8 @@ interface PlaybackRepository {
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
+
+    suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
 
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 

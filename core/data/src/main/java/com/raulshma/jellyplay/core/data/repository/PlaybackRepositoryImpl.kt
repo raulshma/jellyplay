@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
@@ -45,6 +46,9 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
         apiClient.getIntroTimestamps(itemId)
+
+    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
+        apiClient.getCreditTimestamps(itemId)
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =
         apiClient.getRemoteSubtitles(itemId)
