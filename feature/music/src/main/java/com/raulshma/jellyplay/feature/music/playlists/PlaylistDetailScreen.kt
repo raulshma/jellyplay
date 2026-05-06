@@ -77,7 +77,7 @@ fun PlaylistDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = padding,
                 ) {
-                    items(viewModel.items.size) { index ->
+                    items(viewModel.items.size, key = { viewModel.items[it].id }) { index ->
                         val item = viewModel.items[index]
                         PlaylistTrackRow(
                             item = item,

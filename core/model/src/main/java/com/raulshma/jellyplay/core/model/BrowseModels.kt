@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class SearchResult(
     val items: List<MediaItem>,
@@ -9,6 +11,7 @@ data class SearchResult(
     val startIndex: Int,
 )
 
+@Immutable
 @Serializable
 data class HomeSection(
     val title: String,
@@ -16,6 +19,7 @@ data class HomeSection(
     val items: List<MediaItem>,
 )
 
+@Immutable
 @Serializable
 enum class HomeSectionType {
     CONTINUE_WATCHING,
@@ -25,6 +29,7 @@ enum class HomeSectionType {
     LIVE_TV,
 }
 
+@Immutable
 @Serializable
 data class LibraryFolder(
     val id: String,
@@ -33,6 +38,7 @@ data class LibraryFolder(
     val type: String? = null,
 )
 
+@Immutable
 @Serializable
 data class Genre(
     val id: String,

@@ -140,7 +140,7 @@ fun KidsHomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(vertical = 8.dp),
                             ) {
-                                items(genres) { genre ->
+                                items(genres, key = { it }) { genre ->
                                     FilterChip(
                                         selected = genre == selectedGenre,
                                         onClick = {

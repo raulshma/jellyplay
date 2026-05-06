@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.database.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "servers")
@@ -25,7 +26,13 @@ data class UserEntity(
     val lastConnected: Long = System.currentTimeMillis(),
 )
 
-@Entity(tableName = "downloads")
+@Entity(
+    tableName = "downloads",
+    indices = [
+        Index(value = ["mediaItemId"]),
+        Index(value = ["status"]),
+    ],
+)
 data class DownloadEntity(
     @PrimaryKey val id: String,
     val mediaItemId: String,

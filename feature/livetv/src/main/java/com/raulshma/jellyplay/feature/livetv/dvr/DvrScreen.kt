@@ -200,7 +200,7 @@ fun DvrScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                 )
                             }
-                            items(viewModel.seriesTimers.size) { index ->
+                            items(viewModel.seriesTimers.size, key = { viewModel.seriesTimers[it].id }) { index ->
                                 val timer = viewModel.seriesTimers[index]
                                 SeriesTimerCard(
                                     timer = timer,
@@ -227,7 +227,7 @@ fun DvrScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                 )
                             }
-                            items(viewModel.timers.size) { index ->
+                            items(viewModel.timers.size, key = { viewModel.timers[it].id }) { index ->
                                 val timer = viewModel.timers[index]
                                 TimerCard(
                                     timer = timer,

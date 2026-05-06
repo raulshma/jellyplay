@@ -123,7 +123,7 @@ fun MoodPlaylistDetailScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(viewModel.generatedItems.size) { index ->
+                    items(viewModel.generatedItems.size, key = { viewModel.generatedItems[it].id }) { index ->
                         val track = viewModel.generatedItems[index]
                         TrackRow(
                             name = track.name,

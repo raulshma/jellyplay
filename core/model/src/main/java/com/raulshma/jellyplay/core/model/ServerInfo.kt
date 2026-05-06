@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class ServerInfo(
     val id: String,
@@ -12,6 +14,7 @@ data class ServerInfo(
     val isConnected: Boolean = false,
 )
 
+@Immutable
 @Serializable
 data class UserInfo(
     val id: String,

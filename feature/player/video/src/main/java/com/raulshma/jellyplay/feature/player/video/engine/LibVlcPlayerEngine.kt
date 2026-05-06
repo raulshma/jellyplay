@@ -57,12 +57,12 @@ class LibVlcPlayerEngine(
         release()
 
         val options = arrayListOf(
-            "--aout=opensles",
+            "--aout=aaudio",
             "--audio-time-stretch",
             "--avcodec-skiploopfilter", "1",
             "--avcodec-skip-frame", "0",
             "--avcodec-skip-idct", "0",
-            "--network-caching=1500",
+            "--network-caching=3000",
         )
 
         if (_audioDelayMs != 0L) {

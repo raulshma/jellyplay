@@ -15,6 +15,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -194,6 +195,12 @@ class ExoPlayerEngine(
         }
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
+            .setEnableDecoderFallback(true)
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 3_000)
+            .setTargetBufferBytes(-1)
+            .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
             setSubtitleParserFactory(
@@ -214,6 +221,7 @@ class ExoPlayerEngine(
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(selector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -235,6 +243,12 @@ class ExoPlayerEngine(
         }
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
+            .setEnableDecoderFallback(true)
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 3_000)
+            .setTargetBufferBytes(-1)
+            .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
             setSubtitleParserFactory(
@@ -255,6 +269,7 @@ class ExoPlayerEngine(
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(selector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
