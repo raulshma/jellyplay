@@ -257,8 +257,8 @@ fun VideoPlayerScreen(
     val doPlay: () -> Unit = remember(engine) { { engine?.play() } }
     val doPause: () -> Unit = remember(engine) { { engine?.pause() } }
     val doSeekTo: (Long) -> Unit = remember(engine) { { ms -> engine?.seekTo(ms) } }
-    val doSeekBack: () -> Unit = remember(engine) { { engine?.seekBack() } }
-    val doSeekForward: () -> Unit = remember(engine) { { engine?.seekForward() } }
+    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekBack(uiState.seekDurationMs) } }
+    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekForward(uiState.seekDurationMs) } }
     val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
         derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }

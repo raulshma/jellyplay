@@ -212,6 +212,12 @@ private fun SeekCircleOverlay(
                         tint = Color.White,
                         modifier = Modifier.size(28.dp),
                     )
+                    Text(
+                        text = "${seekOffsetMs / 1000}s",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }
