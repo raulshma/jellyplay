@@ -74,6 +74,10 @@ data class UserPreferences(
     val audioAutoplayNext: Boolean = true,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
+    val skipIntroEnabled: Boolean = true,
+    val skipOutroEnabled: Boolean = true,
+    val autoSkipIntro: Boolean = false,
+    val autoSkipOutro: Boolean = false,
 )
 
 @Immutable

@@ -291,4 +291,20 @@ class SettingsViewModel @Inject constructor(
     fun setTrickplayOnSeekGesture(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
     }
+
+    fun setSkipIntroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSkipIntroEnabled(enabled) }
+    }
+
+    fun setSkipOutroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSkipOutroEnabled(enabled) }
+    }
+
+    fun setAutoSkipIntro(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAutoSkipIntro(enabled) }
+    }
+
+    fun setAutoSkipOutro(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAutoSkipOutro(enabled) }
+    }
 }

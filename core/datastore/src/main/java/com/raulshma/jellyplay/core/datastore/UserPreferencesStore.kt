@@ -70,6 +70,10 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_AUTOPLAY_NEXT = stringPreferencesKey("audio_autoplay_next")
         val TRICKPLAY_ENABLED = stringPreferencesKey("trickplay_enabled")
         val TRICKPLAY_ON_SEEK_GESTURE = stringPreferencesKey("trickplay_on_seek_gesture")
+        val SKIP_INTRO_ENABLED = stringPreferencesKey("skip_intro_enabled")
+        val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
+        val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
+        val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -134,6 +138,10 @@ class UserPreferencesStore @Inject constructor(
             audioAutoplayNext = prefs[Keys.AUDIO_AUTOPLAY_NEXT]?.toBoolean() ?: true,
             trickplayEnabled = prefs[Keys.TRICKPLAY_ENABLED]?.toBoolean() ?: true,
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
+            skipIntroEnabled = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true,
+            skipOutroEnabled = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true,
+            autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false,
+            autoSkipOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false,
         )
     }
 
@@ -326,6 +334,22 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setTrickplayOnSeekGesture(enabled: Boolean) {
         context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled.toString() }
+    }
+
+    suspend fun setSkipIntroEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SKIP_INTRO_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setSkipOutroEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SKIP_OUTRO_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setAutoSkipIntro(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_SKIP_INTRO] = enabled.toString() }
+    }
+
+    suspend fun setAutoSkipOutro(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_SKIP_OUTRO] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

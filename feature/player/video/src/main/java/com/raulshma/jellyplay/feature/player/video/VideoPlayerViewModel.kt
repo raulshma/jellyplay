@@ -88,6 +88,8 @@ class VideoPlayerViewModel @Inject constructor(
         getPlaySessionId = { playSessionId },
         getResolvedPlayMethod = { resolvedPlayMethod },
         getPlayerEngine = { playerEngine },
+        onAutoSkipIntro = { skipIntro() },
+        onAutoSkipOutro = { skipCredits() },
     )
     private val syncPlayController = SyncPlayController(
         syncPlayManager = syncPlayManager,
@@ -142,6 +144,10 @@ class VideoPlayerViewModel @Inject constructor(
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
+                skipIntroEnabled = prefs.skipIntroEnabled,
+                skipOutroEnabled = prefs.skipOutroEnabled,
+                autoSkipIntro = prefs.autoSkipIntro,
+                autoSkipOutro = prefs.autoSkipOutro,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -727,13 +733,20 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun getTrickplayImageUrl(positionMs: Long): String? {
         val itemId = currentItemId ?: return null
+        val mediaSourceId = _uiState.value.currentMediaSource?.id ?: itemId
         val base = trickplayBaseUrl ?: run {
             val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
             trickplayBaseUrl = server
             server
         }
         val index = (positionMs / 10_000).toInt()
-        return "$base/Items/$itemId/Trickplay/320/$index.jpg"
+        
+        // Extract api_key from getStreamUrl so the trickplay image endpoint can authenticate if needed
+        val streamUrl = playbackRepository.getStreamUrl(itemId, mediaSourceId, 0)
+        val apiKey = if (streamUrl.contains("api_key=")) streamUrl.substringAfter("api_key=") else ""
+        val suffix = if (apiKey.isNotEmpty()) "?api_key=$apiKey" else ""
+        
+        return "$base/Videos/$itemId/$mediaSourceId/Trickplay/320/$index.jpg$suffix"
     }
 
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null

@@ -22,9 +22,13 @@ internal class PlaybackProgressReporter(
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,
     private val getPlayerEngine: () -> PlayerEngine?,
+    private val onAutoSkipIntro: () -> Unit,
+    private val onAutoSkipOutro: () -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
+    private var lastIntroSkipPosition: Long = -1
+    private var lastOutroSkipPosition: Long = -1
 
     fun startPositionTracking() {
         positionJob?.cancel()
@@ -36,6 +40,7 @@ internal class PlaybackProgressReporter(
                         currentPosition = pos,
                         duration = engine.durationMs.coerceAtLeast(0L),
                     ) }
+                    checkAutoSkip(pos)
                 }
             }
         } else {
@@ -43,12 +48,44 @@ internal class PlaybackProgressReporter(
                 while (true) {
                     val eng = getPlayerEngine()
                     if (eng != null) {
+                        val pos = eng.currentPositionMs
                         uiState.update { it.copy(
-                            currentPosition = eng.currentPositionMs,
+                            currentPosition = pos,
                             duration = eng.durationMs.coerceAtLeast(0L),
                         ) }
+                        checkAutoSkip(pos)
                     }
                     delay(250)
+                }
+            }
+        }
+    }
+
+    private fun checkAutoSkip(currentPositionMs: Long) {
+        val state = uiState.value
+        
+        // Auto-skip intro
+        if (state.autoSkipIntro && state.isInIntro) {
+            val introTs = state.introTimestamps
+            if (introTs != null && introTs.hasIntro) {
+                val introStartMs = introTs.introStartTicks / 10_000
+                // Only skip once per intro (check if we're at a different intro than last time)
+                if (lastIntroSkipPosition != introStartMs) {
+                    lastIntroSkipPosition = introStartMs
+                    onAutoSkipIntro()
+                }
+            }
+        }
+        
+        // Auto-skip outro/credits
+        if (state.autoSkipOutro && state.isInCredits) {
+            val creditTs = state.creditTimestamps
+            if (creditTs != null && creditTs.hasCredits) {
+                val creditStartMs = creditTs.creditStartTicks / 10_000
+                // Only skip once per credits (check if we're at different credits than last time)
+                if (lastOutroSkipPosition != creditStartMs) {
+                    lastOutroSkipPosition = creditStartMs
+                    onAutoSkipOutro()
                 }
             }
         }

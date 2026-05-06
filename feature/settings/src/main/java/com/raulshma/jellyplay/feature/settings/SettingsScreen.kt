@@ -338,6 +338,56 @@ fun SettingsScreen(
             }
 
             item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Skip Intro & Outro")
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.FastForward,
+                    title = "Skip Intro Button",
+                    subtitle = if (preferences.skipIntroEnabled) "Show skip intro button when available" else "Never show skip intro button",
+                    checked = preferences.skipIntroEnabled,
+                    onCheckedChange = { viewModel.setSkipIntroEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.FastForward,
+                    title = "Skip Outro Button",
+                    subtitle = if (preferences.skipOutroEnabled) "Show skip credits button when available" else "Never show skip credits button",
+                    checked = preferences.skipOutroEnabled,
+                    onCheckedChange = { viewModel.setSkipOutroEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.SkipNext,
+                    title = "Auto-Skip Intro",
+                    subtitle = if (preferences.autoSkipIntro) "Automatically skip intros" else "Manual intro skip only",
+                    checked = preferences.autoSkipIntro,
+                    onCheckedChange = { viewModel.setAutoSkipIntro(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.SkipNext,
+                    title = "Auto-Skip Outro",
+                    subtitle = if (preferences.autoSkipOutro) "Automatically skip credits" else "Manual credits skip only",
+                    checked = preferences.autoSkipOutro,
+                    onCheckedChange = { viewModel.setAutoSkipOutro(it) },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Advanced Video")
+            }
+
+            item {
                 SettingToggleItem(
                     icon = Icons.Default.RecordVoiceOver,
                     title = "Dialogue Boost",
