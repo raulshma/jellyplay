@@ -683,7 +683,7 @@ fun SettingsScreen(
                 SettingInfoItem(
                     icon = Icons.Default.OndemandVideo,
                     title = "Version",
-                    subtitle = "JellyPlay v1.0.0",
+                    subtitle = "JellyPlay v${viewModel.appVersion}",
                 )
             }
         }

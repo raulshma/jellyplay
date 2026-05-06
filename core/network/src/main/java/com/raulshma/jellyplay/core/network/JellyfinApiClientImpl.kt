@@ -48,7 +48,11 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private val jellyfin: Jellyfin = createJellyfin {
         context = this@JellyfinApiClientImpl.context
-        clientInfo = ClientInfo(name = "JellyPlay", version = "1.0.0")
+        clientInfo = ClientInfo(
+            name = "JellyPlay",
+            version = this@JellyfinApiClientImpl.context.packageManager
+                .getPackageInfo(this@JellyfinApiClientImpl.context.packageName, 0).versionName ?: "1.0"
+        )
     }
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
