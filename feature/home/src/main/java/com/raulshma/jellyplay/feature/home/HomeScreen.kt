@@ -52,11 +52,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
@@ -154,27 +156,40 @@ fun HomeScreen(
         featuredCandidates.getOrNull(featuredIndex)
     }
 
-    val fallbackImageUrlBuilder: (MediaItem) -> List<String> = { item ->
-        if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
-            listOfNotNull(
-                item.parentId?.let { viewModel.getImageUrl(it) },
-                item.artistItems.firstOrNull()?.id?.let { viewModel.getImageUrl(it) }
-            )
-        } else {
-            emptyList()
+    val fallbackImageUrlBuilder: (MediaItem) -> List<String> = remember {
+        { item ->
+            if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
+                listOfNotNull(
+                    item.parentId?.let { viewModel.getImageUrl(it) },
+                    item.artistItems.firstOrNull()?.id?.let { viewModel.getImageUrl(it) }
+                )
+            } else {
+                emptyList()
+            }
         }
     }
 
     if (kidsMode) {
+        val currentOnItemClick by rememberUpdatedState(onItemClick)
+        val currentViewModel by rememberUpdatedState(viewModel)
+        val kidsImageUrlBuilder = remember {
+            { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
+        }
+        val kidsOnRefresh = remember {
+            { currentViewModel.refresh() }
+        }
+        val kidsOnItemClick = remember {
+            { id: String -> currentOnItemClick(id) }
+        }
         KidsHomeScreen(
             sections = sections,
             favorites = viewModel.favorites,
             isLoading = isLoading,
             error = error,
-            imageUrlBuilder = { item -> viewModel.getImageUrl(item.id) },
+            imageUrlBuilder = kidsImageUrlBuilder,
             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-            onItemClick = onItemClick,
-            onRefresh = { viewModel.refresh() },
+            onItemClick = kidsOnItemClick,
+            onRefresh = kidsOnRefresh,
         )
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
@@ -205,9 +220,17 @@ fun HomeScreen(
             val navBarColor = LocalNavigationBarColor.current
             navBarColor.value = backgroundColor
 
-            val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
-                    (listState.firstVisibleItemIndex * 1000f)
-            val scrollFraction = (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+            val scrollOffset by remember {
+                derivedStateOf {
+                    listState.firstVisibleItemScrollOffset.toFloat() +
+                            (listState.firstVisibleItemIndex * 1000f)
+                }
+            }
+            val scrollFraction by remember {
+                derivedStateOf {
+                    (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+                }
+            }
 
             val appBarColor by animateFloatAsState(
                 targetValue = if (scrollFraction > 0.7f) 1f else 0f,
@@ -222,6 +245,18 @@ fun HomeScreen(
             )
 
             val sectionsVisible = sections.isNotEmpty()
+
+            val currentOnItemClick by rememberUpdatedState(onItemClick)
+            val currentViewModel by rememberUpdatedState(viewModel)
+            val mediaImageUrlBuilder = remember {
+                { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
+            }
+            val mediaBackdropUrlBuilder = remember {
+                { item: MediaItem -> currentViewModel.getBackdropUrl(item.id) }
+            }
+            val mediaOnItemClick = remember {
+                { item: MediaItem -> currentOnItemClick(item.id) }
+            }
 
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
@@ -269,7 +304,7 @@ fun HomeScreen(
                                     item { Spacer(Modifier.height(100.dp)) }
                                 }
 
-                                items(count = sections.size, key = { sections[it].title }) { index ->
+                                items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
                                     val sectionModifier = Modifier
@@ -299,18 +334,18 @@ fun HomeScreen(
                                             ContinueWatchingRow(
                                                 title = section.title,
                                                 items = section.items,
-                                                imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                                backdropUrlBuilder = { viewModel.getBackdropUrl(it.id) },
-                                                onItemClick = { onItemClick(it.id) },
+                                                imageUrlBuilder = mediaImageUrlBuilder,
+                                                backdropUrlBuilder = mediaBackdropUrlBuilder,
+                                                onItemClick = mediaOnItemClick,
                                                 modifier = sectionModifier,
                                             )
                                         } else {
                                             HomeMediaRow(
                                                 title = section.title,
                                                 items = section.items,
-                                                imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                                imageUrlBuilder = mediaImageUrlBuilder,
                                                 fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                                onItemClick = { onItemClick(it.id) },
+                                                onItemClick = mediaOnItemClick,
                                                 modifier = sectionModifier,
                                             )
                                         }
@@ -543,7 +578,7 @@ private fun HeroHeader(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(item.genres) { genre ->
+                    items(item.genres, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
@@ -644,7 +679,7 @@ private fun ContinueWatchingRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }) { item ->
+            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 WideMediaCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -796,7 +831,7 @@ private fun HomeMediaRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }) { item ->
+            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),

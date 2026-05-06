@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class PlaybackInfo(
     val itemId: String,
@@ -12,6 +14,7 @@ data class PlaybackInfo(
     val playSessionId: String? = null,
 )
 
+@Immutable
 @Serializable
 enum class PlayMethod {
     DIRECT_PLAY,
@@ -19,6 +22,7 @@ enum class PlayMethod {
     TRANSCODE,
 }
 
+@Immutable
 @Serializable
 data class PlaybackProgress(
     val itemId: String,
@@ -32,6 +36,7 @@ data class PlaybackProgress(
     val canSeek: Boolean = true,
 )
 
+@Immutable
 @Serializable
 data class PlaybackStartInfo(
     val itemId: String,

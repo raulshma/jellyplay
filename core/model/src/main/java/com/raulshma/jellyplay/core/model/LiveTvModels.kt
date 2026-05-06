@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class LiveTvChannel(
     val id: String,
@@ -13,6 +15,7 @@ data class LiveTvChannel(
     val primaryBlurHash: String? = null,
 )
 
+@Immutable
 @Serializable
 data class LiveTvProgram(
     val id: String,
@@ -33,6 +36,7 @@ data class LiveTvProgram(
     val isSeries: Boolean = false,
 )
 
+@Immutable
 @Serializable
 data class EpgGuide(
     val channels: List<LiveTvChannel>,

@@ -150,19 +150,18 @@ class DownloadWorker(
                             return Result.success()
                         }
 
-                        val currentEntity = dao.getDownloadById(downloadId)
-                        if (currentEntity?.status == DownloadStatus.PAUSED.name ||
-                            currentEntity?.status == DownloadStatus.CANCELLED.name
-                        ) {
-                            response.close()
-                            return Result.success()
-                        }
-
                         output.write(buffer, 0, bytesRead)
                         downloadedBytes += bytesRead
 
                         val now = System.currentTimeMillis()
                         if (now - lastProgressUpdate >= progressUpdateIntervalMs) {
+                            val currentEntity = dao.getDownloadById(downloadId)
+                            if (currentEntity?.status == DownloadStatus.PAUSED.name ||
+                                currentEntity?.status == DownloadStatus.CANCELLED.name
+                            ) {
+                                response.close()
+                                return Result.success()
+                            }
                             val elapsed = now - lastProgressUpdate
                             val bytesDelta = downloadedBytes - lastSpeedBytes
                             speedBytesPerSec = if (elapsed > 0) {

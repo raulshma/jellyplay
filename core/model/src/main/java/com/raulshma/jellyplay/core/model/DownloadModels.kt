@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class DownloadItem(
     val id: String,
@@ -19,6 +21,7 @@ data class DownloadItem(
     val imageBlurHash: String? = null,
 )
 
+@Immutable
 @Serializable
 enum class DownloadStatus {
     PENDING,
@@ -29,6 +32,7 @@ enum class DownloadStatus {
     CANCELLED,
 }
 
+@Immutable
 @Serializable
 data class UserPreferences(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
@@ -68,14 +72,22 @@ data class UserPreferences(
     val audioNightModeGain: Int = 1200,
     val audioSkipPreviousThresholdMs: Long = 3_000L,
     val audioAutoplayNext: Boolean = true,
+    val trickplayEnabled: Boolean = true,
+    val trickplayOnSeekGesture: Boolean = true,
+    val skipIntroEnabled: Boolean = true,
+    val skipOutroEnabled: Boolean = true,
+    val autoSkipIntro: Boolean = false,
+    val autoSkipOutro: Boolean = false,
 )
 
+@Immutable
 @Serializable
 enum class HomeMode {
     VIDEO,
     MUSIC,
 }
 
+@Immutable
 @Serializable
 enum class PlayerType(val displayName: String, val description: String) {
     EXO_PLAYER("ExoPlayer", "Built-in Media3 player with full controls"),
@@ -93,6 +105,7 @@ enum class PlayerType(val displayName: String, val description: String) {
     }
 }
 
+@Immutable
 @Serializable
 data class SubtitleStyle(
     val fontSize: Int = 24,
@@ -105,6 +118,7 @@ data class SubtitleStyle(
     val verticalPosition: Float = 0.05f,
 )
 
+@Immutable
 @Serializable
 enum class DecoderMode(val displayName: String) {
     HW_PREFERRED("Hardware (Preferred)"),
@@ -112,6 +126,7 @@ enum class DecoderMode(val displayName: String) {
     SW_ONLY("Software Only"),
 }
 
+@Immutable
 @Serializable
 enum class SubtitleColor(val value: Int) {
     WHITE(0xFFFFFFFF.toInt()),
@@ -123,6 +138,7 @@ enum class SubtitleColor(val value: Int) {
     BLUE(0xFF0000FF.toInt()),
 }
 
+@Immutable
 @Serializable
 enum class SubtitleEdgeType {
     NONE,
@@ -132,6 +148,7 @@ enum class SubtitleEdgeType {
     DEPRESSED,
 }
 
+@Immutable
 @Serializable
 enum class StreamingQuality {
     AUTO,
@@ -142,6 +159,7 @@ enum class StreamingQuality {
     UHD_4K,
 }
 
+@Immutable
 @Serializable
 data class EqualizerSettings(
     val bandLevels: List<Int> = List(10) { 0 },
@@ -151,6 +169,7 @@ data class EqualizerSettings(
     }
 }
 
+@Immutable
 @Serializable
 enum class OrientationMode(val displayName: String, val constant: String) {
     SENSOR_LANDSCAPE("Landscape", "sensor_landscape"),

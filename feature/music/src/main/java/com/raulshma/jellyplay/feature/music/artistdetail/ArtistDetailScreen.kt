@@ -175,7 +175,7 @@ private fun ArtistDetailContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(albums, key = { it.id }) { album ->
+                        items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
                             AlbumCard(
                                 album = album,
                                 imageUrl = getImageUrl(album.id),

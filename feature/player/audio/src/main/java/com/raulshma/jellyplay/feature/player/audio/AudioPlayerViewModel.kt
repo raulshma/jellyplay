@@ -494,20 +494,10 @@ class AudioPlayerViewModel @Inject constructor(
     }
 
     fun release() {
+        cleanupResources()
         val player = exoPlayer
         val itemId = currentItemId
-        progressJob?.cancel()
-        positionJob?.cancel()
-        exoPlayer?.removeListener(playerListener)
-        mediaSession?.let { sessionManager.clearSession(it) }
-        mediaSession?.release()
-        mediaSession = null
-        exoPlayer?.release()
         exoPlayer = null
-        dialogueBoost.detach()
-        equalizerHelper.detach()
-        loudnessEnhancer?.release()
-        loudnessEnhancer = null
         if (player != null && itemId != null) {
             viewModelScope.launch {
                 playbackRepository.reportPlaybackStopped(
@@ -519,8 +509,7 @@ class AudioPlayerViewModel @Inject constructor(
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
+    private fun cleanupResources() {
         progressJob?.cancel()
         positionJob?.cancel()
         exoPlayer?.removeListener(playerListener)
@@ -533,5 +522,10 @@ class AudioPlayerViewModel @Inject constructor(
         equalizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        cleanupResources()
     }
 }

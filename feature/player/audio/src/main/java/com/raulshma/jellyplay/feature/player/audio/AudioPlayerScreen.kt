@@ -110,7 +110,6 @@ fun AudioPlayerScreen(
     var showLyrics by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
 
-    // Entrance animations
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
 
@@ -144,26 +143,12 @@ fun AudioPlayerScreen(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
     ) {
-        val surfaceColor = MaterialTheme.colorScheme.surface
-        val scrimColor = MaterialTheme.colorScheme.scrim
-
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            // ── Blurred background artwork ──
-            if (viewModel.albumArtUrl.isNotBlank()) {
-                MediaImage(
-                    url = viewModel.albumArtUrl,
-                    contentDescription = null,
-                    blurHash = viewModel.albumArtBlurHash,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(60.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                        .scale(1.3f)
-                        .graphicsLayer { alpha = 0.55f },
-                    contentScale = ContentScale.Crop,
-                )
-            }
+            BlurredArtworkBackground(
+                albumArtUrl = viewModel.albumArtUrl,
+                albumArtBlurHash = viewModel.albumArtBlurHash,
+            )
 
-            // ── Gradient overlays ──
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -181,7 +166,6 @@ fun AudioPlayerScreen(
                     ),
             )
 
-            // ── Main content ──
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -189,136 +173,37 @@ fun AudioPlayerScreen(
                     .padding(WindowInsets.navigationBars.asPaddingValues()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // ── Top bar ──
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
-                            tint = Color.White,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "NOW PLAYING",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f),
-                            letterSpacing = 2.sp,
-                        )
-                    }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, "More", tint = Color.White)
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Queue") },
-                                onClick = { showMenu = false; showQueue = true },
-                                leadingIcon = { Icon(Icons.Default.QueueMusic, null) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Speed (${if (viewModel.speed == 1.0f) "1x" else "${viewModel.speed}x"})") },
-                                onClick = { showMenu = false; showSpeedPicker = true },
-                                leadingIcon = { Icon(Icons.Default.Speed, null) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Equalizer") },
-                                onClick = { showMenu = false; showEqualizer = true },
-                                leadingIcon = { Icon(Icons.Default.Tune, null) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (viewModel.dialogueBoostEnabled) "Dialogue Boost ✓" else "Dialogue Boost") },
-                                onClick = { showMenu = false; viewModel.toggleDialogueBoost() },
-                                leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (viewModel.nightModeEnabled) "Night Mode ✓" else "Night Mode") },
-                                onClick = { showMenu = false; viewModel.toggleNightMode() },
-                                leadingIcon = { Icon(Icons.Default.Nightlight, null) },
-                            )
-                            if (viewModel.lyrics.isNotEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text("Lyrics") },
-                                    onClick = { showMenu = false; showLyrics = true },
-                                    leadingIcon = { Icon(Icons.Default.Mic, null) },
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Ambient Mode") },
-                                onClick = {
-                                    showMenu = false
-                                    onAmbientClick(
-                                        viewModel.albumArtUrl.ifBlank { null },
-                                        viewModel.title,
-                                        viewModel.artist,
-                                    )
-                                },
-                                leadingIcon = { Icon(Icons.Default.NightsStay, null) },
-                            )
-                        }
-                    }
-                }
+                PlayerTopBar(
+                    onBack = onBack,
+                    speed = viewModel.speed,
+                    dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
+                    nightModeEnabled = viewModel.nightModeEnabled,
+                    hasLyrics = viewModel.lyrics.isNotEmpty(),
+                    albumArtUrl = viewModel.albumArtUrl,
+                    title = viewModel.title,
+                    artist = viewModel.artist,
+                    showMenu = showMenu,
+                    onMenuToggle = { showMenu = it },
+                    onQueueClick = { showMenu = false; showQueue = true },
+                    onSpeedClick = { showMenu = false; showSpeedPicker = true },
+                    onEqualizerClick = { showMenu = false; showEqualizer = true },
+                    onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
+                    onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
+                    onLyricsClick = { showMenu = false; showLyrics = true },
+                    onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
+                )
 
                 Spacer(Modifier.weight(0.6f))
 
-                // ── Album art ──
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.75f)
-                        .aspectRatio(1f)
-                        .scale(artworkScale.value)
-                        .shadow(
-                            elevation = 24.dp,
-                            shape = RoundedCornerShape(24.dp),
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                        )
-                        .clip(RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (viewModel.albumArtUrl.isNotBlank()) {
-                        MediaImage(
-                            url = viewModel.albumArtUrl,
-                            contentDescription = viewModel.title,
-                            blurHash = viewModel.albumArtBlurHash,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                            MaterialTheme.colorScheme.surface,
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.MusicNote,
-                                contentDescription = null,
-                                modifier = Modifier.size(72.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            )
-                        }
-                    }
-                }
+                AlbumArtwork(
+                    albumArtUrl = viewModel.albumArtUrl,
+                    albumArtBlurHash = viewModel.albumArtBlurHash,
+                    title = viewModel.title,
+                    scale = artworkScale.value,
+                )
 
                 Spacer(Modifier.weight(0.5f))
 
-                // ── Track info + controls (faded in) ──
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -326,132 +211,35 @@ fun AudioPlayerScreen(
                         .padding(horizontal = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // Title & artist
-                    Text(
-                        viewModel.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Start,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        viewModel.artist,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.65f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Start,
+                    TrackInfoSection(
+                        title = viewModel.title,
+                        artist = viewModel.artist,
                     )
 
                     Spacer(Modifier.height(28.dp))
 
-                    // Progress slider
-                    Slider(
-                        value = if (viewModel.duration > 0) viewModel.currentPosition.toFloat() / viewModel.duration else 0f,
-                        onValueChange = { fraction ->
+                    ProgressSlider(
+                        currentPosition = viewModel.currentPosition,
+                        duration = viewModel.duration,
+                        onSeek = { fraction ->
                             if (viewModel.duration > 0) {
                                 viewModel.seekTo((fraction * viewModel.duration).toLong())
                             }
                         },
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.2f),
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
                     )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .offset(y = (-4).dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            formatDuration(viewModel.currentPosition),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.5f),
-                        )
-                        Text(
-                            if (viewModel.duration > 0) formatDuration(viewModel.duration) else "--:--",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.5f),
-                        )
-                    }
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Transport controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { viewModel.toggleShuffle() }) {
-                            Icon(
-                                Icons.Default.Shuffle,
-                                "Shuffle",
-                                tint = if (viewModel.shuffleMode) MaterialTheme.colorScheme.primary
-                                else Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                        IconButton(
-                            onClick = { viewModel.skipToPrevious() },
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.SkipPrevious, "Previous",
-                                modifier = Modifier.size(32.dp),
-                                tint = Color.White,
-                            )
-                        }
-                        // Large play/pause button
-                        FilledIconButton(
-                            onClick = { viewModel.togglePlayPause() },
-                            modifier = Modifier.size(68.dp),
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color.White,
-                                contentColor = Color.Black,
-                            ),
-                        ) {
-                            Icon(
-                                if (viewModel.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                if (viewModel.isPlaying) "Pause" else "Play",
-                                modifier = Modifier.size(36.dp),
-                            )
-                        }
-                        IconButton(
-                            onClick = { viewModel.skipToNext() },
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.SkipNext, "Next",
-                                modifier = Modifier.size(32.dp),
-                                tint = Color.White,
-                            )
-                        }
-                        IconButton(onClick = { viewModel.cycleRepeatMode() }) {
-                            Icon(
-                                if (viewModel.repeatMode == 2) Icons.Default.RepeatOne
-                                else Icons.Default.Repeat,
-                                when (viewModel.repeatMode) {
-                                    0 -> "Repeat off"
-                                    1 -> "Repeat all"
-                                    else -> "Repeat one"
-                                },
-                                tint = if (viewModel.repeatMode > 0) MaterialTheme.colorScheme.primary
-                                else Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                    }
+                    TransportControls(
+                        isPlaying = viewModel.isPlaying,
+                        shuffleMode = viewModel.shuffleMode,
+                        repeatMode = viewModel.repeatMode,
+                        onTogglePlayPause = { viewModel.togglePlayPause() },
+                        onSkipPrevious = { viewModel.skipToPrevious() },
+                        onSkipNext = { viewModel.skipToNext() },
+                        onToggleShuffle = { viewModel.toggleShuffle() },
+                        onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                    )
 
                     Spacer(Modifier.height(16.dp))
                 }
@@ -528,7 +316,7 @@ private fun QueueSheet(
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(queue, key = { _, item -> item.id }) { index, item ->
+                itemsIndexed(queue, key = { _, item -> item.id }, contentType = { _, _ -> "queueItem" }) { index, item ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -696,7 +484,7 @@ private fun LyricsSheet(
                 modifier = Modifier.fillMaxWidth().height(400.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                items(lyrics.size) { index ->
+                items(lyrics.size, contentType = { "lyricsLine" }) { index ->
                     val line = lyrics[index]
                     Text(
                         text = line.text,
@@ -720,6 +508,311 @@ private fun LyricsSheet(
     LaunchedEffect(currentIndex) {
         if (currentIndex >= 0) {
             listState.animateScrollToItem(currentIndex.coerceAtMost(lyrics.lastIndex))
+        }
+    }
+}
+
+@Composable
+private fun BlurredArtworkBackground(
+    albumArtUrl: String,
+    albumArtBlurHash: String?,
+) {
+    if (albumArtUrl.isNotBlank()) {
+        MediaImage(
+            url = albumArtUrl,
+            contentDescription = null,
+            blurHash = albumArtBlurHash,
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(60.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                .scale(1.3f)
+                .graphicsLayer { alpha = 0.55f },
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+@Composable
+private fun PlayerTopBar(
+    onBack: () -> Unit,
+    speed: Float,
+    dialogueBoostEnabled: Boolean,
+    nightModeEnabled: Boolean,
+    hasLyrics: Boolean,
+    albumArtUrl: String,
+    title: String,
+    artist: String,
+    showMenu: Boolean,
+    onMenuToggle: (Boolean) -> Unit,
+    onQueueClick: () -> Unit,
+    onSpeedClick: () -> Unit,
+    onEqualizerClick: () -> Unit,
+    onDialogueBoostClick: () -> Unit,
+    onNightModeClick: () -> Unit,
+    onLyricsClick: () -> Unit,
+    onAmbientClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                tint = Color.White,
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "NOW PLAYING",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.7f),
+                letterSpacing = 2.sp,
+            )
+        }
+        Box {
+            IconButton(onClick = { onMenuToggle(true) }) {
+                Icon(Icons.Default.MoreVert, "More", tint = Color.White)
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { onMenuToggle(false) },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Queue") },
+                    onClick = onQueueClick,
+                    leadingIcon = { Icon(Icons.Default.QueueMusic, null) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
+                    onClick = onSpeedClick,
+                    leadingIcon = { Icon(Icons.Default.Speed, null) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Equalizer") },
+                    onClick = onEqualizerClick,
+                    leadingIcon = { Icon(Icons.Default.Tune, null) },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (dialogueBoostEnabled) "Dialogue Boost ✓" else "Dialogue Boost") },
+                    onClick = onDialogueBoostClick,
+                    leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (nightModeEnabled) "Night Mode ✓" else "Night Mode") },
+                    onClick = onNightModeClick,
+                    leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                )
+                if (hasLyrics) {
+                    DropdownMenuItem(
+                        text = { Text("Lyrics") },
+                        onClick = onLyricsClick,
+                        leadingIcon = { Icon(Icons.Default.Mic, null) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Ambient Mode") },
+                    onClick = onAmbientClick,
+                    leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumArtwork(
+    albumArtUrl: String,
+    albumArtBlurHash: String?,
+    title: String,
+    scale: Float,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(0.75f)
+            .aspectRatio(1f)
+            .scale(scale)
+            .shadow(
+                elevation = 24.dp,
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+            )
+            .clip(RoundedCornerShape(24.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (albumArtUrl.isNotBlank()) {
+            MediaImage(
+                url = albumArtUrl,
+                contentDescription = title,
+                blurHash = albumArtBlurHash,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.colorScheme.surface,
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackInfoSection(
+    title: String,
+    artist: String,
+) {
+    Text(
+        title,
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Start,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        artist,
+        style = MaterialTheme.typography.bodyLarge,
+        color = Color.White.copy(alpha = 0.65f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Start,
+    )
+}
+
+@Composable
+private fun ProgressSlider(
+    currentPosition: Long,
+    duration: Long,
+    onSeek: (Float) -> Unit,
+) {
+    Slider(
+        value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+        onValueChange = onSeek,
+        colors = SliderDefaults.colors(
+            thumbColor = Color.White,
+            activeTrackColor = Color.White,
+            inactiveTrackColor = Color.White.copy(alpha = 0.2f),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = (-4).dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            formatDuration(currentPosition),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.5f),
+        )
+        Text(
+            if (duration > 0) formatDuration(duration) else "--:--",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.5f),
+        )
+    }
+}
+
+@Composable
+private fun TransportControls(
+    isPlaying: Boolean,
+    shuffleMode: Boolean,
+    repeatMode: Int,
+    onTogglePlayPause: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onSkipNext: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onToggleShuffle) {
+            Icon(
+                Icons.Default.Shuffle,
+                "Shuffle",
+                tint = if (shuffleMode) MaterialTheme.colorScheme.primary
+                else Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        IconButton(
+            onClick = onSkipPrevious,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                Icons.Default.SkipPrevious, "Previous",
+                modifier = Modifier.size(32.dp),
+                tint = Color.White,
+            )
+        }
+        FilledIconButton(
+            onClick = onTogglePlayPause,
+            modifier = Modifier.size(68.dp),
+            shape = CircleShape,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = Color.White,
+                contentColor = Color.Black,
+            ),
+        ) {
+            Icon(
+                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                if (isPlaying) "Pause" else "Play",
+                modifier = Modifier.size(36.dp),
+            )
+        }
+        IconButton(
+            onClick = onSkipNext,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                Icons.Default.SkipNext, "Next",
+                modifier = Modifier.size(32.dp),
+                tint = Color.White,
+            )
+        }
+        IconButton(onClick = onCycleRepeatMode) {
+            Icon(
+                if (repeatMode == 2) Icons.Default.RepeatOne
+                else Icons.Default.Repeat,
+                when (repeatMode) {
+                    0 -> "Repeat off"
+                    1 -> "Repeat all"
+                    else -> "Repeat one"
+                },
+                tint = if (repeatMode > 0) MaterialTheme.colorScheme.primary
+                else Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

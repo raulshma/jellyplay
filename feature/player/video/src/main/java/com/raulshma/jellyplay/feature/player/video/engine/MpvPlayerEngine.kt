@@ -9,6 +9,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -21,13 +22,17 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var _audioDelayMs = 0L
     @Volatile private var _subtitleDelayMs = 0L
     private var pendingUrl: String? = null
+    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
+    private val dialogueBoost = DialogueBoostHelper()
+    private var dialogueBoostEnabled: Boolean = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -51,6 +56,17 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: MPVNode) {}
             override fun event(eventId: Int, node: MPVNode) {
                 if (eventId == MPV.mpvEvent.MPV_EVENT_FILE_LOADED) {
+                    // Add external subtitles after file is loaded
+                    pendingSubtitles?.forEach { (subUrl, _) ->
+                        try {
+                            Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
+                            mpv.command("sub-add", subUrl)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
+                        }
+                    }
+                    pendingSubtitles = null
+                    
                     mainHandler.post { onTracksChanged?.invoke() }
                 }
             }
@@ -61,7 +77,7 @@ class MpvPlayerEngine(
                 DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
                 DecoderMode.SW_ONLY -> "no"
             })
-            mpv.setOptionString("ao", "audiotrack,opensles")
+            mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
         }
@@ -88,15 +104,27 @@ class MpvPlayerEngine(
                     view.mpv.setOptionString("start", "+${startPositionMs / 1000.0}")
                 }
                 view.playFile(url)
+                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
                 pendingUrl = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
         }
     }
+    
+    /**
+     * Configure external subtitles to be loaded with the media.
+     * Must be called before initialize() or after createPlayerView().
+     */
+    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
+        pendingSubtitles = subtitles
+        Log.d(TAG, "Configured ${subtitles.size} external subtitles")
+    }
 
     override fun release() {
         pendingUrl = null
+        pendingSubtitles = null
+        dialogueBoost.detach()
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
@@ -187,12 +215,15 @@ class MpvPlayerEngine(
     }
 
     override val isPlaying: Boolean get() = _isPlaying
-    override val audioSessionId: Int get() = 0
+    override val audioSessionId: Int
+        get() = try {
+            mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
+        } catch (_: Exception) { 0 }
     override val supportsAudioDelay: Boolean get() = true
     override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
     override val supportsSubtitleStyle: Boolean get() = false
-    override val supportsDialogueBoost: Boolean get() = false
+    override val supportsDialogueBoost: Boolean get() = true
     override val supportsNightMode: Boolean get() = false
     override val supportsOcr: Boolean get() = false
     override val supportsCues: Boolean get() = false
@@ -253,6 +284,7 @@ class MpvPlayerEngine(
             pendingUrl = null
             try {
                 view.playFile(url)
+                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
@@ -267,6 +299,19 @@ class MpvPlayerEngine(
 
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
+    }
+
+    override fun setDialogueBoostEnabled(enabled: Boolean) {
+        dialogueBoostEnabled = enabled
+        val sid = audioSessionId
+        if (sid != 0) {
+            dialogueBoost.attach(sid)
+            dialogueBoost.setEnabled(enabled)
+        }
     }
 
     private fun getTracksOfType(type: String, trackType: PlayerEngine.TrackType): List<PlayerEngine.TrackInfo> {

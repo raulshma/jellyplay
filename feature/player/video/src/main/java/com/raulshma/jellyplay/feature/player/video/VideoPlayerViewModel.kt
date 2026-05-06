@@ -88,6 +88,8 @@ class VideoPlayerViewModel @Inject constructor(
         getPlaySessionId = { playSessionId },
         getResolvedPlayMethod = { resolvedPlayMethod },
         getPlayerEngine = { playerEngine },
+        onAutoSkipIntro = { skipIntro() },
+        onAutoSkipOutro = { skipCredits() },
     )
     private val syncPlayController = SyncPlayController(
         syncPlayManager = syncPlayManager,
@@ -140,6 +142,12 @@ class VideoPlayerViewModel @Inject constructor(
                 rememberBrightness = prefs.videoRememberBrightness,
                 brightnessLevel = prefs.videoBrightnessLevel,
                 aspectRatio = defaultAspectRatio,
+                trickplayEnabled = prefs.trickplayEnabled,
+                trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
+                skipIntroEnabled = prefs.skipIntroEnabled,
+                skipOutroEnabled = prefs.skipOutroEnabled,
+                autoSkipIntro = prefs.autoSkipIntro,
+                autoSkipOutro = prefs.autoSkipOutro,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -261,6 +269,9 @@ class VideoPlayerViewModel @Inject constructor(
         engine.setOnTracksChanged {
             updateTracksFromEngine(engine)
         }
+        engine.setOnError { errorMsg ->
+            _uiState.update { it.copy(playerError = errorMsg) }
+        }
 
         if (engine is ExoPlayerEngine) {
             (engine as ExoPlayerEngine).setOnPlaybackStateChanged { playbackState ->
@@ -308,7 +319,32 @@ class VideoPlayerViewModel @Inject constructor(
                 engine.setEqualizerEnabled(true, prefs.equalizerSettings)
             }
         } else {
+            // For MPV and LibVLC, configure external subtitles before initialization
+            val streams = source?.mediaStreams ?: emptyList()
+            val externalSubtitles = streams
+                .filter { it.type == StreamType.SUBTITLE && !it.deliveryUrl.isNullOrBlank() }
+                .map { stream ->
+                    val subUrl = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    val label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown"
+                    subUrl to label
+                }
+            
+            if (externalSubtitles.isNotEmpty()) {
+                when (engine) {
+                    is com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine -> {
+                        engine.configureExternalSubtitles(externalSubtitles)
+                    }
+                    is com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine -> {
+                        engine.configureExternalSubtitles(externalSubtitles)
+                    }
+                }
+            }
+            
             engine.initialize(url, detail.item.name, startPositionTicks / 10_000)
+            
+            // Apply dialogue boost setting for MPV and LibVLC
+            _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
+            engine.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
         }
 
         val speed = state.defaultSpeed
@@ -338,22 +374,18 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectSubtitleTrack(option: TrackOption) {
         val engine = playerEngine ?: return
-        val streams = _uiState.value.mediaStreams
-        if (option.trackGroup == null && option.index >= 0) {
-            val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
-            val stream = serverSubs.getOrNull(option.index)
-            if (stream != null) {
-                selectSecondarySubtitleStream(stream)
-                return
-            }
-        }
+        
+        // Apply selection to the player engine
         engine.selectSubtitleTrack(option.index)
+        
+        // Update internal state tracking
         if (option.index < 0) {
             selectedSubtitleTrackId = null
-            selectSecondarySubtitleStream(null)
         } else {
             selectedSubtitleTrackId = option.index to option.trackGroup
         }
+        
+        // Update UI state to reflect the selection
         _uiState.update { state ->
             val isOff = option.index < 0
             state.copy(subtitleTracks = state.subtitleTracks.map { track ->
@@ -701,13 +733,20 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun getTrickplayImageUrl(positionMs: Long): String? {
         val itemId = currentItemId ?: return null
+        val mediaSourceId = _uiState.value.currentMediaSource?.id ?: itemId
         val base = trickplayBaseUrl ?: run {
             val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
             trickplayBaseUrl = server
             server
         }
         val index = (positionMs / 10_000).toInt()
-        return "$base/Items/$itemId/Trickplay/320/$index.jpg"
+        
+        // Extract api_key from getStreamUrl so the trickplay image endpoint can authenticate if needed
+        val streamUrl = playbackRepository.getStreamUrl(itemId, mediaSourceId, 0)
+        val apiKey = if (streamUrl.contains("api_key=")) streamUrl.substringAfter("api_key=") else ""
+        val suffix = if (apiKey.isNotEmpty()) "?api_key=$apiKey" else ""
+        
+        return "$base/Videos/$itemId/$mediaSourceId/Trickplay/320/$index.jpg$suffix"
     }
 
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
@@ -728,15 +767,10 @@ class VideoPlayerViewModel @Inject constructor(
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
+        // Always use engine tracks as source of truth for primary subtitles
         val subtitleTracks = if (engineSubOptions.isEmpty()) {
-            val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
-            if (serverSubs.isNotEmpty()) {
-                listOf(TrackOption(-1, "Off", null, true)) + serverSubs.mapIndexed { index, stream ->
-                    TrackOption(index, stream.displayTitle ?: stream.language ?: "Unknown", stream.language, false)
-                }
-            } else {
-                listOf(TrackOption(-1, "None", null, true))
-            }
+            // No subtitle tracks available at all
+            listOf(TrackOption(-1, "None", null, true))
         } else {
             val sel = selectedSubtitleTrackId
             listOf(TrackOption(-1, "Off", null, sel == null)) + engineSubOptions.map { t ->

@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class IntroTimestamps(
     val itemId: String,
@@ -13,6 +15,7 @@ data class IntroTimestamps(
     val hasIntro: Boolean get() = introEndTicks > introStartTicks
 }
 
+@Immutable
 @Serializable
 data class CreditTimestamps(
     val itemId: String,
@@ -24,6 +27,7 @@ data class CreditTimestamps(
     val hasCredits: Boolean get() = creditEndTicks > creditStartTicks
 }
 
+@Immutable
 @Serializable
 data class RemoteSubtitleInfo(
     val id: String,

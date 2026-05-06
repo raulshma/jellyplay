@@ -12,9 +12,11 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -49,6 +51,7 @@ class ExoPlayerEngine(
     private var mediaSession: MediaSession? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
 
     private val dialogueBoost = DialogueBoostHelper()
@@ -83,6 +86,14 @@ class ExoPlayerEngine(
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             this@ExoPlayerEngine.onTracksChanged?.invoke()
         }
+
+        override fun onPlayerError(error: PlaybackException) {
+            onError?.invoke(error.message ?: "Unknown playback error")
+        }
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
     }
 
     fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
@@ -163,14 +174,31 @@ class ExoPlayerEngine(
         getSubtitleDeliveryUrl: (String) -> String,
     ): List<MediaItem.SubtitleConfiguration> {
         return streams
-            .filter { it.type == StreamType.SUBTITLE && it.isExternal && !it.deliveryUrl.isNullOrBlank() }
+            .filter { it.type == StreamType.SUBTITLE }
             .mapNotNull { stream ->
+                // Build URL for external subtitles
+                val url = when {
+                    // External subtitle with delivery URL
+                    !stream.deliveryUrl.isNullOrBlank() -> {
+                        getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    }
+                    // External subtitle without delivery URL - skip, will be handled by embedded tracks
+                    stream.isExternal -> null
+                    // Embedded subtitle - skip, already in container
+                    else -> null
+                }
+                
+                if (url == null) return@mapNotNull null
+                
                 val mimeType = mapSubtitleCodecToMime(stream.codec)
-                val url = getSubtitleDeliveryUrl(stream.deliveryUrl!!)
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
                     .setMimeType(mimeType)
                     .setLanguage(stream.language)
                     .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
+                    .setSelectionFlags(
+                        if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0 or
+                        if (stream.isForced) C.SELECTION_FLAG_FORCED else 0
+                    )
                     .build()
             }
     }
@@ -194,6 +222,12 @@ class ExoPlayerEngine(
         }
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
+            .setEnableDecoderFallback(true)
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 3_000)
+            .setTargetBufferBytes(-1)
+            .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
             setSubtitleParserFactory(
@@ -214,6 +248,7 @@ class ExoPlayerEngine(
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(selector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -235,6 +270,12 @@ class ExoPlayerEngine(
         }
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
+            .setEnableDecoderFallback(true)
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 3_000)
+            .setTargetBufferBytes(-1)
+            .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
             setSubtitleParserFactory(
@@ -255,6 +296,7 @@ class ExoPlayerEngine(
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(selector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()

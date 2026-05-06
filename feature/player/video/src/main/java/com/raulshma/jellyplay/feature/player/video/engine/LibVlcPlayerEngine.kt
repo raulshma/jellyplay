@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -25,13 +26,17 @@ class LibVlcPlayerEngine(
     private var videoLayout: VLCVideoLayout? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var pendingPlay = false
     @Volatile private var _audioDelayMs = 0L
     @Volatile private var _subtitleDelayMs = 0L
+    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
+    private val dialogueBoost = DialogueBoostHelper()
+    private var dialogueBoostEnabled: Boolean = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -39,7 +44,13 @@ class LibVlcPlayerEngine(
         when (event.type) {
             MediaPlayer.Event.Playing -> {
                 _isPlaying = true
-                mainHandler.post { onStateChanged?.invoke(true) }
+                mainHandler.post { 
+                    onStateChanged?.invoke(true)
+                    // Apply dialogue boost when playback starts
+                    if (dialogueBoostEnabled) {
+                        applyDialogueBoost()
+                    }
+                }
             }
             MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> {
                 _isPlaying = false
@@ -50,6 +61,9 @@ class LibVlcPlayerEngine(
             MediaPlayer.Event.ESSelected -> {
                 mainHandler.post { onTracksChanged?.invoke() }
             }
+            MediaPlayer.Event.EncounteredError -> {
+                mainHandler.post { onError?.invoke("VLC encountered an error during playback") }
+            }
         }
     }
 
@@ -57,12 +71,12 @@ class LibVlcPlayerEngine(
         release()
 
         val options = arrayListOf(
-            "--aout=opensles",
+            "--aout=aaudio",
             "--audio-time-stretch",
             "--avcodec-skiploopfilter", "1",
             "--avcodec-skip-frame", "0",
             "--avcodec-skip-idct", "0",
-            "--network-caching=1500",
+            "--network-caching=3000",
         )
 
         if (_audioDelayMs != 0L) {
@@ -96,12 +110,33 @@ class LibVlcPlayerEngine(
 
         mp.media = media
         media.release()
+        
+        // Add external subtitles after media is set
+        // LibVLC addSlave: type (0=subtitle, 1=audio), priority, uri
+        pendingSubtitles?.forEach { (subUrl, _) ->
+            try {
+                mp.addSlave(0, subUrl, false) // 0 = subtitle type
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to add subtitle: $subUrl", e)
+            }
+        }
 
         pendingPlay = true
+        pendingSubtitles = null
+    }
+    
+    /**
+     * Configure external subtitles to be loaded with the media.
+     * Must be called before initialize().
+     */
+    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
+        pendingSubtitles = subtitles
     }
 
     override fun release() {
         pendingPlay = false
+        pendingSubtitles = null
+        dialogueBoost.detach()
         val mp = mediaPlayer ?: return
         mediaPlayer = null
         mp.setEventListener(null)
@@ -204,12 +239,17 @@ class LibVlcPlayerEngine(
 
     override val isPlaying: Boolean
         get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
-    override val audioSessionId: Int get() = 0
+    override val audioSessionId: Int
+        get() = try {
+            // LibVLC doesn't expose audio session ID directly, but we can use a workaround
+            // by getting the audio track ID which can be used for audio effects
+            mediaPlayer?.audioTrack ?: 0
+        } catch (_: Exception) { 0 }
     override val supportsAudioDelay: Boolean get() = true
     override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
     override val supportsSubtitleStyle: Boolean get() = false
-    override val supportsDialogueBoost: Boolean get() = false
+    override val supportsDialogueBoost: Boolean get() = true
     override val supportsNightMode: Boolean get() = false
     override val supportsOcr: Boolean get() = false
     override val supportsCues: Boolean get() = false
@@ -307,5 +347,24 @@ class LibVlcPlayerEngine(
 
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
+    }
+
+    override fun setDialogueBoostEnabled(enabled: Boolean) {
+        dialogueBoostEnabled = enabled
+        if (isPlaying) {
+            applyDialogueBoost()
+        }
+    }
+
+    private fun applyDialogueBoost() {
+        val sid = audioSessionId
+        if (sid != 0) {
+            dialogueBoost.attach(sid)
+            dialogueBoost.setEnabled(dialogueBoostEnabled)
+        }
     }
 }

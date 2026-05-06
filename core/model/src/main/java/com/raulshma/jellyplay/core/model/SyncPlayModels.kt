@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class SyncPlayGroup(
     val groupId: String,
@@ -14,6 +16,7 @@ data class SyncPlayGroup(
     val positionTicks: Long? = null,
 )
 
+@Immutable
 @Serializable
 data class SyncPlayGroupInfo(
     val groupId: String,
@@ -28,6 +31,7 @@ data class SyncPlayGroupInfo(
     val shuffleMode: String = "Sorted",
 )
 
+@Immutable
 @Serializable
 data class SyncPlayParticipant(
     val userId: String,
@@ -37,12 +41,14 @@ data class SyncPlayParticipant(
     val positionTicks: Long? = null,
 )
 
+@Immutable
 @Serializable
 data class SyncPlaySettings(
     val groupId: String = "",
     val newGroup: String = "",
 )
 
+@Immutable
 @Serializable
 enum class SyncPlayCommandType {
     PLAY,

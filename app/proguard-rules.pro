@@ -55,29 +55,31 @@
 }
 
 # Media3 / ExoPlayer
--keep class androidx.media3.** { *; }
+-keep class androidx.media3.session.** { *; }
+-keep class androidx.media3.exoplayer.** { *; }
 -dontwarn androidx.media3.**
 
 # Coil
--keep class coil3.** { *; }
+-keep class coil3.SingletonImageLoader { *; }
+-keep class coil3.ImageLoader { *; }
 -dontwarn coil3.**
 
 # Paging
--keep class androidx.paging.** { *; }
+-keep class androidx.paging.**$* { *; }
+-dontwarn androidx.paging.**
 
 # Compose runtime
--keep class androidx.compose.runtime.** { *; }
--keepclassmembers class androidx.compose.runtime.** { *; }
+-keep class androidx.compose.runtime.**$Composable { *; }
+-dontwarn androidx.compose.runtime.**
 
 # Navigation 3
--keep class androidx.navigation3.** { *; }
--keepclassmembers class androidx.navigation3.** { *; }
+-keep class androidx.navigation3.**$Composable { *; }
+-dontwarn androidx.navigation3.**
 
 # DataStore
--keep class androidx.datastore.** { *; }
+-dontwarn androidx.datastore.**
 
 # WorkManager
--keep class androidx.work.** { *; }
 -keepclassmembers class * extends androidx.work.Worker {
     <init>(android.content.Context,androidx.work.WorkerParameters);
 }
@@ -90,7 +92,6 @@
 # Kotlin coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembers class kotlinx.coroutines.** { *; }
 
 -dontwarn kotlinx.serialization.**
 -dontwarn org.jellyfin.sdk.**

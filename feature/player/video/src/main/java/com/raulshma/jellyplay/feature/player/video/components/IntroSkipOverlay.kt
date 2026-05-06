@@ -67,14 +67,14 @@ private fun SkipButtonOverlay(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.White.copy(alpha = 0.15f))
+                .background(Color.Black.copy(alpha = 0.85f))
                 .clickable(onClick = onSkip)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Icon(
                 imageVector = Icons.Default.FastForward,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Color.White,
                 modifier = Modifier.padding(end = 8.dp),
             )
             Text(

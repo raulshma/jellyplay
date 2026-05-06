@@ -167,7 +167,7 @@ fun SyncPlayScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            items(groups, key = { it.groupId }) { group ->
+                            items(groups, key = { it.groupId }, contentType = { "syncPlayGroup" }) { group ->
                                 SyncPlayGroupCard(
                                     group = group,
                                     onJoin = { viewModel.joinGroup(group.groupId) },
@@ -342,7 +342,7 @@ private fun ActiveGroupView(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(groupInfo.participants) { participant ->
+            items(groupInfo.participants, contentType = { "participant" }) { participant ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(

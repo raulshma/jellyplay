@@ -108,7 +108,7 @@ fun ServerListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(servers, key = { it.id }) { server ->
+                items(servers, key = { it.id }, contentType = { "server" }) { server ->
                     ServerItem(
                         server = server,
                         onClick = { onServerSelected(server) },

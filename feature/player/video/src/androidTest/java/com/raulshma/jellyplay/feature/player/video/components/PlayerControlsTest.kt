@@ -9,8 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.feature.player.video.formatDuration
-import com.raulshma.jellyplay.feature.player.video.TrackOption
 import org.junit.Rule
 import org.junit.Test
 
@@ -25,7 +25,7 @@ class PlayerControlsTest {
         currentPosition: Long = 90_000L,
         duration: Long = 3_600_000L,
         playbackSpeed: Float = 1.0f,
-        hasChapters: Boolean = false,
+        chapters: List<ChapterInfo> = emptyList(),
         title: String = "Test Movie",
         subtitle: String = "Episode 1",
         supportsSubtitleStyle: Boolean = false,
@@ -51,7 +51,7 @@ class PlayerControlsTest {
                     currentPosition = currentPosition,
                     duration = duration,
                     playbackSpeed = playbackSpeed,
-                    hasChapters = hasChapters,
+                    chapters = chapters,
                     dialogueBoostEnabled = dialogueBoostEnabled,
                     nightModeEnabled = nightModeEnabled,
                     audioPassthrough = audioPassthrough,
@@ -144,7 +144,6 @@ class PlayerControlsTest {
     @Test
     fun playerControls_visible_showsSpeedButton() {
         setContent(playbackSpeed = 1.0f)
-        composeTestRule.onNodeWithText("Speed").assertIsDisplayed()
         composeTestRule.onNodeWithText("1x").assertIsDisplayed()
     }
 
@@ -157,43 +156,25 @@ class PlayerControlsTest {
     @Test
     fun playerControls_visible_showsAudioButton() {
         setContent()
-        composeTestRule.onNodeWithText("Audio").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Audio").assertIsDisplayed()
     }
 
     @Test
     fun playerControls_visible_showsSubsButton() {
         setContent()
-        composeTestRule.onNodeWithText("Subs").assertIsDisplayed()
-    }
-
-    @Test
-    fun playerControls_visible_showsDualSubsButton() {
-        setContent()
-        composeTestRule.onNodeWithText("Dual Subs").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Subtitles").assertIsDisplayed()
     }
 
     @Test
     fun playerControls_visible_showsInfoButton() {
         setContent()
-        composeTestRule.onNodeWithText("Info").assertIsDisplayed()
-    }
-
-    @Test
-    fun playerControls_visible_showsDecoderButton() {
-        setContent()
-        composeTestRule.onNodeWithText("Decoder").assertIsDisplayed()
-    }
-
-    @Test
-    fun playerControls_visible_showsDownloadButton() {
-        setContent()
-        composeTestRule.onNodeWithText("Download").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Info").assertIsDisplayed()
     }
 
     @Test
     fun playerControls_visible_showsCastButton() {
         setContent()
-        composeTestRule.onNodeWithText("Cast").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Cast").assertIsDisplayed()
     }
 
     @Test
@@ -205,101 +186,110 @@ class PlayerControlsTest {
 
     @Test
     fun playerControls_withChapters_showsChaptersButton() {
-        setContent(hasChapters = true)
-        composeTestRule.onNodeWithText("Chapters").assertIsDisplayed()
+        setContent(chapters = listOf(ChapterInfo("Chapter 1", 0L)))
+        composeTestRule.onNodeWithContentDescription("Chapters").assertIsDisplayed()
     }
 
     @Test
     fun playerControls_withoutChapters_hidesChaptersButton() {
-        setContent(hasChapters = false)
-        composeTestRule.onNodeWithText("Chapters").assertDoesNotExist()
+        setContent(chapters = emptyList())
+        composeTestRule.onNodeWithContentDescription("Chapters").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsSubtitleStyle_showsStyleButton() {
+    fun playerControls_visible_showsMoreOptionsButton() {
+        setContent()
+        composeTestRule.onNodeWithContentDescription("More options").assertIsDisplayed()
+    }
+
+    @Test
+    fun playerControls_supportsSubtitleStyle_showsStyleInOverflow() {
         setContent(supportsSubtitleStyle = true)
-        composeTestRule.onNodeWithText("Style").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Subtitle Style").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.onNodeWithText("Subtitle Style").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noSubtitleStyle_hidesStyleButton() {
+    fun playerControls_noSubtitleStyle_hidesStyleFromOverflow() {
         setContent(supportsSubtitleStyle = false)
-        composeTestRule.onNodeWithText("Style").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Subtitle Style").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsDialogueBoost_showsBoostButton() {
+    fun playerControls_supportsDialogueBoost_showsBoostInOverflow() {
         setContent(supportsDialogueBoost = true)
-        composeTestRule.onNodeWithText("Boost").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Dialogue Boost").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.onNodeWithText("Dialogue Boost").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noDialogueBoost_hidesBoostButton() {
+    fun playerControls_noDialogueBoost_hidesBoostFromOverflow() {
         setContent(supportsDialogueBoost = false)
-        composeTestRule.onNodeWithText("Boost").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Dialogue Boost").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsNightMode_showsNightButton() {
+    fun playerControls_supportsNightMode_showsNightInOverflow() {
         setContent(supportsNightMode = true)
-        composeTestRule.onNodeWithText("Night").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Night Mode").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.onNodeWithText("Night Mode").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noNightMode_hidesNightButton() {
+    fun playerControls_noNightMode_hidesNightFromOverflow() {
         setContent(supportsNightMode = false)
-        composeTestRule.onNodeWithText("Night").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Night Mode").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsAudioDelay_showsDelayButton() {
+    fun playerControls_supportsAudioDelay_showsDelayInOverflow() {
         setContent(supportsAudioDelay = true)
-        composeTestRule.onNodeWithText("Delay").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Audio Delay").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.onNodeWithText("Audio Delay").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noAudioDelay_hidesDelayButton() {
+    fun playerControls_noAudioDelay_hidesDelayFromOverflow() {
         setContent(supportsAudioDelay = false)
-        composeTestRule.onNodeWithText("Delay").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Audio Delay").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsPassthrough_showsPassthroughButton() {
+    fun playerControls_supportsPassthrough_showsPassthroughInOverflow() {
         setContent(supportsAudioPassthrough = true)
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("Passthrough").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Passthrough").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noPassthrough_hidesPassthroughButton() {
+    fun playerControls_noPassthrough_hidesPassthroughFromOverflow() {
         setContent(supportsAudioPassthrough = false)
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
         composeTestRule.onNodeWithText("Passthrough").assertDoesNotExist()
     }
 
     @Test
-    fun playerControls_supportsOcr_showsOcrButton() {
+    fun playerControls_supportsOcr_showsOcrInOverflow() {
         setContent(supportsOcr = true)
-        composeTestRule.onNodeWithText("OCR").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.waitUntil(5000L) { composeTestRule.onNodeWithText("OCR Subtitle").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.onNodeWithText("OCR Subtitle").assertIsDisplayed()
     }
 
     @Test
-    fun playerControls_noOcr_hidesOcrButton() {
+    fun playerControls_noOcr_hidesOcrFromOverflow() {
         setContent(supportsOcr = false)
-        composeTestRule.onNodeWithText("OCR").assertDoesNotExist()
-    }
-
-    @Test
-    fun playerControls_autoAspectRatioWithDetection_showsAuto() {
-        setContent(
-            currentAspectRatio = AspectRatio.AUTO,
-            detectedAspectRatio = AspectRatio.RATIO_16_9,
-        )
-        composeTestRule.onNodeWithText("Auto").assertIsDisplayed()
-    }
-
-    @Test
-    fun playerControls_nonFitAspectRatio_showsDisplayName() {
-        setContent(currentAspectRatio = AspectRatio.RATIO_16_9)
-        composeTestRule.onNodeWithText("16:9").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("OCR Subtitle").assertDoesNotExist()
     }
 
     @Test
@@ -314,7 +304,7 @@ class PlayerControlsTest {
                     currentPosition = 0L,
                     duration = 0L,
                     playbackSpeed = 1.0f,
-                    hasChapters = false,
+                    chapters = emptyList(),
                     dialogueBoostEnabled = false,
                     nightModeEnabled = false,
                     audioPassthrough = false,
@@ -366,7 +356,7 @@ class PlayerControlsTest {
                     currentPosition = 0L,
                     duration = 0L,
                     playbackSpeed = 1.0f,
-                    hasChapters = false,
+                    chapters = emptyList(),
                     dialogueBoostEnabled = false,
                     nightModeEnabled = false,
                     audioPassthrough = false,

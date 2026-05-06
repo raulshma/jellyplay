@@ -433,6 +433,7 @@ fun SearchScreen(
                             items(
                                 count = pagedResults.itemCount,
                                 key = pagedResults.itemKey { it.id },
+                                contentType = { "mediaItem" },
                             ) { index ->
                                 val item = pagedResults[index]
                                 if (item != null) {

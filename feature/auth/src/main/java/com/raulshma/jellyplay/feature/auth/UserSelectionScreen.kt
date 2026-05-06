@@ -132,7 +132,7 @@ fun UserSelectionScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(users, key = { it.id }) { user ->
+                    items(users, key = { it.id }, contentType = { "user" }) { user ->
                         UserCard(
                             user = user,
                             onClick = {
