@@ -23,6 +23,9 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -181,46 +184,61 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getHomeSections(): Result<List<HomeSection>> = apiResult {
-        val sections = mutableListOf<HomeSection>()
-        var firstError: Throwable? = null
+        coroutineScope {
+            val sections = mutableListOf<HomeSection>()
+            var firstError: Throwable? = null
 
-        var continueWatchingIds = emptySet<String>()
+            val continueWatchingDeferred = async { getContinueWatching() }
+            val nextUpDeferred = async { getNextUp() }
+            val foldersDeferred = async { getLibraryFolders() }
 
-        getContinueWatching()
-            .onSuccess { list ->
-                if (list.isNotEmpty()) {
-                    continueWatchingIds = list.map { it.id }.toSet()
-                    sections.add(HomeSection("Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+            val continueWatchingResult = continueWatchingDeferred.await()
+            val nextUpResult = nextUpDeferred.await()
+            val foldersResult = foldersDeferred.await()
+
+            var continueWatchingIds = emptySet<String>()
+
+            continueWatchingResult
+                .onSuccess { list ->
+                    if (list.isNotEmpty()) {
+                        continueWatchingIds = list.map { it.id }.toSet()
+                        sections.add(HomeSection("Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+                    }
                 }
-            }
-            .onFailure { if (firstError == null) firstError = it }
+                .onFailure { if (firstError == null) firstError = it }
 
-        getNextUp()
-            .onSuccess { list ->
-                val filtered = list.filter { it.id !in continueWatchingIds }
-                if (filtered.isNotEmpty()) {
-                    sections.add(HomeSection("Next Up", HomeSectionType.NEXT_UP, filtered))
+            nextUpResult
+                .onSuccess { list ->
+                    val filtered = list.filter { it.id !in continueWatchingIds }
+                    if (filtered.isNotEmpty()) {
+                        sections.add(HomeSection("Next Up", HomeSectionType.NEXT_UP, filtered))
+                    }
                 }
-            }
-            .onFailure { if (firstError == null) firstError = it }
+                .onFailure { if (firstError == null) firstError = it }
 
-        getLibraryFolders()
-            .onSuccess { folders ->
-                for (folder in folders.filter { it.collectionType != "music" }) {
-                    getLatestMedia(folder.id, limit = 16)
-                        .onSuccess { latest ->
+            foldersResult
+                .onSuccess { folders ->
+                    val latestDeferred = folders
+                        .filter { it.collectionType != "music" }
+                        .map { folder ->
+                            async { folder to getLatestMedia(folder.id, limit = 16) }
+                        }
+                    latestDeferred.forEach { deferred ->
+                        val (folder, result) = deferred.await()
+                        result.onSuccess { latest ->
                             if (latest.isNotEmpty()) {
                                 sections.add(HomeSection("Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
                             }
                         }
+                    }
                 }
-            }
-            .onFailure { if (firstError == null) firstError = it }
+                .onFailure { if (firstError == null) firstError = it }
 
-        if (sections.isEmpty() && firstError != null) {
-            throw firstError!!
+            if (sections.isEmpty() && firstError != null) {
+                throw firstError!!
+            }
+            sections
         }
-        sections
     }
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =

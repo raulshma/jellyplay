@@ -84,7 +84,7 @@ fun PlaylistsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = padding,
                 ) {
-                    items(viewModel.playlists.size) { index ->
+                    items(viewModel.playlists.size, key = { viewModel.playlists[it].id }) { index ->
                         val playlist = viewModel.playlists[index]
                         PlaylistItemRow(
                             playlist = playlist,

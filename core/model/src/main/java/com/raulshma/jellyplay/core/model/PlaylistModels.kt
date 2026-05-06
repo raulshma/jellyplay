@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class Playlist(
     val id: String,
@@ -11,6 +13,7 @@ data class Playlist(
     val imageTag: String? = null,
 )
 
+@Immutable
 @Serializable
 data class PlaylistItem(
     val id: String,

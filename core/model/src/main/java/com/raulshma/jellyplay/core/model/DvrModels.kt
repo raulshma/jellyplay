@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class DvrTimer(
     val id: String,
@@ -20,6 +22,7 @@ data class DvrTimer(
     val seriesTimerId: String? = null,
 )
 
+@Immutable
 @Serializable
 enum class DvrTimerStatus {
     NEW,
@@ -31,6 +34,7 @@ enum class DvrTimerStatus {
     CONFLICT_NOT_OK,
 }
 
+@Immutable
 @Serializable
 data class DvrSeriesTimer(
     val id: String,

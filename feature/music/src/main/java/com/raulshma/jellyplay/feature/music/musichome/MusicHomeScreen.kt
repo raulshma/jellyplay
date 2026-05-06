@@ -101,12 +101,20 @@ fun MusicHomeScreen(
     )
 
     val listState = rememberLazyListState()
-    val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat() +
-            (listState.firstVisibleItemIndex * 1000f)
+    val scrollOffset by remember {
+        derivedStateOf {
+            listState.firstVisibleItemScrollOffset.toFloat() +
+                    (listState.firstVisibleItemIndex * 1000f)
+        }
+    }
     val headerHeight = 320.dp
     val density = LocalDensity.current
     val headerHeightPx = with(density) { headerHeight.toPx() }
-    val scrollFraction = (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+    val scrollFraction by remember {
+        derivedStateOf {
+            (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+        }
+    }
 
     val appBarAlpha by animateFloatAsState(
         targetValue = if (scrollFraction > 0.8f) 1f else 0f,

@@ -61,7 +61,7 @@ class MpvPlayerEngine(
                 DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
                 DecoderMode.SW_ONLY -> "no"
             })
-            mpv.setOptionString("ao", "audiotrack,opensles")
+            mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
         }

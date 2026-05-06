@@ -1,13 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
-/**
- * Represents the current network connectivity state of the device.
- *
- * - **Online**: The device has internet access (validated network capability).
- * - **Local**: The device is connected to a LAN/WiFi network but has no internet access.
- *   The Jellyfin server may still be reachable.
- * - **Offline**: The device has no active network connection at all.
- */
+import androidx.compose.runtime.Immutable
+@Immutable
 enum class NetworkStatus {
     /** Device has internet access. */
     Online,
@@ -15,7 +9,7 @@ enum class NetworkStatus {
     /** Device is on a local LAN (WiFi/Ethernet) but no internet. */
     Local,
 
-    /** No active network connection. */
+    /** Device has no active network connection. */
     Offline,
     ;
 

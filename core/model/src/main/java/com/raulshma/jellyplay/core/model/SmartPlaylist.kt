@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class SmartPlaylist(
     val id: String,
@@ -11,6 +13,7 @@ data class SmartPlaylist(
     val sortBy: SmartPlaylistSort = SmartPlaylistSort.RANDOM,
 )
 
+@Immutable
 @Serializable
 data class PlaylistCriterion(
     val type: CriterionType,
@@ -18,6 +21,7 @@ data class PlaylistCriterion(
     val operator: CriterionOperator = CriterionOperator.EQUALS,
 )
 
+@Immutable
 @Serializable
 enum class CriterionType {
     GENRE,
@@ -29,6 +33,7 @@ enum class CriterionType {
     TAG,
 }
 
+@Immutable
 @Serializable
 enum class CriterionOperator {
     EQUALS,
@@ -37,6 +42,7 @@ enum class CriterionOperator {
     LESS_THAN,
 }
 
+@Immutable
 @Serializable
 enum class SmartPlaylistSort {
     RANDOM,

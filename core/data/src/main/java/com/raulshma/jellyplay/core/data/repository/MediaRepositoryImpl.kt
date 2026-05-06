@@ -212,6 +212,6 @@ class MediaRepositoryImpl @Inject constructor(
 
     companion object {
         private const val PAGE_SIZE = 50
-        private const val PREFETCH_DISTANCE = 10
+        private const val PREFETCH_DISTANCE = 20
     }
 }
