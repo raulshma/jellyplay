@@ -24,6 +24,7 @@ class MpvPlayerEngine(
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var _audioDelayMs = 0L
+    @Volatile private var _subtitleDelayMs = 0L
     private var pendingUrl: String? = null
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
@@ -133,6 +134,11 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("audio-delay", ms / 1000.0) } catch (_: Exception) {}
     }
 
+    override fun setSubtitleDelay(ms: Long) {
+        _subtitleDelayMs = ms
+        try { mpvView?.mpv?.setPropertyDouble("sub-delay", ms / 1000.0) } catch (_: Exception) {}
+    }
+
     override fun setDecoderMode(mode: DecoderMode) {
         currentDecoderMode = mode
         try {
@@ -183,6 +189,7 @@ class MpvPlayerEngine(
     override val isPlaying: Boolean get() = _isPlaying
     override val audioSessionId: Int get() = 0
     override val supportsAudioDelay: Boolean get() = true
+    override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
     override val supportsSubtitleStyle: Boolean get() = false
     override val supportsDialogueBoost: Boolean get() = false

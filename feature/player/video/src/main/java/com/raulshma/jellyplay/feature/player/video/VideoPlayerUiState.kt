@@ -106,6 +106,7 @@ data class VideoPlayerUiState(
 
 data class EngineCapabilities(
     val audioDelay: Boolean = false,
+    val subtitleDelay: Boolean = false,
     val audioPassthrough: Boolean = false,
     val subtitleStyle: Boolean = false,
     val dialogueBoost: Boolean = false,

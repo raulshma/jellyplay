@@ -10,6 +10,7 @@ class EngineCapabilitiesTest {
     fun defaultCapabilities_allFalse() {
         val caps = EngineCapabilities()
         assertFalse(caps.audioDelay)
+        assertFalse(caps.subtitleDelay)
         assertFalse(caps.audioPassthrough)
         assertFalse(caps.subtitleStyle)
         assertFalse(caps.dialogueBoost)
@@ -22,6 +23,7 @@ class EngineCapabilitiesTest {
     fun allCapabilitiesEnabled() {
         val caps = EngineCapabilities(
             audioDelay = true,
+            subtitleDelay = true,
             audioPassthrough = true,
             subtitleStyle = true,
             dialogueBoost = true,
@@ -30,6 +32,7 @@ class EngineCapabilitiesTest {
             cues = true,
         )
         assertTrue(caps.audioDelay)
+        assertTrue(caps.subtitleDelay)
         assertTrue(caps.audioPassthrough)
         assertTrue(caps.subtitleStyle)
         assertTrue(caps.dialogueBoost)

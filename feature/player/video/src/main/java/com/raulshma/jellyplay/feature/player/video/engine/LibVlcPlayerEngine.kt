@@ -29,6 +29,7 @@ class LibVlcPlayerEngine(
     @Volatile private var _speed = 1f
     @Volatile private var pendingPlay = false
     @Volatile private var _audioDelayMs = 0L
+    @Volatile private var _subtitleDelayMs = 0L
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
 
@@ -151,6 +152,14 @@ class LibVlcPlayerEngine(
         } catch (_: Exception) {}
     }
 
+    override fun setSubtitleDelay(ms: Long) {
+        _subtitleDelayMs = ms
+        try {
+            val mp = mediaPlayer ?: return
+            mp.setSpuDelay(ms * 1000L) // libvlc expects microseconds
+        } catch (_: Exception) {}
+    }
+
     override fun setDecoderMode(mode: DecoderMode) {
         currentDecoderMode = mode
     }
@@ -197,6 +206,7 @@ class LibVlcPlayerEngine(
         get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
     override val audioSessionId: Int get() = 0
     override val supportsAudioDelay: Boolean get() = true
+    override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
     override val supportsSubtitleStyle: Boolean get() = false
     override val supportsDialogueBoost: Boolean get() = false

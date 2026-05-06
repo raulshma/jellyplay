@@ -25,6 +25,7 @@ interface PlayerEngine {
     fun seekBack(amountMs: Long = 10_000)
     fun setPlaybackSpeed(speed: Float)
     fun setAudioDelay(ms: Long)
+    fun setSubtitleDelay(ms: Long)
     fun setDecoderMode(mode: DecoderMode)
     fun setAudioPassthrough(enabled: Boolean)
     fun setAspectRatio(mode: Int, ratio: Float? = null)
@@ -36,6 +37,7 @@ interface PlayerEngine {
     val audioSessionId: Int
 
     val supportsAudioDelay: Boolean get() = false
+    val supportsSubtitleDelay: Boolean get() = false
     val supportsAudioPassthrough: Boolean get() = false
     val supportsSubtitleStyle: Boolean get() = false
     val supportsDialogueBoost: Boolean get() = false

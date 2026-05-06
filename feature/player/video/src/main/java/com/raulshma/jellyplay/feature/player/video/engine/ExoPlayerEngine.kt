@@ -23,6 +23,9 @@ import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -54,6 +57,7 @@ class ExoPlayerEngine(
     private var dialogueBoostEnabled: Boolean = false
     private var nightModeEnabled: Boolean = false
     private var equalizerEnabled: Boolean = false
+    private var _subtitleDelayMs: Long = 0L
 
     private var onPlaybackStateChangedCallback: ((Int) -> Unit)? = null
     private var onPlaybackEndedCallback: (() -> Unit)? = null
@@ -191,7 +195,15 @@ class ExoPlayerEngine(
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+        val extractorsFactory = DefaultExtractorsFactory().apply {
+            setSubtitleParserFactory(
+                OffsettingSubtitleParserFactory(
+                    DefaultSubtitleParserFactory(),
+                    offsetUsProvider = { _subtitleDelayMs * 1000L }
+                )
+            )
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
 
         val audioAttrs = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -224,7 +236,15 @@ class ExoPlayerEngine(
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+        val extractorsFactory = DefaultExtractorsFactory().apply {
+            setSubtitleParserFactory(
+                OffsettingSubtitleParserFactory(
+                    DefaultSubtitleParserFactory(),
+                    offsetUsProvider = { _subtitleDelayMs * 1000L }
+                )
+            )
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
 
         val audioAttrs = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -282,6 +302,20 @@ class ExoPlayerEngine(
 
     override fun setAudioDelay(ms: Long) {}
 
+    override fun setSubtitleDelay(ms: Long) {
+        if (_subtitleDelayMs == ms) return
+        _subtitleDelayMs = ms
+        val p = player ?: return
+        val currentPosition = p.currentPosition
+        val currentMediaItem = p.currentMediaItem
+        if (currentMediaItem != null) {
+            val wasPlaying = p.playWhenReady
+            p.setMediaItem(currentMediaItem)
+            p.seekTo(currentPosition)
+            p.playWhenReady = wasPlaying
+        }
+    }
+
     override fun setDecoderMode(mode: DecoderMode) {
         currentDecoderMode = mode
     }
@@ -303,6 +337,7 @@ class ExoPlayerEngine(
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
     override val supportsAudioDelay: Boolean get() = false
+    override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = false
     override val supportsSubtitleStyle: Boolean get() = true
     override val supportsDialogueBoost: Boolean get() = true
