@@ -9,13 +9,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
-import androidx.media3.exoplayer.ExoPlayer
 
 internal class SyncPlayController(
     private val syncPlayManager: SyncPlayManager,
     private val viewModel: ViewModel,
     private val uiState: MutableStateFlow<VideoPlayerUiState>,
-    private val getExoPlayer: () -> ExoPlayer?,
     private val getPlayerEngine: () -> PlayerEngine?,
 ) {
     private var commandJob: Job? = null
@@ -54,40 +52,28 @@ internal class SyncPlayController(
                 when (command) {
                     is SyncPlayCommand.Play -> {
                         val posMs = command.positionTicks / 10_000
-                        getPlayerEngine()?.let { engine ->
-                            engine.seekTo(posMs)
-                            engine.play()
-                        } ?: getExoPlayer()?.let { player ->
-                            player.seekTo(posMs)
-                            player.play()
-                        }
+                        val engine = getPlayerEngine()
+                        engine?.seekTo(posMs)
+                        engine?.play()
                         uiState.update { it.copy(isSyncPlaySynced = true) }
                     }
                     is SyncPlayCommand.Pause -> {
                         val posMs = command.positionTicks / 10_000
-                        getPlayerEngine()?.let { engine ->
-                            engine.seekTo(posMs)
-                            engine.pause()
-                        } ?: getExoPlayer()?.let { player ->
-                            player.seekTo(posMs)
-                            player.pause()
-                        }
+                        val engine = getPlayerEngine()
+                        engine?.seekTo(posMs)
+                        engine?.pause()
                         uiState.update { it.copy(isSyncPlaySynced = true) }
                     }
                     is SyncPlayCommand.Seek -> {
                         val posMs = command.positionTicks / 10_000
-                        getPlayerEngine()?.seekTo(posMs) ?: getExoPlayer()?.seekTo(posMs)
+                        getPlayerEngine()?.seekTo(posMs)
                     }
                     is SyncPlayCommand.PrepareSession -> {
                         val posMs = command.positionTicks / 10_000
                         if (!command.isPlaying) {
-                            getPlayerEngine()?.let { engine ->
-                                engine.seekTo(posMs)
-                                engine.pause()
-                            } ?: getExoPlayer()?.let { player ->
-                                player.seekTo(posMs)
-                                player.pause()
-                            }
+                            val engine = getPlayerEngine()
+                            engine?.seekTo(posMs)
+                            engine?.pause()
                         }
                         viewModel.viewModelScope.launch { syncPlayManager.reportReady() }
                         uiState.update { it.copy(isSyncPlaySynced = false) }

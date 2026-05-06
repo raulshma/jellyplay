@@ -76,6 +76,12 @@ internal fun PlayerControls(
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
+    supportsSubtitleStyle: Boolean = false,
+    supportsDialogueBoost: Boolean = false,
+    supportsNightMode: Boolean = false,
+    supportsAudioDelay: Boolean = false,
+    supportsAudioPassthrough: Boolean = false,
+    supportsOcr: Boolean = false,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -270,7 +276,9 @@ internal fun PlayerControls(
                     LabeledSpeedButton(onClick = onSpeedClick, speed = playbackSpeed)
                     LabeledControlButton(onClick = onAudioClick, icon = Icons.Default.Audiotrack, label = "Audio")
                     LabeledControlButton(onClick = onSubtitleClick, icon = Icons.Default.ClosedCaption, label = "Subs")
-                    LabeledControlButton(onClick = onSubtitleStyleClick, icon = Icons.Default.Settings, label = "Style", iconModifier = Modifier.size(20.dp))
+                    if (supportsSubtitleStyle) {
+                        LabeledControlButton(onClick = onSubtitleStyleClick, icon = Icons.Default.Settings, label = "Style", iconModifier = Modifier.size(20.dp))
+                    }
                     LabeledControlButton(onClick = onSecondarySubtitleClick, icon = Icons.Default.ClosedCaptionOff, label = "Dual Subs")
                     if (hasChapters) {
                         LabeledControlButton(onClick = onChapterClick, icon = Icons.AutoMirrored.Filled.List, label = "Chapters")
@@ -290,35 +298,45 @@ internal fun PlayerControls(
                         },
                     )
                     LabeledControlButton(onClick = onInfoClick, icon = Icons.Default.Info, label = "Info")
-                    LabeledControlButton(
-                        onClick = onDialogueBoostClick,
-                        icon = Icons.Default.RecordVoiceOver,
-                        label = "Boost",
-                        tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                    LabeledControlButton(
-                        onClick = onNightModeClick,
-                        icon = Icons.Default.Nightlight,
-                        label = "Night",
-                        tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                    LabeledControlButton(onClick = onAudioDelayClick, icon = Icons.Default.GraphicEq, label = "Delay")
+                    if (supportsDialogueBoost) {
+                        LabeledControlButton(
+                            onClick = onDialogueBoostClick,
+                            icon = Icons.Default.RecordVoiceOver,
+                            label = "Boost",
+                            tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
+                    if (supportsNightMode) {
+                        LabeledControlButton(
+                            onClick = onNightModeClick,
+                            icon = Icons.Default.Nightlight,
+                            label = "Night",
+                            tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
+                    if (supportsAudioDelay) {
+                        LabeledControlButton(onClick = onAudioDelayClick, icon = Icons.Default.GraphicEq, label = "Delay")
+                    }
                     LabeledControlButton(onClick = onDecoderClick, icon = Icons.Default.Monitor, label = "Decoder")
-                    LabeledControlButton(
-                        onClick = onPassthroughClick,
-                        icon = Icons.Default.SurroundSound,
-                        label = "Passthrough",
-                        tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
-                    )
+                    if (supportsAudioPassthrough) {
+                        LabeledControlButton(
+                            onClick = onPassthroughClick,
+                            icon = Icons.Default.SurroundSound,
+                            label = "Passthrough",
+                            tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
                     LabeledControlButton(onClick = onSubtitleDownloadClick, icon = Icons.Default.Download, label = "Download")
                     CastButton(isCasting = isCasting, onCast = onCastClick)
-                    LabeledControlButton(
-                        onClick = onOcrClick,
-                        icon = Icons.Default.Info,
-                        label = "OCR",
-                        enabled = !isOcrRunning,
-                        iconModifier = Modifier.size(20.dp),
-                    )
+                    if (supportsOcr) {
+                        LabeledControlButton(
+                            onClick = onOcrClick,
+                            icon = Icons.Default.Info,
+                            label = "OCR",
+                            enabled = !isOcrRunning,
+                            iconModifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }

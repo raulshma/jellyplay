@@ -59,6 +59,7 @@ data class VideoPlayerUiState(
     val creditTimestamps: CreditTimestamps? = null,
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
+    val engineCapabilities: EngineCapabilities = EngineCapabilities(),
 ) {
     val isInIntro: Boolean
         get() {
@@ -102,3 +103,13 @@ data class VideoPlayerUiState(
     val videoFrameRate: Float?
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
 }
+
+data class EngineCapabilities(
+    val audioDelay: Boolean = false,
+    val audioPassthrough: Boolean = false,
+    val subtitleStyle: Boolean = false,
+    val dialogueBoost: Boolean = false,
+    val nightMode: Boolean = false,
+    val ocr: Boolean = false,
+    val cues: Boolean = false,
+)

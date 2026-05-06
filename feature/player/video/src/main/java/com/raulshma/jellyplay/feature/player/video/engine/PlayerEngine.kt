@@ -1,8 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.view.View
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.SubtitleStyle
+import kotlinx.coroutines.flow.Flow
 
 interface PlayerEngine {
 
@@ -29,9 +33,15 @@ interface PlayerEngine {
     val currentPositionMs: Long
     val durationMs: Long
     val playbackSpeed: Float
+    val audioSessionId: Int
 
     val supportsAudioDelay: Boolean get() = false
     val supportsAudioPassthrough: Boolean get() = false
+    val supportsSubtitleStyle: Boolean get() = false
+    val supportsDialogueBoost: Boolean get() = false
+    val supportsNightMode: Boolean get() = false
+    val supportsOcr: Boolean get() = false
+    val supportsCues: Boolean get() = false
 
     data class TrackInfo(
         val index: Int,
@@ -39,6 +49,7 @@ interface PlayerEngine {
         val language: String?,
         val isSelected: Boolean,
         val type: TrackType,
+        val trackGroup: Any? = null,
     )
 
     enum class TrackType { AUDIO, SUBTITLE }
@@ -52,4 +63,16 @@ interface PlayerEngine {
 
     fun setOnStateChanged(callback: ((isPlaying: Boolean) -> Unit)?)
     fun setOnTracksChanged(callback: (() -> Unit)?)
+
+    fun setSubtitleStyle(style: SubtitleStyle, view: View?) {}
+
+    fun getCurrentCues(): List<androidx.media3.common.text.Cue> = emptyList()
+
+    fun setDialogueBoostEnabled(enabled: Boolean) {}
+    fun setNightModeEnabled(enabled: Boolean, gain: Int = 0) {}
+    fun setEqualizerEnabled(enabled: Boolean, settings: EqualizerSettings = EqualizerSettings()) {}
+
+    fun captureViewBitmap(): Bitmap? = null
+
+    fun positionFlow(): Flow<Long> = kotlinx.coroutines.flow.flow { while (true) { emit(currentPositionMs); kotlinx.coroutines.delay(250) } }
 }

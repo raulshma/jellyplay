@@ -9,31 +9,15 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.extractor.text.DefaultSubtitleParserFactory
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.session.MediaSession
-import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
-import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
-import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
-import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
-import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DecoderMode
-import com.raulshma.jellyplay.core.model.CreditTimestamps
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -43,8 +27,11 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
+import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -82,23 +69,17 @@ class VideoPlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
     val uiState = _uiState.asStateFlow()
 
-    private var exoPlayer: ExoPlayer? = null
     private var playerEngine: PlayerEngine? = null
-    private var trackSelector: DefaultTrackSelector? = null
-    private var mediaSession: MediaSession? = null
     private var mediaDetail: MediaDetail? = null
     private var secondarySubtitleCues: List<TimedCue> = emptyList()
     private var secondarySubtitleOffsetMs: Long = 0L
     private var equalizerEnabled: Boolean = false
-    @Volatile
-    var subtitleOffsetMs: Long = 0L
-        private set
     private var resolvedPlayMethod: PlayMethod = PlayMethod.DIRECT_PLAY
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var autoplayNext: Boolean = false
+    private var trickplayBaseUrl: String? = null
 
-    private val audioEffects = AudioEffectsController()
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
         viewModel = this,
@@ -106,50 +87,24 @@ class VideoPlayerViewModel @Inject constructor(
         getCurrentItemId = { currentItemId },
         getPlaySessionId = { playSessionId },
         getResolvedPlayMethod = { resolvedPlayMethod },
-        getExoPlayer = { exoPlayer },
         getPlayerEngine = { playerEngine },
     )
     private val syncPlayController = SyncPlayController(
         syncPlayManager = syncPlayManager,
         viewModel = this,
         uiState = _uiState,
-        getExoPlayer = { exoPlayer },
         getPlayerEngine = { playerEngine },
     )
 
-    private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _uiState.update { it.copy(isPlaying = isPlaying) }
-        }
-
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            updateTracks()
-            if (playbackState == Player.STATE_READY) {
-                val state = _uiState.value
-                if (state.dialogueBoostEnabled) audioEffects.applyDialogueBoost(exoPlayer, true)
-                if (state.nightModeEnabled) audioEffects.applyNightMode(exoPlayer, true)
-                if (equalizerEnabled) audioEffects.applyEqualizer(exoPlayer, true)
-            }
-            if (playbackState == Player.STATE_ENDED) {
-                if (autoplayNext) {
-                    playNextEpisode()
-                }
-            }
-        }
-
-        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-            updateTracks()
-        }
-    }
-
-    val exoPlayerRef: ExoPlayer? get() = exoPlayer
     val playerEngineRef: PlayerEngine? get() = playerEngine
 
+    @Suppress("DEPRECATION")
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         if (currentItemId == itemId) return
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
+        trickplayBaseUrl = null
 
         viewModelScope.launch {
             val prefs = preferencesStore.preferences.first()
@@ -186,7 +141,6 @@ class VideoPlayerViewModel @Inject constructor(
                 brightnessLevel = prefs.videoBrightnessLevel,
                 aspectRatio = defaultAspectRatio,
             ) }
-            subtitleOffsetMs = prefs.subtitleStyle.offsetMs
             autoplayNext = prefs.videoAutoplayNext
 
             val detailResult = mediaRepository.getMediaDetail(itemId)
@@ -248,15 +202,9 @@ class VideoPlayerViewModel @Inject constructor(
             _uiState.update { it.copy(streamUrl = url) }
 
             val playerType = _uiState.value.preferredPlayerType
-            when (playerType) {
-                PlayerType.EXO_PLAYER -> initializeExoPlayer(
-                    detail, source, url, startPositionTicks, prefs
-                )
-                PlayerType.MPV, PlayerType.LIBVLC -> initializeAlternativeEngine(
-                    url, detail.item.name, startPositionTicks
-                )
-                PlayerType.EXTERNAL -> return@launch
-            }
+            if (playerType == PlayerType.EXTERNAL) return@launch
+
+            initializeEngine(playerType, detail, source, url, startPositionTicks, prefs)
 
             playbackRepository.reportPlaybackStart(
                 com.raulshma.jellyplay.core.model.PlaybackStartInfo(
@@ -275,121 +223,31 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private suspend fun initializeExoPlayer(
+    private fun initializeEngine(
+        playerType: PlayerType,
         detail: MediaDetail,
         source: MediaSource?,
         url: String,
         startPositionTicks: Long,
         prefs: com.raulshma.jellyplay.core.model.UserPreferences,
     ) {
-        val selector = DefaultTrackSelector(context)
-        trackSelector = selector
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setSubtitleParserFactory(
-                OffsettingSubtitleParserFactory(
-                    DefaultSubtitleParserFactory(),
-                ) { subtitleOffsetMs * 1000L }
-            )
-
-        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .setUsage(C.USAGE_MEDIA)
-            .build()
-
         val state = _uiState.value
-        val rendererMode = when (state.decoderMode) {
-            DecoderMode.HW_PREFERRED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-            DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-            DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-        }
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(rendererMode)
-
-        val player = ExoPlayer.Builder(context)
-            .setRenderersFactory(renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setTrackSelector(selector)
-            .setAudioAttributes(audioAttributes, true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
-        exoPlayer = player
-        player.addListener(playerListener)
-
-        val session = MediaSession.Builder(context, player)
-            .setId(playSessionId)
-            .build()
-        mediaSession = session
-        sessionManager.setActiveSession(session)
-
-        val subtitleConfigs = buildSubtitleConfigurations(source?.mediaStreams ?: emptyList())
-        val artworkUri = Uri.parse(
-            playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
-        )
-
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setSubtitleConfigurations(subtitleConfigs)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(detail.item.name)
-                    .setSubtitle(detail.item.seriesName ?: detail.item.overview?.take(60))
-                    .setArtworkUri(artworkUri)
-                    .build()
-            )
-            .build()
-
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        if (startPositionTicks > 0) player.seekTo(startPositionTicks / 10_000)
-        val speed = state.defaultSpeed
-        if (speed != 1.0f) {
-            _uiState.update { it.copy(playbackSpeed = speed) }
-            player.setPlaybackSpeed(speed)
-        }
-        player.play()
-
-        _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
-        if (prefs.dialogueBoostEnabled) audioEffects.applyDialogueBoost(exoPlayer, true)
-
-        _uiState.update { it.copy(nightModeEnabled = prefs.nightModeEnabled) }
-        audioEffects.setNightModeTargetGain(prefs.audioNightModeGain)
-        if (prefs.nightModeEnabled) audioEffects.applyNightMode(exoPlayer, true)
-
-        equalizerEnabled = prefs.equalizerEnabled
-        if (equalizerEnabled) {
-            audioEffects.setEqualizerSettings(prefs.equalizerSettings)
-            audioEffects.applyEqualizer(exoPlayer, true)
-        }
-
-        if (prefs.preferredAudioLanguage != null) {
-            val params = selector.buildUponParameters()
-            params.setPreferredAudioLanguage(prefs.preferredAudioLanguage!!)
-            selector.setParameters(params)
-        }
-
-        if (prefs.preferredSubtitleLanguage != null) {
-            val params = selector.buildUponParameters()
-            params.setPreferredTextLanguage(prefs.preferredSubtitleLanguage!!)
-            selector.setParameters(params)
-        }
-
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
-        if (maxBitrate != null) {
-            val params = selector.buildUponParameters()
-            params.setMaxVideoBitrate(maxBitrate.toInt())
-            selector.setParameters(params)
-        }
-    }
-
-    private fun initializeAlternativeEngine(
-        url: String,
-        title: String,
-        startPositionTicks: Long,
-    ) {
-        val state = _uiState.value
-        val engine = PlayerEngineFactory.create(context, state.preferredPlayerType)
+        val engine = PlayerEngineFactory.create(context, playerType)
         playerEngine = engine
+
+        _uiState.update {
+            it.copy(
+                engineCapabilities = EngineCapabilities(
+                    audioDelay = engine.supportsAudioDelay,
+                    audioPassthrough = engine.supportsAudioPassthrough,
+                    subtitleStyle = engine.supportsSubtitleStyle,
+                    dialogueBoost = engine.supportsDialogueBoost,
+                    nightMode = engine.supportsNightMode,
+                    ocr = engine.supportsOcr,
+                    cues = engine.supportsCues,
+                )
+            )
+        }
 
         engine.setDecoderMode(state.decoderMode)
         engine.setAudioDelay(state.audioDelayMs)
@@ -402,7 +260,55 @@ class VideoPlayerViewModel @Inject constructor(
             updateTracksFromEngine(engine)
         }
 
-        engine.initialize(url, title, startPositionTicks / 10_000)
+        if (engine is ExoPlayerEngine) {
+            (engine as ExoPlayerEngine).setOnPlaybackStateChanged { playbackState ->
+                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    if (autoplayNext) playNextEpisode()
+                }
+            }
+
+            engine.createPlayer(
+                url = url,
+                title = detail.item.name,
+                startPositionMs = startPositionTicks / 10_000,
+            )
+
+            engine.setMediaSessionCallback(sessionManager, playSessionId)
+
+            val streams = source?.mediaStreams ?: emptyList()
+            val subtitleConfigs = engine.buildSubtitleConfigurations(
+                streams,
+                getSubtitleDeliveryUrl = { playbackRepository.getSubtitleDeliveryUrl(it) },
+            )
+            val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
+            engine.configureMedia(
+                url = url,
+                title = detail.item.name,
+                startPositionMs = startPositionTicks / 10_000,
+                subtitleConfigs = subtitleConfigs,
+                artworkUri = artworkUri,
+            )
+
+            engine.setPreferredAudioLanguage(prefs.preferredAudioLanguage)
+            engine.setPreferredSubtitleLanguage(prefs.preferredSubtitleLanguage)
+
+            val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
+            if (maxBitrate != null) engine.setMaxVideoBitrate(maxBitrate.toInt())
+
+            _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
+            engine.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
+
+            _uiState.update { it.copy(nightModeEnabled = prefs.nightModeEnabled) }
+            engine.setNightModeEnabled(prefs.nightModeEnabled, prefs.audioNightModeGain)
+
+            equalizerEnabled = prefs.equalizerEnabled
+            if (equalizerEnabled) {
+                engine.setEqualizerEnabled(true, prefs.equalizerSettings)
+            }
+        } else {
+            engine.initialize(url, detail.item.name, startPositionTicks / 10_000)
+        }
+
         val speed = state.defaultSpeed
         if (speed != 1.0f) {
             _uiState.update { it.copy(playbackSpeed = speed) }
@@ -412,73 +318,47 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setPlaybackSpeed(speed: Float) {
         _uiState.update { it.copy(playbackSpeed = speed) }
-        if (playerEngine != null) {
-            playerEngine?.setPlaybackSpeed(speed)
-        } else {
-            exoPlayer?.setPlaybackSpeed(speed)
-        }
+        playerEngine?.setPlaybackSpeed(speed)
     }
 
     fun selectAudioTrack(option: TrackOption) {
-        val engine = playerEngine
-        if (engine != null) {
-            engine.selectAudioTrack(option.index)
-            updateTracksFromEngine(engine)
-            return
-        }
-        val selector = trackSelector ?: return
-        if (option.index < 0) {
-            val params = selector.buildUponParameters()
-            params.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-            selector.setParameters(params)
-        } else {
-            val group = option.trackGroup ?: return
-            val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
-            val params = selector.buildUponParameters()
-                .setOverrideForType(override)
-                .build()
-            selector.setParameters(params)
+        val engine = playerEngine ?: return
+        engine.selectAudioTrack(option.index)
+        _uiState.update { state ->
+            val isDefault = option.index < 0
+            state.copy(audioTracks = state.audioTracks.map { track ->
+                val matches = track.index == option.index
+                val isDefaultTrack = track.index < 0
+                track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
+            })
         }
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
-        val engine = playerEngine
+        val engine = playerEngine ?: return
         val streams = _uiState.value.mediaStreams
-        if (engine != null) {
-            if (option.trackGroup == null && option.index >= 0) {
-                val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
-                val stream = serverSubs.getOrNull(option.index)
-                if (stream != null) {
-                    selectSecondarySubtitleStream(stream)
-                    return
-                }
+        if (option.trackGroup == null && option.index >= 0) {
+            val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
+            val stream = serverSubs.getOrNull(option.index)
+            if (stream != null) {
+                selectSecondarySubtitleStream(stream)
+                return
             }
-            engine.selectSubtitleTrack(option.index)
-            updateTracksFromEngine(engine)
-            return
         }
-        val selector = trackSelector ?: return
+        engine.selectSubtitleTrack(option.index)
         if (option.index < 0) {
-            val params = selector.buildUponParameters()
-            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            selector.setParameters(params)
+            selectedSubtitleTrackId = null
             selectSecondarySubtitleStream(null)
         } else {
-            val group = option.trackGroup
-            if (group != null) {
-                val override = androidx.media3.common.TrackSelectionOverride(group, listOf(option.index))
-                val params = selector.buildUponParameters()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                    .setOverrideForType(override)
-                    .build()
-                selector.setParameters(params)
-            } else {
-                val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
-                val stream = serverSubs.getOrNull(option.index)
-                if (stream != null) {
-                    selectSecondarySubtitleStream(stream)
-                }
-            }
+            selectedSubtitleTrackId = option.index to option.trackGroup
+        }
+        _uiState.update { state ->
+            val isOff = option.index < 0
+            state.copy(subtitleTracks = state.subtitleTracks.map { track ->
+                val matches = track.index == option.index && track.trackGroup == option.trackGroup
+                val isOffTrack = track.index < 0
+                track.copy(isSelected = if (isOff) isOffTrack else matches)
+            })
         }
     }
 
@@ -514,7 +394,7 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
             }
-            val mimeType = mapSubtitleCodecToMime(stream.codec) ?: MimeTypes.APPLICATION_SUBRIP
+            val mimeType = mapSubtitleCodecToMime(stream.codec)
             val request = okhttp3.Request.Builder().url(url).build()
             val response = okHttpClient.newCall(request).execute()
             response.use { resp ->
@@ -538,10 +418,11 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun getCurrentPrimarySubtitleText(): String? {
-        val player = exoPlayer ?: return null
-        val cues = player.currentCues.cues
+        val engine = playerEngine ?: return null
+        val cues = engine.getCurrentCues()
         if (cues.isEmpty()) return null
-        return cues.joinToString("\n") { it.text?.toString() ?: "" }
+        return cues.mapNotNull { it.text?.toString() }
+            .joinToString("\n")
             .takeIf { it.isNotBlank() }
     }
 
@@ -570,16 +451,20 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
-        subtitleOffsetMs = style.offsetMs
         viewModelScope.launch {
             preferencesStore.setSubtitleStyle(style)
         }
     }
 
+    fun applySubtitleStyleToView(view: android.view.View?) {
+        val engine = playerEngine ?: return
+        engine.setSubtitleStyle(_uiState.value.subtitleStyle, view)
+    }
+
     fun toggleDialogueBoost() {
         val newVal = !_uiState.value.dialogueBoostEnabled
         _uiState.update { it.copy(dialogueBoostEnabled = newVal) }
-        audioEffects.applyDialogueBoost(exoPlayer, newVal)
+        playerEngine?.setDialogueBoostEnabled(newVal)
         viewModelScope.launch {
             preferencesStore.setDialogueBoostEnabled(newVal)
         }
@@ -588,7 +473,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun toggleNightMode() {
         val newVal = !_uiState.value.nightModeEnabled
         _uiState.update { it.copy(nightModeEnabled = newVal) }
-        audioEffects.applyNightMode(exoPlayer, newVal)
+        playerEngine?.setNightModeEnabled(newVal)
         viewModelScope.launch {
             preferencesStore.setNightModeEnabled(newVal)
         }
@@ -627,14 +512,20 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun toggleEqualizer() {
         equalizerEnabled = !equalizerEnabled
-        audioEffects.applyEqualizer(exoPlayer, equalizerEnabled)
+        val engine = playerEngine
+        if (engine is ExoPlayerEngine) {
+            engine.setEqualizerEnabled(equalizerEnabled)
+        }
         viewModelScope.launch {
             preferencesStore.setEqualizerEnabled(equalizerEnabled)
         }
     }
 
     fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
-        audioEffects.setEqualizerSettings(settings)
+        val engine = playerEngine
+        if (engine is ExoPlayerEngine) {
+            engine.setEqualizerEnabled(equalizerEnabled, settings)
+        }
         viewModelScope.launch {
             preferencesStore.setEqualizerSettings(settings)
         }
@@ -665,11 +556,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipIntro() {
         val ts = _uiState.value.introTimestamps ?: return
         val targetMs = ts.introEndTicks / 10_000
-        if (playerEngine != null) {
-            playerEngine?.seekTo(targetMs)
-        } else {
-            exoPlayer?.seekTo(targetMs)
-        }
+        playerEngine?.seekTo(targetMs)
     }
 
     private fun fetchIntroTimestamps(itemId: String) {
@@ -703,11 +590,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipCredits() {
         val ts = _uiState.value.creditTimestamps ?: return
         val targetMs = ts.creditEndTicks / 10_000
-        if (playerEngine != null) {
-            playerEngine?.seekTo(targetMs)
-        } else {
-            exoPlayer?.seekTo(targetMs)
-        }
+        playerEngine?.seekTo(targetMs)
     }
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
@@ -759,25 +642,29 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun castToDevice() {
         val state = _uiState.value
-        val currentMedia = exoPlayer?.currentMediaItem
-            ?: run {
-                val url = state.streamUrl ?: return
-                val artworkUri = currentItemId?.let {
-                    try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
-                }
-                MediaItem.Builder()
-                    .setUri(url)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(state.title)
-                            .setSubtitle(state.subtitle)
-                            .setArtworkUri(artworkUri)
-                            .build()
-                    )
-                    .build()
+        val engine = playerEngine ?: return
+        val currentMedia = if (engine is ExoPlayerEngine) {
+            engine.currentMediaItem
+        } else null
+
+        val mediaItem = currentMedia ?: run {
+            val url = state.streamUrl ?: return
+            val artworkUri = currentItemId?.let {
+                try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
             }
-        val positionMs = exoPlayer?.currentPosition ?: playerEngine?.currentPositionMs ?: 0L
-        castManager.loadMedia(currentMedia, positionMs, playerListener)
+            MediaItem.Builder()
+                .setUri(url)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(state.title)
+                        .setSubtitle(state.subtitle)
+                        .setArtworkUri(artworkUri)
+                        .build()
+                )
+                .build()
+        }
+        val positionMs = engine.currentPositionMs
+        castManager.loadMedia(mediaItem, positionMs, object : androidx.media3.common.Player.Listener {})
     }
 
     fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
@@ -801,75 +688,31 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    fun capturePlayerViewBitmap(): android.graphics.Bitmap? {
+        return playerEngine?.captureViewBitmap()
+    }
+
     fun clearOcrText() {
         _uiState.update { it.copy(ocrText = null) }
     }
 
     fun getTrickplayImageUrl(positionMs: Long): String? {
         val itemId = currentItemId ?: return null
-        val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
+        val base = trickplayBaseUrl ?: run {
+            val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
+            trickplayBaseUrl = server
+            server
+        }
         val index = (positionMs / 10_000).toInt()
-        return "$server/Items/$itemId/Trickplay/320/$index.jpg"
+        return "$base/Items/$itemId/Trickplay/320/$index.jpg"
     }
 
-    private fun updateTracks() {
-        val player = exoPlayer ?: return
-        val tracks = player.currentTracks
-        val streams = _uiState.value.mediaStreams
-
-        val audioOptions = mutableListOf<TrackOption>()
-        val subtitleOptions = mutableListOf<TrackOption>()
-
-        for (group in tracks.groups) {
-            when (group.type) {
-                C.TRACK_TYPE_AUDIO -> {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val isSelected = group.isTrackSelected(i)
-                        val label = buildTrackLabel(format)
-                        audioOptions.add(TrackOption(i, label, format.language, isSelected, group.mediaTrackGroup))
-                    }
-                }
-                C.TRACK_TYPE_TEXT -> {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val isSelected = group.isTrackSelected(i)
-                        val label = buildTrackLabel(format)
-                        subtitleOptions.add(TrackOption(i, label, format.language, isSelected, group.mediaTrackGroup))
-                    }
-                }
-            }
-        }
-
-        val audioTracks = if (audioOptions.isEmpty()) {
-            listOf(TrackOption(-1, "Default", null, true))
-        } else {
-            listOf(TrackOption(-1, "Default", null, true)) + audioOptions
-        }
-
-        val subtitleTracks = if (subtitleOptions.isEmpty()) {
-            val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
-            if (serverSubs.isNotEmpty()) {
-                listOf(TrackOption(-1, "Off", null, true)) + serverSubs.mapIndexed { index, stream ->
-                    TrackOption(index, stream.displayTitle ?: stream.language ?: "Unknown", stream.language, false)
-                }
-            } else {
-                listOf(TrackOption(-1, "None", null, true))
-            }
-        } else {
-            listOf(TrackOption(-1, "Off", null, true)) + subtitleOptions
-        }
-
-        _uiState.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
-    }
+    private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
 
     private fun updateTracksFromEngine(engine: PlayerEngine) {
         val streams = _uiState.value.mediaStreams
         val audioOptions = engine.audioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected)
-        }
-        val subtitleOptions = engine.subtitleTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected)
+            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
         val audioTracks = if (audioOptions.isEmpty()) {
@@ -878,7 +721,11 @@ class VideoPlayerViewModel @Inject constructor(
             listOf(TrackOption(-1, "Default", null, true)) + audioOptions
         }
 
-        val subtitleTracks = if (subtitleOptions.isEmpty()) {
+        val engineSubOptions = engine.subtitleTracks.map { t ->
+            TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
+        }
+
+        val subtitleTracks = if (engineSubOptions.isEmpty()) {
             val serverSubs = streams.filter { it.type == StreamType.SUBTITLE }
             if (serverSubs.isNotEmpty()) {
                 listOf(TrackOption(-1, "Off", null, true)) + serverSubs.mapIndexed { index, stream ->
@@ -888,111 +735,54 @@ class VideoPlayerViewModel @Inject constructor(
                 listOf(TrackOption(-1, "None", null, true))
             }
         } else {
-            listOf(TrackOption(-1, "Off", null, true)) + subtitleOptions
+            val sel = selectedSubtitleTrackId
+            listOf(TrackOption(-1, "Off", null, sel == null)) + engineSubOptions.map { t ->
+                val isSel = sel != null && sel.first == t.index && sel.second == t.trackGroup
+                t.copy(isSelected = isSel)
+            }
         }
 
         _uiState.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
     }
 
-    private fun buildTrackLabel(format: Format): String {
-        val lang = format.language?.let {
-            try {
-                java.util.Locale(it).displayLanguage.ifBlank { it }
-            } catch (_: Exception) { it }
-        }
-        val codec = format.sampleMimeType?.let { mimeToName(it) }
-        val channels = format.channelCount
-        val channelLabel = when (channels) {
-            1 -> "Mono"
-            2 -> "Stereo"
-            6 -> "5.1"
-            8 -> "7.1"
-            else -> null
-        }
-        return listOfNotNull(lang, codec, channelLabel).joinToString(" · ").ifBlank { "Unknown" }
-    }
-
-    private fun mimeToName(mime: String): String = when {
-        mime.startsWith("audio/") -> mime.removePrefix("audio/")
-        mime.startsWith("text/") -> mime.removePrefix("text/")
-        else -> mime
-    }
-
-    private fun buildSubtitleConfigurations(streams: List<MediaStream>): List<MediaItem.SubtitleConfiguration> {
-        return streams
-            .filter { it.type == StreamType.SUBTITLE }
-            .mapNotNull { stream ->
-                val mimeType = mapSubtitleCodecToMime(stream.codec) ?: return@mapNotNull null
-                val url = if (!stream.deliveryUrl.isNullOrBlank()) {
-                    playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                } else {
-                    val itemId = currentItemId ?: return@mapNotNull null
-                    val sourceId = _uiState.value.currentMediaSource?.id ?: return@mapNotNull null
-                    val ext = when (stream.codec?.lowercase()) {
-                        "ass", "ssa" -> "ass"
-                        "vtt", "webvtt" -> "vtt"
-                        "ttml", "dfxp" -> "ttml"
-                        "mov_text" -> "vtt"
-                        else -> "srt"
-                    }
-                    playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
-                }
-                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(url))
-                    .setMimeType(mimeType)
-                    .setLanguage(stream.language)
-                    .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
-                    .setSelectionFlags(
-                        (if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
-                        (if (stream.isForced) C.SELECTION_FLAG_FORCED else 0)
-                    )
-                    .build()
-            }
-    }
-
-    private fun mapSubtitleCodecToMime(codec: String?): String? {
-        if (codec == null) return null
+    private fun mapSubtitleCodecToMime(codec: String?): String {
+        if (codec == null) return MimeTypes.TEXT_UNKNOWN
         return when (codec.lowercase()) {
             "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
             "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
+            "vtt", "webvtt" -> MimeTypes.APPLICATION_SUBRIP
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.TEXT_VTT
-            else -> null
+            "mov_text" -> MimeTypes.APPLICATION_SUBRIP
+            else -> MimeTypes.TEXT_UNKNOWN
         }
     }
 
     private fun releaseInternals() {
         progressReporter.cancelJobs()
         syncPlayController.reset()
+        val engine = playerEngine
+        if (engine is ExoPlayerEngine) {
+            engine.releaseMediaSession(sessionManager)
+        }
         playerEngine?.release()
         playerEngine = null
-        exoPlayer?.removeListener(playerListener)
-        mediaSession?.let { sessionManager.clearSession(it) }
-        mediaSession?.release()
-        mediaSession = null
-        exoPlayer?.release()
-        exoPlayer = null
-        trackSelector = null
+        trickplayBaseUrl = null
+        selectedSubtitleTrackId = null
+        secondarySubtitleCues = emptyList()
         _uiState.update { it.copy(
             introTimestamps = null,
             creditTimestamps = null,
             nextEpisode = null,
             remoteSubtitles = emptyList(),
         ) }
-        audioEffects.release()
     }
 
     fun release() {
         val itemId = currentItemId
         val sessionId = playSessionId
         val engine = playerEngine
-        val player = exoPlayer
-        val positionTicks = when {
-            engine != null -> engine.currentPositionMs * 10_000
-            player != null -> player.currentPosition * 10_000
-            else -> 0L
-        }
+        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {

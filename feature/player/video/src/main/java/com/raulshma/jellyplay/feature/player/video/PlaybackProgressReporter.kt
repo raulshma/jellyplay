@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -21,7 +21,6 @@ internal class PlaybackProgressReporter(
     private val getCurrentItemId: () -> String?,
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,
-    private val getExoPlayer: () -> ExoPlayer?,
     private val getPlayerEngine: () -> PlayerEngine?,
 ) {
     private var positionJob: Job? = null
@@ -29,23 +28,28 @@ internal class PlaybackProgressReporter(
 
     fun startPositionTracking() {
         positionJob?.cancel()
-        positionJob = viewModel.viewModelScope.launch {
-            while (true) {
-                val engine = getPlayerEngine()
-                if (engine != null) {
+        val engine = getPlayerEngine() ?: return
+        if (engine is ExoPlayerEngine) {
+            positionJob = viewModel.viewModelScope.launch {
+                engine.positionFlow().collect { pos ->
                     uiState.update { it.copy(
-                        currentPosition = engine.currentPositionMs,
+                        currentPosition = pos,
                         duration = engine.durationMs.coerceAtLeast(0L),
                     ) }
-                } else {
-                    getExoPlayer()?.let { player ->
+                }
+            }
+        } else {
+            positionJob = viewModel.viewModelScope.launch {
+                while (true) {
+                    val eng = getPlayerEngine()
+                    if (eng != null) {
                         uiState.update { it.copy(
-                            currentPosition = player.currentPosition,
-                            duration = player.duration.coerceAtLeast(0L),
+                            currentPosition = eng.currentPositionMs,
+                            duration = eng.durationMs.coerceAtLeast(0L),
                         ) }
                     }
+                    delay(250)
                 }
-                delay(250)
             }
         }
     }
@@ -55,18 +59,10 @@ internal class PlaybackProgressReporter(
         progressJob = viewModel.viewModelScope.launch {
             while (true) {
                 delay(10_000)
+                val engine = getPlayerEngine() ?: continue
                 val itemId = getCurrentItemId() ?: continue
-                val engine = getPlayerEngine()
-                val positionTicks: Long
-                val isPaused: Boolean
-                if (engine != null) {
-                    positionTicks = engine.currentPositionMs * 10_000
-                    isPaused = !engine.isPlaying
-                } else {
-                    val player = getExoPlayer() ?: continue
-                    positionTicks = player.currentPosition * 10_000
-                    isPaused = !player.isPlaying
-                }
+                val positionTicks = engine.currentPositionMs * 10_000
+                val isPaused = !engine.isPlaying
                 playbackRepository.reportPlaybackProgress(
                     PlaybackProgress(
                         itemId = itemId,
@@ -96,12 +92,7 @@ internal class PlaybackProgressReporter(
         sessionId: String,
     ) {
         val engine = getPlayerEngine()
-        val player = getExoPlayer()
-        val positionTicks = when {
-            engine != null -> engine.currentPositionMs * 10_000
-            player != null -> player.currentPosition * 10_000
-            else -> 0L
-        }
+        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         cancelJobs()
         if (itemId != null && positionTicks > 0) {
             viewModel.viewModelScope.launch {

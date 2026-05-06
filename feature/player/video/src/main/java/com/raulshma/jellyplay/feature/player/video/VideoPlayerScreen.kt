@@ -2,18 +2,12 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,59 +15,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Cast
-import androidx.compose.material.icons.filled.CastConnected
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.ClosedCaptionOff
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Monitor
-import androidx.compose.material.icons.filled.SurroundSound
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -85,16 +40,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -102,26 +53,20 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
-import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.CreditsSkipOverlay
+import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
-import com.raulshma.jellyplay.feature.player.video.components.CastButton
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
-import com.raulshma.jellyplay.feature.player.video.components.LabeledControlButton
-import com.raulshma.jellyplay.feature.player.video.components.LabeledSpeedButton
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitlePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
@@ -132,7 +77,8 @@ import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.findActivity
 import kotlinx.coroutines.delay
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import androidx.media3.ui.AspectRatioFrameLayout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,8 +100,7 @@ fun VideoPlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var isCasting by remember { mutableStateOf(false) }
-    var playerViewRef by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
-
+    var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var secondarySubtitleText by remember { mutableStateOf<String?>(null) }
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
@@ -206,7 +151,6 @@ fun VideoPlayerScreen(
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
             activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
-            playerViewRef?.player = null
             playerViewRef = null
             viewModel.release()
         }
@@ -265,7 +209,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    val exoPlayer = viewModel.exoPlayerRef
+    val engine = viewModel.playerEngineRef
     val title = uiState.title
     val subtitle = uiState.subtitle
     val isPlaying = uiState.isPlaying
@@ -277,7 +221,11 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
-    LaunchedEffect(aspectRatio, detectedAspectRatio) {
+    val isInIntro = uiState.isInIntro
+    val isInCredits = uiState.isInCredits
+    val shouldShowUpNext = uiState.shouldShowUpNext
+
+    LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
             detectedAspectRatio ?: AspectRatio.FIT
         } else {
@@ -293,43 +241,22 @@ fun VideoPlayerScreen(
             AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         val targetRatio = effectiveRatio.ratio
-        val eng = viewModel.playerEngineRef
-        if (eng != null) {
-            eng.setAspectRatio(resizeMode, targetRatio)
-        } else {
-            val pv = playerViewRef ?: return@LaunchedEffect
-            pv.setResizeMode(resizeMode)
-            if (targetRatio != null) {
-                (pv as? AspectRatioFrameLayout)?.setAspectRatio(targetRatio)
-            } else {
-                (pv as? AspectRatioFrameLayout)?.setAspectRatio(0f)
-            }
-        }
+        engine?.setAspectRatio(resizeMode, targetRatio)
     }
 
     val playMethod = uiState.playMethod
     val subtitleStyle = uiState.subtitleStyle
-    val isInIntro = uiState.isInIntro
-    val isInCredits = uiState.isInCredits
-    val shouldShowUpNext = uiState.shouldShowUpNext
     val nextEpisode = uiState.nextEpisode
     val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
 
-    val activeEngine = viewModel.playerEngineRef
-    val doPlay: () -> Unit = { if (activeEngine != null) activeEngine.play() else exoPlayer?.play() }
-    val doPause: () -> Unit = { if (activeEngine != null) activeEngine.pause() else exoPlayer?.pause() }
+    val doPlay: () -> Unit = { engine?.play() }
+    val doPause: () -> Unit = { engine?.pause() }
     val doTogglePlayPause: () -> Unit = {
         if (isPlaying) doPause() else doPlay()
     }
-    val doSeekTo: (Long) -> Unit = { ms ->
-        if (activeEngine != null) activeEngine.seekTo(ms) else exoPlayer?.seekTo(ms)
-    }
-    val doSeekBack: () -> Unit = {
-        if (activeEngine != null) activeEngine.seekBack() else exoPlayer?.seekBack()
-    }
-    val doSeekForward: () -> Unit = {
-        if (activeEngine != null) activeEngine.seekForward() else exoPlayer?.seekForward()
-    }
+    val doSeekTo: (Long) -> Unit = { ms -> engine?.seekTo(ms) }
+    val doSeekBack: () -> Unit = { engine?.seekBack() }
+    val doSeekForward: () -> Unit = { engine?.seekForward() }
 
     Box(
         modifier = Modifier
@@ -361,89 +288,30 @@ fun VideoPlayerScreen(
                     },
                     onLongPress = {
                         if (!uiState.gesturesEnabled) return@detectTapGestures
-                        val primaryText = viewModel.getCurrentPrimarySubtitleText()
+                        if (!uiState.engineCapabilities.cues && secondarySubtitleText.isNullOrBlank()) return@detectTapGestures
+                        val primaryText = if (uiState.engineCapabilities.cues) viewModel.getCurrentPrimarySubtitleText() else null
                         val secondaryText = secondarySubtitleText
                         val text = listOfNotNull(primaryText, secondaryText)
                             .joinToString("\n")
-                            .takeIf { it.isNotBlank() } ?: "No subtitle available"
+                            .takeIf { it.isNotBlank() } ?: return@detectTapGestures
                         currentSheet = PlayerSheet.TapToTranslate(text)
                     },
                 )
             },
     ) {
-        val engine = viewModel.playerEngineRef
         if (engine != null) {
             AndroidView(
-                factory = { ctx -> engine.createPlayerView(ctx) },
+                factory = { ctx ->
+                    engine.createPlayerView(ctx).also { view ->
+                        playerViewRef = view
+                        viewModel.applySubtitleStyleToView(view)
+                    }
+                },
+                update = { view ->
+                    viewModel.applySubtitleStyleToView(view)
+                },
                 modifier = Modifier.fillMaxSize(),
             )
-        } else {
-            exoPlayer?.let { player ->
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            this.player = player
-                            useController = false
-                            playerViewRef = this
-                            val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
-                            val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
-                            subtitleView?.setStyle(
-                                androidx.media3.ui.CaptionStyleCompat(
-                                    subtitleStyle.fontColor.value,
-                                    bgColorWithAlpha,
-                                    android.graphics.Color.TRANSPARENT,
-                                    when (subtitleStyle.edgeType) {
-                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
-                                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
-                                        else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
-                                    },
-                                    subtitleStyle.edgeColor.value,
-                                    null,
-                                )
-                            )
-                            subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
-                            val bottomPaddingPx = (subtitleStyle.verticalPosition * height).toInt()
-                            subtitleView?.setPadding(
-                                subtitleView?.paddingLeft ?: 0,
-                                subtitleView?.paddingTop ?: 0,
-                                subtitleView?.paddingRight ?: 0,
-                                bottomPaddingPx,
-                            )
-                        }
-                    },
-                    update = { view ->
-                        val bgAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
-                        val bgColorWithAlpha = (bgAlpha shl 24) or (subtitleStyle.backgroundColor.value and 0x00FFFFFF)
-                        view.subtitleView?.setStyle(
-                            androidx.media3.ui.CaptionStyleCompat(
-                                subtitleStyle.fontColor.value,
-                                bgColorWithAlpha,
-                                android.graphics.Color.TRANSPARENT,
-                                when (subtitleStyle.edgeType) {
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_RAISED
-                                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DEPRESSED
-                                    else -> androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
-                                },
-                                subtitleStyle.edgeColor.value,
-                                null,
-                            )
-                        )
-                        view.subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
-                        val bottomPaddingPx = (subtitleStyle.verticalPosition * view.height).toInt()
-                        view.subtitleView?.setPadding(
-                            view.subtitleView?.paddingLeft ?: 0,
-                            view.subtitleView?.paddingTop ?: 0,
-                            view.subtitleView?.paddingRight ?: 0,
-                            bottomPaddingPx,
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
         }
 
         GestureOverlay(
@@ -454,15 +322,9 @@ fun VideoPlayerScreen(
             gesturesEnabled = uiState.gesturesEnabled,
             swipeSeekMaxMs = uiState.swipeSeekMaxMs,
             onSeekGesture = { delta ->
-                val eng = viewModel.playerEngineRef
-                if (eng != null) {
+                engine?.let { eng ->
                     val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
                     eng.seekTo(newPos)
-                } else {
-                    exoPlayer?.let { player ->
-                        val newPos = (player.currentPosition + delta).coerceIn(0, player.duration.coerceAtLeast(0))
-                        player.seekTo(newPos)
-                    }
                 }
             },
             onBrightnessGesture = { delta ->
@@ -635,6 +497,12 @@ fun VideoPlayerScreen(
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls,
+            supportsSubtitleStyle = uiState.engineCapabilities.subtitleStyle,
+            supportsDialogueBoost = uiState.engineCapabilities.dialogueBoost,
+            supportsNightMode = uiState.engineCapabilities.nightMode,
+            supportsAudioDelay = uiState.engineCapabilities.audioDelay,
+            supportsAudioPassthrough = uiState.engineCapabilities.audioPassthrough,
+            supportsOcr = uiState.engineCapabilities.ocr,
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
             onSeekForward = { doSeekForward() },
@@ -657,43 +525,12 @@ fun VideoPlayerScreen(
             onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
             onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
             onNightModeClick = { viewModel.toggleNightMode() },
-            onAudioDelayClick = {
-                val engine = viewModel.playerEngineRef
-                if (engine == null || engine.supportsAudioDelay) {
-                    currentSheet = PlayerSheet.AudioDelay
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Audio delay requires mpv or LibVLC player engine",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                }
-            },
+            onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
             onDecoderClick = { currentSheet = PlayerSheet.Decoder },
-            onPassthroughClick = {
-                val engine = viewModel.playerEngineRef
-                if (engine == null || engine.supportsAudioPassthrough) {
-                    viewModel.setAudioPassthrough(!uiState.audioPassthrough)
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Audio passthrough requires mpv or LibVLC player engine",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                }
-            },
+            onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
             onCastClick = { viewModel.castToDevice() },
             onOcrClick = {
-                val pv = playerViewRef
-                val bitmap = if (pv != null && pv.width > 0 && pv.height > 0) {
-                    try {
-                        android.graphics.Bitmap.createBitmap(pv.width, pv.height, android.graphics.Bitmap.Config.ARGB_8888).also {
-                            pv.draw(android.graphics.Canvas(it))
-                        }
-                    } catch (_: Exception) { null }
-                } else null
+                val bitmap = viewModel.capturePlayerViewBitmap()
                 viewModel.captureOcrSubtitle(bitmap)
                 currentSheet = PlayerSheet.OcrResult
             },
@@ -747,10 +584,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(exoPlayer, uiState.secondarySubtitleTrack) {
+    LaunchedEffect(uiState.secondarySubtitleTrack) {
         val track = uiState.secondarySubtitleTrack ?: return@LaunchedEffect
         while (true) {
-            val pos = activeEngine?.currentPositionMs ?: exoPlayer?.currentPosition ?: 0L
+            val pos = engine?.currentPositionMs ?: 0L
             secondarySubtitleText = viewModel.getSecondarySubtitleText(pos)
             delay(250)
         }

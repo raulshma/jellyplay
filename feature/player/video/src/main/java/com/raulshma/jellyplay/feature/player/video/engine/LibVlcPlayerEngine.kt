@@ -195,8 +195,14 @@ class LibVlcPlayerEngine(
 
     override val isPlaying: Boolean
         get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
+    override val audioSessionId: Int get() = 0
     override val supportsAudioDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
+    override val supportsSubtitleStyle: Boolean get() = false
+    override val supportsDialogueBoost: Boolean get() = false
+    override val supportsNightMode: Boolean get() = false
+    override val supportsOcr: Boolean get() = false
+    override val supportsCues: Boolean get() = false
 
     override val currentPositionMs: Long
         get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }
