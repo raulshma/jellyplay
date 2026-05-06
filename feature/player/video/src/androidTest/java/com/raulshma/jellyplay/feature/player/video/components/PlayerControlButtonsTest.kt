@@ -5,10 +5,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -18,29 +17,28 @@ class PlayerControlButtonsTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun labeledControlButton_displaysIconAndLabel() {
+    fun playerIconButton_displaysIcon() {
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledControlButton(
+                PlayerIconButton(
                     onClick = {},
                     icon = Icons.Default.Audiotrack,
-                    label = "Audio",
+                    contentDescription = "Audio",
                 )
             }
         }
-        composeTestRule.onNodeWithText("Audio").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Audio").assertIsDisplayed()
     }
 
     @Test
-    fun labeledControlButton_click_callsOnClick() {
+    fun playerIconButton_click_callsOnClick() {
         var clicked = false
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledControlButton(
+                PlayerIconButton(
                     onClick = { clicked = true },
                     icon = Icons.Default.Audiotrack,
-                    label = "Audio",
+                    contentDescription = "Audio",
                 )
             }
         }
@@ -49,14 +47,14 @@ class PlayerControlButtonsTest {
     }
 
     @Test
-    fun labeledControlButton_disabled_clickDoesNotFire() {
+    fun playerIconButton_disabled_clickDoesNotFire() {
         var clicked = false
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledControlButton(
+                PlayerIconButton(
                     onClick = { clicked = true },
                     icon = Icons.Default.Audiotrack,
-                    label = "Audio",
+                    contentDescription = "Audio",
                     enabled = false,
                 )
             }
@@ -66,38 +64,23 @@ class PlayerControlButtonsTest {
     }
 
     @Test
-    fun labeledControlButton_displaysCustomLabel() {
+    fun playerSpeedButton_showsSpeedText() {
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledControlButton(
-                    onClick = {},
-                    icon = Icons.Default.Audiotrack,
-                    label = "Subs",
-                )
-            }
-        }
-        composeTestRule.onNodeWithText("Subs").assertIsDisplayed()
-    }
-
-    @Test
-    fun labeledSpeedButton_showsSpeedText() {
-        composeTestRule.setContent {
-            MaterialTheme {
-                LabeledSpeedButton(
+                PlayerSpeedButton(
                     onClick = {},
                     speed = 1.5f,
                 )
             }
         }
         composeTestRule.onNodeWithText("1.5x").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Speed").assertIsDisplayed()
     }
 
     @Test
-    fun labeledSpeedButton_speedOne_showsSimplifiedFormat() {
+    fun playerSpeedButton_speedOne_showsSimplifiedFormat() {
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledSpeedButton(
+                PlayerSpeedButton(
                     onClick = {},
                     speed = 1.0f,
                 )
@@ -107,10 +90,10 @@ class PlayerControlButtonsTest {
     }
 
     @Test
-    fun labeledSpeedButton_speedZeroPoint25_showsCorrectFormat() {
+    fun playerSpeedButton_speedZeroPoint25_showsCorrectFormat() {
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledSpeedButton(
+                PlayerSpeedButton(
                     onClick = {},
                     speed = 0.25f,
                 )
@@ -120,11 +103,11 @@ class PlayerControlButtonsTest {
     }
 
     @Test
-    fun labeledSpeedButton_click_callsOnClick() {
+    fun playerSpeedButton_click_callsOnClick() {
         var clicked = false
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledSpeedButton(
+                PlayerSpeedButton(
                     onClick = { clicked = true },
                     speed = 1.0f,
                 )
@@ -135,10 +118,10 @@ class PlayerControlButtonsTest {
     }
 
     @Test
-    fun labeledSpeedButton_speedTwo_showsCorrectFormat() {
+    fun playerSpeedButton_speedTwo_showsCorrectFormat() {
         composeTestRule.setContent {
             MaterialTheme {
-                LabeledSpeedButton(
+                PlayerSpeedButton(
                     onClick = {},
                     speed = 2.0f,
                 )

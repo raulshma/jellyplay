@@ -488,7 +488,7 @@ fun VideoPlayerScreen(
             currentPosition = currentPosition,
             duration = duration,
             playbackSpeed = playbackSpeed,
-            hasChapters = uiState.chapters.isNotEmpty(),
+            chapters = uiState.chapters,
             dialogueBoostEnabled = uiState.dialogueBoostEnabled,
             nightModeEnabled = uiState.nightModeEnabled,
             audioPassthrough = uiState.audioPassthrough,
@@ -551,8 +551,8 @@ fun VideoPlayerScreen(
                 imageUrl = trickplayImageUrl,
                 positionMs = seekPositionMs,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 80.dp),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 120.dp),
             )
         }
     }
