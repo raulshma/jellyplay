@@ -770,6 +770,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
         playerEngine?.release()
         playerEngine = null
+        currentItemId = null
         trickplayBaseUrl = null
         selectedSubtitleTrackId = null
         secondarySubtitleCues = emptyList()
