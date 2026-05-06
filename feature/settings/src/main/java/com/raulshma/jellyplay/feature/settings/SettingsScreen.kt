@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,14 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cached
@@ -58,22 +61,20 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -84,9 +85,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,14 +147,11 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Settings",
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Text("Settings")
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -160,418 +160,530 @@ fun SettingsScreen(
             )
         },
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             if (userName.isNotBlank()) {
-                SettingsHeroBanner(userName = userName)
-                Spacer(Modifier.height(8.dp))
+                item {
+                    SettingsProfileBanner(
+                        userName = userName,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
             }
 
-            SettingsCategoryRow(
-                title = "Account",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.Dns,
-                        title = "Servers",
-                        subtitle = "Manage servers",
-                        onClick = onServerManagement,
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Person,
-                        title = "Switch User",
-                        subtitle = userName.ifBlank { "Manage users" },
-                        onClick = onUserManagement,
-                    ),
-                    SettingsCardData(
-                        icon = Icons.AutoMirrored.Filled.Logout,
-                        title = "Sign Out",
-                        subtitle = "Log out of current account",
-                        onClick = {
-                            viewModel.logout()
-                            onLogout()
-                        },
-                        isDestructive = true,
-                    ),
-                ),
-            )
+            item {
+                SettingsSectionHeader(title = "Account")
+            }
 
-            SettingsCategoryRow(
-                title = "Video Player",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.PlayCircle,
-                        title = "Player Engine",
-                        subtitle = preferences.preferredPlayer.displayName,
-                        valueBadge = preferences.preferredPlayer.displayName,
-                        onClick = { showPlayerPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.FastForward,
-                        title = "Seek Duration",
-                        subtitle = "${preferences.videoSeekDurationMs / 1000}s double-tap",
-                        valueBadge = "${preferences.videoSeekDurationMs / 1000}s",
-                        onClick = { showVideoSeekDurationPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.ScreenLockLandscape,
-                        title = "Orientation",
-                        subtitle = preferences.videoDefaultOrientation.displayName,
-                        valueBadge = preferences.videoDefaultOrientation.displayName,
-                        onClick = { showOrientationPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Timer,
-                        title = "Controls Timeout",
-                        subtitle = "${preferences.videoControlsTimeoutMs / 1000}s auto-hide",
-                        valueBadge = "${preferences.videoControlsTimeoutMs / 1000}s",
-                        onClick = { showControlsTimeoutPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Gesture,
-                        title = "Gestures",
-                        subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap active" else "Disabled",
-                        isToggle = true,
-                        toggled = preferences.videoGesturesEnabled,
-                        onToggle = { viewModel.setVideoGesturesEnabled(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Speed,
-                        title = "Default Speed",
-                        subtitle = if (preferences.videoDefaultSpeed == 1.0f) "Normal" else "${preferences.videoDefaultSpeed}x",
-                        valueBadge = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
-                        onClick = { showVideoSpeedPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.AspectRatio,
-                        title = "Default Aspect",
-                        subtitle = preferences.videoDefaultAspectRatio,
-                        valueBadge = preferences.videoDefaultAspectRatio,
-                        onClick = { showAspectRatioPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.QueuePlayNext,
-                        title = "Auto-play Next",
-                        subtitle = if (preferences.videoAutoplayNext) "Plays next episode" else "Disabled",
-                        isToggle = true,
-                        toggled = preferences.videoAutoplayNext,
-                        onToggle = { viewModel.setVideoAutoplayNext(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Swipe,
-                        title = "Swipe Seek Range",
-                        subtitle = "Max ${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        valueBadge = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        onClick = { showSwipeSeekPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Brightness6,
-                        title = "Remember Brightness",
-                        subtitle = if (preferences.videoRememberBrightness) "Saves between sessions" else "Disabled",
-                        isToggle = true,
-                        toggled = preferences.videoRememberBrightness,
-                        onToggle = { viewModel.setVideoRememberBrightness(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.RecordVoiceOver,
-                        title = "Dialogue Boost",
-                        subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocals" else "Off",
-                        isToggle = true,
-                        toggled = preferences.dialogueBoostEnabled,
-                        onToggle = { viewModel.setDialogueBoostEnabled(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.HighQuality,
-                        title = "Decoder",
-                        subtitle = preferences.decoderMode.displayName,
-                        valueBadge = preferences.decoderMode.displayName.split(" ").first(),
-                        onClick = {
-                            val modes = DecoderMode.entries
-                            val currentIndex = modes.indexOf(preferences.decoderMode)
-                            val nextIndex = (currentIndex + 1) % modes.size
-                            viewModel.setDecoderMode(modes[nextIndex])
-                        },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Movie,
-                        title = "Audio Passthrough",
-                        subtitle = if (preferences.audioPassthrough) "Direct to receiver" else "Off",
-                        isToggle = true,
-                        toggled = preferences.audioPassthrough,
-                        onToggle = { viewModel.setAudioPassthrough(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Fullscreen,
-                        title = "Frame Rate Match",
-                        subtitle = if (preferences.frameRateMatching) "Matches display" else "Off",
-                        isToggle = true,
-                        toggled = preferences.frameRateMatching,
-                        onToggle = { viewModel.setFrameRateMatching(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.HighQuality,
-                        title = "Streaming Quality",
-                        subtitle = streamingQualityLabel(preferences.streamingQuality),
-                        valueBadge = streamingQualityShort(preferences.streamingQuality),
-                        onClick = {
-                            val qualities = StreamingQuality.entries
-                            val currentIndex = qualities.indexOf(preferences.streamingQuality)
-                            val nextIndex = (currentIndex + 1) % qualities.size
-                            viewModel.setStreamingQuality(qualities[nextIndex])
-                        },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Audiotrack,
-                        title = "Audio Delay",
-                        subtitle = if (preferences.audioDelayMs == 0L) "None" else "${preferences.audioDelayMs}ms",
-                        valueBadge = "${preferences.audioDelayMs}ms",
-                        onClick = { showAudioDelayPicker = true },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Dns,
+                    title = "Servers",
+                    subtitle = "Manage your Jellyfin servers",
+                    onClick = onServerManagement,
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "Audio Player",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.Speed,
-                        title = "Default Speed",
-                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal" else "${preferences.audioDefaultSpeed}x",
-                        valueBadge = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
-                        onClick = { showAudioSpeedPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.LibraryMusic,
-                        title = "Night Mode Volume",
-                        subtitle = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                        valueBadge = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                        onClick = { showNightModeVolumePicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Tune,
-                        title = "Night Mode Gain",
-                        subtitle = "${preferences.audioNightModeGain}",
-                        valueBadge = "${preferences.audioNightModeGain}",
-                        onClick = { showNightModeGainPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.SkipNext,
-                        title = "Skip Prev Threshold",
-                        subtitle = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                        valueBadge = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                        onClick = { showSkipPrevThresholdPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.QueuePlayNext,
-                        title = "Auto-play Next",
-                        subtitle = if (preferences.audioAutoplayNext) "Automatic" else "Manual",
-                        isToggle = true,
-                        toggled = preferences.audioAutoplayNext,
-                        onToggle = { viewModel.setAudioAutoplayNext(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Tune,
-                        title = "Equalizer",
-                        subtitle = if (preferences.equalizerEnabled) "10-band active" else "Off",
-                        isToggle = true,
-                        toggled = preferences.equalizerEnabled,
-                        onToggle = { viewModel.setEqualizerEnabled(it) },
-                        onClick = { showEqualizerEditor = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.RecordVoiceOver,
-                        title = "Dialogue Boost",
-                        subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocals" else "Off",
-                        isToggle = true,
-                        toggled = preferences.dialogueBoostEnabled,
-                        onToggle = { viewModel.setDialogueBoostEnabled(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Speed,
-                        title = "Night Mode",
-                        subtitle = if (preferences.nightModeEnabled) "Compression active" else "Off",
-                        isToggle = true,
-                        toggled = preferences.nightModeEnabled,
-                        onToggle = { viewModel.setNightModeEnabled(it) },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Person,
+                    title = "Switch User",
+                    subtitle = userName.ifBlank { "Manage users" },
+                    onClick = onUserManagement,
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "Language",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.Language,
-                        title = "Audio Language",
-                        subtitle = preferences.preferredAudioLanguage ?: "Default",
-                        onClick = { showAudioLanguagePicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.ClosedCaption,
-                        title = "Subtitle Language",
-                        subtitle = preferences.preferredSubtitleLanguage ?: "Default",
-                        onClick = { showSubtitleLanguagePicker = true },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    title = "Sign Out",
+                    subtitle = "Log out of current account",
+                    isDestructive = true,
+                    onClick = {
+                        viewModel.logout()
+                        onLogout()
+                    },
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "Subtitles",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.TextFields,
-                        title = "Font Size",
-                        subtitle = "${preferences.subtitleStyle.fontSize}sp",
-                        valueBadge = "${preferences.subtitleStyle.fontSize}",
-                        onClick = { showSubtitleFontPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Palette,
-                        title = "Text Color",
-                        subtitle = preferences.subtitleStyle.fontColor.name,
-                        valueBadge = preferences.subtitleStyle.fontColor.name,
-                        onClick = { showSubtitleColorPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.ClosedCaption,
-                        title = "Background",
-                        subtitle = "${preferences.subtitleStyle.backgroundColor.name} ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
-                        onClick = { showSubtitleBgColorPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.TextFields,
-                        title = "Edge Style",
-                        subtitle = preferences.subtitleStyle.edgeType.name,
-                        valueBadge = preferences.subtitleStyle.edgeType.name,
-                        onClick = { showSubtitleEdgePicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Timer,
-                        title = "Sync Offset",
-                        subtitle = "${preferences.subtitleStyle.offsetMs}ms",
-                        valueBadge = "${preferences.subtitleStyle.offsetMs}ms",
-                        onClick = { showSubtitleOffsetPicker = true },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.ClosedCaption,
-                        title = "Position",
-                        subtitle = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
-                        valueBadge = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
-                        onClick = { showSubtitlePositionPicker = true },
-                    ),
-                ),
-            )
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Video Player")
+            }
 
-            SettingsCategoryRow(
-                title = "Storage",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.Storage,
-                        title = "Cache Used",
-                        subtitle = "${viewModel.cacheSizeMb} MB",
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Delete,
-                        title = "Clear Cache",
-                        subtitle = "Free up space",
-                        onClick = { viewModel.clearCache() },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Cached,
-                        title = "Auto-delete",
-                        subtitle = if (preferences.autoDeleteCache) "On low storage" else "Off",
-                        isToggle = true,
-                        toggled = preferences.autoDeleteCache,
-                        onToggle = { viewModel.setAutoDeleteCache(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Storage,
-                        title = "Max Cache",
-                        subtitle = "${preferences.maxCacheSizeMb} MB",
-                        valueBadge = "${preferences.maxCacheSizeMb} MB",
-                        onClick = {
-                            val sizes = listOf(250, 500, 1000, 2000, 5000)
-                            val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
-                            val nextIndex = (currentIndex + 1) % sizes.size
-                            viewModel.setMaxCacheSize(sizes[nextIndex])
-                        },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.PlayCircle,
+                    title = "Player Engine",
+                    subtitle = "Choose media playback engine",
+                    trailingText = preferences.preferredPlayer.displayName,
+                    onClick = { showPlayerPicker = true },
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "Appearance",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.OndemandVideo,
-                        title = "Dynamic Theming",
-                        subtitle = "Colors from artwork",
-                        isToggle = true,
-                        toggled = preferences.dynamicTheming,
-                        onToggle = { viewModel.setDynamicTheming(it) },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.Home,
-                        title = "Home Mode",
-                        subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video focus" else "Music focus",
-                        valueBadge = preferences.homeMode.name,
-                        onClick = {
-                            val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                            viewModel.setHomeMode(next)
-                        },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.FastForward,
+                    title = "Seek Duration",
+                    subtitle = "Double-tap to seek",
+                    trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                    onClick = { showVideoSeekDurationPicker = true },
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "Security",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                        title = "PIN Lock",
-                        subtitle = if (preferences.pinLockEnabled) "Enabled" else "Disabled",
-                        isToggle = true,
-                        toggled = preferences.pinLockEnabled,
-                        onToggle = { enabled ->
-                            if (enabled) showPinDialog = true
-                            else viewModel.clearPin()
-                        },
-                        onClick = {
-                            if (preferences.pinLockEnabled) viewModel.clearPin()
-                            else showPinDialog = true
-                        },
-                    ),
-                    SettingsCardData(
-                        icon = Icons.Default.ChildCare,
-                        title = "Kids Mode",
-                        subtitle = if (preferences.kidsModeEnabled) "Max: ${preferences.kidsModeMaxRating}" else "Disabled",
-                        isToggle = true,
-                        toggled = preferences.kidsModeEnabled,
-                        onToggle = { viewModel.setKidsModeEnabled(it) },
-                        onClick = {
-                            val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
-                            val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
-                            viewModel.setKidsModeMaxRating(nextRating)
-                        },
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.ScreenLockLandscape,
+                    title = "Orientation",
+                    subtitle = "Default screen orientation",
+                    trailingText = preferences.videoDefaultOrientation.displayName,
+                    onClick = { showOrientationPicker = true },
+                )
+            }
 
-            SettingsCategoryRow(
-                title = "About",
-                cards = listOf(
-                    SettingsCardData(
-                        icon = Icons.Default.OndemandVideo,
-                        title = "Version",
-                        subtitle = "JellyPlay v1.0.0",
-                    ),
-                ),
-            )
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Timer,
+                    title = "Controls Timeout",
+                    subtitle = "Auto-hide player controls",
+                    trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                    onClick = { showControlsTimeoutPicker = true },
+                )
+            }
 
-            Spacer(Modifier.height(32.dp))
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Gesture,
+                    title = "Gestures",
+                    subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
+                    checked = preferences.videoGesturesEnabled,
+                    onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Speed,
+                    title = "Default Speed",
+                    subtitle = if (preferences.videoDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.videoDefaultSpeed}x playback",
+                    trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
+                    onClick = { showVideoSpeedPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.AspectRatio,
+                    title = "Default Aspect",
+                    subtitle = "Video aspect ratio mode",
+                    trailingText = preferences.videoDefaultAspectRatio,
+                    onClick = { showAspectRatioPicker = true },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.QueuePlayNext,
+                    title = "Auto-play Next",
+                    subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
+                    checked = preferences.videoAutoplayNext,
+                    onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Swipe,
+                    title = "Swipe Seek Range",
+                    subtitle = "Maximum seek distance",
+                    trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
+                    onClick = { showSwipeSeekPicker = true },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Brightness6,
+                    title = "Remember Brightness",
+                    subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
+                    checked = preferences.videoRememberBrightness,
+                    onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = "Dialogue Boost",
+                    subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
+                    checked = preferences.dialogueBoostEnabled,
+                    onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.HighQuality,
+                    title = "Decoder",
+                    subtitle = preferences.decoderMode.displayName,
+                    trailingText = preferences.decoderMode.displayName.split(" ").first(),
+                    onClick = {
+                        val modes = DecoderMode.entries
+                        val currentIndex = modes.indexOf(preferences.decoderMode)
+                        val nextIndex = (currentIndex + 1) % modes.size
+                        viewModel.setDecoderMode(modes[nextIndex])
+                    },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Movie,
+                    title = "Audio Passthrough",
+                    subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Software audio processing",
+                    checked = preferences.audioPassthrough,
+                    onCheckedChange = { viewModel.setAudioPassthrough(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Fullscreen,
+                    title = "Frame Rate Match",
+                    subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
+                    checked = preferences.frameRateMatching,
+                    onCheckedChange = { viewModel.setFrameRateMatching(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.HighQuality,
+                    title = "Streaming Quality",
+                    subtitle = streamingQualityLabel(preferences.streamingQuality),
+                    trailingText = streamingQualityShort(preferences.streamingQuality),
+                    onClick = {
+                        val qualities = StreamingQuality.entries
+                        val currentIndex = qualities.indexOf(preferences.streamingQuality)
+                        val nextIndex = (currentIndex + 1) % qualities.size
+                        viewModel.setStreamingQuality(qualities[nextIndex])
+                    },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Audiotrack,
+                    title = "Audio Delay",
+                    subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
+                    trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
+                    onClick = { showAudioDelayPicker = true },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Audio Player")
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Speed,
+                    title = "Default Speed",
+                    subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
+                    trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
+                    onClick = { showAudioSpeedPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.LibraryMusic,
+                    title = "Night Mode Volume",
+                    subtitle = "Maximum volume level at night",
+                    trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
+                    onClick = { showNightModeVolumePicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Tune,
+                    title = "Night Mode Gain",
+                    subtitle = "Loudness compensation",
+                    trailingText = "${preferences.audioNightModeGain}",
+                    onClick = { showNightModeGainPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.SkipNext,
+                    title = "Skip Prev Threshold",
+                    subtitle = "Restart song if past this point",
+                    trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
+                    onClick = { showSkipPrevThresholdPicker = true },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.QueuePlayNext,
+                    title = "Auto-play Next",
+                    subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
+                    checked = preferences.audioAutoplayNext,
+                    onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Tune,
+                    title = "Equalizer",
+                    subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
+                    checked = preferences.equalizerEnabled,
+                    onCheckedChange = { viewModel.setEqualizerEnabled(it) },
+                    onClick = { showEqualizerEditor = true },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = "Dialogue Boost",
+                    subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
+                    checked = preferences.dialogueBoostEnabled,
+                    onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Speed,
+                    title = "Night Mode",
+                    subtitle = if (preferences.nightModeEnabled) "Dynamic range compression active" else "Off",
+                    checked = preferences.nightModeEnabled,
+                    onCheckedChange = { viewModel.setNightModeEnabled(it) },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Language")
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Language,
+                    title = "Audio Language",
+                    subtitle = "Preferred audio track language",
+                    trailingText = preferences.preferredAudioLanguage ?: "Default",
+                    onClick = { showAudioLanguagePicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.ClosedCaption,
+                    title = "Subtitle Language",
+                    subtitle = "Preferred subtitle language",
+                    trailingText = preferences.preferredSubtitleLanguage ?: "Default",
+                    onClick = { showSubtitleLanguagePicker = true },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Subtitles")
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.TextFields,
+                    title = "Font Size",
+                    subtitle = "Subtitle text size",
+                    trailingText = "${preferences.subtitleStyle.fontSize}sp",
+                    onClick = { showSubtitleFontPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Palette,
+                    title = "Text Color",
+                    subtitle = "Subtitle font color",
+                    trailingText = preferences.subtitleStyle.fontColor.name,
+                    onClick = { showSubtitleColorPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.ClosedCaption,
+                    title = "Background",
+                    subtitle = "${preferences.subtitleStyle.backgroundColor.name} \u2022 ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
+                    onClick = { showSubtitleBgColorPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.TextFields,
+                    title = "Edge Style",
+                    subtitle = "Text outline effect",
+                    trailingText = preferences.subtitleStyle.edgeType.name,
+                    onClick = { showSubtitleEdgePicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Timer,
+                    title = "Sync Offset",
+                    subtitle = "Subtitle timing adjustment",
+                    trailingText = "${preferences.subtitleStyle.offsetMs}ms",
+                    onClick = { showSubtitleOffsetPicker = true },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.ClosedCaption,
+                    title = "Position",
+                    subtitle = "Vertical placement on screen",
+                    trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                    onClick = { showSubtitlePositionPicker = true },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Storage")
+            }
+
+            item {
+                SettingInfoItem(
+                    icon = Icons.Default.Storage,
+                    title = "Cache Used",
+                    subtitle = "${viewModel.cacheSizeMb} MB",
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Delete,
+                    title = "Clear Cache",
+                    subtitle = "Free up storage space",
+                    onClick = { viewModel.clearCache() },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Cached,
+                    title = "Auto-delete Cache",
+                    subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
+                    checked = preferences.autoDeleteCache,
+                    onCheckedChange = { viewModel.setAutoDeleteCache(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Storage,
+                    title = "Max Cache Size",
+                    subtitle = "Maximum disk space for caching",
+                    trailingText = "${preferences.maxCacheSizeMb} MB",
+                    onClick = {
+                        val sizes = listOf(250, 500, 1000, 2000, 5000)
+                        val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
+                        val nextIndex = (currentIndex + 1) % sizes.size
+                        viewModel.setMaxCacheSize(sizes[nextIndex])
+                    },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Appearance")
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.OndemandVideo,
+                    title = "Dynamic Theming",
+                    subtitle = "Colors extracted from artwork",
+                    checked = preferences.dynamicTheming,
+                    onCheckedChange = { viewModel.setDynamicTheming(it) },
+                )
+            }
+
+            item {
+                SettingListItem(
+                    icon = Icons.Default.Home,
+                    title = "Home Mode",
+                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                    trailingText = preferences.homeMode.name,
+                    onClick = {
+                        val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                        viewModel.setHomeMode(next)
+                    },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Security")
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                    title = "PIN Lock",
+                    subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
+                    checked = preferences.pinLockEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) showPinDialog = true
+                        else viewModel.clearPin()
+                    },
+                    onClick = {
+                        if (preferences.pinLockEnabled) viewModel.clearPin()
+                        else showPinDialog = true
+                    },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.ChildCare,
+                    title = "Kids Mode",
+                    subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
+                    checked = preferences.kidsModeEnabled,
+                    onCheckedChange = { viewModel.setKidsModeEnabled(it) },
+                    onClick = {
+                        val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
+                        val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
+                        viewModel.setKidsModeMaxRating(nextRating)
+                    },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "About")
+            }
+
+            item {
+                SettingInfoItem(
+                    icon = Icons.Default.OndemandVideo,
+                    title = "Version",
+                    subtitle = "JellyPlay v1.0.0",
+                )
+            }
         }
     }
 
@@ -583,10 +695,10 @@ fun SettingsScreen(
                 pinConfirm = ""
                 pinError = null
             },
-            title = { Text("Set PIN") },
+            title = { Text("Set PIN Lock") },
             text = {
                 Column {
-                    TextField(
+                    OutlinedTextField(
                         value = pinInput,
                         onValueChange = {
                             if (it.length <= 4 && it.all { c -> c.isDigit() }) {
@@ -598,9 +710,11 @@ fun SettingsScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         isError = pinError != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    TextField(
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
                         value = pinConfirm,
                         onValueChange = {
                             if (it.length <= 4 && it.all { c -> c.isDigit() }) {
@@ -612,10 +726,22 @@ fun SettingsScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         isError = pinError != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    if (pinError != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(pinError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    AnimatedVisibility(
+                        visible = pinError != null,
+                        enter = expandVertically(),
+                        exit = shrinkVertically(),
+                    ) {
+                        pinError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
                     }
                 }
             },
@@ -632,7 +758,7 @@ fun SettingsScreen(
                             pinError = null
                         }
                     }
-                }) { Text("Set") }
+                }) { Text("Set PIN") }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -754,7 +880,11 @@ fun SettingsScreen(
             title = { Text("Night Mode Volume") },
             text = {
                 Column {
-                    Text("${(sliderValue * 100).toInt()}%", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "${(sliderValue * 100).toInt()}%",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Spacer(Modifier.height(16.dp))
                     Slider(
                         value = sliderValue,
@@ -762,6 +892,13 @@ fun SettingsScreen(
                         valueRange = 0.1f..0.8f,
                         steps = 6,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("10%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("80%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = {
@@ -783,7 +920,11 @@ fun SettingsScreen(
             title = { Text("Night Mode Loudness Gain") },
             text = {
                 Column {
-                    Text("${sliderValue.toInt()}", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "${sliderValue.toInt()}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Spacer(Modifier.height(16.dp))
                     Slider(
                         value = sliderValue,
@@ -791,6 +932,13 @@ fun SettingsScreen(
                         valueRange = 0f..3000f,
                         steps = 29,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("0", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("3000", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = {
@@ -825,10 +973,10 @@ fun SettingsScreen(
             title = { Text("Audio Delay") },
             text = {
                 Column {
-                    val displayMs = sliderValue.toLong()
                     Text(
-                        if (displayMs == 0L) "No delay" else "${displayMs}ms",
-                        style = MaterialTheme.typography.headlineSmall,
+                        if (sliderValue.toLong() == 0L) "No delay" else "${sliderValue.toLong()}ms",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
                     )
                     Spacer(Modifier.height(16.dp))
                     Slider(
@@ -837,6 +985,13 @@ fun SettingsScreen(
                         valueRange = -500f..500f,
                         steps = 99,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("-500ms", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("+500ms", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = {
@@ -906,7 +1061,11 @@ fun SettingsScreen(
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("Opacity: ${(bgOpacity * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Opacity: ${(bgOpacity * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Slider(
                         value = bgOpacity,
                         onValueChange = { bgOpacity = it },
@@ -946,7 +1105,11 @@ fun SettingsScreen(
             title = { Text("Subtitle Sync Offset") },
             text = {
                 Column {
-                    Text("${sliderValue.toLong()}ms", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "${sliderValue.toLong()}ms",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Spacer(Modifier.height(16.dp))
                     Slider(
                         value = sliderValue,
@@ -954,6 +1117,13 @@ fun SettingsScreen(
                         valueRange = -5000f..5000f,
                         steps = 99,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("-5s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("+5s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = {
@@ -975,7 +1145,11 @@ fun SettingsScreen(
             title = { Text("Subtitle Vertical Position") },
             text = {
                 Column {
-                    Text("${(sliderValue * 100).toInt()}%", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "${(sliderValue * 100).toInt()}%",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Spacer(Modifier.height(16.dp))
                     Slider(
                         value = sliderValue,
@@ -983,6 +1157,13 @@ fun SettingsScreen(
                         valueRange = 0f..0.4f,
                         steps = 7,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Bottom", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("40%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = {
@@ -1010,6 +1191,7 @@ fun SettingsScreen(
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("-15", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(28.dp))
@@ -1061,172 +1243,208 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsHeroBanner(userName: String) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                modifier = Modifier.size(56.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(
-                    "Signed in as",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    userName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-data class SettingsCardData(
-    val icon: ImageVector,
-    val title: String,
-    val subtitle: String,
-    val valueBadge: String? = null,
-    val isToggle: Boolean = false,
-    val toggled: Boolean = false,
-    val onToggle: ((Boolean) -> Unit)? = null,
-    val onClick: (() -> Unit)? = null,
-    val isDestructive: Boolean = false,
-)
-
-@Composable
-private fun SettingsCategoryRow(
-    title: String,
-    cards: List<SettingsCardData>,
+private fun SettingsProfileBanner(
+    userName: String,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp),
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(cards) { card ->
-                SettingsCard(card)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsCard(data: SettingsCardData) {
-    val cardColor = if (data.isDestructive) {
-        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = Modifier
-            .width(160.dp)
-            .then(
-                if (data.onClick != null || data.isToggle) {
-                    Modifier.clickable {
-                        if (data.isToggle && data.onToggle != null) {
-                            data.onToggle(!data.toggled)
-                        }
-                        data.onClick?.invoke()
-                    }
-                } else Modifier
-            ),
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    data.icon,
-                    contentDescription = null,
-                    tint = if (data.isDestructive) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-                if (data.isToggle && data.onToggle != null) {
-                    Switch(
-                        checked = data.toggled,
-                        onCheckedChange = data.onToggle,
-                        modifier = Modifier.height(24.dp),
-                    )
-                } else if (data.valueBadge != null) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    ) {
-                        Text(
-                            data.valueBadge,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
+            Icon(
+                Icons.Default.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Column {
             Text(
-                data.title,
-                style = MaterialTheme.typography.bodyMedium,
+                "Signed in as",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+            )
+            Text(
+                userName,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = if (data.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                data.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
     }
+}
+
+@Composable
+private fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun SettingListItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    trailingText: String? = null,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val supportingColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val iconColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = headlineColor,
+            )
+        },
+        supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
+            {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = supportingColor,
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(24.dp),
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                trailingText?.let { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.NavigateNext,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+        ),
+    )
+}
+
+@Composable
+private fun SettingToggleItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onClick: (() -> Unit)? = null,
+) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+        },
+        supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
+            {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+            )
+        },
+        modifier = Modifier.clickable {
+            onClick?.invoke() ?: onCheckedChange(!checked)
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+        ),
+    )
+}
+
+@Composable
+private fun SettingInfoItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+        },
+        supportingContent = {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+        ),
+    )
 }
 
 private data class RadioOption(
@@ -1244,7 +1462,7 @@ private fun RadioPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(title, fontWeight = FontWeight.SemiBold) },
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
@@ -1253,8 +1471,9 @@ private fun RadioPickerDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
                             .clickable { onSelect(index) }
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = option.isSelected, onClick = { onSelect(index) })
@@ -1262,7 +1481,11 @@ private fun RadioPickerDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(option.title, style = MaterialTheme.typography.bodyLarge)
                             if (option.subtitle.isNotBlank()) {
-                                Text(option.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    option.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -1283,7 +1506,7 @@ private fun LanguagePickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Language") },
+        title = { Text("Select Language", fontWeight = FontWeight.SemiBold) },
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
@@ -1292,8 +1515,9 @@ private fun LanguagePickerDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
                             .clickable { onSelect(code) }
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = isSelected, onClick = { onSelect(code) })
@@ -1445,7 +1669,7 @@ private val languages = listOf(
     "ndo" to "Ndonga",
     "nep" to "Nepali",
     "nno" to "Norwegian Nynorsk",
-    "nob" to "Norwegian Bokmål",
+    "nob" to "Norwegian Bokm\u00e5l",
     "nor" to "Norwegian",
     "nya" to "Chichewa",
     "oci" to "Occitan",
@@ -1503,7 +1727,7 @@ private val languages = listOf(
     "uzb" to "Uzbek",
     "ven" to "Venda",
     "vie" to "Vietnamese",
-    "vol" to "Volapük",
+    "vol" to "Volap\u00fck",
     "wel" to "Welsh",
     "wln" to "Walloon",
     "wol" to "Wolof",
