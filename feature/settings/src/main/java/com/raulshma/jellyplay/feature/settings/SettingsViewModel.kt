@@ -45,6 +45,10 @@ class SettingsViewModel @Inject constructor(
     var cacheSizeMb by mutableStateOf(0L)
         private set
 
+    val appVersion: String by lazy {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+    }
+
     var currentUser by mutableStateOf<UserInfo?>(null)
         private set
 
