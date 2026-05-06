@@ -164,14 +164,31 @@ class ExoPlayerEngine(
         getSubtitleDeliveryUrl: (String) -> String,
     ): List<MediaItem.SubtitleConfiguration> {
         return streams
-            .filter { it.type == StreamType.SUBTITLE && it.isExternal && !it.deliveryUrl.isNullOrBlank() }
+            .filter { it.type == StreamType.SUBTITLE }
             .mapNotNull { stream ->
+                // Build URL for external subtitles
+                val url = when {
+                    // External subtitle with delivery URL
+                    !stream.deliveryUrl.isNullOrBlank() -> {
+                        getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    }
+                    // External subtitle without delivery URL - skip, will be handled by embedded tracks
+                    stream.isExternal -> null
+                    // Embedded subtitle - skip, already in container
+                    else -> null
+                }
+                
+                if (url == null) return@mapNotNull null
+                
                 val mimeType = mapSubtitleCodecToMime(stream.codec)
-                val url = getSubtitleDeliveryUrl(stream.deliveryUrl!!)
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
                     .setMimeType(mimeType)
                     .setLanguage(stream.language)
                     .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
+                    .setSelectionFlags(
+                        if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0 or
+                        if (stream.isForced) C.SELECTION_FLAG_FORCED else 0
+                    )
                     .build()
             }
     }

@@ -30,6 +30,7 @@ class LibVlcPlayerEngine(
     @Volatile private var pendingPlay = false
     @Volatile private var _audioDelayMs = 0L
     @Volatile private var _subtitleDelayMs = 0L
+    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
 
@@ -96,12 +97,32 @@ class LibVlcPlayerEngine(
 
         mp.media = media
         media.release()
+        
+        // Add external subtitles after media is set
+        // LibVLC addSlave: type (0=subtitle, 1=audio), priority, uri
+        pendingSubtitles?.forEach { (subUrl, _) ->
+            try {
+                mp.addSlave(0, subUrl, false) // 0 = subtitle type
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to add subtitle: $subUrl", e)
+            }
+        }
 
         pendingPlay = true
+        pendingSubtitles = null
+    }
+    
+    /**
+     * Configure external subtitles to be loaded with the media.
+     * Must be called before initialize().
+     */
+    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
+        pendingSubtitles = subtitles
     }
 
     override fun release() {
         pendingPlay = false
+        pendingSubtitles = null
         val mp = mediaPlayer ?: return
         mediaPlayer = null
         mp.setEventListener(null)

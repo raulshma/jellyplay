@@ -26,6 +26,7 @@ class MpvPlayerEngine(
     @Volatile private var _audioDelayMs = 0L
     @Volatile private var _subtitleDelayMs = 0L
     private var pendingUrl: String? = null
+    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
 
@@ -51,6 +52,17 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: MPVNode) {}
             override fun event(eventId: Int, node: MPVNode) {
                 if (eventId == MPV.mpvEvent.MPV_EVENT_FILE_LOADED) {
+                    // Add external subtitles after file is loaded
+                    pendingSubtitles?.forEach { (subUrl, _) ->
+                        try {
+                            Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
+                            mpv.command("sub-add", subUrl)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
+                        }
+                    }
+                    pendingSubtitles = null
+                    
                     mainHandler.post { onTracksChanged?.invoke() }
                 }
             }
@@ -88,15 +100,26 @@ class MpvPlayerEngine(
                     view.mpv.setOptionString("start", "+${startPositionMs / 1000.0}")
                 }
                 view.playFile(url)
+                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
                 pendingUrl = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
         }
     }
+    
+    /**
+     * Configure external subtitles to be loaded with the media.
+     * Must be called before initialize() or after createPlayerView().
+     */
+    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
+        pendingSubtitles = subtitles
+        Log.d(TAG, "Configured ${subtitles.size} external subtitles")
+    }
 
     override fun release() {
         pendingUrl = null
+        pendingSubtitles = null
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
@@ -253,6 +276,7 @@ class MpvPlayerEngine(
             pendingUrl = null
             try {
                 view.playFile(url)
+                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
