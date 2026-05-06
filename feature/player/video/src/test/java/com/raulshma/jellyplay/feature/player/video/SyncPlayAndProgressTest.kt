@@ -287,6 +287,7 @@ class PlayerEngineDefaultBehaviorTest {
         override fun seekBack(amountMs: Long) {}
         override fun setPlaybackSpeed(speed: Float) {}
         override fun setAudioDelay(ms: Long) {}
+        override fun setSubtitleDelay(ms: Long) {}
         override fun setDecoderMode(mode: com.raulshma.jellyplay.core.model.DecoderMode) {}
         override fun setAudioPassthrough(enabled: Boolean) {}
         override fun setAspectRatio(mode: Int, ratio: Float?) {}

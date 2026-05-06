@@ -304,7 +304,7 @@ fun HomeScreen(
                                     item { Spacer(Modifier.height(100.dp)) }
                                 }
 
-                                items(count = sections.size, key = { sections[it].title }) { index ->
+                                items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
                                     val sectionModifier = Modifier
@@ -578,7 +578,7 @@ private fun HeroHeader(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(item.genres) { genre ->
+                    items(item.genres, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
@@ -679,7 +679,7 @@ private fun ContinueWatchingRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }) { item ->
+            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 WideMediaCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -831,7 +831,7 @@ private fun HomeMediaRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }) { item ->
+            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),

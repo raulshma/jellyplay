@@ -76,7 +76,7 @@ fun GenresScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(genres, key = { it.id }) { genre ->
+                        items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
                             GenreChip(
                                 name = genre.name,
                                 onClick = { onItemClick(genre.id) },

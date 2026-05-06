@@ -116,7 +116,7 @@ fun ServerManagementScreen(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
-                items(servers, key = { it.id }) { server ->
+                items(servers, key = { it.id }, contentType = { "server" }) { server ->
                     ServerCard(
                         server = server,
                         isActive = server.id == activeServerId,

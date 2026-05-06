@@ -101,7 +101,7 @@ fun CollectionDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(items, key = { it.id }) { item ->
+                        items(items, key = { it.id }, contentType = { "mediaItem" }) { item ->
                             PosterCard(
                                 item = item,
                                 imageUrl = viewModel.getImageUrl(item.id),

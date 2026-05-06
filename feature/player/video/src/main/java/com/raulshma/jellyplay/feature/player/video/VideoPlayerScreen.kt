@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -10,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,11 +20,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -32,6 +35,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -46,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -55,6 +60,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
+import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
@@ -118,10 +125,7 @@ fun VideoPlayerScreen(
     val streamUrl = uiState.streamUrl
 
     LaunchedEffect(preferredPlayer, streamUrl) {
-        if (preferredPlayer == com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL
-            && streamUrl != null
-            && !externalLaunched
-        ) {
+        if (preferredPlayer == PlayerType.EXTERNAL && streamUrl != null && !externalLaunched) {
             externalLaunched = true
             val launched = ExternalPlayerLauncher.tryLaunch(
                 context = context,
@@ -169,18 +173,13 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(400)
+        delay(400)
         activity?.requestedOrientation = when (uiState.defaultOrientation) {
-            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR_LANDSCAPE ->
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR_PORTRAIT ->
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            com.raulshma.jellyplay.core.model.OrientationMode.SENSOR ->
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            com.raulshma.jellyplay.core.model.OrientationMode.LOCKED_LANDSCAPE ->
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            com.raulshma.jellyplay.core.model.OrientationMode.LOCKED_PORTRAIT ->
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
     }
 
@@ -221,9 +220,15 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
-    val isInIntro = uiState.isInIntro
-    val isInCredits = uiState.isInCredits
-    val shouldShowUpNext = uiState.shouldShowUpNext
+    val isInIntro by remember {
+        derivedStateOf { uiState.isInIntro }
+    }
+    val isInCredits by remember {
+        derivedStateOf { uiState.isInCredits }
+    }
+    val shouldShowUpNext by remember {
+        derivedStateOf { uiState.shouldShowUpNext }
+    }
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
@@ -249,14 +254,15 @@ fun VideoPlayerScreen(
     val nextEpisode = uiState.nextEpisode
     val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
 
-    val doPlay: () -> Unit = { engine?.play() }
-    val doPause: () -> Unit = { engine?.pause() }
-    val doTogglePlayPause: () -> Unit = {
-        if (isPlaying) doPause() else doPlay()
+    val doPlay: () -> Unit = remember(engine) { { engine?.play() } }
+    val doPause: () -> Unit = remember(engine) { { engine?.pause() } }
+    val doSeekTo: (Long) -> Unit = remember(engine) { { ms -> engine?.seekTo(ms) } }
+    val doSeekBack: () -> Unit = remember(engine) { { engine?.seekBack() } }
+    val doSeekForward: () -> Unit = remember(engine) { { engine?.seekForward() } }
+    val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
+        derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }
-    val doSeekTo: (Long) -> Unit = { ms -> engine?.seekTo(ms) }
-    val doSeekBack: () -> Unit = { engine?.seekBack() }
-    val doSeekForward: () -> Unit = { engine?.seekForward() }
+    val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
     Box(
         modifier = Modifier
@@ -321,65 +327,58 @@ fun VideoPlayerScreen(
             volumeValue = volumeOverlay,
             gesturesEnabled = uiState.gesturesEnabled,
             swipeSeekMaxMs = uiState.swipeSeekMaxMs,
-            onSeekGesture = { delta ->
-                engine?.let { eng ->
-                    val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
-                    eng.seekTo(newPos)
+            onSeekGesture = remember(engine) {
+                { delta ->
+                    engine?.let { eng ->
+                        val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
+                        eng.seekTo(newPos)
+                    }
                 }
             },
-            onBrightnessGesture = { delta ->
-                activity?.let { act ->
-                    val window = act.window
-                    val layout = window.attributes
-                    val current = layout.screenBrightness
-                    val newBrightness = (current + delta).coerceIn(0f, 1f)
-                    layout.screenBrightness = newBrightness
-                    window.attributes = layout
-                    brightnessOverlay = newBrightness
+            onBrightnessGesture = remember(activity) {
+                { delta ->
+                    activity?.let { act ->
+                        val window = act.window
+                        val layout = window.attributes
+                        val current = layout.screenBrightness
+                        val newBrightness = (current + delta).coerceIn(0f, 1f)
+                        layout.screenBrightness = newBrightness
+                        window.attributes = layout
+                        brightnessOverlay = newBrightness
+                    }
                 }
             },
-            onVolumeGesture = { delta ->
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                audioManager?.let { am ->
-                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                    val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                    val step = 1
-                    val newVol = if (delta > 0) (current + step).coerceAtMost(max)
-                    else (current - step).coerceAtLeast(0)
-                    am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                    volumeOverlay = newVol.toFloat() / max.toFloat()
+            onVolumeGesture = remember(context) {
+                { delta ->
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                    audioManager?.let { am ->
+                        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val step = 1
+                        val newVol = if (delta > 0) (current + step).coerceAtMost(max)
+                        else (current - step).coerceAtLeast(0)
+                        am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                        volumeOverlay = newVol.toFloat() / max.toFloat()
+                    }
                 }
             },
-            onClearOverlays = {
-                if (brightnessOverlay in 0f..1f) {
-                    viewModel.saveBrightness(brightnessOverlay)
+            onClearOverlays = remember(viewModel) {
+                {
+                    if (brightnessOverlay in 0f..1f) {
+                        viewModel.saveBrightness(brightnessOverlay)
+                    }
+                    seekDirection = 0
+                    seekOffsetMs = 0L
+                    brightnessOverlay = -1f
+                    volumeOverlay = -1f
                 }
-                seekDirection = 0
-                seekOffsetMs = 0L
-                brightnessOverlay = -1f
-                volumeOverlay = -1f
             },
         )
 
-        secondarySubtitleText?.let { text ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(top = 60.dp, start = 16.dp, end = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = text,
-                    color = Color.Yellow,
-                    fontSize = (uiState.subtitleStyle.fontSize - 4).sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            }
-        }
+        SecondarySubtitleOverlay(
+            text = secondarySubtitleText,
+            fontSize = uiState.subtitleStyle.fontSize,
+        )
 
         IntroSkipOverlay(
             isVisible = isInIntro,
@@ -423,37 +422,10 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp, end = 16.dp),
         )
 
-        var showAutoAspectBadge by remember { mutableStateOf(false) }
-        LaunchedEffect(detectedAspectRatio, aspectRatio) {
-            if (detectedAspectRatio != null && detectedAspectRatio != AspectRatio.FIT && aspectRatio == AspectRatio.AUTO) {
-                showAutoAspectBadge = true
-                delay(5000L)
-                showAutoAspectBadge = false
-            } else {
-                showAutoAspectBadge = false
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showAutoAspectBadge,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 60.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.15f),
-            ) {
-                Text(
-                    text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
+        AutoAspectRatioBadge(
+            detectedAspectRatio = detectedAspectRatio,
+            aspectRatio = aspectRatio,
+        )
 
         if (uiState.isInSyncPlaySession) {
             SyncPlayOverlay(
@@ -506,10 +478,8 @@ fun VideoPlayerScreen(
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
             onSeekForward = { doSeekForward() },
-            onSeek = { fraction ->
-                if (duration > 0) {
-                    doSeekTo((fraction * duration).toLong())
-                }
+            onSeek = remember(duration, doSeekTo) {
+                { fraction -> if (duration > 0) doSeekTo((fraction * duration).toLong()) }
             },
             onSeekStart = { isSeeking = true },
             onSeekEnd = { isSeeking = false },
@@ -593,12 +563,98 @@ fun VideoPlayerScreen(
         }
     }
 
-    val dismissSheet: () -> Unit = { currentSheet = PlayerSheet.None }
+    PlayerSheetRouter(
+        currentSheet = currentSheet,
+        onSheetChange = { sheet -> currentSheet = sheet },
+        dismissSheet = dismissSheet,
+        uiState = uiState,
+        currentPosition = currentPosition,
+        doSeekTo = doSeekTo,
+        viewModel = viewModel,
+    )
+}
+
+@Composable
+private fun BoxScope.SecondarySubtitleOverlay(
+    text: String?,
+    fontSize: Int,
+) {
+    text?.let {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 60.dp, start = 16.dp, end = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = it,
+                color = Color.Yellow,
+                fontSize = (fontSize - 4).sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.AutoAspectRatioBadge(
+    detectedAspectRatio: AspectRatio?,
+    aspectRatio: AspectRatio,
+) {
+    var showBadge by remember { mutableStateOf(false) }
+    LaunchedEffect(detectedAspectRatio, aspectRatio) {
+        if (detectedAspectRatio != null && detectedAspectRatio != AspectRatio.FIT && aspectRatio == AspectRatio.AUTO) {
+            showBadge = true
+            delay(5000L)
+            showBadge = false
+        } else {
+            showBadge = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = showBadge,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 60.dp),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White.copy(alpha = 0.15f),
+        ) {
+            Text(
+                text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlayerSheetRouter(
+    currentSheet: PlayerSheet,
+    onSheetChange: (PlayerSheet) -> Unit,
+    dismissSheet: () -> Unit,
+    uiState: VideoPlayerUiState,
+    currentPosition: Long,
+    doSeekTo: (Long) -> Unit,
+    viewModel: VideoPlayerViewModel,
+) {
+    val context = LocalContext.current
 
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
             SpeedPickerSheet(
-                currentSpeed = playbackSpeed,
+                currentSpeed = uiState.playbackSpeed,
                 onSelect = { viewModel.setPlaybackSpeed(it) },
                 onDismiss = dismissSheet,
             )
@@ -625,7 +681,7 @@ fun VideoPlayerScreen(
                 currentPositionMs = currentPosition,
                 onSelect = { positionTicks ->
                     doSeekTo(positionTicks / 10_000)
-                    currentSheet = PlayerSheet.None
+                    onSheetChange(PlayerSheet.None)
                 },
                 onDismiss = dismissSheet,
             )
@@ -636,9 +692,9 @@ fun VideoPlayerScreen(
                 sheetState = rememberModalBottomSheetState(),
             ) {
                 PlaybackInfoOverlay(
-                    mediaSource = currentMediaSource,
-                    mediaStreams = mediaStreams,
-                    playMethod = playMethod,
+                    mediaSource = uiState.currentMediaSource,
+                    mediaStreams = uiState.mediaStreams,
+                    playMethod = uiState.playMethod,
                     hdrType = uiState.hdrType,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -649,15 +705,15 @@ fun VideoPlayerScreen(
         }
         is PlayerSheet.AspectRatio -> {
             AspectRatioSheet(
-                currentRatio = aspectRatio,
-                detectedRatio = detectedAspectRatio,
+                currentRatio = uiState.aspectRatio,
+                detectedRatio = uiState.detectedAspectRatio,
                 onSelect = { viewModel.setAspectRatio(it) },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.SubtitleStyle -> {
             SubtitleStyleSheet(
-                currentStyle = subtitleStyle,
+                currentStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
                 onDismiss = dismissSheet,
             )
@@ -668,7 +724,7 @@ fun VideoPlayerScreen(
                 currentSecondary = uiState.secondarySubtitleTrack,
                 onSelect = { stream ->
                     viewModel.selectSecondarySubtitleStream(stream)
-                    currentSheet = PlayerSheet.None
+                    onSheetChange(PlayerSheet.None)
                 },
                 onDismiss = dismissSheet,
             )
@@ -699,79 +755,94 @@ fun VideoPlayerScreen(
                 isLoading = uiState.isLoadingRemoteSubtitles,
                 onDownload = {
                     viewModel.downloadSubtitle(it)
-                    currentSheet = PlayerSheet.None
+                    onSheetChange(PlayerSheet.None)
                 },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.OcrResult -> {
-            val ocrText = uiState.ocrText
-            ModalBottomSheet(
-                onDismissRequest = {
-                    currentSheet = PlayerSheet.None
+            OcrResultSheet(
+                ocrText = uiState.ocrText,
+                isOcrRunning = uiState.isOcrRunning,
+                onDismiss = {
+                    onSheetChange(PlayerSheet.None)
                     viewModel.clearOcrText()
                 },
-                sheetState = rememberModalBottomSheetState(),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 32.dp),
+                context = context,
+            )
+        }
+        PlayerSheet.None -> { }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OcrResultSheet(
+    ocrText: String?,
+    isOcrRunning: Boolean,
+    onDismiss: () -> Unit,
+    context: Context,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "OCR Subtitle Text",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(12.dp))
+            if (isOcrRunning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+            } else if (ocrText != null) {
+                Text(
+                    ocrText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Text(
+                    "No subtitle text detected in current frame.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (ocrText != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        "OCR Subtitle Text",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    if (uiState.isOcrRunning) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                        )
-                    } else if (ocrText != null) {
-                        Text(
-                            ocrText,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        Text(
-                            "No subtitle text detected in current frame.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (ocrText != null) {
-                        Spacer(Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            androidx.compose.material3.FilledTonalButton(
-                                onClick = {
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
-                                    )
-                                },
-                                modifier = Modifier.weight(1f),
-                            ) { Text("Copy") }
-                            androidx.compose.material3.FilledTonalButton(
-                                onClick = {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(android.content.Intent.EXTRA_TEXT, ocrText)
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(intent, "Share"))
-                                },
-                                modifier = Modifier.weight(1f),
-                            ) { Text("Share") }
-                        }
-                    }
+                    FilledTonalButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(
+                                android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Copy") }
+                    FilledTonalButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, ocrText)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share"))
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Share") }
                 }
             }
         }
-        PlayerSheet.None -> { }
     }
 }

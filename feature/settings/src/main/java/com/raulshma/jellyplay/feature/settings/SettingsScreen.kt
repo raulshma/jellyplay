@@ -1042,7 +1042,7 @@ fun SettingsScreen(
                 Column {
                     val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
                     LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                        items(SubtitleColor.entries.size) { index ->
+                        items(SubtitleColor.entries.size, contentType = { "subtitleColor" }) { index ->
                             val color = SubtitleColor.entries[index]
                             val isSelected = color == preferences.subtitleStyle.backgroundColor
                             Row(
@@ -1188,7 +1188,7 @@ fun SettingsScreen(
             text = {
                 val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
                 LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size) { i ->
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { "equalizerBand" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
@@ -1468,7 +1468,7 @@ private fun RadioPickerDialog(
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(options.size) { index ->
+                items(options.size, contentType = { "option" }) { index ->
                     val option = options[index]
                     Row(
                         modifier = Modifier
@@ -1512,7 +1512,7 @@ private fun LanguagePickerDialog(
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(languages) { (code, name) ->
+                items(languages, contentType = { "language" }) { (code, name) ->
                     val isSelected = code == currentLanguage
                     Row(
                         modifier = Modifier

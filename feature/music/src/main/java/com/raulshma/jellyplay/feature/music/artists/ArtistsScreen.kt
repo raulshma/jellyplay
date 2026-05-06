@@ -78,6 +78,7 @@ fun ArtistsScreen(
                             items(
                                 count = artists.itemCount,
                                 key = artists.itemKey { it.id },
+                                contentType = { "mediaItem" },
                             ) { index ->
                                 val artist = artists[index]
                                 if (artist != null) {

@@ -24,6 +24,8 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))
 
+    implementation(libs.room.ktx)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.kotlinx.serialization.json)

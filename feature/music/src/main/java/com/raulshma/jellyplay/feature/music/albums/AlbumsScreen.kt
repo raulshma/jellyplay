@@ -78,6 +78,7 @@ fun AlbumsScreen(
                             items(
                                 count = albums.itemCount,
                                 key = albums.itemKey { it.id },
+                                contentType = { "mediaItem" },
                             ) { index ->
                                 val album = albums[index]
                                 if (album != null) {

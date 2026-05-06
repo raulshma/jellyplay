@@ -122,7 +122,7 @@ fun UserManagementScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(serverUsers, key = { it.id }) { user ->
+                    items(serverUsers, key = { it.id }, contentType = { "user" }) { user ->
                         val isCurrentUser = currentUser?.id == user.id
                         UserManagementCard(
                             user = user,

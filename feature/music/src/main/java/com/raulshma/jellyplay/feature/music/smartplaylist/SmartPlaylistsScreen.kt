@@ -88,7 +88,7 @@ fun SmartPlaylistsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(playlists.size, key = { playlists[it].id }) { index ->
+            items(playlists.size, key = { playlists[it].id }, contentType = { "smartPlaylist" }) { index ->
                 val playlist = playlists[index]
                 PlaylistCard(
                     playlist = playlist,

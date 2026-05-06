@@ -210,6 +210,7 @@ fun EpgScreen(
                         items(
                             items = viewModel.programs,
                             key = { "${it.channelId}_${it.id}" },
+                            contentType = { "program" },
                         ) { program ->
                             ProgramCard(
                                 program = program,
