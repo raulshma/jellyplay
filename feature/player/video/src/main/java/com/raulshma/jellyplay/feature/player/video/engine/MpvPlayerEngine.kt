@@ -181,8 +181,14 @@ class MpvPlayerEngine(
     }
 
     override val isPlaying: Boolean get() = _isPlaying
+    override val audioSessionId: Int get() = 0
     override val supportsAudioDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
+    override val supportsSubtitleStyle: Boolean get() = false
+    override val supportsDialogueBoost: Boolean get() = false
+    override val supportsNightMode: Boolean get() = false
+    override val supportsOcr: Boolean get() = false
+    override val supportsCues: Boolean get() = false
 
     override val currentPositionMs: Long
         get() = try {
