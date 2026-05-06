@@ -385,13 +385,12 @@ fun VideoPlayerScreen(
             visible = uiState.trickplayOnSeekGesture && isGestureSeeking,
             enter = fadeIn(),
             exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center),
         ) {
             val trickplayImageUrl = viewModel.getTrickplayImageUrl(gestureSeekPositionMs)
             TrickplayOverlay(
                 imageUrl = trickplayImageUrl,
                 positionMs = gestureSeekPositionMs,
-                modifier = Modifier
-                    .align(Alignment.Center),
             )
         }
 
@@ -535,14 +534,12 @@ fun VideoPlayerScreen(
             visible = uiState.trickplayEnabled && showControls && isSeeking,
             enter = fadeIn(),
             exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
             val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
             TrickplayOverlay(
                 imageUrl = trickplayImageUrl,
                 positionMs = seekPositionMs,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp),
             )
         }
     }

@@ -63,9 +63,14 @@ data class VideoPlayerUiState(
     val playerError: String? = null,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
+    val skipIntroEnabled: Boolean = true,
+    val skipOutroEnabled: Boolean = true,
+    val autoSkipIntro: Boolean = false,
+    val autoSkipOutro: Boolean = false,
 ) {
     val isInIntro: Boolean
         get() {
+            if (!skipIntroEnabled) return false
             val ts = introTimestamps ?: return false
             if (!ts.hasIntro) return false
             val posTicks = currentPosition * 10_000
@@ -76,6 +81,7 @@ data class VideoPlayerUiState(
 
     val isInCredits: Boolean
         get() {
+            if (!skipOutroEnabled) return false
             val ts = creditTimestamps ?: return false
             if (!ts.hasCredits) return false
             val posTicks = currentPosition * 10_000
