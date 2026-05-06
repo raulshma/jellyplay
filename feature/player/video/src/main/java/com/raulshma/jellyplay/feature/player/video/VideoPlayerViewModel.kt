@@ -140,6 +140,8 @@ class VideoPlayerViewModel @Inject constructor(
                 rememberBrightness = prefs.videoRememberBrightness,
                 brightnessLevel = prefs.videoBrightnessLevel,
                 aspectRatio = defaultAspectRatio,
+                trickplayEnabled = prefs.trickplayEnabled,
+                trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 

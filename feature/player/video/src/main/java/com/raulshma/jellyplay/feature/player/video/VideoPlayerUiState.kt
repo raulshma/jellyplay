@@ -61,6 +61,8 @@ data class VideoPlayerUiState(
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     val playerError: String? = null,
+    val trickplayEnabled: Boolean = true,
+    val trickplayOnSeekGesture: Boolean = true,
 ) {
     val isInIntro: Boolean
         get() {

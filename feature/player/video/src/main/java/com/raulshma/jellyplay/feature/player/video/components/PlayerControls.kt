@@ -39,10 +39,10 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -188,8 +188,8 @@ internal fun PlayerControls(
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
-                        Icons.Default.SkipPrevious, "Rewind",
-                        modifier = Modifier.size(24.dp)
+                        Icons.Default.FastRewind, "Rewind",
+                        modifier = Modifier.size(28.dp)
                     )
                 }
                 Spacer(Modifier.width(24.dp))
@@ -217,8 +217,8 @@ internal fun PlayerControls(
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
-                        Icons.Default.SkipNext, "Forward",
-                        modifier = Modifier.size(24.dp)
+                        Icons.Default.FastForward, "Forward",
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }

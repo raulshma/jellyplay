@@ -283,4 +283,12 @@ class SettingsViewModel @Inject constructor(
     fun setEqualizerSettings(settings: EqualizerSettings) {
         viewModelScope.launch { preferencesStore.setEqualizerSettings(settings) }
     }
+
+    fun setTrickplayEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setTrickplayEnabled(enabled) }
+    }
+
+    fun setTrickplayOnSeekGesture(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
+    }
 }

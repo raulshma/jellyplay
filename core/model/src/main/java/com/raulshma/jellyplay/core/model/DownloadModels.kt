@@ -72,6 +72,8 @@ data class UserPreferences(
     val audioNightModeGain: Int = 1200,
     val audioSkipPreviousThresholdMs: Long = 3_000L,
     val audioAutoplayNext: Boolean = true,
+    val trickplayEnabled: Boolean = true,
+    val trickplayOnSeekGesture: Boolean = true,
 )
 
 @Immutable
