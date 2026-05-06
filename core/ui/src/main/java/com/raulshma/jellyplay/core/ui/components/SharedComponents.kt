@@ -192,7 +192,7 @@ fun MediaRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }) { item ->
+            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),

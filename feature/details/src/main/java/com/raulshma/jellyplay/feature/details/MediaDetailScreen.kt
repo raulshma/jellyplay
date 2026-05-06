@@ -63,6 +63,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -193,8 +194,14 @@ private fun DetailContent(
     val density = LocalDensity.current
     val backdropHeight = 450.dp
     val collapsedHeight = with(density) { backdropHeight.toPx() }
-    val scrollOffset = scrollState.value.toFloat()
-    val scrollFraction = (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
+    val scrollOffset by remember {
+        derivedStateOf { scrollState.value.toFloat() }
+    }
+    val scrollFraction by remember {
+        derivedStateOf {
+            (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
+        }
+    }
 
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
@@ -778,7 +785,7 @@ private fun DetailContentBody(
                     contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(genres) { genre ->
+                    items(genres, key = { it }, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
@@ -849,7 +856,7 @@ private fun DetailContentBody(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            items(detail.people, key = { "person_${it.id}" }) { person ->
+                            items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
                                 PersonItem(
                                     person = person,
                                     imageUrl = getImageUrl(person.id),
@@ -877,7 +884,7 @@ private fun DetailContentBody(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
+                        items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
                             PosterCard(
                                 item = related,
                                 imageUrl = getImageUrl(related.id),
@@ -923,8 +930,8 @@ private fun SeasonsSection(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(seasons.indices.toList()) { index ->
-                val season = seasons[index]
+            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
+                val index = seasons.indexOf(season)
                 val isSelected = index == selectedSeasonIndex
                 Surface(
                     modifier = Modifier
@@ -957,7 +964,7 @@ private fun SeasonsSection(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     userScrollEnabled = false,
                 ) {
-                    items(3) {
+                    items(3, contentType = { "shimmer" }) {
                         EpisodeCardSkeleton()
                     }
                 }
@@ -967,7 +974,7 @@ private fun SeasonsSection(
                     contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    items(seasonEpisodes, key = { "episode_${it.id}" }) { episode ->
+                    items(seasonEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
                         EpisodeCard(
                             episode = episode,
                             getImageUrl = getImageUrl,

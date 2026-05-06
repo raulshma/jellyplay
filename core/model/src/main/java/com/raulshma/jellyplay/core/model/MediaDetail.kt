@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class MediaDetail(
     val item: MediaItem,
@@ -17,6 +19,7 @@ data class MediaDetail(
     val tagItems: List<TagInfo> = emptyList(),
 )
 
+@Immutable
 @Serializable
 data class ChapterInfo(
     val name: String,
@@ -24,6 +27,7 @@ data class ChapterInfo(
     val imageDateModified: String? = null,
 )
 
+@Immutable
 @Serializable
 data class PersonInfo(
     val id: String,
@@ -34,6 +38,7 @@ data class PersonInfo(
     val primaryBlurHash: String? = null,
 )
 
+@Immutable
 @Serializable
 data class MediaSource(
     val id: String,
@@ -51,6 +56,7 @@ data class MediaSource(
     val mediaStreams: List<MediaStream> = emptyList(),
 )
 
+@Immutable
 @Serializable
 data class MediaStream(
     val index: Int,
@@ -77,6 +83,7 @@ data class MediaStream(
     val keyFrames: List<Long>? = null,
 )
 
+@Immutable
 @Serializable
 enum class StreamType {
     VIDEO,
@@ -85,18 +92,21 @@ enum class StreamType {
     EMBEDDED_IMAGE,
 }
 
+@Immutable
 @Serializable
 data class ExternalUrl(
     val name: String,
     val url: String,
 )
 
+@Immutable
 @Serializable
 data class StudioInfo(
     val name: String,
     val id: String,
 )
 
+@Immutable
 @Serializable
 data class TagInfo(
     val name: String,

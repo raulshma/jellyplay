@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 enum class MediaType {
     MOVIE,
@@ -17,12 +19,14 @@ enum class MediaType {
     UNKNOWN,
 }
 
+@Immutable
 @Serializable
 data class ImageBlurHashes(
     val primary: String? = null,
     val backdrop: String? = null,
 )
 
+@Immutable
 @Serializable
 data class MediaItem(
     val id: String,
@@ -61,6 +65,7 @@ data class MediaItem(
     val blurHashes: ImageBlurHashes = ImageBlurHashes(),
 )
 
+@Immutable
 @Serializable
 data class NameGuidPair(
     val name: String,

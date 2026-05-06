@@ -319,6 +319,76 @@ fun SettingsScreen(
 
             item {
                 SettingToggleItem(
+                    icon = Icons.Default.OndemandVideo,
+                    title = "Trickplay Preview",
+                    subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
+                    checked = preferences.trickplayEnabled,
+                    onCheckedChange = { viewModel.setTrickplayEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.TouchApp,
+                    title = "Trickplay on Gestures",
+                    subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
+                    checked = preferences.trickplayOnSeekGesture,
+                    onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Skip Intro & Outro")
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.FastForward,
+                    title = "Skip Intro Button",
+                    subtitle = if (preferences.skipIntroEnabled) "Show skip intro button when available" else "Never show skip intro button",
+                    checked = preferences.skipIntroEnabled,
+                    onCheckedChange = { viewModel.setSkipIntroEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.FastForward,
+                    title = "Skip Outro Button",
+                    subtitle = if (preferences.skipOutroEnabled) "Show skip credits button when available" else "Never show skip credits button",
+                    checked = preferences.skipOutroEnabled,
+                    onCheckedChange = { viewModel.setSkipOutroEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.SkipNext,
+                    title = "Auto-Skip Intro",
+                    subtitle = if (preferences.autoSkipIntro) "Automatically skip intros" else "Manual intro skip only",
+                    checked = preferences.autoSkipIntro,
+                    onCheckedChange = { viewModel.setAutoSkipIntro(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.SkipNext,
+                    title = "Auto-Skip Outro",
+                    subtitle = if (preferences.autoSkipOutro) "Automatically skip credits" else "Manual credits skip only",
+                    checked = preferences.autoSkipOutro,
+                    onCheckedChange = { viewModel.setAutoSkipOutro(it) },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "Advanced Video")
+            }
+
+            item {
+                SettingToggleItem(
                     icon = Icons.Default.RecordVoiceOver,
                     title = "Dialogue Boost",
                     subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
@@ -683,7 +753,7 @@ fun SettingsScreen(
                 SettingInfoItem(
                     icon = Icons.Default.OndemandVideo,
                     title = "Version",
-                    subtitle = "JellyPlay v1.0.0",
+                    subtitle = "JellyPlay v${viewModel.appVersion}",
                 )
             }
         }
@@ -1042,7 +1112,7 @@ fun SettingsScreen(
                 Column {
                     val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
                     LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                        items(SubtitleColor.entries.size) { index ->
+                        items(SubtitleColor.entries.size, contentType = { "subtitleColor" }) { index ->
                             val color = SubtitleColor.entries[index]
                             val isSelected = color == preferences.subtitleStyle.backgroundColor
                             Row(
@@ -1188,7 +1258,7 @@ fun SettingsScreen(
             text = {
                 val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
                 LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size) { i ->
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { "equalizerBand" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
@@ -1468,7 +1538,7 @@ private fun RadioPickerDialog(
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(options.size) { index ->
+                items(options.size, contentType = { "option" }) { index ->
                     val option = options[index]
                     Row(
                         modifier = Modifier
@@ -1512,7 +1582,7 @@ private fun LanguagePickerDialog(
         text = {
             val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
             LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(languages) { (code, name) ->
+                items(languages, contentType = { "language" }) { (code, name) ->
                     val isSelected = code == currentLanguage
                     Row(
                         modifier = Modifier

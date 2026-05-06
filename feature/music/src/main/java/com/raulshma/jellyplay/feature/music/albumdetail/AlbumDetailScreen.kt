@@ -212,7 +212,7 @@ private fun AlbumDetailContent(
                 }
             }
 
-            itemsIndexed(detail.relatedItems) { index, track ->
+            itemsIndexed(detail.relatedItems, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
                 TrackItem(
                     track = track,
                     index = index + 1,

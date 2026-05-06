@@ -140,7 +140,7 @@ fun KidsHomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(vertical = 8.dp),
                             ) {
-                                items(genres) { genre ->
+                                items(genres, key = { it }, contentType = { "genre" }) { genre ->
                                     FilterChip(
                                         selected = genre == selectedGenre,
                                         onClick = {
@@ -176,7 +176,7 @@ fun KidsHomeScreen(
                         }
                     }
 
-                    items(filteredSections, key = { it.title }) { section ->
+                    items(filteredSections, key = { it.title }, contentType = { "kidsSection" }) { section ->
                         KidsSection(
                             title = section.title,
                             items = section.items,
@@ -268,7 +268,7 @@ private fun KidsSection(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(items, key = { it.id }) { item ->
+            items(items, key = { it.id }, contentType = { "mediaItem" }) { item ->
                 KidsPosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),

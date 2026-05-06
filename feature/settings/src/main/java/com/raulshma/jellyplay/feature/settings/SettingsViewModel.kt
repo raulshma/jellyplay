@@ -45,6 +45,10 @@ class SettingsViewModel @Inject constructor(
     var cacheSizeMb by mutableStateOf(0L)
         private set
 
+    val appVersion: String by lazy {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+    }
+
     var currentUser by mutableStateOf<UserInfo?>(null)
         private set
 
@@ -278,5 +282,29 @@ class SettingsViewModel @Inject constructor(
 
     fun setEqualizerSettings(settings: EqualizerSettings) {
         viewModelScope.launch { preferencesStore.setEqualizerSettings(settings) }
+    }
+
+    fun setTrickplayEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setTrickplayEnabled(enabled) }
+    }
+
+    fun setTrickplayOnSeekGesture(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
+    }
+
+    fun setSkipIntroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSkipIntroEnabled(enabled) }
+    }
+
+    fun setSkipOutroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSkipOutroEnabled(enabled) }
+    }
+
+    fun setAutoSkipIntro(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAutoSkipIntro(enabled) }
+    }
+
+    fun setAutoSkipOutro(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAutoSkipOutro(enabled) }
     }
 }

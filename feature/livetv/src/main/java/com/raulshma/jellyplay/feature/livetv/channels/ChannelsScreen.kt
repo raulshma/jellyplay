@@ -213,6 +213,7 @@ fun ChannelsScreen(
                         items(
                             items = viewModel.channels,
                             key = { it.id },
+                            contentType = { "channel" },
                         ) { channel ->
                             ChannelCard(
                                 channel = channel,

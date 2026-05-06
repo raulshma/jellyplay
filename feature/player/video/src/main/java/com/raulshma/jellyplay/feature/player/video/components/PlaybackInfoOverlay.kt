@@ -22,12 +22,25 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 
+import com.raulshma.jellyplay.feature.player.video.TrackOption
+
 @Composable
 fun PlaybackInfoOverlay(
     mediaSource: MediaSource?,
     mediaStreams: List<MediaStream>,
     playMethod: String,
     hdrType: String? = null,
+    playerType: String = "Unknown",
+    decoderMode: String = "Unknown",
+    aspectRatio: String = "Auto",
+    nightModeEnabled: Boolean = false,
+    dialogueBoostEnabled: Boolean = false,
+    audioPassthrough: Boolean = false,
+    audioTracks: List<TrackOption> = emptyList(),
+    subtitleTracks: List<TrackOption> = emptyList(),
+    playbackSpeed: Float = 1f,
+    audioDelayMs: Long = 0L,
+    playerError: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -66,9 +79,20 @@ fun PlaybackInfoOverlay(
                         } else "Unknown"
                     )
                     InfoRow("Bitrate", videoStream.bitRate?.let { "${it / 1000} kbps" } ?: "Unknown")
-                    if (hdrType != null) {
-                        InfoRow("HDR", hdrType)
+                    
+                    val hdrTypeDetails = listOfNotNull(
+                        hdrType,
+                        videoStream.videoRangeType,
+                        videoStream.videoDoViTitle
+                    ).distinct().joinToString(" - ")
+                    
+                    val videoRange = videoStream.videoRange
+                    if (hdrTypeDetails.isNotEmpty()) {
+                        InfoRow("HDR Format", hdrTypeDetails)
+                    } else if (videoRange != null) {
+                        InfoRow("Range", videoRange)
                     }
+
                     videoStream.realFrameRate?.let { fps ->
                         InfoRow("Frame Rate", "${"%.2f".format(fps)} fps")
                     }
@@ -82,7 +106,19 @@ fun PlaybackInfoOverlay(
                         val label = stream.language?.let { lang ->
                             stream.title?.let { "$lang - $it" } ?: lang
                         } ?: stream.title ?: "Track ${index + 1}"
-                        InfoRow(label, stream.codec?.uppercase() ?: "Unknown")
+                        
+                        val codecUpper = stream.codec?.uppercase() ?: "Unknown"
+                        val matchText = (stream.title ?: "") + " " + (stream.displayTitle ?: "")
+                        val isAtmos = matchText.contains("atmos", ignoreCase = true) || codecUpper.contains("ATMOS", ignoreCase = true)
+                        val isDtsX = matchText.contains("dts:x", ignoreCase = true) || matchText.contains("dtsx", ignoreCase = true) || codecUpper.contains("DTS", ignoreCase = true) && matchText.contains("x", ignoreCase = true)
+                        
+                        val audioFormat = buildString {
+                            append(codecUpper)
+                            if (isAtmos && !codecUpper.contains("ATMOS")) append(" (Atmos)")
+                            else if (isDtsX && !codecUpper.contains("X")) append(" (DTS:X)")
+                        }
+
+                        InfoRow(label, audioFormat)
                         if (stream.channels != null) {
                             InfoRow("Channels", "${stream.channels}ch")
                         }
@@ -97,6 +133,33 @@ fun PlaybackInfoOverlay(
                         val label = stream.language ?: stream.title ?: "Unknown"
                         InfoRow(label, if (stream.isDefault) "Default" else "")
                     }
+                }
+            }
+
+            InfoSection(title = "Active Controls") {
+                InfoRow("Player Engine", playerType)
+                InfoRow("Decoder Mode", decoderMode)
+                InfoRow("Speed", "${playbackSpeed}x")
+                if (audioDelayMs != 0L) InfoRow("Audio Delay", "${audioDelayMs} ms")
+                InfoRow("Aspect Ratio", aspectRatio)
+                InfoRow("Night Mode", if (nightModeEnabled) "On" else "Off")
+                InfoRow("Dialogue Boost", if (dialogueBoostEnabled) "On" else "Off")
+                InfoRow("Audio Passthrough", if (audioPassthrough) "On" else "Off")
+                
+                val activeAudio = audioTracks.find { it.isSelected }?.label ?: "Unknown"
+                InfoRow("Active Audio", activeAudio)
+                val activeSubtitle = subtitleTracks.find { it.isSelected }?.label ?: "None"
+                InfoRow("Active Subtitle", activeSubtitle)
+            }
+
+            if (playerError != null) {
+                InfoSection(title = "Player Errors") {
+                    Text(
+                        text = playerError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
         }

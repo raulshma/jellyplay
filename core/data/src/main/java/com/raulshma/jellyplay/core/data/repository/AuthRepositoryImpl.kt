@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.ServerDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
@@ -8,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import androidx.room.withTransaction
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -23,6 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
@@ -63,8 +66,10 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun removeServer(serverId: String) {
-        userDao.deleteUsersForServer(serverId)
-        serverDao.deleteServerById(serverId)
+        database.withTransaction {
+            userDao.deleteUsersForServer(serverId)
+            serverDao.deleteServerById(serverId)
+        }
     }
 
     override suspend fun switchServer(serverId: String): Result<Unit> = runCatching {
@@ -81,8 +86,10 @@ class AuthRepositoryImpl @Inject constructor(
             apiClient.setUser(user)
             preferencesStore.setActiveServer(serverId)
             preferencesStore.setActiveUser(userEntity.userId)
-            serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
-            userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+            database.withTransaction {
+                serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
+                userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+            }
         }
     }
 
@@ -131,17 +138,19 @@ class AuthRepositoryImpl @Inject constructor(
                     ),
                     lastConnected = System.currentTimeMillis(),
                 )
-                userDao.insertUser(userEntity)
-                serverDao.updateServer(
-                    ServerEntity(
-                        id = server.id,
-                        name = server.name,
-                        address = server.address,
-                        userId = user.id,
-                        accessToken = user.accessToken,
-                        lastConnected = System.currentTimeMillis(),
+                database.withTransaction {
+                    userDao.insertUser(userEntity)
+                    serverDao.updateServer(
+                        ServerEntity(
+                            id = server.id,
+                            name = server.name,
+                            address = server.address,
+                            userId = user.id,
+                            accessToken = user.accessToken,
+                            lastConnected = System.currentTimeMillis(),
+                        )
                     )
-                )
+                }
                 preferencesStore.setActiveServer(server.id)
                 preferencesStore.setActiveUser(user.id)
             }
@@ -207,14 +216,16 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.setUser(userEntity.toUserInfo(server.address))
         preferencesStore.setActiveServer(server.id)
         preferencesStore.setActiveUser(userId)
-        userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
-        serverDao.updateServer(
-            server.copy(
-                userId = userId,
-                accessToken = userEntity.accessToken,
-                lastConnected = System.currentTimeMillis(),
+        database.withTransaction {
+            userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+            serverDao.updateServer(
+                server.copy(
+                    userId = userId,
+                    accessToken = userEntity.accessToken,
+                    lastConnected = System.currentTimeMillis(),
+                )
             )
-        )
+        }
     }
 
     override suspend fun removeUser(userId: String) {

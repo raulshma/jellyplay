@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,10 +56,13 @@ import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,13 +71,16 @@ fun OfflinePlayerScreen(
     filePath: String,
     title: String,
     onBack: () -> Unit,
+    preferencesStore: UserPreferencesStore = hiltViewModel<OfflinePlayerViewModel>().preferencesStore,
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
+    val preferences by preferencesStore.preferences.collectAsStateWithLifecycle(initialValue = com.raulshma.jellyplay.core.model.UserPreferences())
+    val seekDurationMs = preferences.videoSeekDurationMs
 
     var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableStateOf(0L) }
-    var duration by remember { mutableStateOf(0L) }
+    var currentPosition by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -136,14 +143,20 @@ fun OfflinePlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(seekDurationMs) {
                 detectTapGestures(
                     onTap = { showControls = !showControls },
                     onDoubleTap = { offset ->
                         val width = size.width.toFloat()
                         when {
-                            offset.x < width * 0.35 -> exoPlayer.seekBack()
-                            offset.x > width * 0.65 -> exoPlayer.seekForward()
+                            offset.x < width * 0.35 -> {
+                                val newPos = (exoPlayer.currentPosition - seekDurationMs).coerceAtLeast(0)
+                                exoPlayer.seekTo(newPos)
+                            }
+                            offset.x > width * 0.65 -> {
+                                val newPos = (exoPlayer.currentPosition + seekDurationMs).coerceAtMost(exoPlayer.duration.coerceAtLeast(0))
+                                exoPlayer.seekTo(newPos)
+                            }
                             else -> if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                         }
                     },
@@ -200,7 +213,10 @@ fun OfflinePlayerScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { exoPlayer.seekBack() }) {
+                    IconButton(onClick = { 
+                        val newPos = (exoPlayer.currentPosition - seekDurationMs).coerceAtLeast(0)
+                        exoPlayer.seekTo(newPos)
+                    }) {
                         Icon(
                             Icons.Default.SkipPrevious, "Rewind",
                             tint = Color.White, modifier = Modifier.size(36.dp)
@@ -218,7 +234,10 @@ fun OfflinePlayerScreen(
                         )
                     }
                     Spacer(Modifier.width(24.dp))
-                    IconButton(onClick = { exoPlayer.seekForward() }) {
+                    IconButton(onClick = { 
+                        val newPos = (exoPlayer.currentPosition + seekDurationMs).coerceAtMost(exoPlayer.duration.coerceAtLeast(0))
+                        exoPlayer.seekTo(newPos)
+                    }) {
                         Icon(
                             Icons.Default.SkipNext, "Forward",
                             tint = Color.White, modifier = Modifier.size(36.dp)

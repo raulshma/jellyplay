@@ -10,7 +10,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.OkHttpClient
+import okhttp3.ConnectionPool
+import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -34,10 +37,18 @@ abstract class NetworkModule {
 
         @Provides
         @Singleton
-        fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
-            .build()
+        fun provideOkHttpClient(
+            @ApplicationContext context: Context,
+        ): OkHttpClient {
+            val cacheDir = File(context.cacheDir, "http_cache")
+            cacheDir.mkdirs()
+            return OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .cache(Cache(cacheDir, 50L * 1024 * 1024))
+                .connectionPool(ConnectionPool(5, 10, TimeUnit.MINUTES))
+                .build()
+        }
     }
 }

@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class MoodPlaylist(
     val id: String,
@@ -16,6 +18,7 @@ data class MoodPlaylist(
     val themeColorHex: String? = null,
 )
 
+@Immutable
 @Serializable
 enum class MoodPlaylistSort {
     RANDOM,
