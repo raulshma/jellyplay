@@ -79,9 +79,20 @@ fun PlaybackInfoOverlay(
                         } else "Unknown"
                     )
                     InfoRow("Bitrate", videoStream.bitRate?.let { "${it / 1000} kbps" } ?: "Unknown")
-                    if (hdrType != null) {
-                        InfoRow("HDR", hdrType)
+                    
+                    val hdrTypeDetails = listOfNotNull(
+                        hdrType,
+                        videoStream.videoRangeType,
+                        videoStream.videoDoViTitle
+                    ).distinct().joinToString(" - ")
+                    
+                    val videoRange = videoStream.videoRange
+                    if (hdrTypeDetails.isNotEmpty()) {
+                        InfoRow("HDR Format", hdrTypeDetails)
+                    } else if (videoRange != null) {
+                        InfoRow("Range", videoRange)
                     }
+
                     videoStream.realFrameRate?.let { fps ->
                         InfoRow("Frame Rate", "${"%.2f".format(fps)} fps")
                     }
@@ -95,7 +106,19 @@ fun PlaybackInfoOverlay(
                         val label = stream.language?.let { lang ->
                             stream.title?.let { "$lang - $it" } ?: lang
                         } ?: stream.title ?: "Track ${index + 1}"
-                        InfoRow(label, stream.codec?.uppercase() ?: "Unknown")
+                        
+                        val codecUpper = stream.codec?.uppercase() ?: "Unknown"
+                        val matchText = (stream.title ?: "") + " " + (stream.displayTitle ?: "")
+                        val isAtmos = matchText.contains("atmos", ignoreCase = true) || codecUpper.contains("ATMOS", ignoreCase = true)
+                        val isDtsX = matchText.contains("dts:x", ignoreCase = true) || matchText.contains("dtsx", ignoreCase = true) || codecUpper.contains("DTS", ignoreCase = true) && matchText.contains("x", ignoreCase = true)
+                        
+                        val audioFormat = buildString {
+                            append(codecUpper)
+                            if (isAtmos && !codecUpper.contains("ATMOS")) append(" (Atmos)")
+                            else if (isDtsX && !codecUpper.contains("X")) append(" (DTS:X)")
+                        }
+
+                        InfoRow(label, audioFormat)
                         if (stream.channels != null) {
                             InfoRow("Channels", "${stream.channels}ch")
                         }
