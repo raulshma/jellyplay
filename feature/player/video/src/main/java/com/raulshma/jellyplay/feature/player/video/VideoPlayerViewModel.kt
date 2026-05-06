@@ -330,6 +330,10 @@ class VideoPlayerViewModel @Inject constructor(
             }
             
             engine.initialize(url, detail.item.name, startPositionTicks / 10_000)
+            
+            // Apply dialogue boost setting for MPV and LibVLC
+            _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
+            engine.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
         }
 
         val speed = state.defaultSpeed

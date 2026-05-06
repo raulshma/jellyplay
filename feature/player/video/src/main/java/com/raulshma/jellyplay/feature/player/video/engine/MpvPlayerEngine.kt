@@ -9,6 +9,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -29,6 +30,8 @@ class MpvPlayerEngine(
     private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
     private var _passthroughEnabled = false
+    private val dialogueBoost = DialogueBoostHelper()
+    private var dialogueBoostEnabled: Boolean = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -120,6 +123,7 @@ class MpvPlayerEngine(
     override fun release() {
         pendingUrl = null
         pendingSubtitles = null
+        dialogueBoost.detach()
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
@@ -210,12 +214,15 @@ class MpvPlayerEngine(
     }
 
     override val isPlaying: Boolean get() = _isPlaying
-    override val audioSessionId: Int get() = 0
+    override val audioSessionId: Int
+        get() = try {
+            mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
+        } catch (_: Exception) { 0 }
     override val supportsAudioDelay: Boolean get() = true
     override val supportsSubtitleDelay: Boolean get() = true
     override val supportsAudioPassthrough: Boolean get() = true
     override val supportsSubtitleStyle: Boolean get() = false
-    override val supportsDialogueBoost: Boolean get() = false
+    override val supportsDialogueBoost: Boolean get() = true
     override val supportsNightMode: Boolean get() = false
     override val supportsOcr: Boolean get() = false
     override val supportsCues: Boolean get() = false
@@ -291,6 +298,15 @@ class MpvPlayerEngine(
 
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
+    }
+
+    override fun setDialogueBoostEnabled(enabled: Boolean) {
+        dialogueBoostEnabled = enabled
+        val sid = audioSessionId
+        if (sid != 0) {
+            dialogueBoost.attach(sid)
+            dialogueBoost.setEnabled(enabled)
+        }
     }
 
     private fun getTracksOfType(type: String, trackType: PlayerEngine.TrackType): List<PlayerEngine.TrackInfo> {
