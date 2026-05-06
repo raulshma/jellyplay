@@ -49,7 +49,7 @@ internal fun ChapterPickerSheet(
             )
             Spacer(Modifier.height(12.dp))
             LazyColumn {
-                itemsIndexed(chapters) { index, chapter ->
+                itemsIndexed(chapters, contentType = { _, _ -> "chapter" }) { index, chapter ->
                     val chapterMs = chapter.startPositionTicks / 10_000
                     val isCurrentChapter = if (index < chapters.lastIndex) {
                         val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000

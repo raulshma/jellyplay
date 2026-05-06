@@ -108,7 +108,7 @@ fun DownloadsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items = downloads, key = { it.id }) { download ->
+                items(items = downloads, key = { it.id }, contentType = { "downloadItem" }) { download ->
                     DownloadItemRow(
                         item = download,
                         formatBytes = { viewModel.formatBytes(it) },

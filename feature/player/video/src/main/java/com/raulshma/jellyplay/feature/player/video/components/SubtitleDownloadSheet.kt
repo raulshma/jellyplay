@@ -61,7 +61,7 @@ fun SubtitleDownloadSheet(
                 )
             } else {
                 LazyColumn {
-                    itemsIndexed(subtitles) { _, sub ->
+                    itemsIndexed(subtitles, contentType = { _, _ -> "subtitle" }) { _, sub ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

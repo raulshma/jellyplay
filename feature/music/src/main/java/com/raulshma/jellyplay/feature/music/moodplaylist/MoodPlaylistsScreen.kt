@@ -87,7 +87,7 @@ fun MoodPlaylistsScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(MoodPlaylistsPreset.all.size, key = { MoodPlaylistsPreset.all[it].id }) { index ->
+            items(MoodPlaylistsPreset.all.size, key = { MoodPlaylistsPreset.all[it].id }, contentType = { "moodPlaylist" }) { index ->
                 val playlist = MoodPlaylistsPreset.all[index]
                 MoodCard(
                     playlist = playlist,

@@ -785,7 +785,7 @@ private fun DetailContentBody(
                     contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(genres, key = { it }) { genre ->
+                    items(genres, key = { it }, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
@@ -856,7 +856,7 @@ private fun DetailContentBody(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            items(detail.people, key = { "person_${it.id}" }) { person ->
+                            items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
                                 PersonItem(
                                     person = person,
                                     imageUrl = getImageUrl(person.id),
@@ -884,7 +884,7 @@ private fun DetailContentBody(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(detail.relatedItems, key = { "related_${it.id}" }) { related ->
+                        items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
                             PosterCard(
                                 item = related,
                                 imageUrl = getImageUrl(related.id),
@@ -930,7 +930,7 @@ private fun SeasonsSection(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(seasons, key = { it.id }) { season ->
+            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                 val index = seasons.indexOf(season)
                 val isSelected = index == selectedSeasonIndex
                 Surface(
@@ -964,7 +964,7 @@ private fun SeasonsSection(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     userScrollEnabled = false,
                 ) {
-                    items(3) {
+                    items(3, contentType = { "shimmer" }) {
                         EpisodeCardSkeleton()
                     }
                 }
@@ -974,7 +974,7 @@ private fun SeasonsSection(
                     contentPadding = PaddingValues(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    items(seasonEpisodes, key = { "episode_${it.id}" }) { episode ->
+                    items(seasonEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
                         EpisodeCard(
                             episode = episode,
                             getImageUrl = getImageUrl,

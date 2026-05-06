@@ -158,6 +158,7 @@ private fun TracksPage(
                         items(
                             count = tracks.itemCount,
                             key = tracks.itemKey { it.id },
+                            contentType = { "mediaItem" },
                         ) { index ->
                             val track = tracks[index] ?: return@items
                             TrackRow(
@@ -197,7 +198,7 @@ private fun GenresPage(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(genres, key = { it.id }) { genre ->
+            items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
                 GenreChip(
                     name = genre.name,
                     onClick = { onItemClick(genre.id) },
@@ -225,7 +226,7 @@ private fun PlaylistsPage(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(playlists, key = { it.id }) { playlist ->
+            items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
                 AlbumCard(
                     name = playlist.name,
                     artist = if (playlist.itemCount > 0) "${playlist.itemCount} items" else null,
@@ -268,6 +269,7 @@ private fun <T : Any> PagedGrid(
                         items(
                             count = items.itemCount,
                             key = items.itemKey(itemKey),
+                            contentType = { "pagedItem" },
                         ) { index ->
                             val item = items[index]
                             if (item != null) {

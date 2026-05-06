@@ -70,7 +70,7 @@ internal fun SecondarySubtitlePickerSheet(
             }
 
             LazyColumn {
-                itemsIndexed(subtitleStreams) { _, stream ->
+                itemsIndexed(subtitleStreams, contentType = { _, _ -> "subtitleStream" }) { _, stream ->
                     val isSelected = currentSecondary?.index == stream.index
                     Row(
                         modifier = Modifier

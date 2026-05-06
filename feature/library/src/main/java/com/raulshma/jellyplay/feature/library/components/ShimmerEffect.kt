@@ -63,7 +63,7 @@ fun ShimmerLoadingGrid(
         modifier = modifier.fillMaxSize(),
         userScrollEnabled = false,
     ) {
-        items(12) {
+        items(12, contentType = { "shimmer" }) {
             ShimmerCard(shimmerBrush)
         }
     }

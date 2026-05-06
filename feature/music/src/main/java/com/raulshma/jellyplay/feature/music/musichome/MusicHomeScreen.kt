@@ -162,7 +162,7 @@ fun MusicHomeScreen(
                             )
                         }
 
-                        items(sections.size) { index ->
+                        items(sections.size, contentType = { "musicHomeSection" }) { index ->
                             val section = sections[index]
                             MusicSectionRow(
                                 section = section,
@@ -377,7 +377,7 @@ private fun QuickAccessRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(vertical = 8.dp),
     ) {
-        items(items) { (label, icon, onClick) ->
+        items(items, contentType = { "quickAccess" }) { (label, icon, onClick) ->
             AssistChip(
                 onClick = onClick,
                 label = { Text(label) },
@@ -410,7 +410,7 @@ private fun MusicSectionRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(section.items, key = { "${section.title}_${it.id}" }) { item ->
+            items(section.items, key = { "${section.title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 when (section.items.firstOrNull()?.mediaType) {
                     MediaType.ARTIST -> {
                         ArtistCard(

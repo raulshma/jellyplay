@@ -81,7 +81,7 @@ fun PersonDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(items = viewModel.filmography, key = { it.id }) { item ->
+                    items(items = viewModel.filmography, key = { it.id }, contentType = { "mediaItem" }) { item ->
                         PosterCard(
                             item = item,
                             imageUrl = viewModel.getImageUrl(item.id),

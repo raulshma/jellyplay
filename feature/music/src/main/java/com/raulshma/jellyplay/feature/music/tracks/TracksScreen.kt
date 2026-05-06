@@ -73,6 +73,7 @@ fun TracksScreen(
                             items(
                                 count = tracks.itemCount,
                                 key = tracks.itemKey { it.id },
+                                contentType = { "mediaItem" },
                             ) { index ->
                                 val track = tracks[index]
                                 if (track != null) {

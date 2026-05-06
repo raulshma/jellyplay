@@ -47,7 +47,7 @@ internal fun TrackPickerSheet(
             )
             Spacer(Modifier.height(12.dp))
             LazyColumn {
-                itemsIndexed(tracks) { _, track ->
+                itemsIndexed(tracks, contentType = { _, _ -> "track" }) { _, track ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
