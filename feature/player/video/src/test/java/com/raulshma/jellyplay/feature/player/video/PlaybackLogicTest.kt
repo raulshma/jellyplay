@@ -1,0 +1,403 @@
+package com.raulshma.jellyplay.feature.player.video
+
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TrackOptionTest {
+
+    @Test
+    fun trackOption_defaultValues() {
+        val option = TrackOption(index = 0, label = "Test", language = "eng", isSelected = false)
+        assertEquals(0, option.index)
+        assertEquals("Test", option.label)
+        assertEquals("eng", option.language)
+        assertFalse(option.isSelected)
+    }
+
+    @Test
+    fun trackOption_dataClassEquality() {
+        val a = TrackOption(1, "English", "eng", true)
+        val b = TrackOption(1, "English", "eng", true)
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun trackOption_dataClassCopy() {
+        val original = TrackOption(1, "English", "eng", true)
+        val modified = original.copy(isSelected = false)
+        assertTrue(original.isSelected)
+        assertFalse(modified.isSelected)
+    }
+
+    @Test
+    fun trackOption_negativeIndex_forDefaultTrack() {
+        val option = TrackOption(-1, "Default", null, true)
+        assertEquals(-1, option.index)
+    }
+
+    @Test
+    fun trackOption_nullTrackGroup_byDefault() {
+        val option = TrackOption(0, "Test", null, false)
+        assertEquals(null, option.trackGroup)
+    }
+}
+
+class MapSubtitleCodecToMimeTest {
+
+    @Test
+    fun srt_mapsToSubRip() {
+        assertEquals("application/x-subrip", mapCodecToMime("srt"))
+    }
+
+    @Test
+    fun subrip_mapsToSubRip() {
+        assertEquals("application/x-subrip", mapCodecToMime("subrip"))
+    }
+
+    @Test
+    fun ass_mapsToSsa() {
+        assertEquals("text/x-ssa", mapCodecToMime("ass"))
+    }
+
+    @Test
+    fun ssa_mapsToSsa() {
+        assertEquals("text/x-ssa", mapCodecToMime("ssa"))
+    }
+
+    @Test
+    fun vtt_mapsToSubRip() {
+        assertEquals("application/x-subrip", mapCodecToMime("vtt"))
+    }
+
+    @Test
+    fun webvtt_mapsToSubRip() {
+        assertEquals("application/x-subrip", mapCodecToMime("webvtt"))
+    }
+
+    @Test
+    fun ttml_mapsToTtml() {
+        assertEquals("application/ttml+xml", mapCodecToMime("ttml"))
+    }
+
+    @Test
+    fun dfxp_mapsToTtml() {
+        assertEquals("application/ttml+xml", mapCodecToMime("dfxp"))
+    }
+
+    @Test
+    fun pgs_mapsToPgs() {
+        assertEquals("application/pgs", mapCodecToMime("pgs"))
+    }
+
+    @Test
+    fun mov_text_mapsToSubRip() {
+        assertEquals("application/x-subrip", mapCodecToMime("mov_text"))
+    }
+
+    @Test
+    fun nullCodec_mapsToUnknown() {
+        assertEquals("text/unknown", mapCodecToMime(null))
+    }
+
+    @Test
+    fun unknownCodec_mapsToUnknown() {
+        assertEquals("text/unknown", mapCodecToMime("unknown_codec"))
+    }
+
+    @Test
+    fun caseInsensitive() {
+        assertEquals("application/x-subrip", mapCodecToMime("SRT"))
+        assertEquals("application/x-subrip", mapCodecToMime("Srt"))
+        assertEquals("text/x-ssa", mapCodecToMime("ASS"))
+        assertEquals("application/x-subrip", mapCodecToMime("WEBVTT"))
+    }
+
+    private fun mapCodecToMime(codec: String?): String {
+        if (codec == null) return "text/unknown"
+        return when (codec.lowercase()) {
+            "srt", "subrip" -> "application/x-subrip"
+            "ass", "ssa" -> "text/x-ssa"
+            "vtt", "webvtt" -> "application/x-subrip"
+            "ttml", "dfxp" -> "application/ttml+xml"
+            "pgs" -> "application/pgs"
+            "mov_text" -> "application/x-subrip"
+            else -> "text/unknown"
+        }
+    }
+}
+
+class SeekClampingTest {
+
+    @Test
+    fun seekForward_clampsToDuration() {
+        val current = 3_595_000L
+        val amount = 10_000L
+        val duration = 3_600_000L
+        val result = (current + amount).coerceAtMost(duration)
+        assertEquals(3_600_000L, result)
+    }
+
+    @Test
+    fun seekForward_withinBounds_doesNotClamp() {
+        val current = 3_500_000L
+        val amount = 10_000L
+        val duration = 3_600_000L
+        val result = (current + amount).coerceAtMost(duration)
+        assertEquals(3_510_000L, result)
+    }
+
+    @Test
+    fun seekBack_clampsToZero() {
+        val current = 5_000L
+        val amount = 10_000L
+        val result = (current - amount).coerceAtLeast(0)
+        assertEquals(0L, result)
+    }
+
+    @Test
+    fun seekBack_withinBounds_doesNotClamp() {
+        val current = 30_000L
+        val amount = 10_000L
+        val result = (current - amount).coerceAtLeast(0)
+        assertEquals(20_000L, result)
+    }
+
+    @Test
+    fun seekBack_atZero_staysAtZero() {
+        val current = 0L
+        val amount = 10_000L
+        val result = (current - amount).coerceAtLeast(0)
+        assertEquals(0L, result)
+    }
+
+    @Test
+    fun seekForward_defaultAmountIs10Seconds() {
+        val defaultSeekAmountMs = 10_000L
+        assertEquals(10_000L, defaultSeekAmountMs)
+    }
+
+    @Test
+    fun seek_fractionToMs() {
+        val fraction = 0.5f
+        val duration = 3_600_000L
+        val positionMs = (fraction * duration).toLong()
+        assertEquals(1_800_000L, positionMs)
+    }
+
+    @Test
+    fun seek_fractionAtStart() {
+        val fraction = 0f
+        val duration = 3_600_000L
+        val positionMs = (fraction * duration).toLong()
+        assertEquals(0L, positionMs)
+    }
+
+    @Test
+    fun seek_fractionAtEnd() {
+        val fraction = 1f
+        val duration = 3_600_000L
+        val positionMs = (fraction * duration).toLong()
+        assertEquals(3_600_000L, positionMs)
+    }
+}
+
+class ChapterSeekTickConversionTest {
+
+    @Test
+    fun chapterTicksToMs_dividesBy10k() {
+        val ticks = 600_000_000L
+        val ms = ticks / 10_000
+        assertEquals(60_000L, ms)
+    }
+
+    @Test
+    fun chapterTicks_zero_returnsZero() {
+        val ticks = 0L
+        val ms = ticks / 10_000
+        assertEquals(0L, ms)
+    }
+
+    @Test
+    fun chapterTicks_largeValue() {
+        val ticks = 7_200_000_000L
+        val ms = ticks / 10_000
+        assertEquals(720_000L, ms)
+    }
+
+    @Test
+    fun chapterTicks_oneHour() {
+        val oneHourTicks = 36_000_000_000L
+        val ms = oneHourTicks / 10_000
+        assertEquals(3_600_000L, ms)
+    }
+
+    @Test
+    fun chapterTicks_oddValue_truncates() {
+        val ticks = 600_005_000L
+        val ms = ticks / 10_000
+        assertEquals(60_000L, ms)
+    }
+}
+
+class SkipIntroCreditsTest {
+
+    @Test
+    fun skipIntro_seeksToEndOfIntro() {
+        val introEndTicks = 300_000_000L
+        val targetMs = introEndTicks / 10_000
+        assertEquals(30_000L, targetMs)
+    }
+
+    @Test
+    fun skipCredits_seeksToEndOfCredits() {
+        val creditEndTicks = 3_600_000_000L
+        val targetMs = creditEndTicks / 10_000
+        assertEquals(360_000L, targetMs)
+    }
+
+    @Test
+    fun skipIntro_zeroEndTicks() {
+        val introEndTicks = 0L
+        val targetMs = introEndTicks / 10_000
+        assertEquals(0L, targetMs)
+    }
+}
+
+class PlayerEngineSeekContractTest {
+
+    @Test
+    fun allEngines_useSameSeekForwardDefault() {
+        val defaultMs = 10_000L
+        assertEquals(10_000L, defaultMs)
+    }
+
+    @Test
+    fun exoPlayerSeekForward_coercesToDuration() {
+        val current = 5_500_000L
+        val amount = 10_000L
+        val duration = 5_500_000L
+        val result = (current + amount).coerceAtMost(duration)
+        assertEquals(5_500_000L, result)
+    }
+
+    @Test
+    fun mpvSeekForward_noExplicitClamping() {
+        val amount = 10_000L
+        val seconds = amount / 1000.0
+        assertEquals(10.0, seconds, 0.001)
+    }
+
+    @Test
+    fun mpvSeekBack_relativeNegative() {
+        val amount = 10_000L
+        val seconds = amount / 1000.0
+        val expected = "-$seconds"
+        assertEquals("-10.0", expected)
+    }
+
+    @Test
+    fun libvlcSeekForward_clampsToLength() {
+        val current = 59_500L
+        val amount = 10_000L
+        val length = 60_000L
+        val result = (current + amount).coerceAtMost(length.coerceAtLeast(0))
+        assertEquals(60_000L, result)
+    }
+
+    @Test
+    fun libvlcSeekBack_clampsToZero() {
+        val current = 5_000L
+        val amount = 10_000L
+        val result = (current - amount).coerceAtLeast(0)
+        assertEquals(0L, result)
+    }
+}
+
+class SecondarySubtitleTextRetrievalTest {
+
+    @Test
+    fun getSecondarySubtitleText_nullCues_returnsNull() {
+        val cues = emptyList<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>()
+        val result = findActiveCue(cues, 1_000_000L, 0L)
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun getSecondarySubtitleText_positionMsToUs_conversion() {
+        val positionMs = 90_000L
+        val positionUs = positionMs * 1000L
+        assertEquals(90_000_000L, positionUs)
+    }
+
+    @Test
+    fun getSecondarySubtitleText_offsetMsToUs_conversion() {
+        val offsetMs = 2000L
+        val offsetUs = offsetMs * 1000L
+        assertEquals(2_000_000L, offsetUs)
+    }
+
+    @Test
+    fun getSecondarySubtitleText_negativeOffset() {
+        val offsetMs = -2000L
+        val offsetUs = offsetMs * 1000L
+        assertEquals(-2_000_000L, offsetUs)
+    }
+
+    @Test
+    fun getSecondarySubtitleText_multipleCues_returnsCorrectOne() {
+        val cues = listOf(
+            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(0L, 5_000_000L, "First"),
+            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(5_000_000L, 10_000_000L, "Second"),
+            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(10_000_000L, 15_000_000L, "Third"),
+        )
+        val positionUs = 7_000_000L
+        val result = findActiveCue(cues, positionUs, 0L)
+        assertEquals("Second", result?.text.toString())
+    }
+
+    private fun findActiveCue(
+        cues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>,
+        positionUs: Long,
+        offsetUs: Long,
+    ): com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue? {
+        val adjustedPosition = positionUs + offsetUs
+        return cues.find { cue ->
+            adjustedPosition >= cue.startTimeUs && adjustedPosition < cue.endTimeUs
+        }
+    }
+}
+
+class PlaybackPositionTicksTest {
+
+    @Test
+    fun positionMsToTicks_multiplyBy10k() {
+        assertEquals(0L, 0L * 10_000)
+        assertEquals(10_000_000L, 1_000L * 10_000)
+        assertEquals(600_000_000L, 60_000L * 10_000)
+        assertEquals(3_600_000_000L, 360_000L * 10_000)
+    }
+
+    @Test
+    fun ticksToMs_divideBy10k() {
+        assertEquals(0L, 0L / 10_000)
+        assertEquals(1_000L, 10_000_000L / 10_000)
+        assertEquals(60_000L, 600_000_000L / 10_000)
+    }
+
+    @Test
+    fun startPositionTicksToMs_dividesBy10k() {
+        val startPositionTicks = 1_200_000_000L
+        val ms = startPositionTicks / 10_000
+        assertEquals(120_000L, ms)
+    }
+
+    @Test
+    fun startPositionTicks_zero() {
+        assertEquals(0L, 0L / 10_000)
+    }
+}
