@@ -116,6 +116,8 @@ fun VideoPlayerScreen(
     var brightnessOverlay by remember { mutableFloatStateOf(-1f) }
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
     var externalLaunched by remember { mutableStateOf(false) }
+    var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
+    var isGestureSeeking by remember { mutableStateOf(false) }
 
     LaunchedEffect(itemId) {
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
@@ -331,6 +333,8 @@ fun VideoPlayerScreen(
                 { delta ->
                     engine?.let { eng ->
                         val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
+                        gestureSeekPositionMs = newPos
+                        isGestureSeeking = true
                         eng.seekTo(newPos)
                     }
                 }
@@ -371,9 +375,25 @@ fun VideoPlayerScreen(
                     seekOffsetMs = 0L
                     brightnessOverlay = -1f
                     volumeOverlay = -1f
+                    isGestureSeeking = false
                 }
             },
         )
+
+        // Trickplay overlay for seek gestures
+        AnimatedVisibility(
+            visible = uiState.trickplayOnSeekGesture && isGestureSeeking,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            val trickplayImageUrl = viewModel.getTrickplayImageUrl(gestureSeekPositionMs)
+            TrickplayOverlay(
+                imageUrl = trickplayImageUrl,
+                positionMs = gestureSeekPositionMs,
+                modifier = Modifier
+                    .align(Alignment.Center),
+            )
+        }
 
         SecondarySubtitleOverlay(
             text = secondarySubtitleText,
@@ -512,7 +532,7 @@ fun VideoPlayerScreen(
         )
 
         AnimatedVisibility(
-            visible = showControls && isSeeking,
+            visible = uiState.trickplayEnabled && showControls && isSeeking,
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
@@ -532,6 +552,13 @@ fun VideoPlayerScreen(
             delay(800)
             seekDirection = 0
             seekOffsetMs = 0L
+        }
+    }
+
+    LaunchedEffect(isGestureSeeking) {
+        if (isGestureSeeking) {
+            delay(1000)
+            isGestureSeeking = false
         }
     }
 

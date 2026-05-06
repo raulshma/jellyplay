@@ -319,6 +319,26 @@ fun SettingsScreen(
 
             item {
                 SettingToggleItem(
+                    icon = Icons.Default.OndemandVideo,
+                    title = "Trickplay Preview",
+                    subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
+                    checked = preferences.trickplayEnabled,
+                    onCheckedChange = { viewModel.setTrickplayEnabled(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.TouchApp,
+                    title = "Trickplay on Gestures",
+                    subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
+                    checked = preferences.trickplayOnSeekGesture,
+                    onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
                     icon = Icons.Default.RecordVoiceOver,
                     title = "Dialogue Boost",
                     subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
