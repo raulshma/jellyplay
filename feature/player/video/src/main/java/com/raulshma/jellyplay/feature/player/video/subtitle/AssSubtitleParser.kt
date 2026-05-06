@@ -18,19 +18,28 @@ class AssSubtitleParser : SubtitleParser {
         output: Consumer<CuesWithTiming>,
     ) {
         val text = String(data, offset, length, Charsets.UTF_8)
-        val cues = parseAssEvents(text)
+        val timedCues = parseAssEvents(text)
         val startTimeUs = outputOptions.startTimeUs
 
-        for (cue in cues) {
-            if (startTimeUs != C.TIME_UNSET && cue.endTimeUs < startTimeUs) continue
-            output.accept(cue)
+        for (timedCue in timedCues) {
+            if (startTimeUs != C.TIME_UNSET && timedCue.endTimeUs < startTimeUs) continue
+            val cue = Cue.Builder()
+                .setText(timedCue.text)
+                .build()
+            output.accept(
+                CuesWithTiming(
+                    listOf(cue),
+                    timedCue.startTimeUs,
+                    timedCue.endTimeUs - timedCue.startTimeUs,
+                )
+            )
         }
     }
 
     override fun reset() {}
 
-    private fun parseAssEvents(text: String): List<CuesWithTiming> {
-        val result = mutableListOf<CuesWithTiming>()
+    internal fun parseAssEvents(text: String): List<TimedCue> {
+        val result = mutableListOf<TimedCue>()
         var inEvents = false
         var formatFields: List<String>? = null
 
@@ -72,15 +81,11 @@ class AssSubtitleParser : SubtitleParser {
 
                 if (rawText.isBlank()) continue
 
-                val cue = Cue.Builder()
-                    .setText(android.text.SpannableString(rawText))
-                    .build()
-
                 result.add(
-                    CuesWithTiming(
-                        listOf(cue),
-                        startUs,
-                        endUs - startUs,
+                    TimedCue(
+                        startTimeUs = startUs,
+                        endTimeUs = endUs,
+                        text = rawText,
                     )
                 )
             }
