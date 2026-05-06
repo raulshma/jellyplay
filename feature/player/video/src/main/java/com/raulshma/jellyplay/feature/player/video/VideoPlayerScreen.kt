@@ -702,6 +702,10 @@ private fun PlayerSheetRouter(
                     nightModeEnabled = uiState.nightModeEnabled,
                     dialogueBoostEnabled = uiState.dialogueBoostEnabled,
                     audioPassthrough = uiState.audioPassthrough,
+                    audioTracks = uiState.audioTracks,
+                    subtitleTracks = uiState.subtitleTracks,
+                    playbackSpeed = uiState.playbackSpeed,
+                    audioDelayMs = uiState.audioDelayMs,
                     playerError = uiState.playerError,
                     modifier = Modifier
                         .fillMaxWidth()
