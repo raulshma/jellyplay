@@ -696,6 +696,13 @@ private fun PlayerSheetRouter(
                     mediaStreams = uiState.mediaStreams,
                     playMethod = uiState.playMethod,
                     hdrType = uiState.hdrType,
+                    playerType = uiState.preferredPlayerType.name,
+                    decoderMode = uiState.decoderMode.name,
+                    aspectRatio = uiState.aspectRatio.name,
+                    nightModeEnabled = uiState.nightModeEnabled,
+                    dialogueBoostEnabled = uiState.dialogueBoostEnabled,
+                    audioPassthrough = uiState.audioPassthrough,
+                    playerError = uiState.playerError,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)

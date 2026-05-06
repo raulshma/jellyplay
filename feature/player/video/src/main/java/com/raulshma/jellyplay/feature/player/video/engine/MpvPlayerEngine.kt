@@ -22,6 +22,7 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var _audioDelayMs = 0L
@@ -298,6 +299,10 @@ class MpvPlayerEngine(
 
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
     }
 
     override fun setDialogueBoostEnabled(enabled: Boolean) {

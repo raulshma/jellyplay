@@ -12,6 +12,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
@@ -50,6 +51,7 @@ class ExoPlayerEngine(
     private var mediaSession: MediaSession? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
 
     private val dialogueBoost = DialogueBoostHelper()
@@ -84,6 +86,14 @@ class ExoPlayerEngine(
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             this@ExoPlayerEngine.onTracksChanged?.invoke()
         }
+
+        override fun onPlayerError(error: PlaybackException) {
+            onError?.invoke(error.message ?: "Unknown playback error")
+        }
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
     }
 
     fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
