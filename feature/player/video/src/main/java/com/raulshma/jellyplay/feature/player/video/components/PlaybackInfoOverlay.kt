@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 
+import com.raulshma.jellyplay.feature.player.video.TrackOption
+
 @Composable
 fun PlaybackInfoOverlay(
     mediaSource: MediaSource?,
@@ -34,6 +36,10 @@ fun PlaybackInfoOverlay(
     nightModeEnabled: Boolean = false,
     dialogueBoostEnabled: Boolean = false,
     audioPassthrough: Boolean = false,
+    audioTracks: List<TrackOption> = emptyList(),
+    subtitleTracks: List<TrackOption> = emptyList(),
+    playbackSpeed: Float = 1f,
+    audioDelayMs: Long = 0L,
     playerError: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -110,10 +116,17 @@ fun PlaybackInfoOverlay(
             InfoSection(title = "Active Controls") {
                 InfoRow("Player Engine", playerType)
                 InfoRow("Decoder Mode", decoderMode)
+                InfoRow("Speed", "${playbackSpeed}x")
+                if (audioDelayMs != 0L) InfoRow("Audio Delay", "${audioDelayMs} ms")
                 InfoRow("Aspect Ratio", aspectRatio)
                 InfoRow("Night Mode", if (nightModeEnabled) "On" else "Off")
                 InfoRow("Dialogue Boost", if (dialogueBoostEnabled) "On" else "Off")
                 InfoRow("Audio Passthrough", if (audioPassthrough) "On" else "Off")
+                
+                val activeAudio = audioTracks.find { it.isSelected }?.label ?: "Unknown"
+                InfoRow("Active Audio", activeAudio)
+                val activeSubtitle = subtitleTracks.find { it.isSelected }?.label ?: "None"
+                InfoRow("Active Subtitle", activeSubtitle)
             }
 
             if (playerError != null) {
