@@ -239,6 +239,7 @@ class VideoPlayerViewModel @Inject constructor(
             it.copy(
                 engineCapabilities = EngineCapabilities(
                     audioDelay = engine.supportsAudioDelay,
+                    subtitleDelay = engine.supportsSubtitleDelay,
                     audioPassthrough = engine.supportsAudioPassthrough,
                     subtitleStyle = engine.supportsSubtitleStyle,
                     dialogueBoost = engine.supportsDialogueBoost,
@@ -251,6 +252,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         engine.setDecoderMode(state.decoderMode)
         engine.setAudioDelay(state.audioDelayMs)
+        engine.setSubtitleDelay(state.subtitleStyle.offsetMs)
         engine.setAudioPassthrough(state.audioPassthrough)
 
         engine.setOnStateChanged { playing ->
@@ -451,6 +453,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
+        playerEngine?.setSubtitleDelay(style.offsetMs)
         viewModelScope.launch {
             preferencesStore.setSubtitleStyle(style)
         }
