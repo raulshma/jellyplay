@@ -28,6 +28,13 @@ fun PlaybackInfoOverlay(
     mediaStreams: List<MediaStream>,
     playMethod: String,
     hdrType: String? = null,
+    playerType: String = "Unknown",
+    decoderMode: String = "Unknown",
+    aspectRatio: String = "Auto",
+    nightModeEnabled: Boolean = false,
+    dialogueBoostEnabled: Boolean = false,
+    audioPassthrough: Boolean = false,
+    playerError: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -97,6 +104,26 @@ fun PlaybackInfoOverlay(
                         val label = stream.language ?: stream.title ?: "Unknown"
                         InfoRow(label, if (stream.isDefault) "Default" else "")
                     }
+                }
+            }
+
+            InfoSection(title = "Active Controls") {
+                InfoRow("Player Engine", playerType)
+                InfoRow("Decoder Mode", decoderMode)
+                InfoRow("Aspect Ratio", aspectRatio)
+                InfoRow("Night Mode", if (nightModeEnabled) "On" else "Off")
+                InfoRow("Dialogue Boost", if (dialogueBoostEnabled) "On" else "Off")
+                InfoRow("Audio Passthrough", if (audioPassthrough) "On" else "Off")
+            }
+
+            if (playerError != null) {
+                InfoSection(title = "Player Errors") {
+                    Text(
+                        text = playerError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
         }

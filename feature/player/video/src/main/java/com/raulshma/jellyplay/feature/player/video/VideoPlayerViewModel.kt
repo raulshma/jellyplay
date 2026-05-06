@@ -261,6 +261,9 @@ class VideoPlayerViewModel @Inject constructor(
         engine.setOnTracksChanged {
             updateTracksFromEngine(engine)
         }
+        engine.setOnError { errorMsg ->
+            _uiState.update { it.copy(playerError = errorMsg) }
+        }
 
         if (engine is ExoPlayerEngine) {
             (engine as ExoPlayerEngine).setOnPlaybackStateChanged { playbackState ->

@@ -60,6 +60,7 @@ data class VideoPlayerUiState(
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
+    val playerError: String? = null,
 ) {
     val isInIntro: Boolean
         get() {

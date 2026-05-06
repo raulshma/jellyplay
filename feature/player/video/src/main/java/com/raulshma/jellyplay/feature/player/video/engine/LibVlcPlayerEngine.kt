@@ -26,6 +26,7 @@ class LibVlcPlayerEngine(
     private var videoLayout: VLCVideoLayout? = null
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var pendingPlay = false
@@ -59,6 +60,9 @@ class LibVlcPlayerEngine(
             MediaPlayer.Event.ESDeleted,
             MediaPlayer.Event.ESSelected -> {
                 mainHandler.post { onTracksChanged?.invoke() }
+            }
+            MediaPlayer.Event.EncounteredError -> {
+                mainHandler.post { onError?.invoke("VLC encountered an error during playback") }
             }
         }
     }
@@ -343,6 +347,10 @@ class LibVlcPlayerEngine(
 
     override fun setOnTracksChanged(callback: (() -> Unit)?) {
         onTracksChanged = callback
+    }
+
+    override fun setOnError(callback: ((String) -> Unit)?) {
+        onError = callback
     }
 
     override fun setDialogueBoostEnabled(enabled: Boolean) {
