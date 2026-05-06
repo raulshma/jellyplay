@@ -9,12 +9,16 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import javax.inject.Inject
 
 @HiltViewModel
@@ -25,6 +29,10 @@ class HomeViewModel @Inject constructor(
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
+
+    companion object {
+        private const val REFRESH_INTERVAL_MS = 60_000L
+    }
 
     var sections by mutableStateOf<List<HomeSection>>(emptyList())
         private set
@@ -44,6 +52,9 @@ class HomeViewModel @Inject constructor(
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
+    private val refreshMutex = Mutex()
+    private var refreshJob: Job? = null
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -52,24 +63,46 @@ class HomeViewModel @Inject constructor(
             dynamicTheming = prefs.dynamicTheming
             }
         }
-        refresh()
+        loadInitial()
+    }
+
+    private fun loadInitial() {
+        viewModelScope.launch {
+            isLoading = true
+            error = null
+            fetchAndUpdateSections()
+            isLoading = false
+            startPeriodicRefresh()
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
             isLoading = true
-            error = null
+            fetchAndUpdateSections()
+            isLoading = false
+            startPeriodicRefresh()
+        }
+    }
+
+    private suspend fun fetchAndUpdateSections() {
+        if (!refreshMutex.tryLock()) return
+        try {
             val prefs = preferencesStore.preferences.first()
             mediaRepository.getHomeSections()
-                .onSuccess { sections ->
+                .onSuccess { fetchedSections ->
                     val filteredSections = if (prefs.kidsModeEnabled) {
-                        sections.map { section ->
+                        fetchedSections.map { section ->
                             section.copy(items = section.items.filter { isAllowedForKids(it, prefs.kidsModeMaxRating) })
                         }.filter { it.items.isNotEmpty() }
-                    } else sections
-                    this@HomeViewModel.sections = filteredSections
+                    } else fetchedSections
+
+                    if (this@HomeViewModel.sections != filteredSections) {
+                        this@HomeViewModel.sections = filteredSections
+                    }
+
                     val continueWatching = filteredSections
-                        .find { it.type == com.raulshma.jellyplay.core.model.HomeSectionType.CONTINUE_WATCHING }
+                        .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     preferencesStore.setContinueWatching(continueWatching)
                     val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
@@ -78,17 +111,39 @@ class HomeViewModel @Inject constructor(
 
                     if (prefs.kidsModeEnabled) {
                         mediaRepository.getFavorites(limit = 20)
-                            .onSuccess { favorites = it.items.filter { item -> isAllowedForKids(item, prefs.kidsModeMaxRating) } }
+                            .onSuccess { result ->
+                                val filteredFavorites = result.items.filter { item ->
+                                    isAllowedForKids(item, prefs.kidsModeMaxRating)
+                                }
+                                if (this@HomeViewModel.favorites != filteredFavorites) {
+                                    this@HomeViewModel.favorites = filteredFavorites
+                                }
+                            }
                     }
+
+                    error = null
                 }
                 .onFailure {
-                    error = it.message ?: "${it::class.simpleName}"
+                    if (sections.isEmpty()) {
+                        error = it.message ?: "${it::class.simpleName}"
+                    }
                 }
-            isLoading = false
+        } finally {
+            refreshMutex.unlock()
         }
     }
 
-    private fun isAllowedForKids(item: com.raulshma.jellyplay.core.model.MediaItem, maxRating: String): Boolean {
+    private fun startPeriodicRefresh() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            while (true) {
+                delay(REFRESH_INTERVAL_MS)
+                fetchAndUpdateSections()
+            }
+        }
+    }
+
+    private fun isAllowedForKids(item: MediaItem, maxRating: String): Boolean {
         if (item.officialRating == null) return true
         val kidRatings = listOf("G", "TV-Y", "TV-Y7", "TV-G", "PG", "TV-PG")
         val maxIndex = kidRatings.indexOf(maxRating)
