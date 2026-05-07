@@ -104,7 +104,7 @@ interface MediaRepository {
 
     suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
 
-    suspend fun getSyncPlayInfo(): Result<SyncPlayGroupInfo>
+    suspend fun getSyncPlayInfo(groupId: String? = null): Result<SyncPlayGroupInfo>
 
     suspend fun syncPlayReady(
         positionTicks: Long = 0L,

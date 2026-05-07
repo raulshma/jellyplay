@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 
@@ -82,6 +83,19 @@ fun SyncPlayScreen(
         hasError = error != null,
         networkStatus = networkStatus,
     )
+
+    LaunchedEffect(Unit) {
+        viewModel.loadGroups()
+    }
+
+    LaunchedEffect(isInGroup) {
+        if (!isInGroup) {
+            while (true) {
+                delay(5000)
+                viewModel.refreshGroups()
+            }
+        }
+    }
 
     navigateToPlayer?.let { request ->
         LaunchedEffect(request) {

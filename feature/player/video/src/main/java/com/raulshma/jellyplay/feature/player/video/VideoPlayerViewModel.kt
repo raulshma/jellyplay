@@ -870,6 +870,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun releaseInternals() {
         progressReporter.cancelJobs()
+        syncPlayController.reset()
         val engine = playerEngine
         if (engine is ExoPlayerEngine) {
             engine.releaseMediaSession(sessionManager)

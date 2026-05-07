@@ -46,19 +46,21 @@ class SyncPlayManager @Inject constructor(
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
 ) {
-    private var activeGroupId = AtomicReference<String?>(null)
+    private var activeGroupIdReference = AtomicReference<String?>(null)
     private var isGroupActive = AtomicBoolean(false)
     private var cachedGroup = AtomicReference<SyncPlayGroup?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var eventJob: Job? = null
     private var keepAliveJob: Job? = null
 
-    private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 10)
+    private val _commands = MutableSharedFlow<SyncPlayCommand>(replay = 1, extraBufferCapacity = 10)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
 
-    val isInSyncPlaySession: Boolean get() = isGroupActive.get() && activeGroupId.get() != null
+    val activeGroupId: String? get() = activeGroupIdReference.get()
+
+    val isInSyncPlaySession: Boolean get() = isGroupActive.get() && activeGroupIdReference.get() != null
 
     fun startListening() {
         if (eventJob?.isActive == true) return
@@ -122,7 +124,7 @@ class SyncPlayManager @Inject constructor(
                             val participants = event.data.optJSONArray("Participants")
                             val count = participants?.length() ?: cachedGroup.get()?.participantCount ?: 0
                             cachedGroup.set(SyncPlayGroup(
-                                groupId = activeGroupId.get() ?: "",
+                                groupId = activeGroupIdReference.get() ?: "",
                                 groupName = groupName,
                                 participantCount = count,
                                 participants = (0 until count).mapNotNull { participants?.optString(it) },
@@ -155,7 +157,7 @@ class SyncPlayManager @Inject constructor(
                             }
                             val groupName = event.data.optString("GroupName", cachedGroup.get()?.groupName ?: "")
                             cachedGroup.set(SyncPlayGroup(
-                                groupId = activeGroupId.get() ?: "",
+                                groupId = activeGroupIdReference.get() ?: "",
                                 groupName = groupName,
                                 participantCount = cachedGroup.get()?.participantCount ?: 0,
                                 participants = cachedGroup.get()?.participants ?: emptyList(),
@@ -193,7 +195,7 @@ class SyncPlayManager @Inject constructor(
                         "GroupLeft" -> {
                             cachedGroup.set(null)
                             isGroupActive.set(false)
-                            activeGroupId.set(null)
+                            activeGroupIdReference.set(null)
                             _commands.tryEmit(SyncPlayCommand.GroupUpdate("", 0))
                         }
                         "SendChatMessage" -> {
@@ -213,7 +215,7 @@ class SyncPlayManager @Inject constructor(
                 "GroupLeft" -> {
                     cachedGroup.set(null)
                     isGroupActive.set(false)
-                    activeGroupId.set(null)
+                    activeGroupIdReference.set(null)
                     _commands.tryEmit(SyncPlayCommand.GroupUpdate("", 0))
                 }
             }
@@ -239,11 +241,11 @@ class SyncPlayManager @Inject constructor(
     suspend fun joinGroup(groupId: String): Result<Unit> {
         return try {
             apiClient.joinSyncPlayGroup(groupId)
-            activeGroupId.set(groupId)
+            activeGroupIdReference.set(groupId)
             isGroupActive.set(true)
+            startListening()
             connectWebSocket()
             refreshGroupInfo()
-            startListening()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -269,7 +271,7 @@ class SyncPlayManager @Inject constructor(
             Log.w(TAG, "leaveSyncPlayGroup API failed", e)
             Result.failure(e)
         }
-        activeGroupId.set(null)
+        activeGroupIdReference.set(null)
         isGroupActive.set(false)
         cachedGroup.set(null)
         eventJob?.cancel()
@@ -289,7 +291,7 @@ class SyncPlayManager @Inject constructor(
 
     private suspend fun refreshGroupInfo() {
         try {
-            val info = apiClient.getSyncPlayInfo().getOrNull() ?: return
+            val info = apiClient.getSyncPlayInfo(activeGroupIdReference.get()).getOrNull() ?: return
             cachedGroup.set(SyncPlayGroup(
                 groupId = info.groupId,
                 groupName = info.groupName,
@@ -450,7 +452,7 @@ class SyncPlayManager @Inject constructor(
     }
 
     fun reset() {
-        activeGroupId.set(null)
+        activeGroupIdReference.set(null)
         isGroupActive.set(false)
         cachedGroup.set(null)
         eventJob?.cancel()

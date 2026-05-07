@@ -167,8 +167,8 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
         apiClient.createSyncPlayGroup(groupName)
 
-    override suspend fun getSyncPlayInfo(): Result<SyncPlayGroupInfo> =
-        apiClient.getSyncPlayInfo()
+    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
+        apiClient.getSyncPlayInfo(groupId)
 
     override suspend fun syncPlayReady(
         positionTicks: Long,

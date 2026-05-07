@@ -55,9 +55,12 @@ class SyncPlayViewModel @Inject constructor(
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
     val navigateToPlayer = _navigateToPlayer.asStateFlow()
 
-    private var pollJob: Job? = null
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
+
+    init {
+        loadGroups()
+    }
 
     fun loadGroups() {
         viewModelScope.launch {
@@ -84,16 +87,7 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = true
                     loadCurrentGroup()
-                    startPolling()
                     startCommandListener()
-                    val group = currentGroup
-                    if (!group?.playingItemId.isNullOrBlank()) {
-                        _navigateToPlayer.value = PlayItemRequest(
-                            itemId = group!!.playingItemId!!,
-                            positionTicks = group.positionTicks ?: 0L,
-                        )
-                        lastHandledPlayingItemId = group.playingItemId
-                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to join group"
@@ -108,7 +102,6 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = false
                     currentGroup = null
-                    pollJob?.cancel()
                     commandJob?.cancel()
                     lastHandledPlayingItemId = null
                     loadGroups()
@@ -177,7 +170,6 @@ class SyncPlayViewModel @Inject constructor(
                         if (command.groupName.isBlank() && command.participantCount == 0) {
                             isInGroup = false
                             currentGroup = null
-                            pollJob?.cancel()
                             commandJob?.cancel()
                         } else {
                             loadCurrentGroup()
@@ -238,30 +230,22 @@ class SyncPlayViewModel @Inject constructor(
         showQueueSheet = show
     }
 
+    fun refreshGroups() {
+        viewModelScope.launch {
+            mediaRepository.getSyncPlayGroups()
+                .onSuccess { groups = it }
+                .onFailure { /* silently fail on background refresh */ }
+        }
+    }
+
     private suspend fun loadCurrentGroup() {
-        mediaRepository.getSyncPlayInfo()
+        mediaRepository.getSyncPlayInfo(syncPlayManager.activeGroupId)
             .onSuccess { currentGroup = it }
             .onFailure { currentGroup = null }
     }
 
-    private fun startPolling() {
-        pollJob?.cancel()
-        pollJob = viewModelScope.launch {
-            while (true) {
-                try {
-                    delay(2000)
-                    mediaRepository.getSyncPlayInfo()
-                        .onSuccess { currentGroup = it }
-                } catch (_: Exception) {
-                    delay(5000)
-                }
-            }
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
-        pollJob?.cancel()
         commandJob?.cancel()
     }
 }

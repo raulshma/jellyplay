@@ -932,10 +932,13 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = apiResult {
+    override suspend fun getSyncPlayInfo(groupId: String?): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = apiResult {
         val groups = requireApi().syncPlayApi.syncPlayGetGroups().content
-        val groupInfo = groups.firstOrNull()
-            ?: throw IllegalStateException("Not in a SyncPlay group")
+        val groupInfo = if (groupId != null) {
+            groups.find { it.groupId.toString() == groupId }
+        } else {
+            groups.firstOrNull()
+        } ?: throw IllegalStateException("Not in a SyncPlay group")
         com.raulshma.jellyplay.core.model.SyncPlayGroupInfo(
             groupId = groupInfo.groupId.toString(),
             groupName = groupInfo.groupName ?: "",

@@ -80,7 +80,6 @@ import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitlePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
-import com.raulshma.jellyplay.feature.player.video.components.SyncPlayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
@@ -484,19 +483,6 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
-        if (uiState.isInSyncPlaySession) {
-            SyncPlayOverlay(
-                isVisible = true,
-                groupName = uiState.syncPlayGroupName ?: "Group",
-                participantCount = uiState.syncPlayParticipantCount,
-                isSynced = uiState.isSyncPlaySynced,
-                onClick = { currentSheet = PlayerSheet.SyncPlay },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 60.dp, start = 16.dp),
-            )
-        }
-
         if (uiState.isInSyncPlaySession && syncPlayChatVisible) {
             val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
             SyncPlayChatOverlay(
@@ -591,6 +577,9 @@ fun VideoPlayerScreen(
             onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
             onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
             isInSyncPlaySession = isInSyncPlaySession,
+            syncPlayGroupName = uiState.syncPlayGroupName,
+            syncPlayParticipantCount = uiState.syncPlayParticipantCount,
+            isSyncPlaySynced = uiState.isSyncPlaySynced,
             modifier = Modifier.fillMaxSize(),
         )
 
