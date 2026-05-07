@@ -48,6 +48,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -188,6 +190,12 @@ fun MediaRow(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val cardWidth = when (adaptiveInfo.windowSizeClass) {
+            WindowSizeClass.Expanded -> 200.dp
+            WindowSizeClass.Medium -> 180.dp
+            WindowSizeClass.Compact -> 160.dp
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -198,7 +206,7 @@ fun MediaRow(
                     imageUrl = imageUrlBuilder(item),
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item) },
-                    modifier = Modifier.width(160.dp),
+                    modifier = Modifier.width(cardWidth),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()

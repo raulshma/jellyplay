@@ -1,6 +1,11 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -26,6 +31,7 @@ class JellyfinWebSocketClient @Inject constructor(
     private var webSocket: WebSocket? = null
     private val _events = MutableSharedFlow<SyncPlayEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<SyncPlayEvent> = _events.asSharedFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var serverUrl: String? = null
     private var token: String? = null
@@ -77,15 +83,13 @@ class JellyfinWebSocketClient @Inject constructor(
             return
         }
         val delayMs = (1000L * attempts).coerceAtMost(30_000L)
-        Thread {
-            try {
-                Thread.sleep(delayMs)
-                if (serverUrl != null && token != null) {
-                    Log.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
-                    connectInternal()
-                }
-            } catch (_: InterruptedException) {}
-        }.start()
+        scope.launch {
+            delay(delayMs)
+            if (serverUrl != null && token != null) {
+                Log.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
+                connectInternal()
+            }
+        }
     }
 
     fun disconnect() {
@@ -113,11 +117,12 @@ class JellyfinWebSocketClient @Inject constructor(
             when (messageType) {
                 "SyncPlayCommand",
                 "SyncPlayGroupUpdate",
+                "Play",
+                "Playstate",
+                "GeneralCommand",
                 "KeepAlive",
-                "UserJoined",
-                "UserLeft",
-                "GroupLeft",
-                "GroupJoined" -> {
+                "GroupJoined",
+                "GroupLeft" -> {
                     _events.tryEmit(SyncPlayEvent(type = messageType, data = data))
                 }
             }
@@ -128,6 +133,14 @@ class JellyfinWebSocketClient @Inject constructor(
 
     fun sendKeepAlive() {
         val msg = JSONObject().put("MessageType", "KeepAlive")
+        webSocket?.send(msg.toString())
+    }
+
+    fun sendMessage(messageType: String, data: JSONObject = JSONObject()) {
+        val msg = JSONObject().apply {
+            put("MessageType", messageType)
+            put("Data", data)
+        }
         webSocket?.send(msg.toString())
     }
 

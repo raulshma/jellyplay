@@ -22,14 +22,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
@@ -42,6 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,11 +59,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import kotlinx.coroutines.delay
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncPlayScreen(
     onBack: () -> Unit,
+    onPlayItem: (String, Long) -> Unit,
     viewModel: SyncPlayViewModel = hiltViewModel(),
 ) {
     val groups = viewModel.groups
@@ -66,12 +76,33 @@ fun SyncPlayScreen(
     val error = viewModel.error
     val isInGroup = viewModel.isInGroup
     val showCreateDialog = viewModel.showCreateDialog
+    val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isLoading,
         hasError = error != null,
         networkStatus = networkStatus,
     )
+
+    LaunchedEffect(Unit) {
+        viewModel.loadGroups()
+    }
+
+    LaunchedEffect(isInGroup) {
+        if (!isInGroup) {
+            while (true) {
+                delay(5000)
+                viewModel.refreshGroups()
+            }
+        }
+    }
+
+    navigateToPlayer?.let { request ->
+        LaunchedEffect(request) {
+            onPlayItem(request.itemId, request.positionTicks)
+            viewModel.onNavigateToPlayerHandled()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -93,7 +124,7 @@ fun SyncPlayScreen(
                 actions = {
                     if (isInGroup) {
                         IconButton(onClick = { viewModel.leaveGroup() }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Leave group")
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Leave group")
                         }
                     }
                 },
@@ -132,7 +163,11 @@ fun SyncPlayScreen(
                     ActiveGroupView(
                         groupInfo = currentGroup,
                         onTogglePlayback = { viewModel.togglePlayback() },
+                        onStop = { viewModel.stop() },
                         onLeave = { viewModel.leaveGroup() },
+                        onSetRepeatMode = { viewModel.setRepeatMode(it) },
+                        onSetShuffleMode = { viewModel.setShuffleMode(it) },
+                        onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
                     )
                 }
 
@@ -247,12 +282,19 @@ private fun SyncPlayGroupCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActiveGroupView(
     groupInfo: com.raulshma.jellyplay.core.model.SyncPlayGroupInfo,
     onTogglePlayback: () -> Unit,
+    onStop: () -> Unit,
     onLeave: () -> Unit,
+    onSetRepeatMode: (SyncPlayRepeatMode) -> Unit,
+    onSetShuffleMode: (SyncPlayShuffleMode) -> Unit,
+    onSetIgnoreWait: (Boolean) -> Unit,
 ) {
+    var ignoreWait by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -322,10 +364,72 @@ private fun ActiveGroupView(
                         Spacer(Modifier.width(4.dp))
                         Text(if (groupInfo.isPlaying) "Pause" else "Play")
                     }
+                    FilledTonalButton(onClick = onStop) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop")
+                    }
                     OutlinedButton(onClick = onLeave) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Leave")
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Leave")
                         Spacer(Modifier.width(4.dp))
                         Text("Leave")
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            "Group Settings",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            var repeatExpanded by remember { mutableStateOf(false) }
+            Box {
+                FilledTonalButton(onClick = { repeatExpanded = true }) {
+                    Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(groupInfo.repeatMode.name, style = MaterialTheme.typography.labelSmall)
+                }
+                DropdownMenu(
+                    expanded = repeatExpanded,
+                    onDismissRequest = { repeatExpanded = false },
+                ) {
+                    SyncPlayRepeatMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.name) },
+                            onClick = {
+                                onSetRepeatMode(mode)
+                                repeatExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            var shuffleExpanded by remember { mutableStateOf(false) }
+            Box {
+                FilledTonalButton(onClick = { shuffleExpanded = true }) {
+                    Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(groupInfo.shuffleMode.name, style = MaterialTheme.typography.labelSmall)
+                }
+                DropdownMenu(
+                    expanded = shuffleExpanded,
+                    onDismissRequest = { shuffleExpanded = false },
+                ) {
+                    SyncPlayShuffleMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.name) },
+                            onClick = {
+                                onSetShuffleMode(mode)
+                                shuffleExpanded = false
+                            },
+                        )
                     }
                 }
             }

@@ -50,6 +50,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 fun ArtistDetailScreen(
@@ -102,20 +105,24 @@ private fun ArtistDetailContent(
     onTrackClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+    val albumCardWidth = if (isExpanded) 180.dp else 150.dp
+
     Box(modifier = Modifier.fillMaxSize()) {
         MediaImage(
             url = getBackdropUrl(artistId),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp),
+                .height(if (adaptiveInfo.isLandscape && isExpanded) 220.dp else 300.dp),
             contentScale = ContentScale.Crop,
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(if (adaptiveInfo.isLandscape && isExpanded) 220.dp else 300.dp)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -142,53 +149,98 @@ private fun ArtistDetailContent(
             modifier = Modifier.statusBarsPadding(),
         )
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 250.dp),
-            contentPadding = WindowInsets.navigationBars.asPaddingValues(),
-        ) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        if (adaptiveInfo.isLandscape && isExpanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 180.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(0.4f)
+                        .padding(horizontal = 16.dp)
+                ) {
                     Text(
                         text = artistName,
                         style = MaterialTheme.typography.headlineSmall,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-
                     Spacer(Modifier.height(16.dp))
-
                     if (albums.isNotEmpty()) {
                         Text(
                             text = "Albums",
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                LazyRow(
+                    modifier = Modifier
+                        .weight(0.6f)
+                        .padding(top = 40.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
+                        AlbumCard(
+                            album = album,
+                            imageUrl = getImageUrl(album.id),
+                            onClick = { onAlbumClick(album.id) },
+                            cardWidth = albumCardWidth,
+                        )
                     }
                 }
             }
-
-            if (albums.isNotEmpty()) {
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 250.dp),
+                contentPadding = WindowInsets.navigationBars.asPaddingValues(),
+            ) {
                 item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
-                            AlbumCard(
-                                album = album,
-                                imageUrl = getImageUrl(album.id),
-                                onClick = { onAlbumClick(album.id) },
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        Text(
+                            text = artistName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        if (albums.isNotEmpty()) {
+                            Text(
+                                text = "Albums",
+                                style = MaterialTheme.typography.titleMedium,
                             )
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
                 }
-            }
 
-            item {
-                Spacer(Modifier.height(32.dp))
+                if (albums.isNotEmpty()) {
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(albums, key = { it.id }, contentType = { "mediaItem" }) { album ->
+                                AlbumCard(
+                                    album = album,
+                                    imageUrl = getImageUrl(album.id),
+                                    onClick = { onAlbumClick(album.id) },
+                                    cardWidth = albumCardWidth,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                }
+
+                item {
+                    Spacer(Modifier.height(32.dp))
+                }
             }
         }
     }
@@ -199,11 +251,13 @@ private fun AlbumCard(
     album: MediaItem,
     imageUrl: String,
     onClick: () -> Unit,
+    cardWidth: androidx.compose.ui.unit.Dp = 150.dp,
 ) {
     Column(
         modifier = Modifier
-            .width(150.dp)
-            .clickable(onClick = onClick),
+            .width(cardWidth)
+            .clickable(onClick = onClick)
+            .tvFocusable(),
     ) {
         Box(
             modifier = Modifier

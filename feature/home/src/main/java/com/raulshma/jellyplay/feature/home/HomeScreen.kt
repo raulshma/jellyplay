@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,6 +84,8 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -92,6 +96,8 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import kotlinx.coroutines.delay
 
@@ -198,7 +204,14 @@ fun HomeScreen(
             LazyListState()
         }
         val density = LocalDensity.current
-        val headerHeight = 520.dp
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val isTv = isTvDevice()
+
+        val headerHeight = when {
+            isTv -> 420.dp
+            adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact -> 320.dp
+            else -> 520.dp
+        }
         val headerHeightPx = with(density) { headerHeight.toPx() }
 
         ArtworkThemeWrapper(
@@ -258,6 +271,9 @@ fun HomeScreen(
                 { item: MediaItem -> currentOnItemClick(item.id) }
             }
 
+            val showLandscapeHero = adaptiveInfo.isLandscape &&
+                    adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
                     error != null && sections.isEmpty() -> {
@@ -274,6 +290,72 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = Color.White.copy(alpha = 0.6f),
                                 )
+                            }
+                        } else if (showLandscapeHero) {
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                if (featuredItem != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .weight(0.55f)
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = featuredItem,
+                                            transitionSpec = {
+                                                fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+                                            },
+                                            label = "heroRotation",
+                                        ) { currentFeatured ->
+                                            HeroHeader(
+                                                item = currentFeatured,
+                                                backdropUrl = viewModel.getBackdropUrl(currentFeatured.id),
+                                                scrollOffset = 0f,
+                                                height = headerHeight,
+                                                backgroundColor = backgroundColor,
+                                                onClick = { onItemClick(currentFeatured.id) },
+                                            )
+                                        }
+                                    }
+                                }
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .weight(0.45f)
+                                        .fillMaxHeight(),
+                                    contentPadding = PaddingValues(
+                                        top = 100.dp,
+                                        bottom = 100.dp,
+                                        end = 24.dp,
+                                    ),
+                                ) {
+                                    items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
+                                        val section = sections[index]
+                                        StaggeredSection(
+                                            visible = sectionsVisible,
+                                            index = index,
+                                        ) {
+                                            if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                                section.type == HomeSectionType.NEXT_UP
+                                            ) {
+                                                ContinueWatchingRow(
+                                                    title = section.title,
+                                                    items = section.items,
+                                                    imageUrlBuilder = mediaImageUrlBuilder,
+                                                    backdropUrlBuilder = mediaBackdropUrlBuilder,
+                                                    onItemClick = mediaOnItemClick,
+                                                )
+                                            } else {
+                                                HomeMediaRow(
+                                                    title = section.title,
+                                                    items = section.items,
+                                                    imageUrlBuilder = mediaImageUrlBuilder,
+                                                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                                    onItemClick = mediaOnItemClick,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         } else {
                             LazyColumn(
@@ -385,17 +467,23 @@ fun HomeScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = {
-                                showSurprise = !showSurprise
-                                if (!showSurprise) autoRotateEnabled = true
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    showSurprise = !showSurprise
+                                    if (!showSurprise) autoRotateEnabled = true
+                                },
+                                modifier = Modifier.tvFocusable(),
+                            ) {
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = "Surprise Me",
                                     tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White,
                                 )
                             }
-                            IconButton(onClick = onSyncPlayClick) {
+                            IconButton(
+                                onClick = onSyncPlayClick,
+                                modifier = Modifier.tvFocusable(),
+                            ) {
                                 Icon(
                                     Icons.Default.Group,
                                     contentDescription = "SyncPlay",
@@ -409,7 +497,10 @@ fun HomeScreen(
                                     }
                                 }
                             ) {
-                                IconButton(onClick = onDownloadsClick) {
+                                IconButton(
+                                    onClick = onDownloadsClick,
+                                    modifier = Modifier.tvFocusable(),
+                                ) {
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Downloads",
@@ -417,7 +508,10 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            IconButton(onClick = onSettingsClick) {
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier.tvFocusable(),
+                            ) {
                                 Icon(
                                     Icons.Default.Settings,
                                     contentDescription = "Settings",
@@ -467,6 +561,7 @@ private fun HeroHeader(
                 indication = null,
                 onClick = onClick,
             )
+            .tvFocusable()
     ) {
         val imageModifier = Modifier.fillMaxSize()
         val resolvedModifier = if (sharedTransitionScope != null) {
@@ -619,6 +714,7 @@ private fun HeroHeader(
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(onClick = onClick)
+                        .tvFocusable()
                         .padding(horizontal = 24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -644,6 +740,7 @@ private fun HeroHeader(
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                         .clickable(onClick = onClick)
+                        .tvFocusable()
                         .padding(horizontal = 24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -668,6 +765,9 @@ private fun ContinueWatchingRow(
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val cardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 320.dp else 260.dp
+
     Column(modifier = modifier) {
         Text(
             text = title,
@@ -685,6 +785,7 @@ private fun ContinueWatchingRow(
                     imageUrl = imageUrlBuilder(item),
                     backdropUrl = backdropUrlBuilder(item),
                     onClick = { onItemClick(item) },
+                    cardWidth = cardWidth,
                 )
             }
         }
@@ -698,6 +799,7 @@ private fun WideMediaCard(
     imageUrl: String,
     backdropUrl: String,
     onClick: () -> Unit,
+    cardWidth: androidx.compose.ui.unit.Dp = 260.dp,
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -710,7 +812,7 @@ private fun WideMediaCard(
 
     Column(
         modifier = Modifier
-            .width(260.dp)
+            .width(cardWidth)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -721,7 +823,8 @@ private fun WideMediaCard(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            ),
+            )
+            .tvFocusable(),
     ) {
         Box(
             modifier = Modifier
@@ -820,6 +923,13 @@ private fun HomeMediaRow(
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val cardWidth = when (adaptiveInfo.windowSizeClass) {
+        WindowSizeClass.Expanded -> 180.dp
+        WindowSizeClass.Medium -> 160.dp
+        WindowSizeClass.Compact -> if (adaptiveInfo.isLandscape) 160.dp else 140.dp
+    }
+
     Column(modifier = modifier) {
         Text(
             text = title,
@@ -837,7 +947,7 @@ private fun HomeMediaRow(
                     imageUrl = imageUrlBuilder(item),
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item) },
-                    modifier = Modifier.width(140.dp),
+                    modifier = Modifier.width(cardWidth),
                     showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
                     progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()

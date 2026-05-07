@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -416,6 +417,11 @@ class JellyfinApiClientImpl @Inject constructor(
                         videoDoViTitle = stream.videoDoViTitle,
                     )
                 } ?: emptyList(),
+                trickplayInfo = item.trickplay
+                    ?.get(source.id.toString())
+                    ?.values
+                    ?.maxByOrNull { it.width ?: 0 }
+                    ?.toTrickplayInfo(),
             )
         } ?: emptyList()
         MediaDetail(
@@ -878,24 +884,34 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlayReady(): Result<Unit> = apiResult {
+    override suspend fun syncPlayReady(
+        positionTicks: Long,
+        isPlaying: Boolean,
+        playlistItemId: String?,
+    ): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayReady(
             org.jellyfin.sdk.model.api.ReadyRequestDto(
                 `when` = java.time.LocalDateTime.now(),
-                positionTicks = 0L,
-                isPlaying = true,
-                playlistItemId = java.util.UUID.randomUUID(),
+                positionTicks = positionTicks,
+                isPlaying = isPlaying,
+                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
+                    ?: java.util.UUID.randomUUID(),
             )
         )
     }
 
-    override suspend fun syncPlayBuffering(): Result<Unit> = apiResult {
+    override suspend fun syncPlayBuffering(
+        positionTicks: Long,
+        isPlaying: Boolean,
+        playlistItemId: String?,
+    ): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayBuffering(
             org.jellyfin.sdk.model.api.BufferRequestDto(
                 `when` = java.time.LocalDateTime.now(),
-                positionTicks = 0L,
-                isPlaying = false,
-                playlistItemId = java.util.UUID.randomUUID(),
+                positionTicks = positionTicks,
+                isPlaying = isPlaying,
+                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
+                    ?: java.util.UUID.randomUUID(),
             )
         )
     }
@@ -916,10 +932,13 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = apiResult {
+    override suspend fun getSyncPlayInfo(groupId: String?): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = apiResult {
         val groups = requireApi().syncPlayApi.syncPlayGetGroups().content
-        val groupInfo = groups.firstOrNull()
-            ?: throw IllegalStateException("Not in a SyncPlay group")
+        val groupInfo = if (groupId != null) {
+            groups.find { it.groupId.toString() == groupId }
+        } else {
+            groups.firstOrNull()
+        } ?: throw IllegalStateException("Not in a SyncPlay group")
         com.raulshma.jellyplay.core.model.SyncPlayGroupInfo(
             groupId = groupInfo.groupId.toString(),
             groupName = groupInfo.groupName ?: "",
@@ -931,6 +950,86 @@ class JellyfinApiClientImpl @Inject constructor(
                 )
             },
             isPlaying = groupInfo.state == org.jellyfin.sdk.model.api.GroupStateType.PLAYING,
+        )
+    }
+
+    override suspend fun syncPlayStop(): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayStop()
+    }
+
+    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayNextItem(
+            org.jellyfin.sdk.model.api.NextItemRequestDto(
+                playlistItemId = java.util.UUID.fromString(playlistItemId),
+            )
+        )
+    }
+
+    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayPreviousItem(
+            org.jellyfin.sdk.model.api.PreviousItemRequestDto(
+                playlistItemId = java.util.UUID.fromString(playlistItemId),
+            )
+        )
+    }
+
+    override suspend fun syncPlaySetRepeatMode(mode: com.raulshma.jellyplay.core.model.SyncPlayRepeatMode): Result<Unit> = apiResult {
+        val sdkMode = when (mode) {
+            com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_NONE -> org.jellyfin.sdk.model.api.GroupRepeatMode.REPEAT_NONE
+            com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ALL -> org.jellyfin.sdk.model.api.GroupRepeatMode.REPEAT_ALL
+            com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ONE -> org.jellyfin.sdk.model.api.GroupRepeatMode.REPEAT_ONE
+        }
+        requireApi().syncPlayApi.syncPlaySetRepeatMode(
+            org.jellyfin.sdk.model.api.SetRepeatModeRequestDto(mode = sdkMode)
+        )
+    }
+
+    override suspend fun syncPlaySetShuffleMode(mode: com.raulshma.jellyplay.core.model.SyncPlayShuffleMode): Result<Unit> = apiResult {
+        val sdkMode = when (mode) {
+            com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SORTED -> org.jellyfin.sdk.model.api.GroupShuffleMode.SORTED
+            com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SHUFFLE -> org.jellyfin.sdk.model.api.GroupShuffleMode.SHUFFLE
+        }
+        requireApi().syncPlayApi.syncPlaySetShuffleMode(
+            org.jellyfin.sdk.model.api.SetShuffleModeRequestDto(mode = sdkMode)
+        )
+    }
+
+    override suspend fun syncPlaySetNewQueue(
+        itemIds: List<String>,
+        playingItemId: String,
+        startPositionTicks: Long,
+    ): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlaySetNewQueue(
+            org.jellyfin.sdk.model.api.PlayRequestDto(
+                playingQueue = itemIds.map { java.util.UUID.fromString(it) },
+                playingItemPosition = itemIds.indexOf(playingItemId).takeIf { it >= 0 } ?: 0,
+                startPositionTicks = startPositionTicks,
+            )
+        )
+    }
+
+    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlaySetIgnoreWait(
+            org.jellyfin.sdk.model.api.IgnoreWaitRequestDto(ignoreWait = ignore)
+        )
+    }
+
+    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayRemoveFromPlaylist(
+            org.jellyfin.sdk.model.api.RemoveFromPlaylistRequestDto(
+                playlistItemIds = listOf(java.util.UUID.fromString(playlistItemId)),
+                clearPlayingItem = true,
+                clearPlaylist = false,
+            )
+        )
+    }
+
+    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayMovePlaylistItem(
+            org.jellyfin.sdk.model.api.MovePlaylistItemRequestDto(
+                playlistItemId = java.util.UUID.fromString(playlistItemId),
+                newIndex = newIndex,
+            )
         )
     }
 
@@ -1154,4 +1253,27 @@ class JellyfinApiClientImpl @Inject constructor(
         MediaType.MUSIC -> org.jellyfin.sdk.model.api.BaseItemKind.AUDIO
         MediaType.UNKNOWN -> null
     }
+
+    private fun org.jellyfin.sdk.model.api.TrickplayInfoDto.toTrickplayInfo() = TrickplayInfo(
+        width = width ?: 320,
+        height = height ?: 180,
+        tileWidth = tileWidth ?: 10,
+        tileHeight = tileHeight ?: 1,
+        thumbnailCount = thumbnailCount ?: 0,
+        interval = interval ?: 10_000,
+        bandwidth = bandwidth ?: 0,
+    )
+
+    override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
+        try {
+            withContext(Dispatchers.IO) {
+                requireApi().trickplayApi.getTrickplayTileImage(
+                    itemId = java.util.UUID.fromString(itemId),
+                    width = width,
+                    index = index,
+                ).content
+            }
+        } catch (_: Exception) {
+            null
+        }
 }

@@ -67,6 +67,9 @@ import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
 
@@ -117,6 +120,13 @@ fun LibraryScreen(
         top = 8.dp,
         bottom = 100.dp,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val gridCellSize = when (adaptiveInfo.windowSizeClass) {
+        WindowSizeClass.Expanded -> 180.dp
+        WindowSizeClass.Medium -> 160.dp
+        WindowSizeClass.Compact -> 150.dp
+    }
 
     Box(
         modifier = Modifier
@@ -382,7 +392,7 @@ fun LibraryScreen(
                                 // ── Media Grid ──
                                 LazyVerticalGrid(
                                     state = gridState,
-                                    columns = GridCells.Adaptive(150.dp),
+                                    columns = GridCells.Adaptive(gridCellSize),
                                     contentPadding = gridPadding,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -494,7 +504,8 @@ private fun GlassIconButton(
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -520,6 +531,7 @@ private fun GlassPill(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
+            .tvFocusable()
             .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow)),
         color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
         contentColor = if (selected) Color.Black else Color.White,

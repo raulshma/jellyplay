@@ -12,8 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
@@ -70,43 +71,51 @@ internal fun GestureOverlay(
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
 ) {
+    val currentOnSeekGesture by rememberUpdatedState(onSeekGesture)
+    val currentOnBrightnessGesture by rememberUpdatedState(onBrightnessGesture)
+    val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
+    val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .then(
                 if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {},
-                        onDragEnd = { onClearOverlays() },
-                        onDragCancel = { onClearOverlays() },
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (abs(dragAmount) > 20) {
-                                val seekDelta = ((dragAmount / size.width) * swipeSeekMaxMs).toLong()
-                                onSeekGesture(seekDelta)
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        var decided = false
+                        var isHorizontal = false
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            val totalDx = change.position.x - startX
+                            val totalDy = change.position.y - startY
+                            if (!decided && (abs(totalDx) > 50 || abs(totalDy) > 50)) {
+                                decided = true
+                                isHorizontal = abs(totalDx) > abs(totalDy)
                             }
-                        },
-                    )
-                } else Modifier
-            )
-            .then(
-                if (gesturesEnabled) Modifier.pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {},
-                        onDragEnd = { onClearOverlays() },
-                        onDragCancel = { onClearOverlays() },
-                        onVerticalDrag = { change, dragAmount ->
-                            if (abs(dragAmount) > 10) {
-                                val halfWidth = size.width / 2f
-                                if (change.position.x > halfWidth) {
-                                    val delta = -(dragAmount / size.height) * 0.5f
-                                    onVolumeGesture(delta)
+                            if (decided) {
+                                if (isHorizontal) {
+                                    val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
+                                    currentOnSeekGesture(seekDeltaMs)
                                 } else {
-                                    val delta = -(dragAmount / size.height) * 0.5f
-                                    onBrightnessGesture(delta)
+                                    val halfWidth = size.width / 2f
+                                    val dy = change.position.y - change.previousPosition.y
+                                    val delta = -(dy / size.height) * 0.5f
+                                    if (change.position.x > halfWidth) {
+                                        currentOnVolumeGesture(delta)
+                                    } else {
+                                        currentOnBrightnessGesture(delta)
+                                    }
                                 }
+                                change.consume()
                             }
-                        },
-                    )
+                        } while (true)
+                        currentOnClearOverlays()
+                    }
                 } else Modifier
             ),
     ) {

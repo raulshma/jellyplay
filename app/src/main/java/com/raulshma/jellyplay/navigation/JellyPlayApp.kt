@@ -36,11 +36,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveLayout
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
@@ -49,6 +54,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.tv.TvScaffold
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -128,9 +135,6 @@ private fun MainContent(
             currentRoute is Route.OfflinePlayer ||
             currentRoute is Route.LiveTvChannelPlayer
 
-    val configuration = LocalConfiguration.current
-    val isExpanded = configuration.screenWidthDp >= 600
-
     val activeTopLevelRoutes = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
@@ -148,63 +152,131 @@ private fun MainContent(
         label = "navBarColor",
     )
 
-    CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
-    Scaffold(
-        bottomBar = {
-            if (!isPlayerScreen && !isExpanded) {
-                NavigationBar(containerColor = animatedNavBarColor) {
-                    activeTopLevelRoutes.forEach { (route, label) ->
-                        NavigationBarItem(
-                            selected = route == currentTopLevel,
-                            onClick = { navigator.navigate(route) },
-                            icon = {
-                                NavIcon(route, label)
-                            },
-                            label = { Text(label) },
-                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                indicatorColor = Color.White.copy(alpha = 0.15f),
-                                selectedIconColor = Color.White,
-                                selectedTextColor = Color.White,
-                                unselectedIconColor = Color.White.copy(alpha = 0.6f),
-                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
-                            ),
+    val isTv = isTvDevice()
+
+    val configuration = LocalConfiguration.current
+    val adaptiveInfo = classifyWindow(configuration.screenWidthDp, configuration.screenHeightDp)
+
+    CompositionLocalProvider(LocalAdaptiveInfo provides adaptiveInfo) {
+        val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+
+        CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
+            if (isTv && !isPlayerScreen) {
+                TvScaffold {
+                    TvMainLayout(
+                        isExpanded = true,
+                        isPlayerScreen = false,
+                        animatedNavBarColor = animatedNavBarColor,
+                        activeTopLevelRoutes = activeTopLevelRoutes,
+                        currentTopLevel = currentTopLevel,
+                        navigator = navigator,
+                        navigationState = navigationState,
+                        onLogout = onLogout,
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                    )
+                }
+            } else {
+                Scaffold(
+                    bottomBar = {
+                        if (!isPlayerScreen && !isExpanded) {
+                            NavigationBar(containerColor = animatedNavBarColor) {
+                                activeTopLevelRoutes.forEach { (route, label) ->
+                                    NavigationBarItem(
+                                        selected = route == currentTopLevel,
+                                        onClick = { navigator.navigate(route) },
+                                        icon = {
+                                            NavIcon(route, label)
+                                        },
+                                        label = { Text(label) },
+                                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                            indicatorColor = Color.White.copy(alpha = 0.15f),
+                                            selectedIconColor = Color.White,
+                                            selectedTextColor = Color.White,
+                                            unselectedIconColor = Color.White.copy(alpha = 0.6f),
+                                            unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                ) { innerPadding ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding())
+                    ) {
+                        if (!isPlayerScreen && isExpanded) {
+                            NavigationRail(
+                                containerColor = animatedNavBarColor,
+                            ) {
+                                activeTopLevelRoutes.forEach { (route, label) ->
+                                    NavigationRailItem(
+                                        selected = route == currentTopLevel,
+                                        onClick = { navigator.navigate(route) },
+                                        icon = {
+                                            NavIcon(route, label)
+                                        },
+                                        label = { Text(label) },
+                                    )
+                                }
+                            }
+                        }
+                        MainNavDisplay(
+                            navigationState = navigationState,
+                            navigator = navigator,
+                            onLogout = onLogout,
+                            homeMode = homeMode,
+                            onModeChange = onModeChange,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
             }
-        },
-    ) { innerPadding ->
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding())
-        ) {
-            if (!isPlayerScreen && isExpanded) {
-                NavigationRail(
-                    containerColor = animatedNavBarColor,
-                ) {
-                    activeTopLevelRoutes.forEach { (route, label) ->
-                        NavigationRailItem(
-                            selected = route == currentTopLevel,
-                            onClick = { navigator.navigate(route) },
-                            icon = {
-                                NavIcon(route, label)
-                            },
-                            label = { Text(label) },
-                        )
-                    }
-                }
-            }
-            MainNavDisplay(
-                navigationState = navigationState,
-                navigator = navigator,
-                onLogout = onLogout,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
-                modifier = Modifier.weight(1f),
-            )
         }
     }
+}
+
+@Composable
+private fun TvMainLayout(
+    isExpanded: Boolean,
+    isPlayerScreen: Boolean,
+    animatedNavBarColor: Color,
+    activeTopLevelRoutes: LinkedHashMap<Route, String>,
+    currentTopLevel: androidx.navigation3.runtime.NavKey,
+    navigator: Navigator,
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    onLogout: () -> Unit,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxSize()) {
+        if (!isPlayerScreen) {
+            NavigationRail(
+                containerColor = animatedNavBarColor,
+                modifier = Modifier.padding(vertical = 48.dp),
+            ) {
+                activeTopLevelRoutes.forEach { (route, label) ->
+                    NavigationRailItem(
+                        selected = route == currentTopLevel,
+                        onClick = { navigator.navigate(route) },
+                        icon = {
+                            NavIcon(route, label)
+                        },
+                        label = { Text(label) },
+                    )
+                }
+            }
+        }
+        MainNavDisplay(
+            navigationState = navigationState,
+            navigator = navigator,
+            onLogout = onLogout,
+            homeMode = homeMode,
+            onModeChange = onModeChange,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

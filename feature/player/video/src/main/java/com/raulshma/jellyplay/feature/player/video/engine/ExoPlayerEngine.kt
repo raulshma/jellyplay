@@ -38,8 +38,11 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -437,6 +440,26 @@ class ExoPlayerEngine(
         val pv = PlayerView(ctx).apply {
             this.player = this@ExoPlayerEngine.player
             useController = false
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
+        // Reparent SubtitleView out of AspectRatioFrameLayout so subtitles can reach
+        // the bottom of the screen (e.g. into black bars for letterboxed content).
+        pv.post {
+            val subtitleView = pv.subtitleView ?: return@post
+            val parent = subtitleView.parent as? android.view.ViewGroup ?: return@post
+            if (parent !== pv) {
+                parent.removeView(subtitleView)
+                pv.addView(
+                    subtitleView,
+                    android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+            }
         }
         playerView = pv
         return pv
@@ -454,30 +477,26 @@ class ExoPlayerEngine(
         val pv = (view as? PlayerView) ?: playerView ?: return
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or (style.backgroundColor.value and 0x00FFFFFF)
-        pv.subtitleView?.setStyle(
-            CaptionStyleCompat(
-                style.fontColor.value,
-                bgColorWithAlpha,
-                Color.TRANSPARENT,
-                when (style.edgeType) {
-                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> CaptionStyleCompat.EDGE_TYPE_RAISED
-                    com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> CaptionStyleCompat.EDGE_TYPE_DEPRESSED
-                    else -> CaptionStyleCompat.EDGE_TYPE_NONE
-                },
-                style.edgeColor.value,
-                null,
+        pv.subtitleView?.let { sv ->
+            sv.setStyle(
+                CaptionStyleCompat(
+                    style.fontColor.value,
+                    bgColorWithAlpha,
+                    Color.TRANSPARENT,
+                    when (style.edgeType) {
+                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED -> CaptionStyleCompat.EDGE_TYPE_RAISED
+                        com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> CaptionStyleCompat.EDGE_TYPE_DEPRESSED
+                        else -> CaptionStyleCompat.EDGE_TYPE_NONE
+                    },
+                    style.edgeColor.value,
+                    null,
+                )
             )
-        )
-        pv.subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
-        val bottomPaddingPx = (style.verticalPosition * pv.height).toInt()
-        pv.subtitleView?.setPadding(
-            pv.subtitleView?.paddingLeft ?: 0,
-            pv.subtitleView?.paddingTop ?: 0,
-            pv.subtitleView?.paddingRight ?: 0,
-            bottomPaddingPx,
-        )
+            sv.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
+            sv.setBottomPaddingFraction(style.verticalPosition)
+        }
     }
 
     override fun getCurrentCues(): List<androidx.media3.common.text.Cue> {
@@ -523,7 +542,18 @@ class ExoPlayerEngine(
         }
         p.addListener(posListener)
         trySend(p.currentPosition)
-        awaitClose { p.removeListener(posListener) }
+
+        val ticker = launch {
+            while (isActive) {
+                delay(250)
+                trySend(p.currentPosition)
+            }
+        }
+
+        awaitClose {
+            ticker.cancel()
+            p.removeListener(posListener)
+        }
     }
 
     private fun applyDialogueBoostInternal(enabled: Boolean) {

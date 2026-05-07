@@ -21,7 +21,7 @@ class SyncPlayScreenTest {
     @Test
     fun syncPlayScreen_showsEmptyState() {
         composeTestRule.setContent {
-            SyncPlayScreen(onBack = {})
+            SyncPlayScreen(onBack = {}, onPlayItem = { _, _ -> })
         }
 
         composeTestRule.onNodeWithText("SyncPlay").assertIsDisplayed()
@@ -32,7 +32,7 @@ class SyncPlayScreenTest {
     @Test
     fun syncPlayScreen_showsBackButton() {
         composeTestRule.setContent {
-            SyncPlayScreen(onBack = {})
+            SyncPlayScreen(onBack = {}, onPlayItem = { _, _ -> })
         }
 
         composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
@@ -41,7 +41,7 @@ class SyncPlayScreenTest {
     @Test
     fun syncPlayScreen_showsCreateFab() {
         composeTestRule.setContent {
-            SyncPlayScreen(onBack = {})
+            SyncPlayScreen(onBack = {}, onPlayItem = { _, _ -> })
         }
 
         composeTestRule.onNodeWithContentDescription("Create group").assertIsDisplayed()
@@ -50,7 +50,7 @@ class SyncPlayScreenTest {
     @Test
     fun syncPlayScreen_showsCreateDialogOnClick() {
         composeTestRule.setContent {
-            SyncPlayScreen(onBack = {})
+            SyncPlayScreen(onBack = {}, onPlayItem = { _, _ -> })
         }
 
         composeTestRule.onNodeWithContentDescription("Create group").performClick()

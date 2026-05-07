@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -165,11 +167,15 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
         apiClient.createSyncPlayGroup(groupName)
 
-    override suspend fun getSyncPlayInfo(): Result<SyncPlayGroupInfo> =
-        apiClient.getSyncPlayInfo()
+    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
+        apiClient.getSyncPlayInfo(groupId)
 
-    override suspend fun syncPlayReady(): Result<Unit> =
-        apiClient.syncPlayReady()
+    override suspend fun syncPlayReady(
+        positionTicks: Long,
+        isPlaying: Boolean,
+        playlistItemId: String?,
+    ): Result<Unit> =
+        apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId)
 
     override suspend fun syncPlayPause(): Result<Unit> =
         apiClient.syncPlayPause()
@@ -179,6 +185,37 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> =
         apiClient.syncPlaySeek(positionTicks)
+
+    override suspend fun syncPlayStop(): Result<Unit> =
+        apiClient.syncPlayStop()
+
+    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> =
+        apiClient.syncPlayNextItem(playlistItemId)
+
+    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> =
+        apiClient.syncPlayPreviousItem(playlistItemId)
+
+    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> =
+        apiClient.syncPlaySetRepeatMode(mode)
+
+    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> =
+        apiClient.syncPlaySetShuffleMode(mode)
+
+    override suspend fun syncPlaySetNewQueue(
+        itemIds: List<String>,
+        playingItemId: String,
+        startPositionTicks: Long,
+    ): Result<Unit> =
+        apiClient.syncPlaySetNewQueue(itemIds, playingItemId, startPositionTicks)
+
+    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
+        apiClient.syncPlaySetIgnoreWait(ignore)
+
+    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> =
+        apiClient.syncPlayRemoveFromPlaylist(playlistItemId)
+
+    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
+        apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
         apiClient.toggleFavorite(itemId)
