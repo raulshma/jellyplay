@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -396,6 +397,25 @@ private fun YouTubeStyleSeekBar(
                 .height(24.dp)
                 .pointerInput(duration) {
                     if (duration <= 0) return@pointerInput
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            onSeekStart()
+                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            dragFraction = fraction
+                            onSeek(fraction)
+                            isDragging = true
+                        },
+                        onDrag = { change, dragAmount ->
+                            val fraction = (dragFraction + (dragAmount.x / size.width)).coerceIn(0f, 1f)
+                            dragFraction = fraction
+                            onSeek(fraction)
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            onSeekEnd()
+                        },
+                    )
                     detectTapGestures(
                         onPress = { offset ->
                             onSeekStart()
@@ -403,11 +423,9 @@ private fun YouTubeStyleSeekBar(
                             dragFraction = fraction
                             onSeek(fraction)
                             isDragging = true
-                            val released = tryAwaitRelease()
-                            if (released) {
-                                isDragging = false
-                                onSeekEnd()
-                            }
+                            tryAwaitRelease()
+                            isDragging = false
+                            onSeekEnd()
                         },
                     )
                 },

@@ -12,8 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,38 +75,42 @@ internal fun GestureOverlay(
             .fillMaxSize()
             .then(
                 if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {},
-                        onDragEnd = { onClearOverlays() },
-                        onDragCancel = { onClearOverlays() },
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (abs(dragAmount) > 20) {
-                                val seekDelta = ((dragAmount / size.width) * swipeSeekMaxMs).toLong()
-                                onSeekGesture(seekDelta)
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var totalX = 0f
+                        var totalY = 0f
+                        var decided = false
+                        var isHorizontal = false
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            val dx = change.position.x - change.previousPosition.x
+                            val dy = change.position.y - change.previousPosition.y
+                            totalX += dx
+                            totalY += dy
+                            if (!decided && (abs(totalX) > 20 || abs(totalY) > 20)) {
+                                decided = true
+                                isHorizontal = abs(totalX) > abs(totalY)
                             }
-                        },
-                    )
-                } else Modifier
-            )
-            .then(
-                if (gesturesEnabled) Modifier.pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {},
-                        onDragEnd = { onClearOverlays() },
-                        onDragCancel = { onClearOverlays() },
-                        onVerticalDrag = { change, dragAmount ->
-                            if (abs(dragAmount) > 10) {
-                                val halfWidth = size.width / 2f
-                                if (change.position.x > halfWidth) {
-                                    val delta = -(dragAmount / size.height) * 0.5f
-                                    onVolumeGesture(delta)
+                            if (decided) {
+                                if (isHorizontal) {
+                                    val seekDelta = ((dx / size.width) * swipeSeekMaxMs).toLong()
+                                    onSeekGesture(seekDelta)
                                 } else {
-                                    val delta = -(dragAmount / size.height) * 0.5f
-                                    onBrightnessGesture(delta)
+                                    val halfWidth = size.width / 2f
+                                    val delta = -(dy / size.height) * 0.5f
+                                    if (change.position.x > halfWidth) {
+                                        onVolumeGesture(delta)
+                                    } else {
+                                        onBrightnessGesture(delta)
+                                    }
                                 }
+                                change.consume()
                             }
-                        },
-                    )
+                        } while (true)
+                        onClearOverlays()
+                    }
                 } else Modifier
             ),
     ) {
