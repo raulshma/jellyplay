@@ -56,13 +56,35 @@ class HomeViewModel @Inject constructor(
     private var refreshJob: Job? = null
 
     init {
+        // First, listen for user changes 
         viewModelScope.launch {
-            preferencesStore.preferences.collect { prefs ->
-            kidsModeEnabled = prefs.kidsModeEnabled
-            homeMode = prefs.homeMode
-            dynamicTheming = prefs.dynamicTheming
+            var previousUserId: String? = null
+            preferencesStore.activeUserId.collect { userId ->
+                if (previousUserId != null && previousUserId != userId) {
+                    // User switched, force a full refresh with cleared state
+                    refreshJob?.cancel()
+                    sections = emptyList()
+                    favorites = emptyList()
+                    error = null
+                    isLoading = true
+                    fetchAndUpdateSections()
+                    isLoading = false
+                    startPeriodicRefresh()
+                }
+                previousUserId = userId
             }
         }
+        
+        // Listen for preference changes
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                kidsModeEnabled = prefs.kidsModeEnabled
+                homeMode = prefs.homeMode
+                dynamicTheming = prefs.dynamicTheming
+            }
+        }
+        
+        // Finally, load initial data
         loadInitial()
     }
 
@@ -79,6 +101,9 @@ class HomeViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             isLoading = true
+            sections = emptyList()
+            favorites = emptyList()
+            error = null
             fetchAndUpdateSections()
             isLoading = false
             startPeriodicRefresh()
