@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import android.graphics.Bitmap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
@@ -18,7 +19,7 @@ class TrickplayOverlayTest {
         composeTestRule.setContent {
             MaterialTheme {
                 TrickplayOverlay(
-                    imageUrl = null,
+                    bitmap = null,
                     positionMs = 90_000L,
                 )
             }
@@ -31,7 +32,7 @@ class TrickplayOverlayTest {
         composeTestRule.setContent {
             MaterialTheme {
                 TrickplayOverlay(
-                    imageUrl = null,
+                    bitmap = null,
                     positionMs = 3_600_000L,
                 )
             }
@@ -44,7 +45,7 @@ class TrickplayOverlayTest {
         composeTestRule.setContent {
             MaterialTheme {
                 TrickplayOverlay(
-                    imageUrl = null,
+                    bitmap = null,
                     positionMs = 0L,
                 )
             }
@@ -53,15 +54,17 @@ class TrickplayOverlayTest {
     }
 
     @Test
-    fun trickplayOverlay_withImageUrl_displaysTime() {
+    fun trickplayOverlay_withBitmap_displaysTime() {
+        val bitmap = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
         composeTestRule.setContent {
             MaterialTheme {
                 TrickplayOverlay(
-                    imageUrl = "https://example.com/thumb.jpg",
+                    bitmap = bitmap,
                     positionMs = 45_000L,
                 )
             }
         }
         composeTestRule.onNodeWithText("00:45").assertIsDisplayed()
+        bitmap.recycle()
     }
 }

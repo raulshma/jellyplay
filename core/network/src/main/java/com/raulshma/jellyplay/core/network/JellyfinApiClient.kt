@@ -235,4 +235,6 @@ interface JellyfinApiClient {
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
+
+    suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray?
 }

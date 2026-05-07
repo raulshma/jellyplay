@@ -55,4 +55,7 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit> =
         apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+
+    override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
+        apiClient.getTrickplayTileImage(itemId, width, index)
 }

@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -416,6 +417,11 @@ class JellyfinApiClientImpl @Inject constructor(
                         videoDoViTitle = stream.videoDoViTitle,
                     )
                 } ?: emptyList(),
+                trickplayInfo = item.trickplay
+                    ?.get(source.id.toString())
+                    ?.values
+                    ?.maxByOrNull { it.width ?: 0 }
+                    ?.toTrickplayInfo(),
             )
         } ?: emptyList()
         MediaDetail(
@@ -1154,4 +1160,27 @@ class JellyfinApiClientImpl @Inject constructor(
         MediaType.MUSIC -> org.jellyfin.sdk.model.api.BaseItemKind.AUDIO
         MediaType.UNKNOWN -> null
     }
+
+    private fun org.jellyfin.sdk.model.api.TrickplayInfoDto.toTrickplayInfo() = TrickplayInfo(
+        width = width ?: 320,
+        height = height ?: 180,
+        tileWidth = tileWidth ?: 10,
+        tileHeight = tileHeight ?: 1,
+        thumbnailCount = thumbnailCount ?: 0,
+        interval = interval ?: 10_000,
+        bandwidth = bandwidth ?: 0,
+    )
+
+    override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
+        try {
+            withContext(Dispatchers.IO) {
+                requireApi().trickplayApi.getTrickplayTileImage(
+                    itemId = java.util.UUID.fromString(itemId),
+                    width = width,
+                    index = index,
+                ).content
+            }
+        } catch (_: Exception) {
+            null
+        }
 }

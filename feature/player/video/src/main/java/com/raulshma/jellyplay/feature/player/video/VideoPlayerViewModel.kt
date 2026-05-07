@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -32,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
+import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -78,7 +80,7 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var autoplayNext: Boolean = false
-    private var trickplayBaseUrl: String? = null
+    private val trickplayManager = TrickplayManager(playbackRepository)
 
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
@@ -106,7 +108,7 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
-        trickplayBaseUrl = null
+        trickplayManager.clear()
 
         viewModelScope.launch {
             val prefs = preferencesStore.preferences.first()
@@ -188,7 +190,12 @@ class VideoPlayerViewModel @Inject constructor(
                 detectedAspectRatio = detectedRatio,
                 playMethod = playMethodStr,
                 seriesId = detail.item.seriesId,
+                trickplayInfo = source?.trickplayInfo,
             ) }
+
+            source?.trickplayInfo?.let { info ->
+                trickplayManager.initialize(itemId, info)
+            }
 
             val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
             val file = localDownload?.let {
@@ -731,22 +738,10 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(ocrText = null) }
     }
 
-    fun getTrickplayImageUrl(positionMs: Long): String? {
-        val itemId = currentItemId ?: return null
-        val mediaSourceId = _uiState.value.currentMediaSource?.id ?: itemId
-        val base = trickplayBaseUrl ?: run {
-            val server = playbackRepository.getImageUrl(itemId).substringBefore("/Items")
-            trickplayBaseUrl = server
-            server
-        }
-        val index = (positionMs / 10_000).toInt()
-        
-        // Extract api_key from getStreamUrl so the trickplay image endpoint can authenticate if needed
-        val streamUrl = playbackRepository.getStreamUrl(itemId, mediaSourceId, 0)
-        val apiKey = if (streamUrl.contains("api_key=")) streamUrl.substringAfter("api_key=") else ""
-        val suffix = if (apiKey.isNotEmpty()) "?api_key=$apiKey" else ""
-        
-        return "$base/Videos/$itemId/$mediaSourceId/Trickplay/320/$index.jpg$suffix"
+    suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
+        val state = _uiState.value
+        if (!state.trickplayEnabled && !state.trickplayOnSeekGesture) return null
+        return trickplayManager.getThumbnail(positionMs)
     }
 
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
@@ -805,7 +800,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerEngine?.release()
         playerEngine = null
         currentItemId = null
-        trickplayBaseUrl = null
+        trickplayManager.clear()
         selectedSubtitleTrackId = null
         secondarySubtitleCues = emptyList()
         _uiState.update { it.copy(

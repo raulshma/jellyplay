@@ -119,6 +119,9 @@ fun VideoPlayerScreen(
     var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
     var isGestureSeeking by remember { mutableStateOf(false) }
 
+    var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
     LaunchedEffect(itemId) {
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
     }
@@ -387,9 +390,8 @@ fun VideoPlayerScreen(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
         ) {
-            val trickplayImageUrl = viewModel.getTrickplayImageUrl(gestureSeekPositionMs)
             TrickplayOverlay(
-                imageUrl = trickplayImageUrl,
+                bitmap = gestureTrickplayBitmap,
                 positionMs = gestureSeekPositionMs,
             )
         }
@@ -536,9 +538,8 @@ fun VideoPlayerScreen(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
-            val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
             TrickplayOverlay(
-                imageUrl = trickplayImageUrl,
+                bitmap = seekTrickplayBitmap,
                 positionMs = seekPositionMs,
             )
         }
@@ -552,10 +553,19 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(isGestureSeeking) {
-        if (isGestureSeeking) {
-            delay(1000)
-            isGestureSeeking = false
+    LaunchedEffect(isSeeking, seekPositionMs) {
+        if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            seekTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
+        } else if (!isSeeking) {
+            seekTrickplayBitmap = null
+        }
+    }
+
+    LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
+        if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+            gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
+        } else if (!isGestureSeeking) {
+            gestureTrickplayBitmap = null
         }
     }
 

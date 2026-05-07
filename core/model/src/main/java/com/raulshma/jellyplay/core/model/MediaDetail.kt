@@ -54,6 +54,7 @@ data class MediaSource(
     val directStreamUrl: String? = null,
     val path: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
+    val trickplayInfo: TrickplayInfo? = null,
 )
 
 @Immutable

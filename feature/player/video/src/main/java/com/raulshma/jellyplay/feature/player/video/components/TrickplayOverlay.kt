@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,14 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 
 @Composable
 fun TrickplayOverlay(
-    imageUrl: String?,
+    bitmap: Bitmap?,
     positionMs: Long,
     modifier: Modifier = Modifier,
 ) {
@@ -44,9 +46,9 @@ fun TrickplayOverlay(
                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (imageUrl != null) {
-                    AsyncImage(
-                        model = imageUrl,
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Trickplay thumbnail",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
