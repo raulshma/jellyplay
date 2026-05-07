@@ -16,4 +16,5 @@ sealed class PlayerSheet {
     data object Decoder : PlayerSheet()
     data object SubtitleDownload : PlayerSheet()
     data object Episodes : PlayerSheet()
+    data object SyncPlay : PlayerSheet()
 }

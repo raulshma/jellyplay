@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Gesture
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Language
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
@@ -466,6 +468,61 @@ fun SettingsScreen(
                     subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
                     trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
                     onClick = { showAudioDelayPicker = true },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "SyncPlay")
+            }
+
+            item {
+                var progressMode by remember { mutableStateOf(preferences.syncPlayProgressReportingMode) }
+                SettingListItem(
+                    icon = Icons.Default.Speed,
+                    title = "Progress Reporting",
+                    subtitle = when (progressMode) {
+                        "SUPPRESS_DURING" -> "Suppress during SyncPlay"
+                        "ALWAYS" -> "Always report"
+                        "NEVER" -> "Never report"
+                        else -> "Suppress during SyncPlay"
+                    },
+                    onClick = {
+                        val modes = listOf("SUPPRESS_DURING", "ALWAYS", "NEVER")
+                        val nextIndex = (modes.indexOf(progressMode) + 1) % modes.size
+                        progressMode = modes[nextIndex]
+                        viewModel.setSyncPlayProgressReportingMode(progressMode)
+                    },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Group,
+                    title = "Auto-Join Last Group",
+                    subtitle = "Automatically rejoin last group on app start",
+                    checked = preferences.syncPlayAutoJoinLastGroup,
+                    onCheckedChange = { viewModel.setSyncPlayAutoJoinLastGroup(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Notifications,
+                    title = "Join/Leave Notifications",
+                    subtitle = "Show when users join or leave",
+                    checked = preferences.syncPlayNotifyUserJoinLeave,
+                    onCheckedChange = { viewModel.setSyncPlayNotifyUserJoinLeave(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Notifications,
+                    title = "Default Ignore Wait",
+                    subtitle = "Ignore group waits by default when joining",
+                    checked = preferences.syncPlayDefaultIgnoreWait,
+                    onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
                 )
             }
 

@@ -311,4 +311,28 @@ class SettingsViewModel @Inject constructor(
     fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
     }
+
+    fun setSyncPlayProgressReportingMode(mode: String) {
+        viewModelScope.launch { preferencesStore.setSyncPlayProgressReportingMode(mode) }
+    }
+
+    fun setSyncPlayAutoJoinLastGroup(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlayAutoJoinLastGroup(enabled) }
+    }
+
+    fun setSyncPlayNotifyUserJoinLeave(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlayNotifyUserJoinLeave(enabled) }
+    }
+
+    fun setSyncPlayNotifyChatMessages(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlayNotifyChatMessages(enabled) }
+    }
+
+    fun setSyncPlayNotifySyncIssues(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlayNotifySyncIssues(enabled) }
+    }
+
+    fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlayDefaultIgnoreWait(enabled) }
+    }
 }

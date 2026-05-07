@@ -216,9 +216,17 @@ interface JellyfinApiClient {
 
     suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
 
-    suspend fun syncPlayReady(): Result<Unit>
+    suspend fun syncPlayReady(
+        positionTicks: Long = 0L,
+        isPlaying: Boolean = false,
+        playlistItemId: String? = null,
+    ): Result<Unit>
 
-    suspend fun syncPlayBuffering(): Result<Unit>
+    suspend fun syncPlayBuffering(
+        positionTicks: Long = 0L,
+        isPlaying: Boolean = false,
+        playlistItemId: String? = null,
+    ): Result<Unit>
 
     suspend fun syncPlayPause(): Result<Unit>
 
@@ -227,6 +235,28 @@ interface JellyfinApiClient {
     suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
 
     suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo>
+
+    suspend fun syncPlayStop(): Result<Unit>
+
+    suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit>
+
+    suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit>
+
+    suspend fun syncPlaySetRepeatMode(mode: com.raulshma.jellyplay.core.model.SyncPlayRepeatMode): Result<Unit>
+
+    suspend fun syncPlaySetShuffleMode(mode: com.raulshma.jellyplay.core.model.SyncPlayShuffleMode): Result<Unit>
+
+    suspend fun syncPlaySetNewQueue(
+        itemIds: List<String>,
+        playingItemId: String,
+        startPositionTicks: Long = 0L,
+    ): Result<Unit>
+
+    suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit>
+
+    suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit>
+
+    suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit>
 
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
 

@@ -98,6 +98,14 @@ class VideoPlayerViewModel @Inject constructor(
         viewModel = this,
         uiState = _uiState,
         getPlayerEngine = { playerEngine },
+        getCurrentItemId = { currentItemId },
+        onLoadItem = { itemId, positionTicks ->
+            if (currentItemId != itemId) {
+                initialize(itemId, null, positionTicks)
+            } else {
+                playerEngine?.seekTo(positionTicks / 10_000)
+            }
+        },
     )
 
     val playerEngineRef: PlayerEngine? get() = playerEngine
@@ -317,6 +325,7 @@ class VideoPlayerViewModel @Inject constructor(
                 if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
                     if (autoplayNext) playNextEpisode()
                 }
+                syncPlayController.onPlaybackStateChanged(playbackState)
             }
 
             engine.createPlayer(
@@ -705,6 +714,43 @@ class VideoPlayerViewModel @Inject constructor(
         syncPlayController.leaveGroup()
     }
 
+    fun syncPlayTogglePlayPause() {
+        viewModelScope.launch {
+            if (playerEngine?.isPlaying == true) {
+                syncPlayManager.sendPause()
+            } else {
+                syncPlayManager.sendUnpause()
+            }
+        }
+    }
+
+    fun syncPlaySeekTo(positionMs: Long) {
+        viewModelScope.launch {
+            syncPlayManager.sendSeek(positionMs * 10_000)
+        }
+    }
+
+    fun syncPlaySetIgnoreWait(ignore: Boolean) {
+        syncPlayController.setIgnoreWait(ignore)
+    }
+
+    fun syncPlayStop() {
+        syncPlayController.sendStop()
+    }
+
+    val syncPlayNotifications: kotlinx.coroutines.flow.SharedFlow<String>
+        get() = syncPlayController.notifications
+
+    val syncPlayIgnoreWait: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = syncPlayController.ignoreWait
+
+    val syncPlayChatMessages: kotlinx.coroutines.flow.StateFlow<List<com.raulshma.jellyplay.core.model.SyncPlayChatMessage>>
+        get() = syncPlayController.chatMessages
+
+    fun syncPlaySendChatMessage(text: String) {
+        syncPlayController.sendChatMessage(text)
+    }
+
     val isCastAvailable: Boolean
         get() = castManager.isCastAvailable
 
@@ -824,7 +870,6 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun releaseInternals() {
         progressReporter.cancelJobs()
-        syncPlayController.reset()
         val engine = playerEngine
         if (engine is ExoPlayerEngine) {
             engine.releaseMediaSession(sessionManager)

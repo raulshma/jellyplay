@@ -27,8 +27,9 @@ data class SyncPlayGroupInfo(
     val isPlaying: Boolean = false,
     val positionTicks: Long? = null,
     val playbackSpeed: Float = 1.0f,
-    val repeatMode: String = "RepeatNone",
-    val shuffleMode: String = "Sorted",
+    val repeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
+    val shuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
+    val playlistItemIds: List<String> = emptyList(),
 )
 
 @Immutable
@@ -57,4 +58,37 @@ enum class SyncPlayCommandType {
     SEEK,
     READY,
     BUFFERING,
+}
+
+@Immutable
+@Serializable
+enum class SyncPlayRepeatMode {
+    REPEAT_NONE,
+    REPEAT_ALL,
+    REPEAT_ONE,
+}
+
+@Immutable
+@Serializable
+enum class SyncPlayShuffleMode {
+    SORTED,
+    SHUFFLE,
+}
+
+@Immutable
+@Serializable
+data class SyncPlayChatMessage(
+    val id: String,
+    val userId: String,
+    val userName: String,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val type: SyncPlayChatMessageType = SyncPlayChatMessageType.USER,
+)
+
+@Immutable
+@Serializable
+enum class SyncPlayChatMessageType {
+    USER,
+    SYSTEM,
 }

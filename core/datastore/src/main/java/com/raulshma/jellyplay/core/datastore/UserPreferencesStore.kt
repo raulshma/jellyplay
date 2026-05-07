@@ -75,6 +75,12 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
+        val SYNCPLAY_PROGRESS_REPORTING_MODE = stringPreferencesKey("syncplay_progress_reporting_mode")
+        val SYNCPLAY_AUTO_JOIN_LAST_GROUP = stringPreferencesKey("syncplay_auto_join_last_group")
+        val SYNCPLAY_NOTIFY_USER_JOIN_LEAVE = stringPreferencesKey("syncplay_notify_user_join_leave")
+        val SYNCPLAY_NOTIFY_CHAT_MESSAGES = stringPreferencesKey("syncplay_notify_chat_messages")
+        val SYNCPLAY_NOTIFY_SYNC_ISSUES = stringPreferencesKey("syncplay_notify_sync_issues")
+        val SYNCPLAY_DEFAULT_IGNORE_WAIT = stringPreferencesKey("syncplay_default_ignore_wait")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -144,6 +150,12 @@ class UserPreferencesStore @Inject constructor(
             autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false,
             autoSkipOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false,
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
+            syncPlayProgressReportingMode = prefs[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] ?: "SUPPRESS_DURING",
+            syncPlayAutoJoinLastGroup = prefs[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP]?.toBoolean() ?: false,
+            syncPlayNotifyUserJoinLeave = prefs[Keys.SYNCPLAY_NOTIFY_USER_JOIN_LEAVE]?.toBoolean() ?: true,
+            syncPlayNotifyChatMessages = prefs[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES]?.toBoolean() ?: true,
+            syncPlayNotifySyncIssues = prefs[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES]?.toBoolean() ?: true,
+            syncPlayDefaultIgnoreWait = prefs[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT]?.toBoolean() ?: false,
         )
     }
 
@@ -356,6 +368,30 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlayProgressReportingMode(mode: String) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] = mode }
+    }
+
+    suspend fun setSyncPlayAutoJoinLastGroup(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlayNotifyUserJoinLeave(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_USER_JOIN_LEAVE] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlayNotifyChatMessages(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlayNotifySyncIssues(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

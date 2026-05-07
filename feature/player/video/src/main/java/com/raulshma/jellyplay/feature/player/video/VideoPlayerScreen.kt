@@ -81,6 +81,8 @@ import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitleP
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
@@ -123,6 +125,8 @@ fun VideoPlayerScreen(
     var gestureDeltaMs by remember { mutableLongStateOf(0L) }
     var isGestureSeeking by remember { mutableStateOf(false) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
+
+    var syncPlayChatVisible by remember { mutableStateOf(false) }
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -268,10 +272,26 @@ fun VideoPlayerScreen(
     val subtitleStyle = uiState.subtitleStyle
     val nextEpisode = uiState.nextEpisode
     val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
+    val isInSyncPlaySession = uiState.isInSyncPlaySession
 
-    val doPlay: () -> Unit = remember(engine) { { engine?.play() } }
-    val doPause: () -> Unit = remember(engine) { { engine?.pause() } }
-    val doSeekTo: (Long) -> Unit = remember(engine) { { ms -> engine?.seekTo(ms) } }
+    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession) {
+        {
+            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else engine?.play()
+        }
+    }
+    val doPause: () -> Unit = remember(engine, isInSyncPlaySession) {
+        {
+            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else engine?.pause()
+        }
+    }
+    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession) {
+        { ms ->
+            if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
+            else engine?.seekTo(ms)
+        }
+    }
     val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekBack(uiState.seekDurationMs) } }
     val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekForward(uiState.seekDurationMs) } }
     val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
@@ -470,9 +490,22 @@ fun VideoPlayerScreen(
                 groupName = uiState.syncPlayGroupName ?: "Group",
                 participantCount = uiState.syncPlayParticipantCount,
                 isSynced = uiState.isSyncPlaySynced,
+                onClick = { currentSheet = PlayerSheet.SyncPlay },
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = 60.dp, start = 16.dp),
+            )
+        }
+
+        if (uiState.isInSyncPlaySession && syncPlayChatVisible) {
+            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
+            SyncPlayChatOverlay(
+                messages = chatMessages,
+                isVisible = syncPlayChatVisible,
+                onSendMessage = { viewModel.syncPlaySendChatMessage(it) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 200.dp),
             )
         }
 
@@ -556,6 +589,8 @@ fun VideoPlayerScreen(
                 currentSheet = PlayerSheet.SubtitleDownload
             },
             onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
+            onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
+            isInSyncPlaySession = isInSyncPlaySession,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -632,6 +667,15 @@ fun VideoPlayerScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.syncPlayNotifications.collect { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = androidx.compose.material3.SnackbarDuration.Short,
+            )
+        }
+    }
+
     PlayerSheetRouter(
         currentSheet = currentSheet,
         onSheetChange = { sheet -> currentSheet = sheet },
@@ -641,6 +685,7 @@ fun VideoPlayerScreen(
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
+        onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
     )
 }
 
@@ -719,6 +764,7 @@ private fun PlayerSheetRouter(
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
     itemId: String,
+    onToggleChatOverlay: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -867,6 +913,32 @@ private fun PlayerSheetRouter(
                 },
                 onDismiss = dismissSheet,
                 getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            )
+        }
+        is PlayerSheet.SyncPlay -> {
+            val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
+            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
+            SyncPlayPlayerSheet(
+                groupName = uiState.syncPlayGroupName ?: "Group",
+                participantCount = uiState.syncPlayParticipantCount,
+                isSynced = uiState.isSyncPlaySynced,
+                isPlaying = uiState.isPlaying,
+                ignoreWait = syncPlayIgnoreWait,
+                chatMessages = chatMessages,
+                onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
+                onStop = { viewModel.syncPlayStop() },
+                onLeave = {
+                    viewModel.leaveSyncPlay()
+                    onToggleChatOverlay()
+                    onSheetChange(PlayerSheet.None)
+                },
+                onIgnoreWaitChange = { viewModel.syncPlaySetIgnoreWait(it) },
+                onSendChatMessage = { viewModel.syncPlaySendChatMessage(it) },
+                onToggleChatOverlay = {
+                    onToggleChatOverlay()
+                    onSheetChange(PlayerSheet.None)
+                },
+                onDismiss = dismissSheet,
             )
         }
         PlayerSheet.None -> { }

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FastForward
@@ -129,6 +130,8 @@ internal fun PlayerControls(
     onOcrClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
+    onSyncPlayClick: () -> Unit = {},
+    isInSyncPlaySession: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -343,6 +346,14 @@ internal fun PlayerControls(
                                 icon = Icons.Default.VideoLibrary,
                                 contentDescription = "Episodes",
                                 onClick = onEpisodesClick,
+                            )
+                        }
+                        if (isInSyncPlaySession) {
+                            PlayerIconButton(
+                                icon = Icons.Default.Group,
+                                contentDescription = "SyncPlay",
+                                onClick = onSyncPlayClick,
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                         PlayerIconButton(
