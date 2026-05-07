@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
 import com.raulshma.jellyplay.feature.player.video.components.CreditsSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
@@ -234,7 +235,7 @@ fun VideoPlayerScreen(
 
     val skipSegmentText: String? = when {
         isInIntro -> "Skip Intro"
-        isInCredits && !shouldShowUpNext -> "Skip Credits"
+        isInCredits -> "Skip Credits"
         else -> null
     }
     val onSkipSegment: () -> Unit = when {
@@ -416,7 +417,7 @@ fun VideoPlayerScreen(
         )
 
         IntroSkipOverlay(
-            isVisible = isInIntro && !showControls,
+            isVisible = isInIntro,
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -424,7 +425,7 @@ fun VideoPlayerScreen(
         )
 
         CreditsSkipOverlay(
-            isVisible = isInCredits && !shouldShowUpNext && !showControls,
+            isVisible = isInCredits && !shouldShowUpNext,
             onSkip = { viewModel.skipCredits() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -488,6 +489,9 @@ fun VideoPlayerScreen(
             )
         }
 
+        val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
+        val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+
         PlayerControls(
             title = title,
             subtitle = subtitle,
@@ -514,6 +518,8 @@ fun VideoPlayerScreen(
             supportsAudioDelay = uiState.engineCapabilities.audioDelay,
             supportsAudioPassthrough = uiState.engineCapabilities.audioPassthrough,
             supportsOcr = uiState.engineCapabilities.ocr,
+            hasEpisodes = hasEpisodes,
+            episodeBrowserEnabled = episodeBrowserEnabled,
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
             onSeekForward = { doSeekForward() },
@@ -548,6 +554,7 @@ fun VideoPlayerScreen(
                 viewModel.loadRemoteSubtitles()
                 currentSheet = PlayerSheet.SubtitleDownload
             },
+            onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -632,6 +639,7 @@ fun VideoPlayerScreen(
         currentPosition = currentPosition,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
+        itemId = itemId,
     )
 }
 
@@ -709,6 +717,7 @@ private fun PlayerSheetRouter(
     currentPosition: Long,
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
+    itemId: String,
 ) {
     val context = LocalContext.current
 
@@ -835,12 +844,28 @@ private fun PlayerSheetRouter(
         is PlayerSheet.OcrResult -> {
             OcrResultSheet(
                 ocrText = uiState.ocrText,
-            isOcrRunning = uiState.isOcrRunning,
+                isOcrRunning = uiState.isOcrRunning,
                 onDismiss = {
                     onSheetChange(PlayerSheet.None)
                     viewModel.clearOcrText()
                 },
                 context = context,
+            )
+        }
+        is PlayerSheet.Episodes -> {
+            EpisodePickerSheet(
+                seasons = uiState.seriesSeasons,
+                episodes = uiState.seasonEpisodes,
+                currentSeasonId = uiState.currentSeasonId,
+                currentEpisodeId = itemId,
+                isLoading = uiState.isLoadingEpisodes,
+                onSeasonSelect = { viewModel.loadSeasonEpisodes(it) },
+                onEpisodeSelect = { episode ->
+                    viewModel.playEpisode(episode.id, episode.playbackPositionTicks ?: 0L)
+                    onSheetChange(PlayerSheet.None)
+                },
+                onDismiss = dismissSheet,
+                getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
             )
         }
         PlayerSheet.None -> { }

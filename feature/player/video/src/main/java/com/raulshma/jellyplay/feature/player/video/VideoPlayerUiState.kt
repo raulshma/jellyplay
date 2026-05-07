@@ -69,6 +69,11 @@ data class VideoPlayerUiState(
     val skipOutroEnabled: Boolean = true,
     val autoSkipIntro: Boolean = false,
     val autoSkipOutro: Boolean = false,
+    val seriesSeasons: List<JellyfinMediaItem> = emptyList(),
+    val seasonEpisodes: List<JellyfinMediaItem> = emptyList(),
+    val currentSeasonId: String? = null,
+    val isLoadingEpisodes: Boolean = false,
+    val videoEpisodeBrowserEnabled: Boolean = true,
 ) {
     val isInIntro: Boolean
         get() {

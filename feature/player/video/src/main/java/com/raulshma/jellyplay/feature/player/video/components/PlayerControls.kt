@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -100,6 +101,8 @@ internal fun PlayerControls(
     supportsAudioDelay: Boolean = false,
     supportsAudioPassthrough: Boolean = false,
     supportsOcr: Boolean = false,
+    hasEpisodes: Boolean = false,
+    episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -124,6 +127,7 @@ internal fun PlayerControls(
     onCastClick: () -> Unit,
     onOcrClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
+    onEpisodesClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -326,6 +330,13 @@ internal fun PlayerControls(
                                 icon = Icons.AutoMirrored.Filled.List,
                                 contentDescription = "Chapters",
                                 onClick = onChapterClick,
+                            )
+                        }
+                        if (hasEpisodes && episodeBrowserEnabled) {
+                            PlayerIconButton(
+                                icon = Icons.Default.VideoLibrary,
+                                contentDescription = "Episodes",
+                                onClick = onEpisodesClick,
                             )
                         }
                         PlayerIconButton(

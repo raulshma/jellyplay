@@ -63,7 +63,16 @@ class DetailViewModel @Inject constructor(
     var isDownloading by mutableStateOf(false)
         private set
 
+    var smartPlayTarget by mutableStateOf<SmartPlayTarget?>(null)
+        private set
+
     private var currentMediaItemId: String? = null
+
+    data class SmartPlayTarget(
+        val episode: MediaItem,
+        val label: String,
+        val startPositionTicks: Long,
+    )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val activeDownload: Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
@@ -84,6 +93,7 @@ class DetailViewModel @Inject constructor(
             seasons = emptyList()
             episodes = emptyMap()
             fetchedSeasonIds = emptySet()
+            smartPlayTarget = null
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
@@ -91,6 +101,8 @@ class DetailViewModel @Inject constructor(
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
                         loadSeasons(detail.item.seriesId!!)
+                    } else {
+                        smartPlayTarget = null
                     }
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load details" }
@@ -117,6 +129,7 @@ class DetailViewModel @Inject constructor(
                     episodes = episodes.toMutableMap().apply {
                         this[seasonId] = episodeList
                     }
+                    maybeComputeSmartPlayTarget()
                 }
                 .onFailure {
                     // On failure store empty list so UI stops showing skeleton
@@ -125,10 +138,102 @@ class DetailViewModel @Inject constructor(
                             this[seasonId] = emptyList()
                         }
                     }
+                    maybeComputeSmartPlayTarget()
                 }
             // Always mark as fetched so UI never spins forever
             fetchedSeasonIds = fetchedSeasonIds + seasonId
         }
+    }
+
+    private fun maybeComputeSmartPlayTarget() {
+        val item = _detail.value?.item ?: return
+        when (item.mediaType) {
+            MediaType.SERIES -> computeSeriesSmartPlayTarget()
+            MediaType.EPISODE -> computeEpisodeSmartPlayTarget(item)
+            else -> smartPlayTarget = null
+        }
+    }
+
+    private fun computeSeriesSmartPlayTarget() {
+        val allEpisodes = episodes.values.flatten()
+        if (allEpisodes.isEmpty()) {
+            smartPlayTarget = null
+            return
+        }
+        val sorted = allEpisodes.sortedWith(
+            compareBy(
+                { it.seasonNumber ?: it.parentId ?: "" },
+                { it.indexNumber ?: Int.MAX_VALUE }
+            )
+        )
+        // Priority 1: first partially watched (has progress but not played)
+        val resumeEpisode = sorted.firstOrNull {
+            (it.playbackPositionTicks ?: 0) > 0 && !it.isPlayed
+        }
+        if (resumeEpisode != null) {
+            val s = resumeEpisode.seasonNumber ?: 1
+            val e = resumeEpisode.indexNumber ?: 1
+            smartPlayTarget = SmartPlayTarget(
+                episode = resumeEpisode,
+                label = "Resume S${s}:E${e}",
+                startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
+            )
+            return
+        }
+        // Priority 2: first unwatched
+        val nextEpisode = sorted.firstOrNull { !it.isPlayed }
+        if (nextEpisode != null) {
+            val s = nextEpisode.seasonNumber ?: 1
+            val e = nextEpisode.indexNumber ?: 1
+            val label = if (sorted.all { it.id == nextEpisode.id || it.isPlayed }) {
+                "Play S${s}:E${e}"
+            } else {
+                "Play Next S${s}:E${e}"
+            }
+            smartPlayTarget = SmartPlayTarget(
+                episode = nextEpisode,
+                label = label,
+                startPositionTicks = 0,
+            )
+            return
+        }
+        // Priority 3: all watched -> replay first
+        val first = sorted.firstOrNull()
+        if (first != null) {
+            val s = first.seasonNumber ?: 1
+            val e = first.indexNumber ?: 1
+            smartPlayTarget = SmartPlayTarget(
+                episode = first,
+                label = "Replay S${s}:E${e}",
+                startPositionTicks = 0,
+            )
+        }
+    }
+
+    private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
+        val allEpisodes = episodes.values.flatten().sortedWith(
+            compareBy(
+                { it.seasonNumber ?: it.parentId ?: "" },
+                { it.indexNumber ?: Int.MAX_VALUE }
+            )
+        )
+        if (allEpisodes.isEmpty()) {
+            smartPlayTarget = null
+            return
+        }
+        val currentIndex = allEpisodes.indexOfFirst { it.id == currentEpisode.id }
+        if (currentIndex < 0) {
+            smartPlayTarget = null
+            return
+        }
+        val s = currentEpisode.seasonNumber ?: 1
+        val e = currentEpisode.indexNumber ?: 1
+        val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
+        smartPlayTarget = SmartPlayTarget(
+            episode = currentEpisode,
+            label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}",
+            startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
+        )
     }
 
     fun toggleFavorite() {
