@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
@@ -70,46 +71,50 @@ internal fun GestureOverlay(
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
 ) {
+    val currentOnSeekGesture by rememberUpdatedState(onSeekGesture)
+    val currentOnBrightnessGesture by rememberUpdatedState(onBrightnessGesture)
+    val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
+    val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .then(
                 if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs) {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        var totalX = 0f
-                        var totalY = 0f
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startX = down.position.x
+                        val startY = down.position.y
                         var decided = false
                         var isHorizontal = false
                         do {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
-                            val dx = change.position.x - change.previousPosition.x
-                            val dy = change.position.y - change.previousPosition.y
-                            totalX += dx
-                            totalY += dy
-                            if (!decided && (abs(totalX) > 20 || abs(totalY) > 20)) {
+                            val totalDx = change.position.x - startX
+                            val totalDy = change.position.y - startY
+                            if (!decided && (abs(totalDx) > 50 || abs(totalDy) > 50)) {
                                 decided = true
-                                isHorizontal = abs(totalX) > abs(totalY)
+                                isHorizontal = abs(totalDx) > abs(totalDy)
                             }
                             if (decided) {
                                 if (isHorizontal) {
-                                    val seekDelta = ((dx / size.width) * swipeSeekMaxMs).toLong()
-                                    onSeekGesture(seekDelta)
+                                    val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
+                                    currentOnSeekGesture(seekDeltaMs)
                                 } else {
                                     val halfWidth = size.width / 2f
+                                    val dy = change.position.y - change.previousPosition.y
                                     val delta = -(dy / size.height) * 0.5f
                                     if (change.position.x > halfWidth) {
-                                        onVolumeGesture(delta)
+                                        currentOnVolumeGesture(delta)
                                     } else {
-                                        onBrightnessGesture(delta)
+                                        currentOnBrightnessGesture(delta)
                                     }
                                 }
                                 change.consume()
                             }
                         } while (true)
-                        onClearOverlays()
+                        currentOnClearOverlays()
                     }
                 } else Modifier
             ),
