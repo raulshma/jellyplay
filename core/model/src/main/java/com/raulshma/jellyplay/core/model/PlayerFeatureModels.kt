@@ -1,16 +1,17 @@
 package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Immutable
 @Serializable
 data class IntroTimestamps(
-    val itemId: String,
-    val introStartTicks: Long = 0,
-    val introEndTicks: Long = 0,
-    val showSkipPromptAtTicks: Long = 0,
-    val hideSkipPromptAtTicks: Long = 0,
+    @SerialName("ItemId") val itemId: String,
+    @SerialName("IntroStartTicks") val introStartTicks: Long = 0,
+    @SerialName("IntroEndTicks") val introEndTicks: Long = 0,
+    @SerialName("ShowSkipPromptAtTicks") val showSkipPromptAtTicks: Long = 0,
+    @SerialName("HideSkipPromptAtTicks") val hideSkipPromptAtTicks: Long = 0,
 ) {
     val hasIntro: Boolean get() = introEndTicks > introStartTicks
 }
@@ -18,11 +19,11 @@ data class IntroTimestamps(
 @Immutable
 @Serializable
 data class CreditTimestamps(
-    val itemId: String,
-    val creditStartTicks: Long = 0,
-    val creditEndTicks: Long = 0,
-    val showSkipPromptAtTicks: Long = 0,
-    val hideSkipPromptAtTicks: Long = 0,
+    @SerialName("ItemId") val itemId: String,
+    @SerialName("CreditStartTicks") val creditStartTicks: Long = 0,
+    @SerialName("CreditEndTicks") val creditEndTicks: Long = 0,
+    @SerialName("ShowSkipPromptAtTicks") val showSkipPromptAtTicks: Long = 0,
+    @SerialName("HideSkipPromptAtTicks") val hideSkipPromptAtTicks: Long = 0,
 ) {
     val hasCredits: Boolean get() = creditEndTicks > creditStartTicks
 }
