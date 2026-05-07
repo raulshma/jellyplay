@@ -74,6 +74,7 @@ class UserPreferencesStore @Inject constructor(
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
+        val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -142,6 +143,7 @@ class UserPreferencesStore @Inject constructor(
             skipOutroEnabled = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true,
             autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false,
             autoSkipOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false,
+            videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
         )
     }
 
@@ -350,6 +352,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setAutoSkipOutro(enabled: Boolean) {
         context.dataStore.edit { it[Keys.AUTO_SKIP_OUTRO] = enabled.toString() }
+    }
+
+    suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

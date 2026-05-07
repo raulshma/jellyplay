@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.ScreenLockLandscape
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -294,6 +295,16 @@ fun SettingsScreen(
                     subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
                     checked = preferences.videoAutoplayNext,
                     onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.VideoLibrary,
+                    title = "Episode Browser",
+                    subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
+                    checked = preferences.videoEpisodeBrowserEnabled,
+                    onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                 )
             }
 

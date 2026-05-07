@@ -150,6 +150,7 @@ class VideoPlayerViewModel @Inject constructor(
                 skipOutroEnabled = prefs.skipOutroEnabled,
                 autoSkipIntro = prefs.autoSkipIntro,
                 autoSkipOutro = prefs.autoSkipOutro,
+                videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
@@ -235,7 +236,38 @@ class VideoPlayerViewModel @Inject constructor(
             fetchIntroTimestamps(itemId)
             fetchCreditTimestamps(itemId)
             fetchNextEpisode(detail)
+            loadSeriesEpisodes(detail)
         }
+    }
+
+    private fun loadSeriesEpisodes(detail: MediaDetail) {
+        val seriesId = detail.item.seriesId ?: return
+        val currentSeasonId = detail.item.seasonId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingEpisodes = true) }
+            val seasonsResult = mediaRepository.getSeasons(seriesId)
+            val seasonList = seasonsResult.getOrElse { emptyList() }
+            _uiState.update { it.copy(seriesSeasons = seasonList, currentSeasonId = currentSeasonId) }
+            loadSeasonEpisodes(currentSeasonId)
+        }
+    }
+
+    fun loadSeasonEpisodes(seasonId: String) {
+        val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.seriesId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingEpisodes = true) }
+            val episodesResult = mediaRepository.getEpisodes(seriesId, seasonId)
+            val episodeList = episodesResult.getOrElse { emptyList() }
+            _uiState.update { it.copy(
+                seasonEpisodes = episodeList,
+                currentSeasonId = seasonId,
+                isLoadingEpisodes = false,
+            ) }
+        }
+    }
+
+    fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
+        initialize(episodeId, null, startPositionTicks)
     }
 
     private fun initializeEngine(
@@ -808,6 +840,10 @@ class VideoPlayerViewModel @Inject constructor(
             creditTimestamps = null,
             nextEpisode = null,
             remoteSubtitles = emptyList(),
+            seriesSeasons = emptyList(),
+            seasonEpisodes = emptyList(),
+            currentSeasonId = null,
+            isLoadingEpisodes = false,
         ) }
     }
 

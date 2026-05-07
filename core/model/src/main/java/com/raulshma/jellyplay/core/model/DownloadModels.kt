@@ -78,6 +78,7 @@ data class UserPreferences(
     val skipOutroEnabled: Boolean = true,
     val autoSkipIntro: Boolean = false,
     val autoSkipOutro: Boolean = false,
+    val videoEpisodeBrowserEnabled: Boolean = true,
 )
 
 @Immutable

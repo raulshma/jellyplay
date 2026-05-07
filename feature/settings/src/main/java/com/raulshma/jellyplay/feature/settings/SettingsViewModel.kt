@@ -307,4 +307,8 @@ class SettingsViewModel @Inject constructor(
     fun setAutoSkipOutro(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setAutoSkipOutro(enabled) }
     }
+
+    fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
+    }
 }

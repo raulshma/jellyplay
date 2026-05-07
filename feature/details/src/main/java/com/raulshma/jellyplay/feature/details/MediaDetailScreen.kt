@@ -136,6 +136,7 @@ fun MediaDetailScreen(
             seasons = viewModel.seasons,
             episodes = viewModel.episodes,
             fetchedSeasonIds = viewModel.fetchedSeasonIds,
+            smartPlayTarget = viewModel.smartPlayTarget,
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
@@ -165,6 +166,7 @@ private fun DetailContent(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
@@ -385,6 +387,7 @@ private fun DetailContent(
                                 seasons = seasons,
                                 episodes = episodes,
                                 fetchedSeasonIds = fetchedSeasonIds,
+                                smartPlayTarget = smartPlayTarget,
                                 getImageUrl = getImageUrl,
                                 isAudio = isAudio,
                                 isDownloading = isDownloading,
@@ -537,6 +540,7 @@ private fun DetailContentBody(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     getImageUrl: (String) -> String,
     isAudio: Boolean,
     isDownloading: Boolean,
@@ -667,10 +671,22 @@ private fun DetailContentBody(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
+                val target = if (isSeriesOrEpisode) smartPlayTarget else null
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
-                val progress = if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                val progress = if (target != null) {
+                    val t = target.startPositionTicks
+                    val rt = target.episode.runTimeTicks
+                    if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
+                } else if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                     (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
                 } else 0f
+
+                val playLabel = when {
+                    target != null -> target.label
+                    hasProgress -> "Resume"
+                    else -> "Play"
+                }
 
                 Box(
                     modifier = Modifier
@@ -681,6 +697,8 @@ private fun DetailContentBody(
                         .clickable {
                             if (isAudio) {
                                 onAudioClick()
+                            } else if (target != null) {
+                                onPlayClick(target.episode.id, null, target.startPositionTicks)
                             } else {
                                 val sourceId = detail.mediaSources.firstOrNull()?.id
                                 val startPos = item.playbackPositionTicks ?: 0L
@@ -689,7 +707,7 @@ private fun DetailContentBody(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (hasProgress) {
+                    if (progress > 0f) {
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -702,7 +720,7 @@ private fun DetailContentBody(
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
                         Spacer(Modifier.size(8.dp))
                         Text(
-                            if (hasProgress) "Resume" else "Play",
+                            playLabel,
                             style = MaterialTheme.typography.titleMedium,
                             color = Color.White,
                         )
