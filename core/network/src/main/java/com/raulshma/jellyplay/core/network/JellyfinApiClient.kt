@@ -234,7 +234,7 @@ interface JellyfinApiClient {
 
     suspend fun syncPlaySeek(positionTicks: Long): Result<Unit>
 
-    suspend fun getSyncPlayInfo(): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo>
+    suspend fun getSyncPlayInfo(groupId: String? = null): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo>
 
     suspend fun syncPlayStop(): Result<Unit>
 

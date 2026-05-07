@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -132,6 +133,9 @@ internal fun PlayerControls(
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     isInSyncPlaySession: Boolean = false,
+    syncPlayGroupName: String? = null,
+    syncPlayParticipantCount: Int = 0,
+    isSyncPlaySynced: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -183,6 +187,15 @@ internal fun PlayerControls(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
+                    }
+                    if (isInSyncPlaySession) {
+                        Spacer(Modifier.width(8.dp))
+                        SyncPlayHeaderIndicator(
+                            groupName = syncPlayGroupName ?: "Group",
+                            participantCount = syncPlayParticipantCount,
+                            isSynced = isSyncPlaySynced,
+                            onClick = onSyncPlayClick,
+                        )
                     }
                 }
             }
@@ -433,6 +446,53 @@ internal fun PlayerControls(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SyncPlayHeaderIndicator(
+    groupName: String,
+    participantCount: Int,
+    isSynced: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.15f),
+        modifier = Modifier.tvFocusable(),
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                modifier = Modifier.size(7.dp),
+            ) {}
+            Text(
+                text = if (isSynced) "Synced" else "Buffering",
+                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = groupName,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Text(
+                text = "$participantCount",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
