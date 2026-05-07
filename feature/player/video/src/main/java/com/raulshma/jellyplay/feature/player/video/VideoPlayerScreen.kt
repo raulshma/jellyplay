@@ -228,15 +228,9 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
-    val isInIntro by remember {
-        derivedStateOf { uiState.isInIntro }
-    }
-    val isInCredits by remember {
-        derivedStateOf { uiState.isInCredits }
-    }
-    val shouldShowUpNext by remember {
-        derivedStateOf { uiState.shouldShowUpNext }
-    }
+    val isInIntro = uiState.isInIntro
+    val isInCredits = uiState.isInCredits
+    val shouldShowUpNext = uiState.shouldShowUpNext
 
     val skipSegmentText: String? = when {
         isInIntro -> "Skip Intro"
