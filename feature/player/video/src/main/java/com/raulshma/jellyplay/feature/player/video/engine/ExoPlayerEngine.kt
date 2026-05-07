@@ -471,13 +471,7 @@ class ExoPlayerEngine(
             )
         )
         pv.subtitleView?.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, style.fontSize.toFloat())
-        val bottomPaddingPx = (style.verticalPosition * pv.height).toInt()
-        pv.subtitleView?.setPadding(
-            pv.subtitleView?.paddingLeft ?: 0,
-            pv.subtitleView?.paddingTop ?: 0,
-            pv.subtitleView?.paddingRight ?: 0,
-            bottomPaddingPx,
-        )
+        pv.subtitleView?.setBottomPaddingFraction(style.verticalPosition)
     }
 
     override fun getCurrentCues(): List<androidx.media3.common.text.Cue> {
