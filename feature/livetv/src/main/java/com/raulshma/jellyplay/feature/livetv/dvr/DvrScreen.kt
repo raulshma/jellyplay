@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +127,8 @@ fun DvrScreen(
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.08f))
-                                        .clickable(onClick = onBack),
+                                        .clickable(onClick = onBack)
+                                        .tvFocusable(),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -253,6 +255,7 @@ private fun TimerCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
             .clickable { }
+            .tvFocusable()
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -327,7 +330,8 @@ private fun TimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.08f))
-                .clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) }
+            .tvFocusable(),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -351,6 +355,7 @@ private fun SeriesTimerCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
             .clickable { }
+            .tvFocusable()
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -401,7 +406,8 @@ private fun SeriesTimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.08f))
-                .clickable { onCancel(timer.id) },
+                .clickable { onCancel(timer.id) }
+            .tvFocusable(),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

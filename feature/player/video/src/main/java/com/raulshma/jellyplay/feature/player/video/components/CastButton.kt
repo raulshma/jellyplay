@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 internal fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
@@ -44,7 +45,7 @@ internal fun CastButton(isCasting: Boolean, onCast: () -> Unit) {
                 }
             }
         },
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(40.dp).tvFocusable(),
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = if (isCasting) MaterialTheme.colorScheme.primary else Color.White,
         ),

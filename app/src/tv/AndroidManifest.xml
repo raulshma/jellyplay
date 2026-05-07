@@ -8,7 +8,8 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <application>
+    <application
+        android:banner="@drawable/ic_banner">
         <activity
             android:name=".MainActivity"
             android:exported="true">

@@ -106,6 +106,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,7 +153,7 @@ fun SettingsScreen(
                     Text("Settings")
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -1439,7 +1440,7 @@ private fun SettingListItem(
                 )
             }
         },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(onClick = onClick).tvFocusable(),
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
         ),
@@ -1488,7 +1489,7 @@ private fun SettingToggleItem(
         },
         modifier = Modifier.clickable {
             onClick?.invoke() ?: onCheckedChange(!checked)
-        },
+        }.tvFocusable(),
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
         ),

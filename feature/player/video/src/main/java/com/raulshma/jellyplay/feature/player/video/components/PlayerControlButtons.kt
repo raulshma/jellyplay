@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 internal fun PlayerIconButton(
@@ -25,7 +26,7 @@ internal fun PlayerIconButton(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(40.dp),
+        modifier = modifier.size(40.dp).tvFocusable(),
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = tint,
         ),
@@ -48,7 +49,7 @@ internal fun PlayerSpeedButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(40.dp),
+        modifier = modifier.size(40.dp).tvFocusable(),
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = if (speed != 1.0f) MaterialTheme.colorScheme.primary else Color.White,
         ),
