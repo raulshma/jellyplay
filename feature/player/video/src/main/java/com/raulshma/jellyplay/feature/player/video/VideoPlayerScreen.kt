@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
@@ -926,7 +927,7 @@ private fun OcrResultSheet(
                                 android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
                             )
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).tvFocusable(),
                     ) { Text("Copy") }
                     FilledTonalButton(
                         onClick = {
@@ -936,7 +937,7 @@ private fun OcrResultSheet(
                             }
                             context.startActivity(Intent.createChooser(intent, "Share"))
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).tvFocusable(),
                     ) { Text("Share") }
                 }
             }

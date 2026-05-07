@@ -135,6 +135,7 @@ fun JellyPlayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     kidsMode: Boolean = false,
+    isTv: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -149,9 +150,15 @@ fun JellyPlayTheme(
 
     val shapes = if (kidsMode) KidsShapes else DefaultShapes
 
+    val typography = if (isTv) {
+        TvTypography
+    } else {
+        JellyPlayTypography
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = JellyPlayTypography,
+        typography = typography,
         shapes = shapes,
         content = content,
     )

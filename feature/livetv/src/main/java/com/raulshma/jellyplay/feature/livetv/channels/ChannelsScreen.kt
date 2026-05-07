@@ -54,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -240,6 +241,7 @@ private fun ChannelCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
             .clickable(onClick = onClick)
+            .tvFocusable()
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -307,7 +309,8 @@ private fun ChannelCard(
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.12f))
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .tvFocusable(),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -337,8 +340,9 @@ private fun GlassIconButton(
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .clickable(onClick = onClick)
+            .tvFocusable(),
+         contentAlignment = Alignment.Center,
     ) {
         Icon(
             icon,

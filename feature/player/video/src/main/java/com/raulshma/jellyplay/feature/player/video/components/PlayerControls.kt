@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 @Composable
@@ -156,6 +157,7 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
+                        modifier = Modifier.tvFocusable(),
                         colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -197,7 +199,8 @@ internal fun PlayerControls(
                     onClick = { onSeekBack() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -210,7 +213,8 @@ internal fun PlayerControls(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(64.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
@@ -226,7 +230,8 @@ internal fun PlayerControls(
                     onClick = { onSeekForward() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -286,8 +291,9 @@ internal fun PlayerControls(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(24.dp))
                                 .background(Color.Black.copy(alpha = 0.85f))
-                                .clickable(onClick = onSkipSegment)
-                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                            .clickable(onClick = onSkipSegment)
+                            .tvFocusable()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FastForward,

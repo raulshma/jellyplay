@@ -65,6 +65,9 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import java.util.Locale
 
@@ -122,6 +125,13 @@ fun SearchScreen(
         top = 8.dp,
         bottom = 100.dp,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val gridCellSize = when (adaptiveInfo.windowSizeClass) {
+        WindowSizeClass.Expanded -> 180.dp
+        WindowSizeClass.Medium -> 150.dp
+        WindowSizeClass.Compact -> 120.dp
+    }
 
     Box(
         modifier = Modifier
@@ -226,7 +236,8 @@ fun SearchScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
+                            .padding(horizontal = 24.dp)
+                            .tvFocusable(),
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         colors = TextFieldDefaults.colors(
@@ -424,7 +435,7 @@ fun SearchScreen(
                     }
                     else -> {
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(120.dp),
+                            columns = GridCells.Adaptive(gridCellSize),
                             contentPadding = gridPadding,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -553,7 +564,8 @@ private fun GlassIconButton(
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

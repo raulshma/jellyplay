@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +127,8 @@ fun EpgScreen(
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.08f))
-                                        .clickable(onClick = onBack),
+                                        .clickable(onClick = onBack)
+                                        .tvFocusable(),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -237,6 +239,7 @@ private fun ProgramCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
             .clickable(onClick = onClick)
+            .tvFocusable()
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -292,7 +295,8 @@ private fun ProgramCard(
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
-                    .clickable(onClick = onRecordClick),
+                    .clickable(onClick = onRecordClick)
+                    .tvFocusable(),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -321,6 +322,7 @@ private fun QueueSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(index) }
+                            .tvFocusable()
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -559,7 +561,7 @@ private fun PlayerTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
+        IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack, "Back",
                 tint = Color.White,
@@ -574,7 +576,7 @@ private fun PlayerTopBar(
             )
         }
         Box {
-            IconButton(onClick = { onMenuToggle(true) }) {
+            IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
                 Icon(Icons.Default.MoreVert, "More", tint = Color.White)
             }
             DropdownMenu(
@@ -756,7 +758,7 @@ private fun TransportControls(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onToggleShuffle) {
+        IconButton(onClick = onToggleShuffle, modifier = Modifier.tvFocusable()) {
             Icon(
                 Icons.Default.Shuffle,
                 "Shuffle",
@@ -767,7 +769,7 @@ private fun TransportControls(
         }
         IconButton(
             onClick = onSkipPrevious,
-            modifier = Modifier.size(48.dp),
+            modifier = Modifier.size(48.dp).tvFocusable(),
         ) {
             Icon(
                 Icons.Default.SkipPrevious, "Previous",
@@ -777,7 +779,7 @@ private fun TransportControls(
         }
         FilledIconButton(
             onClick = onTogglePlayPause,
-            modifier = Modifier.size(68.dp),
+            modifier = Modifier.size(68.dp).tvFocusable(),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = Color.White,
@@ -792,7 +794,7 @@ private fun TransportControls(
         }
         IconButton(
             onClick = onSkipNext,
-            modifier = Modifier.size(48.dp),
+            modifier = Modifier.size(48.dp).tvFocusable(),
         ) {
             Icon(
                 Icons.Default.SkipNext, "Next",
@@ -800,7 +802,7 @@ private fun TransportControls(
                 tint = Color.White,
             )
         }
-        IconButton(onClick = onCycleRepeatMode) {
+        IconButton(onClick = onCycleRepeatMode, modifier = Modifier.tvFocusable()) {
             Icon(
                 if (repeatMode == 2) Icons.Default.RepeatOne
                 else Icons.Default.Repeat,
