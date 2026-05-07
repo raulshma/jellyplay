@@ -78,6 +78,13 @@ data class UserPreferences(
     val skipOutroEnabled: Boolean = true,
     val autoSkipIntro: Boolean = false,
     val autoSkipOutro: Boolean = false,
+    val videoEpisodeBrowserEnabled: Boolean = true,
+    val syncPlayProgressReportingMode: String = "SUPPRESS_DURING",
+    val syncPlayAutoJoinLastGroup: Boolean = false,
+    val syncPlayNotifyUserJoinLeave: Boolean = true,
+    val syncPlayNotifyChatMessages: Boolean = true,
+    val syncPlayNotifySyncIssues: Boolean = true,
+    val syncPlayDefaultIgnoreWait: Boolean = false,
 )
 
 @Immutable

@@ -32,6 +32,8 @@ internal class PlaybackProgressReporter(
 
     fun startPositionTracking() {
         positionJob?.cancel()
+        lastIntroSkipPosition = -1
+        lastOutroSkipPosition = -1
         val engine = getPlayerEngine() ?: return
         if (engine is ExoPlayerEngine) {
             positionJob = viewModel.viewModelScope.launch {

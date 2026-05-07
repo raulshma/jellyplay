@@ -94,7 +94,10 @@ import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 fun MediaDetailScreen(
@@ -136,6 +139,7 @@ fun MediaDetailScreen(
             seasons = viewModel.seasons,
             episodes = viewModel.episodes,
             fetchedSeasonIds = viewModel.fetchedSeasonIds,
+            smartPlayTarget = viewModel.smartPlayTarget,
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
@@ -165,6 +169,7 @@ private fun DetailContent(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
@@ -191,8 +196,15 @@ private fun DetailContent(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
 
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+
     val density = LocalDensity.current
-    val backdropHeight = 450.dp
+    val backdropHeight = when {
+        adaptiveInfo.isLandscape && isExpanded -> 320.dp
+        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> 400.dp
+        else -> 450.dp
+    }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
     val scrollOffset by remember {
         derivedStateOf { scrollState.value.toFloat() }
@@ -385,6 +397,7 @@ private fun DetailContent(
                                 seasons = seasons,
                                 episodes = episodes,
                                 fetchedSeasonIds = fetchedSeasonIds,
+                                smartPlayTarget = smartPlayTarget,
                                 getImageUrl = getImageUrl,
                                 isAudio = isAudio,
                                 isDownloading = isDownloading,
@@ -537,6 +550,7 @@ private fun DetailContentBody(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     getImageUrl: (String) -> String,
     isAudio: Boolean,
     isDownloading: Boolean,
@@ -667,10 +681,22 @@ private fun DetailContentBody(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
+                val target = if (isSeriesOrEpisode) smartPlayTarget else null
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
-                val progress = if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                val progress = if (target != null) {
+                    val t = target.startPositionTicks
+                    val rt = target.episode.runTimeTicks
+                    if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
+                } else if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                     (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
                 } else 0f
+
+                val playLabel = when {
+                    target != null -> target.label
+                    hasProgress -> "Resume"
+                    else -> "Play"
+                }
 
                 Box(
                     modifier = Modifier
@@ -681,15 +707,18 @@ private fun DetailContentBody(
                         .clickable {
                             if (isAudio) {
                                 onAudioClick()
+                            } else if (target != null) {
+                                onPlayClick(target.episode.id, null, target.startPositionTicks)
                             } else {
                                 val sourceId = detail.mediaSources.firstOrNull()?.id
                                 val startPos = item.playbackPositionTicks ?: 0L
                                 onPlayClick(item.id, sourceId, startPos)
                             }
-                        },
+                        }
+                        .tvFocusable(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (hasProgress) {
+                    if (progress > 0f) {
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -702,7 +731,7 @@ private fun DetailContentBody(
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
                         Spacer(Modifier.size(8.dp))
                         Text(
-                            if (hasProgress) "Resume" else "Play",
+                            playLabel,
                             style = MaterialTheme.typography.titleMedium,
                             color = Color.White,
                         )
@@ -715,6 +744,7 @@ private fun DetailContentBody(
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
+                        .tvFocusable()
                 ) {
                     Icon(
                         if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
@@ -729,6 +759,7 @@ private fun DetailContentBody(
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
+                        .tvFocusable()
                 ) {
                     Icon(
                         if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -754,6 +785,7 @@ private fun DetailContentBody(
                             .size(56.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color.White.copy(alpha = 0.15f))
+                            .tvFocusable()
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
@@ -791,6 +823,7 @@ private fun DetailContentBody(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .tvFocusable()
                         ) {
                             Text(
                                 text = genre,
@@ -885,11 +918,14 @@ private fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
+                            val adaptiveInfo = LocalAdaptiveInfo.current
                             PosterCard(
                                 item = related,
                                 imageUrl = getImageUrl(related.id),
                                 onClick = { onItemClick(related.id) },
-                                modifier = Modifier.width(160.dp),
+                                modifier = Modifier.width(
+                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                ),
                             )
                         }
                     }
@@ -936,7 +972,8 @@ private fun SeasonsSection(
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { selectedSeasonIndex = index },
+                        .clickable { selectedSeasonIndex = index }
+                        .tvFocusable(),
                     color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
                     contentColor = if (isSelected) Color.Black else Color.White,
                 ) {
@@ -1092,6 +1129,7 @@ private fun EpisodeCard(
                 else Modifier
             )
             .clickable(onClick = onDetailClick)
+            .tvFocusable()
     ) {
         Box(
             modifier = Modifier
@@ -1178,7 +1216,8 @@ private fun PersonItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(80.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(),
     ) {
         MediaImage(
             url = imageUrl,

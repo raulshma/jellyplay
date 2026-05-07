@@ -10,6 +10,13 @@ fun EntryProviderScope<NavKey>.syncPlaySection(navigator: Navigator) {
     entry<Route.SyncPlay> {
         SyncPlayScreen(
             onBack = { navigator.goBack() },
+            onPlayItem = { itemId, positionTicks ->
+                navigator.navigate(Route.VideoPlayer(
+                    itemId = itemId,
+                    mediaSourceId = null,
+                    startPositionTicks = positionTicks,
+                ))
+            },
         )
     }
 }

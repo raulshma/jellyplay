@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Gesture
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Language
@@ -44,11 +45,13 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.ScreenLockLandscape
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -105,6 +108,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -151,7 +155,7 @@ fun SettingsScreen(
                     Text("Settings")
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -294,6 +298,16 @@ fun SettingsScreen(
                     subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
                     checked = preferences.videoAutoplayNext,
                     onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.VideoLibrary,
+                    title = "Episode Browser",
+                    subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
+                    checked = preferences.videoEpisodeBrowserEnabled,
+                    onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                 )
             }
 
@@ -454,6 +468,61 @@ fun SettingsScreen(
                     subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
                     trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
                     onClick = { showAudioDelayPicker = true },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                SettingsSectionHeader(title = "SyncPlay")
+            }
+
+            item {
+                var progressMode by remember { mutableStateOf(preferences.syncPlayProgressReportingMode) }
+                SettingListItem(
+                    icon = Icons.Default.Speed,
+                    title = "Progress Reporting",
+                    subtitle = when (progressMode) {
+                        "SUPPRESS_DURING" -> "Suppress during SyncPlay"
+                        "ALWAYS" -> "Always report"
+                        "NEVER" -> "Never report"
+                        else -> "Suppress during SyncPlay"
+                    },
+                    onClick = {
+                        val modes = listOf("SUPPRESS_DURING", "ALWAYS", "NEVER")
+                        val nextIndex = (modes.indexOf(progressMode) + 1) % modes.size
+                        progressMode = modes[nextIndex]
+                        viewModel.setSyncPlayProgressReportingMode(progressMode)
+                    },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Group,
+                    title = "Auto-Join Last Group",
+                    subtitle = "Automatically rejoin last group on app start",
+                    checked = preferences.syncPlayAutoJoinLastGroup,
+                    onCheckedChange = { viewModel.setSyncPlayAutoJoinLastGroup(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Notifications,
+                    title = "Join/Leave Notifications",
+                    subtitle = "Show when users join or leave",
+                    checked = preferences.syncPlayNotifyUserJoinLeave,
+                    onCheckedChange = { viewModel.setSyncPlayNotifyUserJoinLeave(it) },
+                )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Notifications,
+                    title = "Default Ignore Wait",
+                    subtitle = "Ignore group waits by default when joining",
+                    checked = preferences.syncPlayDefaultIgnoreWait,
+                    onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
                 )
             }
 
@@ -1428,7 +1497,7 @@ private fun SettingListItem(
                 )
             }
         },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(onClick = onClick).tvFocusable(),
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
         ),
@@ -1477,7 +1546,7 @@ private fun SettingToggleItem(
         },
         modifier = Modifier.clickable {
             onClick?.invoke() ?: onCheckedChange(!checked)
-        },
+        }.tvFocusable(),
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
         ),

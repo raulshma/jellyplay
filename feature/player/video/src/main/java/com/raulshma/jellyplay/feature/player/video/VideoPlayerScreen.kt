@@ -62,11 +62,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
 import com.raulshma.jellyplay.feature.player.video.components.CreditsSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
@@ -78,7 +80,8 @@ import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitlePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
-import com.raulshma.jellyplay.feature.player.video.components.SyncPlayOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
@@ -117,7 +120,15 @@ fun VideoPlayerScreen(
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
     var externalLaunched by remember { mutableStateOf(false) }
     var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
+    var gestureStartPositionMs by remember { mutableLongStateOf(0L) }
+    var gestureDeltaMs by remember { mutableLongStateOf(0L) }
     var isGestureSeeking by remember { mutableStateOf(false) }
+    var gestureTrickplayVisible by remember { mutableStateOf(false) }
+
+    var syncPlayChatVisible by remember { mutableStateOf(false) }
+
+    var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(itemId) {
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
@@ -222,14 +233,19 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
-    val isInIntro by remember {
-        derivedStateOf { uiState.isInIntro }
+    val isInIntro = uiState.isInIntro
+    val isInCredits = uiState.isInCredits
+    val shouldShowUpNext = uiState.shouldShowUpNext
+
+    val skipSegmentText: String? = when {
+        isInIntro -> "Skip Intro"
+        isInCredits -> "Skip Credits"
+        else -> null
     }
-    val isInCredits by remember {
-        derivedStateOf { uiState.isInCredits }
-    }
-    val shouldShowUpNext by remember {
-        derivedStateOf { uiState.shouldShowUpNext }
+    val onSkipSegment: () -> Unit = when {
+        isInIntro -> { { viewModel.skipIntro() } }
+        isInCredits -> { { viewModel.skipCredits() } }
+        else -> { {} }
     }
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -255,10 +271,26 @@ fun VideoPlayerScreen(
     val subtitleStyle = uiState.subtitleStyle
     val nextEpisode = uiState.nextEpisode
     val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
+    val isInSyncPlaySession = uiState.isInSyncPlaySession
 
-    val doPlay: () -> Unit = remember(engine) { { engine?.play() } }
-    val doPause: () -> Unit = remember(engine) { { engine?.pause() } }
-    val doSeekTo: (Long) -> Unit = remember(engine) { { ms -> engine?.seekTo(ms) } }
+    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession) {
+        {
+            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else engine?.play()
+        }
+    }
+    val doPause: () -> Unit = remember(engine, isInSyncPlaySession) {
+        {
+            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else engine?.pause()
+        }
+    }
+    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession) {
+        { ms ->
+            if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
+            else engine?.seekTo(ms)
+        }
+    }
     val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekBack(uiState.seekDurationMs) } }
     val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekForward(uiState.seekDurationMs) } }
     val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
@@ -330,12 +362,15 @@ fun VideoPlayerScreen(
             gesturesEnabled = uiState.gesturesEnabled,
             swipeSeekMaxMs = uiState.swipeSeekMaxMs,
             onSeekGesture = remember(engine) {
-                { delta ->
+                { totalDeltaMs ->
                     engine?.let { eng ->
-                        val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
-                        gestureSeekPositionMs = newPos
-                        isGestureSeeking = true
-                        eng.seekTo(newPos)
+                        if (!isGestureSeeking) {
+                            gestureStartPositionMs = eng.currentPositionMs
+                            isGestureSeeking = true
+                        }
+                        gestureDeltaMs = totalDeltaMs
+                        val durationMs = eng.durationMs.coerceAtLeast(0)
+                        gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
                     }
                 }
             },
@@ -366,31 +401,33 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onClearOverlays = remember(viewModel) {
-                {
-                    if (brightnessOverlay in 0f..1f) {
-                        viewModel.saveBrightness(brightnessOverlay)
-                    }
-                    seekDirection = 0
-                    seekOffsetMs = 0L
-                    brightnessOverlay = -1f
-                    volumeOverlay = -1f
-                    isGestureSeeking = false
+            onClearOverlays = {
+                if (isGestureSeeking) {
+                    doSeekTo(gestureSeekPositionMs)
                 }
+                if (brightnessOverlay in 0f..1f) {
+                    viewModel.saveBrightness(brightnessOverlay)
+                }
+                seekDirection = 0
+                seekOffsetMs = 0L
+                brightnessOverlay = -1f
+                volumeOverlay = -1f
+                isGestureSeeking = false
             },
         )
 
         // Trickplay overlay for seek gestures
         AnimatedVisibility(
-            visible = uiState.trickplayOnSeekGesture && isGestureSeeking,
+            visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
         ) {
-            val trickplayImageUrl = viewModel.getTrickplayImageUrl(gestureSeekPositionMs)
             TrickplayOverlay(
-                imageUrl = trickplayImageUrl,
+                bitmap = gestureTrickplayBitmap,
                 positionMs = gestureSeekPositionMs,
+                deltaMs = gestureDeltaMs,
+                durationMs = duration,
             )
         }
 
@@ -446,15 +483,15 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
-        if (uiState.isInSyncPlaySession) {
-            SyncPlayOverlay(
-                isVisible = true,
-                groupName = uiState.syncPlayGroupName ?: "Group",
-                participantCount = uiState.syncPlayParticipantCount,
-                isSynced = uiState.isSyncPlaySynced,
+        if (uiState.isInSyncPlaySession && syncPlayChatVisible) {
+            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
+            SyncPlayChatOverlay(
+                messages = chatMessages,
+                isVisible = syncPlayChatVisible,
+                onSendMessage = { viewModel.syncPlaySendChatMessage(it) },
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 60.dp, start = 16.dp),
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 200.dp),
             )
         }
 
@@ -472,6 +509,9 @@ fun VideoPlayerScreen(
             )
         }
 
+        val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
+        val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+
         PlayerControls(
             title = title,
             subtitle = subtitle,
@@ -485,6 +525,10 @@ fun VideoPlayerScreen(
             audioPassthrough = uiState.audioPassthrough,
             isCasting = isCasting,
             isOcrRunning = uiState.isOcrRunning,
+            introTimestamps = uiState.introTimestamps,
+            creditTimestamps = uiState.creditTimestamps,
+            skipSegmentText = skipSegmentText,
+            onSkipSegment = onSkipSegment,
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls,
@@ -494,14 +538,17 @@ fun VideoPlayerScreen(
             supportsAudioDelay = uiState.engineCapabilities.audioDelay,
             supportsAudioPassthrough = uiState.engineCapabilities.audioPassthrough,
             supportsOcr = uiState.engineCapabilities.ocr,
+            hasEpisodes = hasEpisodes,
+            episodeBrowserEnabled = episodeBrowserEnabled,
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
             onSeekForward = { doSeekForward() },
-            onSeek = remember(duration, doSeekTo) {
-                { fraction -> if (duration > 0) doSeekTo((fraction * duration).toLong()) }
-            },
+            onSeek = { },
             onSeekStart = { isSeeking = true },
-            onSeekEnd = { isSeeking = false },
+            onSeekEnd = {
+                isSeeking = false
+                if (duration > 0) doSeekTo(seekPositionMs)
+            },
             onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
             onBack = onBack,
             onSpeedClick = { currentSheet = PlayerSheet.Speed },
@@ -527,6 +574,12 @@ fun VideoPlayerScreen(
                 viewModel.loadRemoteSubtitles()
                 currentSheet = PlayerSheet.SubtitleDownload
             },
+            onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
+            onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
+            isInSyncPlaySession = isInSyncPlaySession,
+            syncPlayGroupName = uiState.syncPlayGroupName,
+            syncPlayParticipantCount = uiState.syncPlayParticipantCount,
+            isSyncPlaySynced = uiState.isSyncPlaySynced,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -536,10 +589,10 @@ fun VideoPlayerScreen(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
-            val trickplayImageUrl = viewModel.getTrickplayImageUrl(seekPositionMs)
             TrickplayOverlay(
-                imageUrl = trickplayImageUrl,
+                bitmap = seekTrickplayBitmap,
                 positionMs = seekPositionMs,
+                durationMs = duration,
             )
         }
     }
@@ -552,10 +605,26 @@ fun VideoPlayerScreen(
         }
     }
 
+    LaunchedEffect(isSeeking, seekPositionMs) {
+        if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            seekTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
+        } else if (!isSeeking) {
+            seekTrickplayBitmap = null
+        }
+    }
+
+    LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
+        if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+            gestureTrickplayVisible = true
+            gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
+        }
+    }
+
     LaunchedEffect(isGestureSeeking) {
-        if (isGestureSeeking) {
+        if (!isGestureSeeking && gestureTrickplayVisible) {
             delay(1000)
-            isGestureSeeking = false
+            gestureTrickplayVisible = false
+            gestureTrickplayBitmap = null
         }
     }
 
@@ -587,6 +656,15 @@ fun VideoPlayerScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.syncPlayNotifications.collect { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = androidx.compose.material3.SnackbarDuration.Short,
+            )
+        }
+    }
+
     PlayerSheetRouter(
         currentSheet = currentSheet,
         onSheetChange = { sheet -> currentSheet = sheet },
@@ -595,6 +673,8 @@ fun VideoPlayerScreen(
         currentPosition = currentPosition,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
+        itemId = itemId,
+        onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
     )
 }
 
@@ -672,6 +752,8 @@ private fun PlayerSheetRouter(
     currentPosition: Long,
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
+    itemId: String,
+    onToggleChatOverlay: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -806,6 +888,48 @@ private fun PlayerSheetRouter(
                 context = context,
             )
         }
+        is PlayerSheet.Episodes -> {
+            EpisodePickerSheet(
+                seasons = uiState.seriesSeasons,
+                episodes = uiState.seasonEpisodes,
+                currentSeasonId = uiState.currentSeasonId,
+                currentEpisodeId = itemId,
+                isLoading = uiState.isLoadingEpisodes,
+                onSeasonSelect = { viewModel.loadSeasonEpisodes(it) },
+                onEpisodeSelect = { episode ->
+                    viewModel.playEpisode(episode.id, episode.playbackPositionTicks ?: 0L)
+                    onSheetChange(PlayerSheet.None)
+                },
+                onDismiss = dismissSheet,
+                getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            )
+        }
+        is PlayerSheet.SyncPlay -> {
+            val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
+            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
+            SyncPlayPlayerSheet(
+                groupName = uiState.syncPlayGroupName ?: "Group",
+                participantCount = uiState.syncPlayParticipantCount,
+                isSynced = uiState.isSyncPlaySynced,
+                isPlaying = uiState.isPlaying,
+                ignoreWait = syncPlayIgnoreWait,
+                chatMessages = chatMessages,
+                onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
+                onStop = { viewModel.syncPlayStop() },
+                onLeave = {
+                    viewModel.leaveSyncPlay()
+                    onToggleChatOverlay()
+                    onSheetChange(PlayerSheet.None)
+                },
+                onIgnoreWaitChange = { viewModel.syncPlaySetIgnoreWait(it) },
+                onSendChatMessage = { viewModel.syncPlaySendChatMessage(it) },
+                onToggleChatOverlay = {
+                    onToggleChatOverlay()
+                    onSheetChange(PlayerSheet.None)
+                },
+                onDismiss = dismissSheet,
+            )
+        }
         PlayerSheet.None -> { }
     }
 }
@@ -864,7 +988,7 @@ private fun OcrResultSheet(
                                 android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
                             )
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).tvFocusable(),
                     ) { Text("Copy") }
                     FilledTonalButton(
                         onClick = {
@@ -874,7 +998,7 @@ private fun OcrResultSheet(
                             }
                             context.startActivity(Intent.createChooser(intent, "Share"))
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).tvFocusable(),
                     ) { Text("Share") }
                 }
             }

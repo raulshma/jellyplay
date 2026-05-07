@@ -12,6 +12,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -37,18 +39,21 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,6 +72,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 @Composable
@@ -82,6 +91,10 @@ internal fun PlayerControls(
     audioPassthrough: Boolean,
     isCasting: Boolean,
     isOcrRunning: Boolean,
+    introTimestamps: IntroTimestamps? = null,
+    creditTimestamps: CreditTimestamps? = null,
+    skipSegmentText: String? = null,
+    onSkipSegment: () -> Unit = {},
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -91,6 +104,8 @@ internal fun PlayerControls(
     supportsAudioDelay: Boolean = false,
     supportsAudioPassthrough: Boolean = false,
     supportsOcr: Boolean = false,
+    hasEpisodes: Boolean = false,
+    episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -115,6 +130,12 @@ internal fun PlayerControls(
     onCastClick: () -> Unit,
     onOcrClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
+    onEpisodesClick: () -> Unit = {},
+    onSyncPlayClick: () -> Unit = {},
+    isInSyncPlaySession: Boolean = false,
+    syncPlayGroupName: String? = null,
+    syncPlayParticipantCount: Int = 0,
+    isSyncPlaySynced: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -143,6 +164,7 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
+                        modifier = Modifier.tvFocusable(),
                         colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -166,6 +188,15 @@ internal fun PlayerControls(
                             )
                         }
                     }
+                    if (isInSyncPlaySession) {
+                        Spacer(Modifier.width(8.dp))
+                        SyncPlayHeaderIndicator(
+                            groupName = syncPlayGroupName ?: "Group",
+                            participantCount = syncPlayParticipantCount,
+                            isSynced = isSyncPlaySynced,
+                            onClick = onSyncPlayClick,
+                        )
+                    }
                 }
             }
         }
@@ -184,7 +215,8 @@ internal fun PlayerControls(
                     onClick = { onSeekBack() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -197,7 +229,8 @@ internal fun PlayerControls(
                     onClick = onPlayPause,
                     modifier = Modifier
                         .size(64.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
@@ -213,7 +246,8 @@ internal fun PlayerControls(
                     onClick = { onSeekForward() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .tvFocusable(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -249,6 +283,8 @@ internal fun PlayerControls(
                     currentPosition = currentPosition,
                     duration = duration,
                     chapters = chapters,
+                    introTimestamps = introTimestamps,
+                    creditTimestamps = creditTimestamps,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -256,6 +292,41 @@ internal fun PlayerControls(
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                 )
+
+                AnimatedVisibility(
+                    visible = skipSegmentText != null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color.Black.copy(alpha = 0.85f))
+                            .clickable(onClick = onSkipSegment)
+                            .tvFocusable()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FastForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = skipSegmentText ?: "",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
 
                 Row(
                     modifier = Modifier
@@ -281,6 +352,21 @@ internal fun PlayerControls(
                                 icon = Icons.AutoMirrored.Filled.List,
                                 contentDescription = "Chapters",
                                 onClick = onChapterClick,
+                            )
+                        }
+                        if (hasEpisodes && episodeBrowserEnabled) {
+                            PlayerIconButton(
+                                icon = Icons.Default.VideoLibrary,
+                                contentDescription = "Episodes",
+                                onClick = onEpisodesClick,
+                            )
+                        }
+                        if (isInSyncPlaySession) {
+                            PlayerIconButton(
+                                icon = Icons.Default.Group,
+                                contentDescription = "SyncPlay",
+                                onClick = onSyncPlayClick,
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                         PlayerIconButton(
@@ -365,10 +451,59 @@ internal fun PlayerControls(
 }
 
 @Composable
+private fun SyncPlayHeaderIndicator(
+    groupName: String,
+    participantCount: Int,
+    isSynced: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.15f),
+        modifier = Modifier.tvFocusable(),
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                modifier = Modifier.size(7.dp),
+            ) {}
+            Text(
+                text = if (isSynced) "Synced" else "Buffering",
+                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = groupName,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Text(
+                text = "$participantCount",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
 private fun YouTubeStyleSeekBar(
     currentPosition: Long,
     duration: Long,
     chapters: List<ChapterInfo>,
+    introTimestamps: IntroTimestamps? = null,
+    creditTimestamps: CreditTimestamps? = null,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -396,6 +531,25 @@ private fun YouTubeStyleSeekBar(
                 .height(24.dp)
                 .pointerInput(duration) {
                     if (duration <= 0) return@pointerInput
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            onSeekStart()
+                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            dragFraction = fraction
+                            onSeek(fraction)
+                            isDragging = true
+                        },
+                        onDrag = { change, dragAmount ->
+                            val fraction = (dragFraction + (dragAmount.x / size.width)).coerceIn(0f, 1f)
+                            dragFraction = fraction
+                            onSeek(fraction)
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            onSeekEnd()
+                        },
+                    )
                     detectTapGestures(
                         onPress = { offset ->
                             onSeekStart()
@@ -403,11 +557,9 @@ private fun YouTubeStyleSeekBar(
                             dragFraction = fraction
                             onSeek(fraction)
                             isDragging = true
-                            val released = tryAwaitRelease()
-                            if (released) {
-                                isDragging = false
-                                onSeekEnd()
-                            }
+                            tryAwaitRelease()
+                            isDragging = false
+                            onSeekEnd()
                         },
                     )
                 },
@@ -427,6 +579,41 @@ private fun YouTubeStyleSeekBar(
                     size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight.toPx()),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
                 )
+
+                if (duration > 0) {
+                    val introTs = introTimestamps
+                    if (introTs != null && introTs.hasIntro) {
+                        val startFrac = (introTs.introStartTicks / 10_000f) / duration
+                        val endFrac = (introTs.introEndTicks / 10_000f) / duration
+                        if (startFrac in 0f..1f && endFrac > startFrac) {
+                            val segHeightDp = 5.dp
+                            val segHeight = segHeightDp.toPx()
+                            val segY = (size.height / 2f) - (segHeight / 2f)
+                            drawRoundRect(
+                                color = Color(0xFF66BB6A).copy(alpha = 0.6f),
+                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
+                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
+                            )
+                        }
+                    }
+                    val creditTs = creditTimestamps
+                    if (creditTs != null && creditTs.hasCredits) {
+                        val startFrac = (creditTs.creditStartTicks / 10_000f) / duration
+                        val endFrac = (creditTs.creditEndTicks / 10_000f) / duration
+                        if (startFrac in 0f..1f && endFrac > startFrac) {
+                            val segHeightDp = 5.dp
+                            val segHeight = segHeightDp.toPx()
+                            val segY = (size.height / 2f) - (segHeight / 2f)
+                            drawRoundRect(
+                                color = Color(0xFF42A5F5).copy(alpha = 0.6f),
+                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
+                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
+                            )
+                        }
+                    }
+                }
 
                 drawRoundRect(
                     color = activeColor,

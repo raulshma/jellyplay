@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 
@@ -63,10 +64,16 @@ data class VideoPlayerUiState(
     val playerError: String? = null,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
+    val trickplayInfo: TrickplayInfo? = null,
     val skipIntroEnabled: Boolean = true,
     val skipOutroEnabled: Boolean = true,
     val autoSkipIntro: Boolean = false,
     val autoSkipOutro: Boolean = false,
+    val seriesSeasons: List<JellyfinMediaItem> = emptyList(),
+    val seasonEpisodes: List<JellyfinMediaItem> = emptyList(),
+    val currentSeasonId: String? = null,
+    val isLoadingEpisodes: Boolean = false,
+    val videoEpisodeBrowserEnabled: Boolean = true,
 ) {
     val isInIntro: Boolean
         get() {
