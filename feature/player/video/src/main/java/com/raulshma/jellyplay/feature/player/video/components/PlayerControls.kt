@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -67,6 +69,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 @Composable
@@ -83,6 +87,10 @@ internal fun PlayerControls(
     audioPassthrough: Boolean,
     isCasting: Boolean,
     isOcrRunning: Boolean,
+    introTimestamps: IntroTimestamps? = null,
+    creditTimestamps: CreditTimestamps? = null,
+    skipSegmentText: String? = null,
+    onSkipSegment: () -> Unit = {},
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -250,6 +258,8 @@ internal fun PlayerControls(
                     currentPosition = currentPosition,
                     duration = duration,
                     chapters = chapters,
+                    introTimestamps = introTimestamps,
+                    creditTimestamps = creditTimestamps,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -257,6 +267,40 @@ internal fun PlayerControls(
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                 )
+
+                AnimatedVisibility(
+                    visible = skipSegmentText != null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color.Black.copy(alpha = 0.85f))
+                                .clickable(onClick = onSkipSegment)
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FastForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = skipSegmentText ?: "",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
 
                 Row(
                     modifier = Modifier
@@ -370,6 +414,8 @@ private fun YouTubeStyleSeekBar(
     currentPosition: Long,
     duration: Long,
     chapters: List<ChapterInfo>,
+    introTimestamps: IntroTimestamps? = null,
+    creditTimestamps: CreditTimestamps? = null,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -445,6 +491,41 @@ private fun YouTubeStyleSeekBar(
                     size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight.toPx()),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
                 )
+
+                if (duration > 0) {
+                    val introTs = introTimestamps
+                    if (introTs != null && introTs.hasIntro) {
+                        val startFrac = (introTs.introStartTicks / 10_000f) / duration
+                        val endFrac = (introTs.introEndTicks / 10_000f) / duration
+                        if (startFrac in 0f..1f && endFrac > startFrac) {
+                            val segHeightDp = 5.dp
+                            val segHeight = segHeightDp.toPx()
+                            val segY = (size.height / 2f) - (segHeight / 2f)
+                            drawRoundRect(
+                                color = Color(0xFF66BB6A).copy(alpha = 0.6f),
+                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
+                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
+                            )
+                        }
+                    }
+                    val creditTs = creditTimestamps
+                    if (creditTs != null && creditTs.hasCredits) {
+                        val startFrac = (creditTs.creditStartTicks / 10_000f) / duration
+                        val endFrac = (creditTs.creditEndTicks / 10_000f) / duration
+                        if (startFrac in 0f..1f && endFrac > startFrac) {
+                            val segHeightDp = 5.dp
+                            val segHeight = segHeightDp.toPx()
+                            val segY = (size.height / 2f) - (segHeight / 2f)
+                            drawRoundRect(
+                                color = Color(0xFF42A5F5).copy(alpha = 0.6f),
+                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
+                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
+                            )
+                        }
+                    }
+                }
 
                 drawRoundRect(
                     color = activeColor,
