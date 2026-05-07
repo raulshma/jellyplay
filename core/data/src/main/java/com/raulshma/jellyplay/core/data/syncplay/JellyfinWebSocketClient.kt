@@ -113,11 +113,12 @@ class JellyfinWebSocketClient @Inject constructor(
             when (messageType) {
                 "SyncPlayCommand",
                 "SyncPlayGroupUpdate",
+                "Play",
+                "Playstate",
+                "GeneralCommand",
                 "KeepAlive",
-                "UserJoined",
-                "UserLeft",
-                "GroupLeft",
-                "GroupJoined" -> {
+                "GroupJoined",
+                "GroupLeft" -> {
                     _events.tryEmit(SyncPlayEvent(type = messageType, data = data))
                 }
             }
@@ -128,6 +129,14 @@ class JellyfinWebSocketClient @Inject constructor(
 
     fun sendKeepAlive() {
         val msg = JSONObject().put("MessageType", "KeepAlive")
+        webSocket?.send(msg.toString())
+    }
+
+    fun sendMessage(messageType: String, data: JSONObject = JSONObject()) {
+        val msg = JSONObject().apply {
+            put("MessageType", messageType)
+            put("Data", data)
+        }
         webSocket?.send(msg.toString())
     }
 
