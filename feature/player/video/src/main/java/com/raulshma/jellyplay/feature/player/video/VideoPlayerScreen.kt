@@ -235,6 +235,17 @@ fun VideoPlayerScreen(
         derivedStateOf { uiState.shouldShowUpNext }
     }
 
+    val skipSegmentText: String? = when {
+        isInIntro -> "Skip Intro"
+        isInCredits && !shouldShowUpNext -> "Skip Credits"
+        else -> null
+    }
+    val onSkipSegment: () -> Unit = when {
+        isInIntro -> { { viewModel.skipIntro() } }
+        isInCredits -> { { viewModel.skipCredits() } }
+        else -> { {} }
+    }
+
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
             detectedAspectRatio ?: AspectRatio.FIT
@@ -338,7 +349,6 @@ fun VideoPlayerScreen(
                         val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
                         gestureSeekPositionMs = newPos
                         isGestureSeeking = true
-                        eng.seekTo(newPos)
                     }
                 }
             },
@@ -371,6 +381,9 @@ fun VideoPlayerScreen(
             },
             onClearOverlays = remember(viewModel) {
                 {
+                    if (isGestureSeeking) {
+                        doSeekTo(gestureSeekPositionMs)
+                    }
                     if (brightnessOverlay in 0f..1f) {
                         viewModel.saveBrightness(brightnessOverlay)
                     }
@@ -402,7 +415,7 @@ fun VideoPlayerScreen(
         )
 
         IntroSkipOverlay(
-            isVisible = isInIntro,
+            isVisible = isInIntro && !showControls,
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -410,7 +423,7 @@ fun VideoPlayerScreen(
         )
 
         CreditsSkipOverlay(
-            isVisible = isInCredits && !shouldShowUpNext,
+            isVisible = isInCredits && !shouldShowUpNext && !showControls,
             onSkip = { viewModel.skipCredits() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -487,6 +500,10 @@ fun VideoPlayerScreen(
             audioPassthrough = uiState.audioPassthrough,
             isCasting = isCasting,
             isOcrRunning = uiState.isOcrRunning,
+            introTimestamps = uiState.introTimestamps,
+            creditTimestamps = uiState.creditTimestamps,
+            skipSegmentText = skipSegmentText,
+            onSkipSegment = onSkipSegment,
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls,
@@ -499,11 +516,12 @@ fun VideoPlayerScreen(
             onPlayPause = { doTogglePlayPause() },
             onSeekBack = { doSeekBack() },
             onSeekForward = { doSeekForward() },
-            onSeek = remember(duration, doSeekTo) {
-                { fraction -> if (duration > 0) doSeekTo((fraction * duration).toLong()) }
-            },
+            onSeek = { },
             onSeekStart = { isSeeking = true },
-            onSeekEnd = { isSeeking = false },
+            onSeekEnd = {
+                isSeeking = false
+                if (duration > 0) doSeekTo(seekPositionMs)
+            },
             onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
             onBack = onBack,
             onSpeedClick = { currentSheet = PlayerSheet.Speed },
@@ -808,7 +826,7 @@ private fun PlayerSheetRouter(
         is PlayerSheet.OcrResult -> {
             OcrResultSheet(
                 ocrText = uiState.ocrText,
-                isOcrRunning = uiState.isOcrRunning,
+            isOcrRunning = uiState.isOcrRunning,
                 onDismiss = {
                     onSheetChange(PlayerSheet.None)
                     viewModel.clearOcrText()
