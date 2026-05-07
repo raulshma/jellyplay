@@ -117,7 +117,10 @@ fun VideoPlayerScreen(
     var volumeOverlay by remember { mutableFloatStateOf(-1f) }
     var externalLaunched by remember { mutableStateOf(false) }
     var gestureSeekPositionMs by remember { mutableLongStateOf(0L) }
+    var gestureStartPositionMs by remember { mutableLongStateOf(0L) }
+    var gestureDeltaMs by remember { mutableLongStateOf(0L) }
     var isGestureSeeking by remember { mutableStateOf(false) }
+    var gestureTrickplayVisible by remember { mutableStateOf(false) }
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -344,11 +347,15 @@ fun VideoPlayerScreen(
             gesturesEnabled = uiState.gesturesEnabled,
             swipeSeekMaxMs = uiState.swipeSeekMaxMs,
             onSeekGesture = remember(engine) {
-                { delta ->
+                { totalDeltaMs ->
                     engine?.let { eng ->
-                        val newPos = (eng.currentPositionMs + delta).coerceIn(0, eng.durationMs.coerceAtLeast(0))
-                        gestureSeekPositionMs = newPos
-                        isGestureSeeking = true
+                        if (!isGestureSeeking) {
+                            gestureStartPositionMs = eng.currentPositionMs
+                            isGestureSeeking = true
+                        }
+                        gestureDeltaMs = totalDeltaMs
+                        val durationMs = eng.durationMs.coerceAtLeast(0)
+                        gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
                     }
                 }
             },
@@ -379,26 +386,24 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onClearOverlays = remember(viewModel) {
-                {
-                    if (isGestureSeeking) {
-                        doSeekTo(gestureSeekPositionMs)
-                    }
-                    if (brightnessOverlay in 0f..1f) {
-                        viewModel.saveBrightness(brightnessOverlay)
-                    }
-                    seekDirection = 0
-                    seekOffsetMs = 0L
-                    brightnessOverlay = -1f
-                    volumeOverlay = -1f
-                    isGestureSeeking = false
+            onClearOverlays = {
+                if (isGestureSeeking) {
+                    doSeekTo(gestureSeekPositionMs)
                 }
+                if (brightnessOverlay in 0f..1f) {
+                    viewModel.saveBrightness(brightnessOverlay)
+                }
+                seekDirection = 0
+                seekOffsetMs = 0L
+                brightnessOverlay = -1f
+                volumeOverlay = -1f
+                isGestureSeeking = false
             },
         )
 
         // Trickplay overlay for seek gestures
         AnimatedVisibility(
-            visible = uiState.trickplayOnSeekGesture && isGestureSeeking,
+            visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
@@ -406,6 +411,8 @@ fun VideoPlayerScreen(
             TrickplayOverlay(
                 bitmap = gestureTrickplayBitmap,
                 positionMs = gestureSeekPositionMs,
+                deltaMs = gestureDeltaMs,
+                durationMs = duration,
             )
         }
 
@@ -559,6 +566,7 @@ fun VideoPlayerScreen(
             TrickplayOverlay(
                 bitmap = seekTrickplayBitmap,
                 positionMs = seekPositionMs,
+                durationMs = duration,
             )
         }
     }
@@ -581,8 +589,15 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
         if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+            gestureTrickplayVisible = true
             gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
-        } else if (!isGestureSeeking) {
+        }
+    }
+
+    LaunchedEffect(isGestureSeeking) {
+        if (!isGestureSeeking && gestureTrickplayVisible) {
+            delay(1000)
+            gestureTrickplayVisible = false
             gestureTrickplayBitmap = null
         }
     }
