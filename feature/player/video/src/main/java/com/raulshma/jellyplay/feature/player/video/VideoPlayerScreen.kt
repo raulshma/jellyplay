@@ -130,6 +130,8 @@ fun VideoPlayerScreen(
     var isGestureSeeking by remember { mutableStateOf(false) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
 
+    var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+
     var syncPlayChatVisible by remember { mutableStateOf(false) }
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -418,11 +420,16 @@ fun VideoPlayerScreen(
                     audioManager?.let { am ->
                         val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                         val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val step = 1
-                        val newVol = if (delta > 0) (current + step).coerceAtMost(max)
-                        else (current - step).coerceAtLeast(0)
-                        am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                        volumeOverlay = newVol.toFloat() / max.toFloat()
+                        val currentNorm = current.toFloat() / max.toFloat()
+                        val stepThreshold = 1f / max.toFloat()
+                        volumeGestureAccumulator += delta
+                        volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
+                        val steps = (volumeGestureAccumulator / stepThreshold).toInt()
+                        if (steps != 0) {
+                            volumeGestureAccumulator -= steps * stepThreshold
+                            val newVol = (current + steps).coerceIn(0, max)
+                            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                        }
                     }
                 }
             },
@@ -437,6 +444,7 @@ fun VideoPlayerScreen(
                 seekOffsetMs = 0L
                 brightnessOverlay = -1f
                 volumeOverlay = -1f
+                volumeGestureAccumulator = 0f
                 isGestureSeeking = false
             },
         )
