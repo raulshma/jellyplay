@@ -1,15 +1,11 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,7 +86,6 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
-import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
@@ -98,10 +93,9 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -528,7 +522,6 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HeroHeader(
     item: MediaItem,
@@ -538,7 +531,6 @@ private fun HeroHeader(
     backgroundColor: Color,
     onClick: () -> Unit,
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -563,23 +555,11 @@ private fun HeroHeader(
             )
             .tvFocusable()
     ) {
-        val imageModifier = Modifier.fillMaxSize()
-        val resolvedModifier = if (sharedTransitionScope != null) {
-            with(sharedTransitionScope) {
-                imageModifier.sharedElement(
-                    rememberSharedContentState(key = "backdrop_${item.id}"),
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
-                )
-            }
-        } else {
-            imageModifier
-        }
-
         MediaImage(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
-            modifier = resolvedModifier,
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
 
@@ -755,7 +735,6 @@ private fun HeroHeader(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ContinueWatchingRow(
     title: String,
@@ -792,7 +771,6 @@ private fun ContinueWatchingRow(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
@@ -801,7 +779,6 @@ private fun WideMediaCard(
     onClick: () -> Unit,
     cardWidth: androidx.compose.ui.unit.Dp = 260.dp,
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -832,24 +809,12 @@ private fun WideMediaCard(
                 .aspectRatio(16f / 9f),
             contentAlignment = Alignment.Center,
         ) {
-            val imageModifier = Modifier.fillMaxSize()
-            val resolvedModifier = if (sharedTransitionScope != null) {
-                with(sharedTransitionScope) {
-                    imageModifier.sharedElement(
-                        rememberSharedContentState(key = "backdrop_${item.id}"),
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
-                    )
-                }
-            } else {
-                imageModifier
-            }
-
             MediaImage(
                 url = backdropUrl,
                 fallbackUrls = listOf(imageUrl),
                 contentDescription = item.name,
                 blurHash = item.blurHashes.primary,
-                modifier = resolvedModifier,
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
 
@@ -913,7 +878,6 @@ private fun WideMediaCard(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HomeMediaRow(
     title: String,
@@ -953,8 +917,6 @@ private fun HomeMediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = item.blurHashes.primary,
-                    sharedElementKey = "poster_${item.id}",
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
                 )
             }
         }
