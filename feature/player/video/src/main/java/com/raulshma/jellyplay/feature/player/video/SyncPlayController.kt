@@ -4,6 +4,7 @@ import android.util.Log
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
+import com.raulshma.jellyplay.core.model.UserPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -24,6 +25,7 @@ internal class SyncPlayController(
     private val getPlayerEngine: () -> PlayerEngine?,
     private val getCurrentItemId: () -> String? = { null },
     private val onLoadItem: ((String, Long) -> Unit)? = null,
+    private val preferencesFlow: StateFlow<UserPreferences>,
 ) {
     private var commandJob: Job? = null
     private var currentPlaylistItemId: String? = null
@@ -45,12 +47,11 @@ internal class SyncPlayController(
     private var syncCorrectionJob: Job? = null
     private var pendingItemLoad = false
 
-    private val minDelaySpeedToSync = 60.0
-    private val maxDelaySpeedToSync = 3000.0
-    private val speedToSyncDuration = 1000.0
     private val minDelaySkipToSync = 400.0
     private val syncCorrectionInitialDelay = 500.0
     private val syncCorrectionInterval = 1000.0
+
+    private val prefs: UserPreferences get() = preferencesFlow.value
 
     init {
         if (syncPlayManager.isInSyncPlaySession) {
@@ -449,6 +450,7 @@ internal class SyncPlayController(
 
     private fun enableSyncCorrection() {
         if (syncCorrectionEnabled) return
+        if (!prefs.syncPlaySyncCorrection) return
         syncCorrectionEnabled = true
         syncCorrectionJob?.cancel()
         syncCorrectionJob = viewModel.viewModelScope.launch {
@@ -474,9 +476,18 @@ internal class SyncPlayController(
 
     private fun performSyncCorrection() {
         if (!syncCorrectionEnabled) return
+        if (!prefs.syncPlaySyncCorrection) {
+            stopSyncCorrection()
+            return
+        }
         if (!isInSession) return
         val engine = getPlayerEngine() ?: return
         if (!engine.isPlaying) return
+
+        val minDelaySpeedToSync = prefs.syncPlaySpeedToSyncMinDelayMs.toDouble()
+        val maxDelaySpeedToSync = prefs.syncPlaySpeedToSyncMaxDelayMs.toDouble()
+        val speedToSyncDuration = prefs.syncPlaySpeedToSyncDurationMs.toDouble()
+        val useSpeedToSync = prefs.syncPlaySpeedToSyncEnabled
 
         val cmd = lastCommand ?: return
         val currentPosMs = engine.currentPositionMs
@@ -509,7 +520,7 @@ internal class SyncPlayController(
                 uiState.update { it.copy(isSyncPlaySyncing = false) }
             }
             Log.d(TAG, "SkipToSync: diff=${diffMs}ms, seeking to ${seekMs}ms")
-        } else if (absDiffMs < maxDelaySpeedToSync) {
+        } else if (useSpeedToSync && absDiffMs < maxDelaySpeedToSync) {
             val speed = (1.0 + diffMs / speedToSyncDuration).toFloat().coerceIn(0.8f, 1.5f)
             engine.setPlaybackSpeed(speed)
             uiState.update { it.copy(isSyncPlaySyncing = true) }

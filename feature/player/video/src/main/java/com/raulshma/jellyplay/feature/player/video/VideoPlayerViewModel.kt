@@ -39,6 +39,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -70,6 +71,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
     val uiState = _uiState.asStateFlow()
+
+    private val _syncPlayPrefs = MutableStateFlow(com.raulshma.jellyplay.core.model.UserPreferences())
+    private val syncPlayPrefs: StateFlow<com.raulshma.jellyplay.core.model.UserPreferences> = _syncPlayPrefs.asStateFlow()
 
     private var playerEngine: PlayerEngine? = null
     private var mediaDetail: MediaDetail? = null
@@ -106,9 +110,15 @@ class VideoPlayerViewModel @Inject constructor(
                 playerEngine?.seekTo(positionTicks / 10_000)
             }
         },
+        preferencesFlow = syncPlayPrefs,
     )
 
     init {
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                _syncPlayPrefs.value = prefs
+            }
+        }
         syncPlayController.start()
     }
 
