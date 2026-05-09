@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -27,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,9 +59,15 @@ fun MiniPlayer(
         exit = slideOutVertically(targetOffsetY = { it }),
         modifier = modifier,
     ) {
+        val navBarColorState = LocalNavigationBarColor.current
+        val animatedColor by animateColorAsState(
+            targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            animationSpec = tween(400),
+            label = "miniPlayerColor",
+        )
         Surface(
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = animatedColor,
             shadowElevation = 8.dp,
             tonalElevation = 4.dp,
             modifier = Modifier.fillMaxWidth(),

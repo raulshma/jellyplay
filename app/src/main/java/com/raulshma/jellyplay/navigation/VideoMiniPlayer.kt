@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -37,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 
 @Composable
@@ -57,9 +60,15 @@ fun VideoMiniPlayer(
         exit = slideOutVertically(targetOffsetY = { it }),
         modifier = modifier,
     ) {
+        val navBarColorState = LocalNavigationBarColor.current
+        val animatedColor by animateColorAsState(
+            targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            animationSpec = tween(400),
+            label = "videoMiniPlayerColor",
+        )
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = animatedColor,
             shadowElevation = 12.dp,
             tonalElevation = 4.dp,
         ) {
@@ -100,7 +109,7 @@ fun VideoMiniPlayer(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .background(animatedColor)
                         .clickable(onClick = onClick)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
