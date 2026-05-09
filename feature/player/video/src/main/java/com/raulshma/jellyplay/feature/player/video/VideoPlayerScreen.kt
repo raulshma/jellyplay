@@ -594,6 +594,7 @@ fun VideoPlayerScreen(
             syncPlayGroupName = uiState.syncPlayGroupName,
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
             isSyncPlaySynced = uiState.isSyncPlaySynced,
+            isSyncPlaySyncing = uiState.isSyncPlaySyncing,
             modifier = Modifier.fillMaxSize(),
         )
 

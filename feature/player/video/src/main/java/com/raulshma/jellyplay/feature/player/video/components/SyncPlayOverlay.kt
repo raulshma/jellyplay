@@ -35,6 +35,7 @@ fun SyncPlayOverlay(
     groupName: String,
     participantCount: Int,
     isSynced: Boolean,
+    isSyncing: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
@@ -58,12 +59,24 @@ fun SyncPlayOverlay(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                    color = when {
+                        isSynced -> Color(0xFF4CAF50)
+                        isSyncing -> Color(0xFF2196F3)
+                        else -> Color(0xFFFFC107)
+                    },
                     modifier = Modifier.size(8.dp),
                 ) {}
                 Text(
-                    text = if (isSynced) "Synced" else "Buffering",
-                    color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                    text = when {
+                        isSynced -> "Synced"
+                        isSyncing -> "Syncing"
+                        else -> "Buffering"
+                    },
+                    color = when {
+                        isSynced -> Color(0xFF4CAF50)
+                        isSyncing -> Color(0xFF2196F3)
+                        else -> Color(0xFFFFC107)
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                 )

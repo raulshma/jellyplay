@@ -65,6 +65,8 @@ class SyncPlayManager @Inject constructor(
     private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 64)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
+    private var queuedCommand: SyncPlayCommand? = null
+
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
     val activeGroupId: String? get() = activeGroupIdReference.get()
     val isInSyncPlaySession: Boolean get() = isGroupActive.get() && activeGroupIdReference.get() != null
@@ -98,6 +100,17 @@ class SyncPlayManager @Inject constructor(
                     val positionTicks = parseTicks(event.data, "PositionTicks")
                     val whenMs = parseWhen(event.data)
                     val playlistItemId = event.data.optString("PlaylistItemId", "")
+                    if (!syncPlayReady.get()) {
+                        Log.d(TAG, "SyncPlay not ready, queuing command: $command")
+                        queuedCommand = when (command) {
+                            "Unpause" -> SyncPlayCommand.Play(positionTicks, whenMs, playlistItemId)
+                            "Pause" -> SyncPlayCommand.Pause(positionTicks, whenMs, playlistItemId)
+                            "Seek" -> SyncPlayCommand.Seek(positionTicks, whenMs, playlistItemId)
+                            "Stop" -> SyncPlayCommand.Stop
+                            else -> null
+                        }
+                        return
+                    }
                     when (command) {
                         "Unpause" -> {
                             _commands.tryEmit(SyncPlayCommand.Play(positionTicks, whenMs, playlistItemId))
@@ -114,25 +127,29 @@ class SyncPlayManager @Inject constructor(
                     }
                 }
                 "Play" -> {
-                    val itemIds = event.data.optJSONArray("ItemIds")
-                    val ids = mutableListOf<String>()
-                    if (itemIds != null) {
-                        for (i in 0 until itemIds.length()) {
-                            ids.add(itemIds.optString(i, ""))
+                    if (isGroupActive.get()) {
+                        Log.d(TAG, "Ignoring Play event: active SyncPlay session uses SyncPlayCommand")
+                    } else {
+                        val itemIds = event.data.optJSONArray("ItemIds")
+                        val ids = mutableListOf<String>()
+                        if (itemIds != null) {
+                            for (i in 0 until itemIds.length()) {
+                                ids.add(itemIds.optString(i, ""))
+                            }
                         }
-                    }
-                    val startPositionTicks = parseTicks(event.data, "StartPositionTicks")
-                    val whenMs = parseWhen(event.data)
-                    if (ids.isNotEmpty()) {
-                        _commands.tryEmit(SyncPlayCommand.PlayQueueUpdate(
-                            itemIds = ids,
-                            playlistItemIds = emptyList(),
-                            playingItemId = ids.first(),
-                            playingPlaylistItemId = "",
-                            positionTicks = startPositionTicks,
-                            isPlaying = true,
-                            whenMs = whenMs,
-                        ))
+                        val startPositionTicks = parseTicks(event.data, "StartPositionTicks")
+                        val whenMs = parseWhen(event.data)
+                        if (ids.isNotEmpty()) {
+                            _commands.tryEmit(SyncPlayCommand.PlayQueueUpdate(
+                                itemIds = ids,
+                                playlistItemIds = emptyList(),
+                                playingItemId = ids.first(),
+                                playingPlaylistItemId = "",
+                                positionTicks = startPositionTicks,
+                                isPlaying = true,
+                                whenMs = whenMs,
+                            ))
+                        }
                     }
                 }
                 "Playstate" -> {
@@ -427,6 +444,11 @@ class SyncPlayManager @Inject constructor(
                 timeSyncManager.pingUpdated.first()
                 syncPlayReady.set(true)
                 Log.d(TAG, "SyncPlay ready (time sync first ping received)")
+                queuedCommand?.let { cmd ->
+                    Log.d(TAG, "Processing queued command: $cmd")
+                    _commands.tryEmit(cmd)
+                    queuedCommand = null
+                }
             }
 
             startPingReporting()
@@ -465,6 +487,7 @@ class SyncPlayManager @Inject constructor(
         isGroupActive.set(false)
         cachedGroup.set(null)
         syncPlayReady.set(false)
+        queuedCommand = null
         sessionStartedAtRemoteMs.set(0L)
         eventJob?.cancel()
         keepAliveJob?.cancel()
