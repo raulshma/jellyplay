@@ -258,7 +258,8 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     private suspend fun loadCurrentGroup() {
-        mediaRepository.getSyncPlayInfo(syncPlayManager.activeGroupId)
+        val groupId = syncPlayManager.activeGroupId ?: return
+        mediaRepository.getSyncPlayInfo(groupId)
             .onSuccess { currentGroup = it }
             .onFailure { currentGroup = null }
     }

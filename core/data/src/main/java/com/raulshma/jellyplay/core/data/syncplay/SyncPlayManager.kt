@@ -62,7 +62,7 @@ class SyncPlayManager @Inject constructor(
 
     private var syncPlayReady = AtomicBoolean(false)
 
-    private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 64)
+    private val _commands = MutableSharedFlow<SyncPlayCommand>(replay = 1, extraBufferCapacity = 64)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
@@ -86,6 +86,7 @@ class SyncPlayManager @Inject constructor(
 
     private fun handleEvent(event: SyncPlayEvent) {
         try {
+            Log.d(TAG, "WS event: ${event.type}, data=${event.data}")
             if (shouldIgnoreEvent(event.type, event.data)) {
                 Log.d(TAG, "Ignoring stale SyncPlay event: ${event.type}")
                 return
@@ -402,6 +403,7 @@ class SyncPlayManager @Inject constructor(
 
     suspend fun joinGroup(groupId: String): Result<Unit> {
         return try {
+            Log.d(TAG, "Joining SyncPlay group: $groupId")
             apiClient.postCapabilities()
             apiClient.joinSyncPlayGroup(groupId)
             activeGroupIdReference.set(groupId)
@@ -443,11 +445,14 @@ class SyncPlayManager @Inject constructor(
                 serverAddress = server.address,
                 accessToken = user.accessToken,
                 device = "JellyPlay-${user.id.take(8)}",
+                deviceName = "JellyPlay",
+                client = "JellyPlay",
             )
         }
     }
 
     suspend fun leaveGroup(): Result<Unit> {
+        Log.d(TAG, "Leaving SyncPlay group")
         val apiResult = try {
             apiClient.leaveSyncPlayGroup()
         } catch (e: Exception) {
@@ -495,7 +500,8 @@ class SyncPlayManager @Inject constructor(
 
     private suspend fun refreshGroupInfo() {
         try {
-            val info = apiClient.getSyncPlayInfo(activeGroupIdReference.get()).getOrNull() ?: return
+            val groupId = activeGroupIdReference.get() ?: return
+            val info = apiClient.getSyncPlayInfo(groupId).getOrNull() ?: return
             val currentGroup = cachedGroup.get()
             val newGroup = SyncPlayGroup(
                 groupId = info.groupId,
@@ -521,9 +527,11 @@ class SyncPlayManager @Inject constructor(
     ): Result<Unit> {
         return try {
             val remoteNow = timeSyncManager.remoteNow()
+            Log.d(TAG, "reportReady: pos=$positionTicks, isPlaying=$isPlaying, item=$playlistItemId, remoteNow=$remoteNow")
             apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, remoteNow)
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.w(TAG, "reportReady failed", e)
             Result.failure(e)
         }
     }
@@ -535,9 +543,11 @@ class SyncPlayManager @Inject constructor(
     ): Result<Unit> {
         return try {
             val remoteNow = timeSyncManager.remoteNow()
+            Log.d(TAG, "reportBuffering: pos=$positionTicks, isPlaying=$isPlaying, item=$playlistItemId, remoteNow=$remoteNow")
             apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, remoteNow)
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.w(TAG, "reportBuffering failed", e)
             Result.failure(e)
         }
     }
@@ -655,8 +665,27 @@ class SyncPlayManager @Inject constructor(
         }
     }
 
+    suspend fun queueItems(itemIds: List<String>, mode: String = "Queue"): Result<Unit> {
+        return try {
+            apiClient.syncPlayQueue(itemIds, mode)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setPlaylistItem(playlistItemId: String): Result<Unit> {
+        return try {
+            apiClient.syncPlaySetPlaylistItem(playlistItemId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun sendChatMessage(text: String) {
         if (text.isBlank()) return
+        Log.w(TAG, "SyncPlay chat is not supported by standard Jellyfin servers; message will not be delivered")
         val data = JSONObject().apply {
             put("Message", text)
         }
@@ -669,6 +698,8 @@ class SyncPlayManager @Inject constructor(
     fun calculateLatency(whenMs: Long): Long {
         return (timeSyncManager.remoteNow() - whenMs).coerceAtLeast(0)
     }
+
+    fun remoteNow(): Long = timeSyncManager.remoteNow()
 
     fun estimateCurrentTicks(positionTicks: Long, whenMs: Long): Long {
         val elapsedMs = timeSyncManager.remoteNow() - whenMs

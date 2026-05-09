@@ -108,6 +108,10 @@ class VideoPlayerViewModel @Inject constructor(
         },
     )
 
+    init {
+        syncPlayController.start()
+    }
+
     val playerEngineRef: PlayerEngine? get() = playerEngine
 
     @Suppress("DEPRECATION")
@@ -125,13 +129,17 @@ class VideoPlayerViewModel @Inject constructor(
 
         viewModelScope.launch {
             val groupPlayingId = syncPlayManager.currentGroup?.playingItemId
-            if (syncPlayManager.isInSyncPlaySession && groupPlayingId != itemId) {
-                syncPlayManager.setNewQueue(
-                    itemIds = listOf(itemId),
-                    playingItemId = itemId,
-                    mediaSourceId = mediaSourceId,
-                    startPositionTicks = startPositionTicks
-                )
+            if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
+                try {
+                    syncPlayManager.setNewQueue(
+                        itemIds = listOf(itemId),
+                        playingItemId = itemId,
+                        mediaSourceId = mediaSourceId,
+                        startPositionTicks = startPositionTicks
+                    )
+                } catch (_: Exception) {
+                    // Ignore setNewQueue failures to avoid feedback loops
+                }
             }
 
             val prefs = preferencesStore.preferences.first()
@@ -335,13 +343,16 @@ class VideoPlayerViewModel @Inject constructor(
         engine.setOnError { errorMsg ->
             _uiState.update { it.copy(playerError = errorMsg) }
         }
+        engine.setOnPlaybackStateChanged { playbackState ->
+            if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                if (autoplayNext && !syncPlayManager.isInSyncPlaySession) playNextEpisode()
+            }
+            syncPlayController.onPlaybackStateChanged(playbackState)
+        }
 
         if (engine is ExoPlayerEngine) {
-            (engine as ExoPlayerEngine).setOnPlaybackStateChanged { playbackState ->
-                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                    if (autoplayNext) playNextEpisode()
-                }
-                syncPlayController.onPlaybackStateChanged(playbackState)
+            (engine as ExoPlayerEngine).setOnPlaybackEnded {
+                // End-of-playback handled in setOnPlaybackStateChanged above
             }
 
             engine.createPlayer(

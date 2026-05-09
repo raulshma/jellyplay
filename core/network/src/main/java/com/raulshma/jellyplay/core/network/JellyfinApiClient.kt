@@ -255,6 +255,13 @@ interface JellyfinApiClient {
         startPositionTicks: Long = 0L,
     ): Result<Unit>
 
+    suspend fun syncPlayQueue(
+        itemIds: List<String>,
+        mode: String = "Queue",
+    ): Result<Unit>
+
+    suspend fun syncPlaySetPlaylistItem(playlistItemId: String): Result<Unit>
+
     suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit>
 
     suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit>

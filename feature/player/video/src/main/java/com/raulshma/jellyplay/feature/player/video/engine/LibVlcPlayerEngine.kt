@@ -27,6 +27,7 @@ class LibVlcPlayerEngine(
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
+    private var onPlaybackStateChanged: ((Int) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var pendingPlay = false
@@ -44,17 +45,31 @@ class LibVlcPlayerEngine(
         when (event.type) {
             MediaPlayer.Event.Playing -> {
                 _isPlaying = true
-                mainHandler.post { 
+                mainHandler.post {
                     onStateChanged?.invoke(true)
+                    onPlaybackStateChanged?.invoke(3) // READY=3
                     // Apply dialogue boost when playback starts
                     if (dialogueBoostEnabled) {
                         applyDialogueBoost()
                     }
                 }
             }
-            MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> {
+            MediaPlayer.Event.Paused -> {
                 _isPlaying = false
-                mainHandler.post { onStateChanged?.invoke(false) }
+                mainHandler.post {
+                    onStateChanged?.invoke(false)
+                    onPlaybackStateChanged?.invoke(3) // READY=3
+                }
+            }
+            MediaPlayer.Event.Stopped -> {
+                _isPlaying = false
+                mainHandler.post {
+                    onStateChanged?.invoke(false)
+                    onPlaybackStateChanged?.invoke(1) // IDLE=1
+                }
+            }
+            MediaPlayer.Event.Buffering -> {
+                mainHandler.post { onPlaybackStateChanged?.invoke(2) } // BUFFERING=2
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
@@ -351,6 +366,10 @@ class LibVlcPlayerEngine(
 
     override fun setOnError(callback: ((String) -> Unit)?) {
         onError = callback
+    }
+
+    override fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
+        onPlaybackStateChanged = callback
     }
 
     override fun setDialogueBoostEnabled(enabled: Boolean) {
