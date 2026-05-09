@@ -60,6 +60,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
+import com.raulshma.jellyplay.core.data.playback.PipStateHolder
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -97,6 +98,8 @@ fun VideoPlayerScreen(
     mediaSourceId: String?,
     startPositionTicks: Long,
     onBack: () -> Unit,
+    onEnterPip: () -> Unit = {},
+    onEnterMiniMode: () -> Unit = {},
     viewModel: VideoPlayerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -104,6 +107,8 @@ fun VideoPlayerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val isInPipMode by viewModel.pipStateHolder.isInPipMode.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(true) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
@@ -216,6 +221,12 @@ fun VideoPlayerScreen(
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
+        } else if (uiState.isPlaying) {
+            viewModel.prepareForMiniMode(
+                title = uiState.title,
+                subtitle = uiState.subtitle,
+            )
+            onEnterMiniMode()
         } else {
             onBack()
         }
@@ -451,7 +462,7 @@ fun VideoPlayerScreen(
         )
 
         IntroSkipOverlay(
-            isVisible = isInIntro,
+            isVisible = isInIntro && !isInPipMode,
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -459,7 +470,7 @@ fun VideoPlayerScreen(
         )
 
         CreditsSkipOverlay(
-            isVisible = isInCredits && !shouldShowUpNext,
+            isVisible = isInCredits && !shouldShowUpNext && !isInPipMode,
             onSkip = { viewModel.skipCredits() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -545,7 +556,7 @@ fun VideoPlayerScreen(
             onSkipSegment = onSkipSegment,
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
-            isVisible = showControls,
+            isVisible = showControls && !isInPipMode,
             supportsSubtitleStyle = uiState.engineCapabilities.subtitleStyle,
             supportsDialogueBoost = uiState.engineCapabilities.dialogueBoost,
             supportsNightMode = uiState.engineCapabilities.nightMode,
@@ -590,6 +601,13 @@ fun VideoPlayerScreen(
             },
             onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
             onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
+            onPipClick = {
+                viewModel.prepareForMiniMode(
+                    title = title,
+                    subtitle = subtitle,
+                )
+                onEnterMiniMode()
+            },
             isInSyncPlaySession = isInSyncPlaySession,
             syncPlayGroupName = uiState.syncPlayGroupName,
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,

@@ -66,7 +66,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +91,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
@@ -121,10 +121,6 @@ fun AudioPlayerScreen(
 
     LaunchedEffect(Unit) {
         contentAlpha.animateTo(1f, tween(600, delayMillis = 200))
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { viewModel.release() }
     }
 
     BackHandler {

@@ -26,6 +26,7 @@
             android:exported="true"
             android:theme="@style/Theme.JellyPlay.Starting"
             android:windowSoftInputMode="adjustResize"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -132,6 +132,7 @@ internal fun PlayerControls(
     onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
+    onPipClick: () -> Unit = {},
     isInSyncPlaySession: Boolean = false,
     syncPlayGroupName: String? = null,
     syncPlayParticipantCount: Int = 0,
@@ -385,6 +386,8 @@ internal fun PlayerControls(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        PipButton(onClick = onPipClick)
+
                         var showOverflow by remember { mutableStateOf(false) }
                         Box {
                             PlayerIconButton(

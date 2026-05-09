@@ -3,9 +3,11 @@ package com.raulshma.jellyplay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +22,8 @@ class MainViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
+    val audioPlaybackManager: AudioPlaybackManager,
+    val videoMiniPlayerState: VideoMiniPlayerState,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)

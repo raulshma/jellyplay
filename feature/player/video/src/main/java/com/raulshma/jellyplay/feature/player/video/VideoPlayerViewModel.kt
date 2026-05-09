@@ -11,6 +11,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.PipStateHolder
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -67,6 +68,8 @@ class VideoPlayerViewModel @Inject constructor(
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
+    val pipStateHolder: PipStateHolder,
+    val videoMiniPlayerState: VideoMiniPlayerState,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
@@ -128,10 +131,59 @@ class VideoPlayerViewModel @Inject constructor(
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         if (currentItemId == itemId) return
         val wasInSyncPlay = syncPlayManager.isInSyncPlaySession
+
+        val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId)
+        if (reclaimed != null) {
+            currentItemId = itemId
+            playerEngine = reclaimed
+            pipStateHolder.requestAutoEnterPip(true)
+
+            reclaimed.setOnStateChanged { playing ->
+                _uiState.update { it.copy(isPlaying = playing) }
+                syncPlayController.onIsPlayingChanged(playing)
+            }
+            reclaimed.setOnTracksChanged {
+                updateTracksFromEngine(reclaimed)
+            }
+            reclaimed.setOnPlaybackStateChanged { playbackState ->
+                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    if (autoplayNext && !syncPlayManager.isInSyncPlaySession) playNextEpisode()
+                }
+                syncPlayController.onPlaybackStateChanged(playbackState)
+            }
+            _uiState.update {
+                it.copy(
+                    isPlaying = reclaimed.isPlaying,
+                    currentPosition = reclaimed.currentPositionMs,
+                    duration = reclaimed.durationMs,
+                )
+            }
+
+            viewModelScope.launch {
+                mediaRepository.getMediaDetail(itemId)
+                    .onSuccess { detail ->
+                        mediaDetail = detail
+                        _uiState.update { state ->
+                            state.copy(
+                                title = detail.item.name,
+                                subtitle = detail.item.seriesName
+                                    ?: (detail.item.overview?.take(60) ?: ""),
+                            )
+                        }
+                        fetchIntroTimestamps(itemId)
+                        fetchCreditTimestamps(itemId)
+                        fetchNextEpisode(detail)
+                        loadSeriesEpisodes(detail)
+                    }
+            }
+            return
+        }
+
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
         trickplayManager.clear()
+        pipStateHolder.requestAutoEnterPip(true)
 
         if (wasInSyncPlay) {
             syncPlayController.reattachSession()
@@ -932,11 +984,37 @@ class VideoPlayerViewModel @Inject constructor(
         ) }
     }
 
+    fun prepareForMiniMode(
+        title: String,
+        subtitle: String,
+    ) {
+        val engine = playerEngine ?: return
+        val itemId = currentItemId ?: return
+
+        videoMiniPlayerState.enterMiniMode(
+            engine = engine,
+            itemId = itemId,
+            mediaSourceId = null,
+            title = title,
+            subtitle = subtitle,
+        )
+
+        engine.setOnStateChanged(null)
+        engine.setOnTracksChanged(null)
+        engine.setOnPlaybackStateChanged(null)
+
+        playerEngine = null
+        currentItemId = null
+        progressReporter.cancelJobs()
+        pipStateHolder.requestAutoEnterPip(false)
+    }
+
     fun release() {
         val itemId = currentItemId
         val sessionId = playSessionId
         val engine = playerEngine
         val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        pipStateHolder.requestAutoEnterPip(false)
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
