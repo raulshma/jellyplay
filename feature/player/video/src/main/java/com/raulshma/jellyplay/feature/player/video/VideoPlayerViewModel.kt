@@ -113,12 +113,27 @@ class VideoPlayerViewModel @Inject constructor(
     @Suppress("DEPRECATION")
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         if (currentItemId == itemId) return
+        val wasInSyncPlay = syncPlayManager.isInSyncPlaySession
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
         currentItemId = itemId
         trickplayManager.clear()
 
+        if (wasInSyncPlay) {
+            syncPlayController.reattachSession()
+        }
+
         viewModelScope.launch {
+            val groupPlayingId = syncPlayManager.currentGroup?.playingItemId
+            if (syncPlayManager.isInSyncPlaySession && groupPlayingId != itemId) {
+                syncPlayManager.setNewQueue(
+                    itemIds = listOf(itemId),
+                    playingItemId = itemId,
+                    mediaSourceId = mediaSourceId,
+                    startPositionTicks = startPositionTicks
+                )
+            }
+
             val prefs = preferencesStore.preferences.first()
 
             val defaultAspectRatio = try {
@@ -312,6 +327,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         engine.setOnStateChanged { playing ->
             _uiState.update { it.copy(isPlaying = playing) }
+            syncPlayController.onIsPlayingChanged(playing)
         }
         engine.setOnTracksChanged {
             updateTracksFromEngine(engine)

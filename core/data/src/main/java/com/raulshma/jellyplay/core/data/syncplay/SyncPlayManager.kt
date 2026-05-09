@@ -18,22 +18,26 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class SyncPlayCommand {
-    data class Play(val positionTicks: Long) : SyncPlayCommand()
-    data class Pause(val positionTicks: Long) : SyncPlayCommand()
-    data class Seek(val positionTicks: Long) : SyncPlayCommand()
+    data class Play(val positionTicks: Long, val whenMs: Long, val playlistItemId: String) : SyncPlayCommand()
+    data class Pause(val positionTicks: Long, val whenMs: Long, val playlistItemId: String) : SyncPlayCommand()
+    data class Seek(val positionTicks: Long, val whenMs: Long, val playlistItemId: String) : SyncPlayCommand()
     data object Stop : SyncPlayCommand()
     data class PlayQueueUpdate(
         val itemIds: List<String>,
+        val playlistItemIds: List<String>,
         val playingItemId: String,
+        val playingPlaylistItemId: String,
         val positionTicks: Long,
         val isPlaying: Boolean,
+        val whenMs: Long,
     ) : SyncPlayCommand()
-    data class StateUpdate(val isPlaying: Boolean) : SyncPlayCommand()
+    data class StateUpdate(val isPlaying: Boolean, val reason: String) : SyncPlayCommand()
     data class GroupUpdate(val groupName: String, val participantCount: Int) : SyncPlayCommand()
     data object WaitForGroup : SyncPlayCommand()
     data class Notification(val message: String) : SyncPlayCommand()
@@ -45,21 +49,24 @@ class SyncPlayManager @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
+    private val timeSyncManager: TimeSyncManager,
 ) {
     private var activeGroupIdReference = AtomicReference<String?>(null)
     private var isGroupActive = AtomicBoolean(false)
+    private val sessionStartedAtRemoteMs = AtomicLong(0L)
     private var cachedGroup = AtomicReference<SyncPlayGroup?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var eventJob: Job? = null
     private var keepAliveJob: Job? = null
+    private var pingReportJob: Job? = null
 
-    private val _commands = MutableSharedFlow<SyncPlayCommand>(replay = 1, extraBufferCapacity = 10)
+    private var syncPlayReady = AtomicBoolean(false)
+
+    private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 64)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
-
     val activeGroupId: String? get() = activeGroupIdReference.get()
-
     val isInSyncPlaySession: Boolean get() = isGroupActive.get() && activeGroupIdReference.get() != null
 
     fun startListening() {
@@ -79,19 +86,26 @@ class SyncPlayManager @Inject constructor(
 
     private fun handleEvent(event: SyncPlayEvent) {
         try {
+            if (shouldIgnoreEvent(event.type, event.data)) {
+                Log.d(TAG, "Ignoring stale SyncPlay event: ${event.type}")
+                return
+            }
+
             when (event.type) {
                 "SyncPlayCommand" -> {
                     val command = event.data.optString("Command", "")
                     val positionTicks = parseTicks(event.data, "PositionTicks")
+                    val whenMs = parseWhen(event.data)
+                    val playlistItemId = event.data.optString("PlaylistItemId", "")
                     when (command) {
                         "Unpause" -> {
-                            _commands.tryEmit(SyncPlayCommand.Play(positionTicks))
+                            _commands.tryEmit(SyncPlayCommand.Play(positionTicks, whenMs, playlistItemId))
                         }
                         "Pause" -> {
-                            _commands.tryEmit(SyncPlayCommand.Pause(positionTicks))
+                            _commands.tryEmit(SyncPlayCommand.Pause(positionTicks, whenMs, playlistItemId))
                         }
                         "Seek" -> {
-                            _commands.tryEmit(SyncPlayCommand.Seek(positionTicks))
+                            _commands.tryEmit(SyncPlayCommand.Seek(positionTicks, whenMs, playlistItemId))
                         }
                         "Stop" -> {
                             _commands.tryEmit(SyncPlayCommand.Stop)
@@ -107,90 +121,162 @@ class SyncPlayManager @Inject constructor(
                         }
                     }
                     val startPositionTicks = parseTicks(event.data, "StartPositionTicks")
+                    val whenMs = parseWhen(event.data)
                     if (ids.isNotEmpty()) {
                         _commands.tryEmit(SyncPlayCommand.PlayQueueUpdate(
                             itemIds = ids,
+                            playlistItemIds = emptyList(),
                             playingItemId = ids.first(),
+                            playingPlaylistItemId = "",
                             positionTicks = startPositionTicks,
                             isPlaying = true,
+                            whenMs = whenMs,
                         ))
+                    }
+                }
+                "Playstate" -> {
+                    val command = event.data.optString("Command", "")
+                    val positionTicks = parseTicks(event.data, "SeekPositionTicks")
+                    val whenMs = timeSyncManager.remoteNow()
+                    when (command) {
+                        "PlayPause" -> {
+                            val current = cachedGroup.get()
+                            if (current?.isPlaying == true) {
+                                _commands.tryEmit(SyncPlayCommand.Pause(0, whenMs, ""))
+                            } else {
+                                _commands.tryEmit(SyncPlayCommand.Play(0, whenMs, ""))
+                            }
+                        }
+                        "Pause" -> {
+                            _commands.tryEmit(SyncPlayCommand.Pause(0, whenMs, ""))
+                        }
+                        "Unpause" -> {
+                            _commands.tryEmit(SyncPlayCommand.Play(0, whenMs, ""))
+                        }
+                        "Stop" -> {
+                            _commands.tryEmit(SyncPlayCommand.Stop)
+                        }
+                        "Seek" -> {
+                            _commands.tryEmit(SyncPlayCommand.Seek(positionTicks, whenMs, ""))
+                        }
                     }
                 }
                 "SyncPlayGroupUpdate" -> {
                     val type = event.data.optString("Type", "")
+                    val innerData = event.data.optJSONObject("Data")
                     when (type) {
                         "GroupJoined", "GroupUpdate" -> {
-                            val groupName = event.data.optString("GroupName", cachedGroup.get()?.groupName ?: "")
-                            val participants = event.data.optJSONArray("Participants")
-                            val count = participants?.length() ?: cachedGroup.get()?.participantCount ?: 0
+                            val data = innerData ?: event.data
+                            val currentGroup = cachedGroup.get()
+                            val groupName = data.optString("GroupName", currentGroup?.groupName ?: "")
+                            val participants = data.optJSONArray("Participants")
+                            val count = participants?.length() ?: currentGroup?.participantCount ?: 0
                             cachedGroup.set(SyncPlayGroup(
-                                groupId = activeGroupIdReference.get() ?: "",
+                                groupId = data.optString("GroupId", activeGroupIdReference.get() ?: ""),
                                 groupName = groupName,
                                 participantCount = count,
-                                participants = (0 until count).mapNotNull { participants?.optString(it) },
-                                isPlaying = cachedGroup.get()?.isPlaying ?: false,
+                                participants = if (participants != null) {
+                                    (0 until participants.length())
+                                        .mapNotNull { participants.optString(it)?.takeIf { name -> name.isNotBlank() } }
+                                } else {
+                                    currentGroup?.participants ?: emptyList()
+                                },
+                                isPlaying = currentGroup?.isPlaying ?: false,
+                                playingItemId = currentGroup?.playingItemId,
+                                playingItemName = currentGroup?.playingItemName,
+                                playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
+                                positionTicks = currentGroup?.positionTicks,
+                                playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
                             ))
                             _commands.tryEmit(SyncPlayCommand.GroupUpdate(groupName, count))
                         }
                         "PlayQueue" -> {
-                            val playlist = event.data.optJSONArray("Playlist")
+                            val data = innerData ?: event.data
+                            val currentGroup = cachedGroup.get()
+                            val playlist = data.optJSONArray("Playlist")
                             val itemIds = mutableListOf<String>()
+                            val playlistItemIds = mutableListOf<String>()
                             if (playlist != null) {
                                 for (i in 0 until playlist.length()) {
                                     val item = playlist.optJSONObject(i)
                                     if (item != null) {
                                         itemIds.add(item.optString("ItemId", ""))
+                                        playlistItemIds.add(item.optString("PlaylistItemId", ""))
                                     }
                                 }
                             }
-                            val playingItemIndex = event.data.optInt("PlayingItemIndex", 0)
-                            val startPositionTicks = parseTicks(event.data, "StartPositionTicks")
-                            val isPlaying = event.data.optBoolean("IsPlaying", false)
-                            val playingItemId = itemIds.getOrNull(playingItemIndex) ?: ""
+                            val playingItemIndex = data.optInt("PlayingItemIndex", 0)
+                            val startPositionTicks = parseTicks(data, "StartPositionTicks")
+                            val isPlaying = data.optBoolean("IsPlaying", false)
+                            val playingItemId = itemIds.getOrNull(playingItemIndex)
+                                ?: currentGroup?.playingItemId
+                                ?: ""
+                            val playingPlaylistItemId = playlistItemIds.getOrNull(playingItemIndex)
+                                ?: currentGroup?.playingPlaylistItemId
+                                ?: ""
+                            val whenMs = parseWhen(data)
+                            val lastUpdate = data.optString("LastUpdate", "")
+
                             if (playingItemId.isNotBlank()) {
                                 _commands.tryEmit(SyncPlayCommand.PlayQueueUpdate(
                                     itemIds = itemIds,
+                                    playlistItemIds = playlistItemIds,
                                     playingItemId = playingItemId,
+                                    playingPlaylistItemId = playingPlaylistItemId,
                                     positionTicks = startPositionTicks,
                                     isPlaying = isPlaying,
+                                    whenMs = whenMs,
                                 ))
                             }
-                            val groupName = event.data.optString("GroupName", cachedGroup.get()?.groupName ?: "")
+                            val groupName = data.optString("GroupName", currentGroup?.groupName ?: "")
                             cachedGroup.set(SyncPlayGroup(
                                 groupId = activeGroupIdReference.get() ?: "",
                                 groupName = groupName,
-                                participantCount = cachedGroup.get()?.participantCount ?: 0,
-                                participants = cachedGroup.get()?.participants ?: emptyList(),
+                                participantCount = currentGroup?.participantCount ?: 0,
+                                participants = currentGroup?.participants ?: emptyList(),
                                 playingItemId = playingItemId,
+                                playingItemName = currentGroup?.playingItemName,
+                                playingPlaylistItemId = playingPlaylistItemId,
                                 isPlaying = isPlaying,
+                                playlistItemIds = playlistItemIds,
                                 positionTicks = startPositionTicks,
                             ))
                         }
                         "StateUpdate" -> {
-                            val state = event.data.optString("State", "")
+                            val data = innerData ?: event.data
+                            val state = data.optString("State", "")
+                            val reason = data.optString("Reason", "")
                             val isPlaying = state.equals("Playing", ignoreCase = true)
                             cachedGroup.set(cachedGroup.get()?.copy(isPlaying = isPlaying))
-                            _commands.tryEmit(SyncPlayCommand.StateUpdate(isPlaying))
+                            _commands.tryEmit(SyncPlayCommand.StateUpdate(isPlaying, reason))
                         }
                         "UserJoined" -> {
-                            val userName = event.data.optString("UserName", "")
-                            if (userName.isNotBlank()) {
+                            val userName = (innerData ?: event.data).optString("UserName", "")
+                            if (userName.isBlank()) {
+                                val raw = event.data.optString("Data", "")
+                                if (raw.isNotBlank()) _commands.tryEmit(SyncPlayCommand.Notification("$raw joined the group"))
+                            } else {
                                 _commands.tryEmit(SyncPlayCommand.Notification("$userName joined the group"))
                             }
                             scope.launch { refreshGroupInfo() }
                         }
                         "UserLeft" -> {
-                            val userName = event.data.optString("UserName", "")
-                            if (userName.isNotBlank()) {
+                            val userName = (innerData ?: event.data).optString("UserName", "")
+                            if (userName.isBlank()) {
+                                val raw = event.data.optString("Data", "")
+                                if (raw.isNotBlank()) _commands.tryEmit(SyncPlayCommand.Notification("$raw left the group"))
+                            } else {
                                 _commands.tryEmit(SyncPlayCommand.Notification("$userName left the group"))
                             }
                             scope.launch { refreshGroupInfo() }
                         }
                         "GroupWait" -> {
-                            val userName = event.data.optString("UserName", "")
+                            val data = innerData ?: event.data
+                            val userName = data.optString("UserName", "")
                             if (userName.isNotBlank()) {
                                 _commands.tryEmit(SyncPlayCommand.Notification("Waiting for $userName to buffer..."))
                             }
+                            _commands.tryEmit(SyncPlayCommand.WaitForGroup)
                         }
                         "GroupLeft" -> {
                             cachedGroup.set(null)
@@ -198,19 +284,55 @@ class SyncPlayManager @Inject constructor(
                             activeGroupIdReference.set(null)
                             _commands.tryEmit(SyncPlayCommand.GroupUpdate("", 0))
                         }
+                        "NotInGroup" -> {
+                            cachedGroup.set(null)
+                            isGroupActive.set(false)
+                            activeGroupIdReference.set(null)
+                            _commands.tryEmit(SyncPlayCommand.GroupUpdate("", 0))
+                        }
                         "SendChatMessage" -> {
-                            val userId = event.data.optString("UserId", "")
-                            val userName = event.data.optString("UserName", "")
-                            val text = event.data.optString("Message", "")
+                            val data = innerData ?: event.data
+                            val userId = data.optString("UserId", "")
+                            val userName = data.optString("UserName", "")
+                            val text = data.optString("Message", "")
                             if (text.isNotBlank()) {
                                 _commands.tryEmit(SyncPlayCommand.ChatMessage(userId, userName, text))
                             }
                         }
+                        "SyncPlayIsDisabled",
+                        "GroupDoesNotExist",
+                        "CreateGroupDenied",
+                        "JoinGroupDenied",
+                        "LibraryAccessDenied" -> {
+                            val data = innerData ?: event.data
+                            val message = data.optString("Message", type)
+                            _commands.tryEmit(SyncPlayCommand.Notification("SyncPlay: $message"))
+                        }
                     }
                 }
                 "GroupJoined" -> {
+                    val currentGroup = cachedGroup.get()
                     val groupName = event.data.optString("GroupName", "")
-                    _commands.tryEmit(SyncPlayCommand.GroupUpdate(groupName, 1))
+                    val participants = event.data.optJSONArray("Participants")
+                    val participantCount = participants?.length() ?: currentGroup?.participantCount ?: 1
+                    cachedGroup.set(SyncPlayGroup(
+                        groupId = event.data.optString("GroupId", activeGroupIdReference.get() ?: ""),
+                        groupName = groupName.ifBlank { currentGroup?.groupName ?: "" },
+                        participantCount = participantCount,
+                        participants = if (participants != null) {
+                            (0 until participants.length())
+                                .mapNotNull { participants.optString(it)?.takeIf { name -> name.isNotBlank() } }
+                        } else {
+                            currentGroup?.participants ?: emptyList()
+                        },
+                        isPlaying = currentGroup?.isPlaying ?: false,
+                        playingItemId = currentGroup?.playingItemId,
+                        playingItemName = currentGroup?.playingItemName,
+                        playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
+                        positionTicks = currentGroup?.positionTicks,
+                        playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
+                    ))
+                    _commands.tryEmit(SyncPlayCommand.GroupUpdate(groupName, participantCount))
                 }
                 "GroupLeft" -> {
                     cachedGroup.set(null)
@@ -230,6 +352,46 @@ class SyncPlayManager @Inject constructor(
         return ticks.optLong("Value", 0L)
     }
 
+    private fun parseWhen(json: JSONObject): Long {
+        val iso = json.optString("When", "")
+        if (iso.isBlank()) return timeSyncManager.remoteNow()
+        return try {
+            java.time.Instant.parse(iso).toEpochMilli()
+        } catch (_: Exception) {
+            try {
+                java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+            } catch (_: Exception) {
+                timeSyncManager.remoteNow()
+            }
+        }
+    }
+
+    private fun parseEventTime(json: JSONObject): Long {
+        val keys = listOf("When", "EmittedAt", "LastUpdatedAt", "LastUpdate")
+        for (key in keys) {
+            val iso = json.optString(key, "")
+            if (iso.isBlank()) continue
+            try {
+                return java.time.Instant.parse(iso).toEpochMilli()
+            } catch (_: Exception) {
+                try {
+                    return java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+                } catch (_: Exception) {
+                }
+            }
+        }
+        return timeSyncManager.remoteNow()
+    }
+
+    private fun shouldIgnoreEvent(type: String, json: JSONObject): Boolean {
+        val sessionStart = sessionStartedAtRemoteMs.get()
+        if (sessionStart <= 0L) return false
+
+        val eventTime = parseEventTime(json)
+        val skewAllowanceMs = 1_500L
+        return eventTime + skewAllowanceMs < sessionStart && type != "GroupJoined"
+    }
+
     suspend fun getAvailableGroups(): List<SyncPlayGroup> {
         return try {
             apiClient.getSyncPlayGroups().getOrElse { emptyList() }
@@ -240,14 +402,35 @@ class SyncPlayManager @Inject constructor(
 
     suspend fun joinGroup(groupId: String): Result<Unit> {
         return try {
+            apiClient.postCapabilities()
             apiClient.joinSyncPlayGroup(groupId)
             activeGroupIdReference.set(groupId)
             isGroupActive.set(true)
-            startListening()
+            syncPlayReady.set(false)
+            sessionStartedAtRemoteMs.set(timeSyncManager.remoteNow())
+
             connectWebSocket()
+
+            scope.launch {
+                webSocketClient.isConnected.first { it }
+                Log.d(TAG, "WebSocket connected, starting SyncPlay listeners")
+            }
+
+            startListening()
+            timeSyncManager.start()
+
+            scope.launch {
+                timeSyncManager.pingUpdated.first()
+                syncPlayReady.set(true)
+                Log.d(TAG, "SyncPlay ready (time sync first ping received)")
+            }
+
+            startPingReporting()
+
             refreshGroupInfo()
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to join SyncPlay group", e)
             Result.failure(e)
         }
     }
@@ -274,14 +457,19 @@ class SyncPlayManager @Inject constructor(
         activeGroupIdReference.set(null)
         isGroupActive.set(false)
         cachedGroup.set(null)
+        syncPlayReady.set(false)
+        sessionStartedAtRemoteMs.set(0L)
         eventJob?.cancel()
         keepAliveJob?.cancel()
+        pingReportJob?.cancel()
+        timeSyncManager.stop()
         webSocketClient.disconnect()
         return apiResult
     }
 
     suspend fun createGroup(groupName: String): Result<Unit> {
         return try {
+            apiClient.postCapabilities()
             apiClient.createSyncPlayGroup(groupName)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -289,16 +477,40 @@ class SyncPlayManager @Inject constructor(
         }
     }
 
+    private fun startPingReporting() {
+        pingReportJob?.cancel()
+        pingReportJob = scope.launch {
+            timeSyncManager.pingUpdated.collect {
+                if (isInSyncPlaySession) {
+                    try {
+                        val ping = timeSyncManager.getPingMs()
+                        apiClient.syncPlayPing(ping)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to report ping", e)
+                    }
+                }
+            }
+        }
+    }
+
     private suspend fun refreshGroupInfo() {
         try {
             val info = apiClient.getSyncPlayInfo(activeGroupIdReference.get()).getOrNull() ?: return
-            cachedGroup.set(SyncPlayGroup(
+            val currentGroup = cachedGroup.get()
+            val newGroup = SyncPlayGroup(
                 groupId = info.groupId,
                 groupName = info.groupName,
                 participantCount = info.participants.size,
                 participants = info.participants.map { it.userName },
                 isPlaying = info.isPlaying,
-            ))
+                playingItemId = info.playingItemId ?: currentGroup?.playingItemId,
+                playingItemName = info.playingItemName ?: currentGroup?.playingItemName,
+                playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
+                positionTicks = info.positionTicks ?: currentGroup?.positionTicks,
+                playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
+            )
+            cachedGroup.set(newGroup)
+            _commands.tryEmit(SyncPlayCommand.GroupUpdate(newGroup.groupName, newGroup.participantCount))
         } catch (_: Exception) {}
     }
 
@@ -308,7 +520,8 @@ class SyncPlayManager @Inject constructor(
         playlistItemId: String? = null,
     ): Result<Unit> {
         return try {
-            apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId)
+            val remoteNow = timeSyncManager.remoteNow()
+            apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, remoteNow)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -321,7 +534,8 @@ class SyncPlayManager @Inject constructor(
         playlistItemId: String? = null,
     ): Result<Unit> {
         return try {
-            apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId)
+            val remoteNow = timeSyncManager.remoteNow()
+            apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, remoteNow)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -403,10 +617,11 @@ class SyncPlayManager @Inject constructor(
     suspend fun setNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String? = null,
         startPositionTicks: Long = 0L,
     ): Result<Unit> {
         return try {
-            apiClient.syncPlaySetNewQueue(itemIds, playingItemId, startPositionTicks)
+            apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -451,12 +666,25 @@ class SyncPlayManager @Inject constructor(
         })
     }
 
+    fun calculateLatency(whenMs: Long): Long {
+        return (timeSyncManager.remoteNow() - whenMs).coerceAtLeast(0)
+    }
+
+    fun estimateCurrentTicks(positionTicks: Long, whenMs: Long): Long {
+        val elapsedMs = timeSyncManager.remoteNow() - whenMs
+        return positionTicks + elapsedMs * 10_000
+    }
+
     fun reset() {
         activeGroupIdReference.set(null)
         isGroupActive.set(false)
         cachedGroup.set(null)
+        syncPlayReady.set(false)
+        sessionStartedAtRemoteMs.set(0L)
         eventJob?.cancel()
         keepAliveJob?.cancel()
+        pingReportJob?.cancel()
+        timeSyncManager.stop()
         webSocketClient.disconnect()
     }
 

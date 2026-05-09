@@ -888,14 +888,18 @@ class JellyfinApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPlaying: Boolean,
         playlistItemId: String?,
+        whenMs: Long?,
     ): Result<Unit> = apiResult {
+        val whenDate = whenMs?.let {
+            java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
+        } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
+        
         requireApi().syncPlayApi.syncPlayReady(
             org.jellyfin.sdk.model.api.ReadyRequestDto(
-                `when` = java.time.LocalDateTime.now(),
+                `when` = whenDate,
                 positionTicks = positionTicks,
                 isPlaying = isPlaying,
-                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
-                    ?: java.util.UUID.randomUUID(),
+                playlistItemId = java.util.UUID.fromString(playlistItemId ?: "00000000-0000-0000-0000-000000000000"),
             )
         )
     }
@@ -904,14 +908,18 @@ class JellyfinApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPlaying: Boolean,
         playlistItemId: String?,
+        whenMs: Long?,
     ): Result<Unit> = apiResult {
+        val whenDate = whenMs?.let {
+            java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
+        } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
+
         requireApi().syncPlayApi.syncPlayBuffering(
             org.jellyfin.sdk.model.api.BufferRequestDto(
-                `when` = java.time.LocalDateTime.now(),
+                `when` = whenDate,
                 positionTicks = positionTicks,
                 isPlaying = isPlaying,
-                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
-                    ?: java.util.UUID.randomUUID(),
+                playlistItemId = java.util.UUID.fromString(playlistItemId ?: "00000000-0000-0000-0000-000000000000"),
             )
         )
     }
@@ -997,6 +1005,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String?,
         startPositionTicks: Long,
     ): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlaySetNewQueue(
@@ -1030,6 +1039,12 @@ class JellyfinApiClientImpl @Inject constructor(
                 playlistItemId = java.util.UUID.fromString(playlistItemId),
                 newIndex = newIndex,
             )
+        )
+    }
+
+    override suspend fun syncPlayPing(pingMs: Long): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayPing(
+            org.jellyfin.sdk.model.api.PingRequestDto(ping = pingMs)
         )
     }
 
@@ -1276,4 +1291,24 @@ class JellyfinApiClientImpl @Inject constructor(
         } catch (_: Exception) {
             null
         }
+
+    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = apiResult {
+        val response = requireApi().timeSyncApi.getUtcTime().content
+        com.raulshma.jellyplay.core.model.UtcTimeResponse(
+            requestReceptionTime = response.requestReceptionTime?.toString() ?: "",
+            responseTransmissionTime = response.responseTransmissionTime?.toString() ?: "",
+        )
+    }
+
+    override suspend fun postCapabilities(): Result<Unit> = apiResult {
+        requireApi().sessionApi.postCapabilities(
+            playableMediaTypes = listOf(
+                org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                org.jellyfin.sdk.model.api.MediaType.AUDIO,
+            ),
+            supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
+            supportsMediaControl = true,
+            supportsPersistentIdentifier = true,
+        )
+    }
 }

@@ -39,6 +39,9 @@ class JellyfinWebSocketClient @Inject constructor(
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
 
+    private val _isConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
+
     fun connect(serverAddress: String, accessToken: String, device: String) {
         disconnect()
         serverUrl = serverAddress
@@ -59,6 +62,7 @@ class JellyfinWebSocketClient @Inject constructor(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket connected")
                 reconnectAttempts.set(0)
+                _isConnected.value = true
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -67,11 +71,13 @@ class JellyfinWebSocketClient @Inject constructor(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure", t)
+                _isConnected.value = false
                 scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code $reason")
+                _isConnected.value = false
             }
         })
     }
@@ -97,6 +103,7 @@ class JellyfinWebSocketClient @Inject constructor(
         token = null
         deviceId = null
         reconnectAttempts.set(maxReconnectAttempts + 1)
+        _isConnected.value = false
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null
     }

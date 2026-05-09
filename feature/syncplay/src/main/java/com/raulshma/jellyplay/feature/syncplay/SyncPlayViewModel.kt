@@ -57,6 +57,7 @@ class SyncPlayViewModel @Inject constructor(
 
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
+    private var autoJoinGroupId: String? = null
 
     init {
         loadGroups()
@@ -69,8 +70,16 @@ class SyncPlayViewModel @Inject constructor(
             mediaRepository.getSyncPlayGroups()
                 .onSuccess {
                     groups = it
-                    isInGroup = false
-                    currentGroup = null
+                    if (!isInGroup) {
+                        currentGroup = null
+                    }
+                    autoJoinGroupId?.let { gid ->
+                        val target = it.find { g -> g.groupId == gid }
+                        if (target != null) {
+                            autoJoinGroupId = null
+                            joinGroup(target.groupId)
+                        }
+                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to load groups"
@@ -88,6 +97,15 @@ class SyncPlayViewModel @Inject constructor(
                     isInGroup = true
                     loadCurrentGroup()
                     startCommandListener()
+                    val group = syncPlayManager.currentGroup
+                    val playingId = group?.playingItemId
+                    if (!playingId.isNullOrBlank()) {
+                        _navigateToPlayer.value = PlayItemRequest(
+                            itemId = playingId,
+                            positionTicks = group?.positionTicks ?: 0L,
+                        )
+                        lastHandledPlayingItemId = playingId
+                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to join group"
@@ -126,6 +144,7 @@ class SyncPlayViewModel @Inject constructor(
                     if (newGroup != null) {
                         joinGroup(newGroup.groupId)
                     } else {
+                        autoJoinGroupId = null
                         loadGroups()
                     }
                 }
@@ -145,24 +164,24 @@ class SyncPlayViewModel @Inject constructor(
         commandJob = viewModelScope.launch {
             syncPlayManager.commands.collect { command ->
                 when (command) {
-                is SyncPlayCommand.PlayQueueUpdate -> {
-                    val current = currentGroup
-                    if (command.playingItemId.isNotBlank() && lastHandledPlayingItemId != command.playingItemId) {
-                        _navigateToPlayer.value = PlayItemRequest(
-                            itemId = command.playingItemId,
+                    is SyncPlayCommand.PlayQueueUpdate -> {
+                        val current = currentGroup
+                        if (command.playingItemId.isNotBlank() && lastHandledPlayingItemId != command.playingItemId) {
+                            _navigateToPlayer.value = PlayItemRequest(
+                                itemId = command.playingItemId,
+                                positionTicks = command.positionTicks,
+                            )
+                            lastHandledPlayingItemId = command.playingItemId
+                        }
+                        currentGroup = (current ?: SyncPlayGroupInfo(
+                            groupId = "",
+                            groupName = "",
+                        )).copy(
+                            playingItemId = command.playingItemId,
+                            isPlaying = command.isPlaying,
                             positionTicks = command.positionTicks,
                         )
-                        lastHandledPlayingItemId = command.playingItemId
                     }
-                    currentGroup = (current ?: SyncPlayGroupInfo(
-                        groupId = "",
-                        groupName = "",
-                    )).copy(
-                        playingItemId = command.playingItemId,
-                        isPlaying = command.isPlaying,
-                        positionTicks = command.positionTicks,
-                    )
-                }
                     is SyncPlayCommand.StateUpdate -> {
                         currentGroup = currentGroup?.copy(isPlaying = command.isPlaying)
                     }
@@ -234,7 +253,7 @@ class SyncPlayViewModel @Inject constructor(
         viewModelScope.launch {
             mediaRepository.getSyncPlayGroups()
                 .onSuccess { groups = it }
-                .onFailure { /* silently fail on background refresh */ }
+                .onFailure { }
         }
     }
 

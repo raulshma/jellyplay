@@ -145,6 +145,20 @@ private fun MainContent(
         scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
     }
 
+    androidx.compose.runtime.LaunchedEffect(viewModel.syncPlayManager) {
+        viewModel.syncPlayManager.commands.collect { command ->
+            if (command is com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand.PlayQueueUpdate) {
+                val route = navigator.currentRoute()
+                val isPlayer = route is Route.VideoPlayer ||
+                        route is Route.OfflinePlayer ||
+                        route is Route.LiveTvChannelPlayer
+                if (!isPlayer) {
+                    navigator.navigate(Route.VideoPlayer(command.playingItemId, startPositionTicks = command.positionTicks))
+                }
+            }
+        }
+    }
+
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
     val animatedNavBarColor by animateColorAsState(
         targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainer,
