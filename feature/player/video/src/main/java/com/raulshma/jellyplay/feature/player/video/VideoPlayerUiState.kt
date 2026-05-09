@@ -40,6 +40,7 @@ data class VideoPlayerUiState(
     val syncPlayGroupName: String? = null,
     val syncPlayParticipantCount: Int = 0,
     val isSyncPlaySynced: Boolean = false,
+    val isSyncPlaySyncing: Boolean = false,
     val nextEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
@@ -99,6 +100,7 @@ data class VideoPlayerUiState(
 
     val shouldShowUpNext: Boolean
         get() {
+            if (isInSyncPlaySession) return false
             if (nextEpisode == null) return false
             if (seriesId == null) return false
             if (isInCredits) return true

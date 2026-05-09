@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -26,6 +27,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -145,7 +147,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private fun maybeComputeSmartPlayTarget() {
+    private suspend fun maybeComputeSmartPlayTarget() {
         val item = _detail.value?.item ?: return
         when (item.mediaType) {
             MediaType.SERIES -> computeSeriesSmartPlayTarget()
@@ -154,7 +156,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private fun computeSeriesSmartPlayTarget() {
+    private suspend fun computeSeriesSmartPlayTarget() {
         val allEpisodes = episodes.values.flatten()
         if (allEpisodes.isEmpty()) {
             smartPlayTarget = null
@@ -166,9 +168,14 @@ class DetailViewModel @Inject constructor(
                 { it.indexNumber ?: Int.MAX_VALUE }
             )
         )
-        // Priority 1: first partially watched (has progress but not played)
+        val downloadedIds = downloadRepository.getAllDownloads()
+            .first()
+            .filter { it.status == DownloadStatus.COMPLETED }
+            .map { it.mediaItemId }
+            .toSet()
+        // Priority 1: first partially watched (has progress but not played) and downloaded
         val resumeEpisode = sorted.firstOrNull {
-            (it.playbackPositionTicks ?: 0) > 0 && !it.isPlayed
+            (it.playbackPositionTicks ?: 0) > 0 && !it.isPlayed && it.id in downloadedIds
         }
         if (resumeEpisode != null) {
             val s = resumeEpisode.seasonNumber ?: 1
@@ -180,8 +187,8 @@ class DetailViewModel @Inject constructor(
             )
             return
         }
-        // Priority 2: first unwatched
-        val nextEpisode = sorted.firstOrNull { !it.isPlayed }
+        // Priority 2: first unwatched and downloaded
+        val nextEpisode = sorted.firstOrNull { !it.isPlayed && it.id in downloadedIds }
         if (nextEpisode != null) {
             val s = nextEpisode.seasonNumber ?: 1
             val e = nextEpisode.indexNumber ?: 1
@@ -197,8 +204,8 @@ class DetailViewModel @Inject constructor(
             )
             return
         }
-        // Priority 3: all watched -> replay first
-        val first = sorted.firstOrNull()
+        // Priority 3: all watched -> replay first downloaded
+        val first = sorted.firstOrNull { it.id in downloadedIds }
         if (first != null) {
             val s = first.seasonNumber ?: 1
             val e = first.indexNumber ?: 1
@@ -227,7 +234,7 @@ class DetailViewModel @Inject constructor(
             return
         }
         val s = currentEpisode.seasonNumber ?: 1
-        val e = currentEpisode.indexNumber ?: 1
+        val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
         val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
         smartPlayTarget = SmartPlayTarget(
             episode = currentEpisode,

@@ -12,8 +12,10 @@ data class SyncPlayGroup(
     val participants: List<String> = emptyList(),
     val playingItemId: String? = null,
     val playingItemName: String? = null,
+    val playingPlaylistItemId: String? = null,
     val isPlaying: Boolean = false,
     val positionTicks: Long? = null,
+    val playlistItemIds: List<String> = emptyList(),
 )
 
 @Immutable
@@ -41,24 +43,6 @@ data class SyncPlayParticipant(
     val isPlaying: Boolean = false,
     val positionTicks: Long? = null,
 )
-
-@Immutable
-@Serializable
-data class SyncPlaySettings(
-    val groupId: String = "",
-    val newGroup: String = "",
-)
-
-@Immutable
-@Serializable
-enum class SyncPlayCommandType {
-    PLAY,
-    PAUSE,
-    STOP,
-    SEEK,
-    READY,
-    BUFFERING,
-}
 
 @Immutable
 @Serializable
@@ -92,3 +76,10 @@ enum class SyncPlayChatMessageType {
     USER,
     SYSTEM,
 }
+
+@Immutable
+@Serializable
+data class UtcTimeResponse(
+    val requestReceptionTime: String,
+    val responseTransmissionTime: String,
+)

@@ -95,4 +95,22 @@ class SyncPlayOverlayTest {
         }
         composeTestRule.onNodeWithText("1").assertIsDisplayed()
     }
+
+    @Test
+    fun syncPlayOverlay_syncing_showsSyncingText() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SyncPlayOverlay(
+                    isVisible = true,
+                    groupName = "Group",
+                    participantCount = 2,
+                    isSynced = false,
+                    isSyncing = true,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Syncing").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Synced").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Buffering").assertDoesNotExist()
+    }
 }
