@@ -46,24 +46,6 @@ data class SyncPlayParticipant(
 
 @Immutable
 @Serializable
-data class SyncPlaySettings(
-    val groupId: String = "",
-    val newGroup: String = "",
-)
-
-@Immutable
-@Serializable
-enum class SyncPlayCommandType {
-    PLAY,
-    PAUSE,
-    STOP,
-    SEEK,
-    READY,
-    BUFFERING,
-}
-
-@Immutable
-@Serializable
 enum class SyncPlayRepeatMode {
     REPEAT_NONE,
     REPEAT_ALL,

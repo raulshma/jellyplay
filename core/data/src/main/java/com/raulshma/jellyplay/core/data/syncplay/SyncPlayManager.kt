@@ -386,38 +386,13 @@ class SyncPlayManager @Inject constructor(
         return timeSyncManager.remoteNow()
     }
 
-    private fun parseEventTime(json: JSONObject): Long {
-        val keys = listOf("When", "EmittedAt", "LastUpdatedAt", "LastUpdate")
-        for (key in keys) {
-            val iso = json.optString(key, "")
-            if (iso.isBlank()) continue
-            try {
-                return java.time.Instant.parse(iso).toEpochMilli()
-            } catch (_: Exception) {
-                try {
-                    return java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
-                } catch (_: Exception) {
-                }
-            }
-        }
-        return timeSyncManager.remoteNow()
-    }
-
     private fun shouldIgnoreEvent(type: String, json: JSONObject): Boolean {
         val sessionStart = sessionStartedAtRemoteMs.get()
         if (sessionStart <= 0L) return false
 
-        val eventTime = parseEventTime(json)
+        val eventTime = parseWhen(json)
         val skewAllowanceMs = 1_500L
         return eventTime + skewAllowanceMs < sessionStart && type != "GroupJoined"
-    }
-
-    suspend fun getAvailableGroups(): List<SyncPlayGroup> {
-        return try {
-            apiClient.getSyncPlayGroups().getOrElse { emptyList() }
-        } catch (_: Exception) {
-            emptyList()
-        }
     }
 
     suspend fun joinGroup(groupId: String): Result<Unit> {

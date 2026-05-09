@@ -15,7 +15,10 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -49,8 +52,8 @@ class SyncPlayViewModel @Inject constructor(
     var showCreateDialog by mutableStateOf(false)
         private set
 
-    var showQueueSheet by mutableStateOf(false)
-        private set
+    private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
+    val notifications: SharedFlow<String> = _notifications.asSharedFlow()
 
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
     val navigateToPlayer = _navigateToPlayer.asStateFlow()
@@ -194,6 +197,9 @@ class SyncPlayViewModel @Inject constructor(
                             loadCurrentGroup()
                         }
                     }
+                    is SyncPlayCommand.Notification -> {
+                        _notifications.tryEmit(command.message)
+                    }
                     else -> {}
                 }
             }
@@ -243,10 +249,6 @@ class SyncPlayViewModel @Inject constructor(
 
     fun updateShowCreateDialog(show: Boolean) {
         showCreateDialog = show
-    }
-
-    fun updateShowQueueSheet(show: Boolean) {
-        showQueueSheet = show
     }
 
     fun refreshGroups() {
