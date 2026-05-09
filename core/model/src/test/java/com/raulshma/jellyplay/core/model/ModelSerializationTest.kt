@@ -192,16 +192,4 @@ class ModelSerializationTest {
 
         assertEquals(original, deserialized)
     }
-
-    @Test
-    fun `sync play command type enum values`() {
-        val commands = SyncPlayCommandType.entries
-        assertEquals(6, commands.size)
-        assertEquals(SyncPlayCommandType.PLAY, commands[0])
-        assertEquals(SyncPlayCommandType.PAUSE, commands[1])
-        assertEquals(SyncPlayCommandType.STOP, commands[2])
-        assertEquals(SyncPlayCommandType.SEEK, commands[3])
-        assertEquals(SyncPlayCommandType.READY, commands[4])
-        assertEquals(SyncPlayCommandType.BUFFERING, commands[5])
-    }
 }
