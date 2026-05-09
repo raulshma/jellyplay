@@ -62,7 +62,7 @@ class SyncPlayManager @Inject constructor(
 
     private var syncPlayReady = AtomicBoolean(false)
 
-    private val _commands = MutableSharedFlow<SyncPlayCommand>(replay = 1, extraBufferCapacity = 64)
+    private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 64)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
@@ -136,29 +136,28 @@ class SyncPlayManager @Inject constructor(
                     }
                 }
                 "Playstate" -> {
-                    val command = event.data.optString("Command", "")
-                    val positionTicks = parseTicks(event.data, "SeekPositionTicks")
-                    val whenMs = timeSyncManager.remoteNow()
-                    when (command) {
-                        "PlayPause" -> {
-                            val current = cachedGroup.get()
-                            if (current?.isPlaying == true) {
-                                _commands.tryEmit(SyncPlayCommand.Pause(0, whenMs, ""))
-                            } else {
+                    if (isGroupActive.get()) {
+                        Log.d(TAG, "Ignoring Playstate event: active SyncPlay session uses SyncPlayCommand")
+                    } else {
+                        val command = event.data.optString("Command", "")
+                        val positionTicks = parseTicks(event.data, "SeekPositionTicks")
+                        val whenMs = timeSyncManager.remoteNow()
+                        when (command) {
+                            "PlayPause" -> {
                                 _commands.tryEmit(SyncPlayCommand.Play(0, whenMs, ""))
                             }
-                        }
-                        "Pause" -> {
-                            _commands.tryEmit(SyncPlayCommand.Pause(0, whenMs, ""))
-                        }
-                        "Unpause" -> {
-                            _commands.tryEmit(SyncPlayCommand.Play(0, whenMs, ""))
-                        }
-                        "Stop" -> {
-                            _commands.tryEmit(SyncPlayCommand.Stop)
-                        }
-                        "Seek" -> {
-                            _commands.tryEmit(SyncPlayCommand.Seek(positionTicks, whenMs, ""))
+                            "Pause" -> {
+                                _commands.tryEmit(SyncPlayCommand.Pause(0, whenMs, ""))
+                            }
+                            "Unpause" -> {
+                                _commands.tryEmit(SyncPlayCommand.Play(0, whenMs, ""))
+                            }
+                            "Stop" -> {
+                                _commands.tryEmit(SyncPlayCommand.Stop)
+                            }
+                            "Seek" -> {
+                                _commands.tryEmit(SyncPlayCommand.Seek(positionTicks, whenMs, ""))
+                            }
                         }
                     }
                 }
@@ -354,17 +353,20 @@ class SyncPlayManager @Inject constructor(
     }
 
     private fun parseWhen(json: JSONObject): Long {
-        val iso = json.optString("When", "")
-        if (iso.isBlank()) return timeSyncManager.remoteNow()
-        return try {
-            java.time.Instant.parse(iso).toEpochMilli()
-        } catch (_: Exception) {
+        val keys = listOf("When", "EmittedAt", "LastUpdatedAt", "LastUpdate")
+        for (key in keys) {
+            val iso = json.optString(key, "")
+            if (iso.isBlank()) continue
             try {
-                java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+                return java.time.Instant.parse(iso).toEpochMilli()
             } catch (_: Exception) {
-                timeSyncManager.remoteNow()
+                try {
+                    return java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+                } catch (_: Exception) {
+                }
             }
         }
+        return timeSyncManager.remoteNow()
     }
 
     private fun parseEventTime(json: JSONObject): Long {
