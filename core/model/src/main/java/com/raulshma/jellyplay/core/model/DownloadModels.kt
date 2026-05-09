@@ -85,6 +85,11 @@ data class UserPreferences(
     val syncPlayNotifyChatMessages: Boolean = true,
     val syncPlayNotifySyncIssues: Boolean = true,
     val syncPlayDefaultIgnoreWait: Boolean = false,
+    val syncPlaySyncCorrection: Boolean = false,
+    val syncPlaySpeedToSyncEnabled: Boolean = true,
+    val syncPlaySpeedToSyncMinDelayMs: Long = 60,
+    val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
+    val syncPlaySpeedToSyncDurationMs: Long = 1000,
 )
 
 @Immutable

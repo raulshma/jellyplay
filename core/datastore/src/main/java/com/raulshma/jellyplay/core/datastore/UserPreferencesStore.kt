@@ -81,6 +81,11 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_NOTIFY_CHAT_MESSAGES = stringPreferencesKey("syncplay_notify_chat_messages")
         val SYNCPLAY_NOTIFY_SYNC_ISSUES = stringPreferencesKey("syncplay_notify_sync_issues")
         val SYNCPLAY_DEFAULT_IGNORE_WAIT = stringPreferencesKey("syncplay_default_ignore_wait")
+        val SYNCPLAY_SYNC_CORRECTION = stringPreferencesKey("syncplay_sync_correction")
+        val SYNCPLAY_SPEED_TO_SYNC_ENABLED = stringPreferencesKey("syncplay_speed_to_sync_enabled")
+        val SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_min_delay_ms")
+        val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
+        val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -156,6 +161,11 @@ class UserPreferencesStore @Inject constructor(
             syncPlayNotifyChatMessages = prefs[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES]?.toBoolean() ?: true,
             syncPlayNotifySyncIssues = prefs[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES]?.toBoolean() ?: true,
             syncPlayDefaultIgnoreWait = prefs[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT]?.toBoolean() ?: false,
+            syncPlaySyncCorrection = prefs[Keys.SYNCPLAY_SYNC_CORRECTION]?.toBoolean() ?: false,
+            syncPlaySpeedToSyncEnabled = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED]?.toBoolean() ?: true,
+            syncPlaySpeedToSyncMinDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS]?.toLongOrNull() ?: 60,
+            syncPlaySpeedToSyncMaxDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS]?.toLongOrNull() ?: 3000,
+            syncPlaySpeedToSyncDurationMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS]?.toLongOrNull() ?: 1000,
         )
     }
 
@@ -392,6 +402,26 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySyncCorrection(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SYNC_CORRECTION] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncMinDelayMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS] = ms.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncMaxDelayMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS] = ms.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS] = ms.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

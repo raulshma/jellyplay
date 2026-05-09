@@ -137,6 +137,9 @@ fun SettingsScreen(
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
     var showAudioDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayMinDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayMaxDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayDurationPicker by remember { mutableStateOf(false) }
     var showSubtitleFontPicker by remember { mutableStateOf(false) }
     var showSubtitleColorPicker by remember { mutableStateOf(false) }
     var showSubtitleBgColorPicker by remember { mutableStateOf(false) }
@@ -524,6 +527,60 @@ fun SettingsScreen(
                     checked = preferences.syncPlayDefaultIgnoreWait,
                     onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
                 )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Speed,
+                    title = "Sync Correction",
+                    subtitle = "Automatically correct playback sync drift",
+                    checked = preferences.syncPlaySyncCorrection,
+                    onCheckedChange = { viewModel.setSyncPlaySyncCorrection(it) },
+                )
+            }
+
+            if (preferences.syncPlaySyncCorrection) {
+                item {
+                    SettingToggleItem(
+                        icon = Icons.Default.Speed,
+                        title = "Speed Correction",
+                        subtitle = "Adjust playback speed to fix small sync drift",
+                        checked = preferences.syncPlaySpeedToSyncEnabled,
+                        onCheckedChange = { viewModel.setSyncPlaySpeedToSyncEnabled(it) },
+                    )
+                }
+            }
+
+            if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Min Delay",
+                        subtitle = "Minimum delay before speed correction activates",
+                        trailingText = "${preferences.syncPlaySpeedToSyncMinDelayMs}ms",
+                        onClick = { showSyncPlayMinDelayPicker = true },
+                    )
+                }
+
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Max Delay",
+                        subtitle = "Maximum delay for speed correction (seeks above this)",
+                        trailingText = "${preferences.syncPlaySpeedToSyncMaxDelayMs}ms",
+                        onClick = { showSyncPlayMaxDelayPicker = true },
+                    )
+                }
+
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Duration",
+                        subtitle = "How long the speed adjustment lasts",
+                        trailingText = "${preferences.syncPlaySpeedToSyncDurationMs}ms",
+                        onClick = { showSyncPlayDurationPicker = true },
+                    )
+                }
             }
 
             item {
@@ -1143,6 +1200,45 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAudioDelayPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showSyncPlayMinDelayPicker) {
+        val values = listOf(30L, 50L, 60L, 100L, 150L, 200L, 300L, 500L)
+        RadioPickerDialog(
+            title = "Speed Correction Min Delay",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMinDelayMs) },
+            onDismiss = { showSyncPlayMinDelayPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncMinDelayMs(values[index])
+                showSyncPlayMinDelayPicker = false
+            },
+        )
+    }
+
+    if (showSyncPlayMaxDelayPicker) {
+        val values = listOf(1000L, 2000L, 3000L, 5000L, 10000L)
+        RadioPickerDialog(
+            title = "Speed Correction Max Delay",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMaxDelayMs) },
+            onDismiss = { showSyncPlayMaxDelayPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncMaxDelayMs(values[index])
+                showSyncPlayMaxDelayPicker = false
+            },
+        )
+    }
+
+    if (showSyncPlayDurationPicker) {
+        val values = listOf(300L, 500L, 1000L, 1500L, 2000L, 3000L)
+        RadioPickerDialog(
+            title = "Speed Correction Duration",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncDurationMs) },
+            onDismiss = { showSyncPlayDurationPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncDurationMs(values[index])
+                showSyncPlayDurationPicker = false
             },
         )
     }

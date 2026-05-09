@@ -335,4 +335,24 @@ class SettingsViewModel @Inject constructor(
     fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setSyncPlayDefaultIgnoreWait(enabled) }
     }
+
+    fun setSyncPlaySyncCorrection(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlaySyncCorrection(enabled) }
+    }
+
+    fun setSyncPlaySpeedToSyncEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncEnabled(enabled) }
+    }
+
+    fun setSyncPlaySpeedToSyncMinDelayMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncMinDelayMs(ms) }
+    }
+
+    fun setSyncPlaySpeedToSyncMaxDelayMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncMaxDelayMs(ms) }
+    }
+
+    fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncDurationMs(ms) }
+    }
 }
