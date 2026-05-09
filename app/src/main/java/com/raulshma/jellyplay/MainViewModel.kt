@@ -19,6 +19,7 @@ class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
+    val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)

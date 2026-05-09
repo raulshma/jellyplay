@@ -131,6 +131,7 @@ interface MediaRepository {
     suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String? = null,
         startPositionTicks: Long = 0L,
     ): Result<Unit>
 
