@@ -234,7 +234,7 @@ class DetailViewModel @Inject constructor(
             return
         }
         val s = currentEpisode.seasonNumber ?: 1
-        val e = currentEpisode.indexNumber ?: 1
+        val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
         val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
         smartPlayTarget = SmartPlayTarget(
             episode = currentEpisode,
