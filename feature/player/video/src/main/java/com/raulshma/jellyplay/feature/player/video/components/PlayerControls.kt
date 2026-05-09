@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -280,7 +281,8 @@ internal fun PlayerControls(
                             )
                         )
                     )
-                    .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
+                    .navigationBarsPadding()
+                    .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
                 YouTubeStyleSeekBar(
                     currentPosition = currentPosition,
