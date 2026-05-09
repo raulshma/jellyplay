@@ -40,6 +40,7 @@ data class VideoPlayerUiState(
     val syncPlayGroupName: String? = null,
     val syncPlayParticipantCount: Int = 0,
     val isSyncPlaySynced: Boolean = false,
+    val isSyncPlaySyncing: Boolean = false,
     val nextEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,

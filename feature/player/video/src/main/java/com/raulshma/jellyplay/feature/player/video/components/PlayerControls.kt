@@ -136,6 +136,7 @@ internal fun PlayerControls(
     syncPlayGroupName: String? = null,
     syncPlayParticipantCount: Int = 0,
     isSyncPlaySynced: Boolean = false,
+    isSyncPlaySyncing: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -194,6 +195,7 @@ internal fun PlayerControls(
                             groupName = syncPlayGroupName ?: "Group",
                             participantCount = syncPlayParticipantCount,
                             isSynced = isSyncPlaySynced,
+                            isSyncing = isSyncPlaySyncing,
                             onClick = onSyncPlayClick,
                         )
                     }
@@ -455,6 +457,7 @@ private fun SyncPlayHeaderIndicator(
     groupName: String,
     participantCount: Int,
     isSynced: Boolean,
+    isSyncing: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -471,12 +474,24 @@ private fun SyncPlayHeaderIndicator(
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                color = when {
+                    isSynced -> Color(0xFF4CAF50)
+                    isSyncing -> Color(0xFF2196F3)
+                    else -> Color(0xFFFFC107)
+                },
                 modifier = Modifier.size(7.dp),
             ) {}
             Text(
-                text = if (isSynced) "Synced" else "Buffering",
-                color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                text = when {
+                    isSynced -> "Synced"
+                    isSyncing -> "Syncing"
+                    else -> "Buffering"
+                },
+                color = when {
+                    isSynced -> Color(0xFF4CAF50)
+                    isSyncing -> Color(0xFF2196F3)
+                    else -> Color(0xFFFFC107)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
             )

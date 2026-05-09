@@ -744,6 +744,8 @@ class VideoPlayerViewModel @Inject constructor(
     fun syncPlayTogglePlayPause() {
         viewModelScope.launch {
             if (playerEngine?.isPlaying == true) {
+                playerEngine?.pause()
+                _uiState.update { it.copy(isPlaying = false) }
                 syncPlayManager.sendPause()
             } else {
                 syncPlayManager.sendUnpause()
