@@ -54,6 +54,11 @@
     *;
 }
 
+# libmpv - JNI library, must keep all classes and methods
+-keep class is.xyz.mpv.** { *; }
+-keepclassmembers class is.xyz.mpv.** { *; }
+-dontwarn is.xyz.mpv.**
+
 # Media3 / ExoPlayer
 -keep class androidx.media3.session.** { *; }
 -keep class androidx.media3.exoplayer.** { *; }
