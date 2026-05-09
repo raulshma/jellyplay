@@ -1249,6 +1249,8 @@ class JellyfinApiClientImpl @Inject constructor(
         seriesId = seriesId?.toString(),
         seasonId = seasonId?.toString(),
         seriesName = seriesName,
+        seasonNumber = parentIndexNumber,
+        episodeNumber = indexNumber,
         indexNumber = indexNumber,
         childCount = childCount,
         albumArtist = albumArtist,
