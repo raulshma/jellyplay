@@ -37,6 +37,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
+import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
@@ -249,7 +250,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {
             val response = requireApi().userLibraryApi.getLatestMedia(
-                parentId = java.util.UUID.fromString(parentId),
+                parentId = parentId.toUUID(),
                 limit = limit,
                 fields = listOf(
                     org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
@@ -320,7 +321,7 @@ class JellyfinApiClientImpl @Inject constructor(
             .find { it.serialName.equals(sortOrder, ignoreCase = true) }
             ?: org.jellyfin.sdk.model.api.SortOrder.ASCENDING
         val response = requireApi().itemsApi.getItems(
-            parentId = parentId?.let { java.util.UUID.fromString(it) },
+            parentId = parentId?.let { it.toUUID() },
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             excludeItemTypes = listOf(
                 org.jellyfin.sdk.model.api.BaseItemKind.SEASON,
@@ -348,7 +349,7 @@ class JellyfinApiClientImpl @Inject constructor(
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = apiResult {
         val client = requireApi()
-        val uuid = java.util.UUID.fromString(itemId)
+        val uuid = itemId.toUUID()
         val item = client.userLibraryApi.getItem(itemId = uuid).content
         val people = (item.people?.map { person ->
             PersonInfo(
@@ -458,7 +459,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
         runCatching {
             val response = requireApi().genresApi.getGenres(
-                parentId = parentId?.let { java.util.UUID.fromString(it) },
+                parentId = parentId?.let { it.toUUID() },
                 startIndex = startIndex,
                 limit = limit,
             ).content
@@ -474,7 +475,7 @@ class JellyfinApiClientImpl @Inject constructor(
         limit: Int,
     ): Result<SearchResult> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            genreIds = listOf(java.util.UUID.fromString(genreId)),
+            genreIds = listOf(genreId.toUUID()),
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             startIndex = startIndex,
             limit = limit,
@@ -489,7 +490,7 @@ class JellyfinApiClientImpl @Inject constructor(
 
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            albumArtistIds = listOf(java.util.UUID.fromString(artistId)),
+            albumArtistIds = listOf(artistId.toUUID()),
             includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.MUSIC_ALBUM),
             limit = limit,
             recursive = true,
@@ -505,7 +506,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {
             requireApi().libraryApi.getSimilarItems(
-                itemId = java.util.UUID.fromString(itemId),
+                itemId = itemId.toUUID(),
                 limit = limit,
             ).content.items.map { it.toMediaItem() }.filterByParentalRating()
         }
@@ -513,7 +514,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {
             val response = requireApi().itemsApi.getItems(
-                personIds = listOf(java.util.UUID.fromString(personId)),
+                personIds = listOf(personId.toUUID()),
                 limit = limit,
                 recursive = true,
                 fields = listOf(
@@ -526,15 +527,15 @@ class JellyfinApiClientImpl @Inject constructor(
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = apiResult {
         requireApi().tvShowsApi.getSeasons(
-            seriesId = java.util.UUID.fromString(seriesId),
+            seriesId = seriesId.toUUID(),
         ).content.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
         apiResult {
             requireApi().tvShowsApi.getEpisodes(
-                seriesId = java.util.UUID.fromString(seriesId),
-                seasonId = java.util.UUID.fromString(seasonId),
+                seriesId = seriesId.toUUID(),
+                seasonId = seasonId.toUUID(),
             ).content.items.map { it.toMediaItem() }.filterByParentalRating()
         }
 
@@ -544,7 +545,7 @@ class JellyfinApiClientImpl @Inject constructor(
         limit: Int,
     ): Result<SearchResult> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            parentId = java.util.UUID.fromString(collectionId),
+            parentId = collectionId.toUUID(),
             startIndex = startIndex,
             limit = limit,
             recursive = true,
@@ -566,7 +567,7 @@ class JellyfinApiClientImpl @Inject constructor(
         limit: Int,
     ): Result<List<String>> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            parentId = parentId?.let { java.util.UUID.fromString(it) },
+            parentId = parentId?.let { it.toUUID() },
             startIndex = startIndex,
             limit = limit,
             recursive = true,
@@ -629,7 +630,7 @@ class JellyfinApiClientImpl @Inject constructor(
         limit: Int,
     ): Result<List<com.raulshma.jellyplay.core.model.PlaylistItem>> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            parentId = java.util.UUID.fromString(playlistId),
+            parentId = playlistId.toUUID(),
             startIndex = startIndex,
             limit = limit,
             recursive = true,
@@ -652,30 +653,30 @@ class JellyfinApiClientImpl @Inject constructor(
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = apiResult {
         requireApi().playStateApi.markPlayedItem(
-            userId = java.util.UUID.fromString(_currentUser.value?.id),
-            itemId = java.util.UUID.fromString(itemId),
+            userId = _currentUser.value?.id!!.toUUID(),
+            itemId = itemId.toUUID(),
         )
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> = apiResult {
         requireApi().playStateApi.markUnplayedItem(
-            userId = java.util.UUID.fromString(_currentUser.value?.id),
-            itemId = java.util.UUID.fromString(itemId),
+            userId = _currentUser.value?.id!!.toUUID(),
+            itemId = itemId.toUUID(),
         )
     }
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> = apiResult {
-        val uuid = java.util.UUID.fromString(itemId)
+        val uuid = itemId.toUUID()
         val item = requireApi().userLibraryApi.getItem(itemId = uuid).content
         if (item.userData?.isFavorite == true) {
             requireApi().userLibraryApi.unmarkFavoriteItem(
-                userId = java.util.UUID.fromString(_currentUser.value?.id),
+                userId = _currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
             )
             false
         } else {
             requireApi().userLibraryApi.markFavoriteItem(
-                userId = java.util.UUID.fromString(_currentUser.value?.id),
+                userId = _currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
             )
             true
@@ -688,7 +689,7 @@ class JellyfinApiClientImpl @Inject constructor(
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
     ): Result<Unit> =
         runCatching {
-            val uuid = java.util.UUID.fromString(itemId)
+            val uuid = itemId.toUUID()
             val sdkPlayMethod = when (playMethod) {
                 com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
                 com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
@@ -715,7 +716,7 @@ class JellyfinApiClientImpl @Inject constructor(
         isPaused: Boolean,
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
     ): Result<Unit> = apiResult {
-        val uuid = java.util.UUID.fromString(itemId)
+        val uuid = itemId.toUUID()
         val sdkPlayMethod = when (playMethod) {
             com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
             com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
@@ -741,7 +742,7 @@ class JellyfinApiClientImpl @Inject constructor(
         sessionId: String,
         positionTicks: Long,
     ): Result<Unit> = apiResult {
-        val uuid = java.util.UUID.fromString(itemId)
+        val uuid = itemId.toUUID()
         requireApi().playStateApi.reportPlaybackStopped(
             org.jellyfin.sdk.model.api.PlaybackStopInfo(
                 itemId = uuid,
@@ -793,7 +794,7 @@ class JellyfinApiClientImpl @Inject constructor(
         endDateUtc: String?,
     ): Result<List<LiveTvProgram>> = apiResult {
         val response = requireApi().itemsApi.getItems(
-            parentId = java.util.UUID.fromString(channelId),
+            parentId = channelId.toUUID(),
             includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
             fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
         ).content
@@ -840,7 +841,7 @@ class JellyfinApiClientImpl @Inject constructor(
         requireApi().liveTvApi.createTimer(
             org.jellyfin.sdk.model.api.TimerInfoDto(
                 programId = programId,
-                channelId = java.util.UUID.fromString(channelId),
+                channelId = channelId.toUUID(),
                 startDate = startDate?.let { java.time.LocalDateTime.parse(it.replace("Z", "").replace("T", " ").substringBefore('+').replace(" ", "T")) },
                 endDate = endDate?.let { java.time.LocalDateTime.parse(it.replace("Z", "").replace("T", " ").substringBefore('+').replace(" ", "T")) },
             )
@@ -867,7 +868,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayJoinGroup(
             org.jellyfin.sdk.model.api.JoinGroupRequestDto(
-                groupId = java.util.UUID.fromString(groupId),
+                groupId = groupId.toUUID(),
             )
         )
     }
@@ -888,14 +889,18 @@ class JellyfinApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPlaying: Boolean,
         playlistItemId: String?,
+        whenMs: Long?,
     ): Result<Unit> = apiResult {
+        val whenDate = whenMs?.let {
+            java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
+        } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
+        
         requireApi().syncPlayApi.syncPlayReady(
             org.jellyfin.sdk.model.api.ReadyRequestDto(
-                `when` = java.time.LocalDateTime.now(),
+                `when` = whenDate,
                 positionTicks = positionTicks,
                 isPlaying = isPlaying,
-                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
-                    ?: java.util.UUID.randomUUID(),
+                playlistItemId = (playlistItemId ?: "00000000-0000-0000-0000-000000000000").toUUID(),
             )
         )
     }
@@ -904,14 +909,18 @@ class JellyfinApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPlaying: Boolean,
         playlistItemId: String?,
+        whenMs: Long?,
     ): Result<Unit> = apiResult {
+        val whenDate = whenMs?.let {
+            java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
+        } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
+
         requireApi().syncPlayApi.syncPlayBuffering(
             org.jellyfin.sdk.model.api.BufferRequestDto(
-                `when` = java.time.LocalDateTime.now(),
+                `when` = whenDate,
                 positionTicks = positionTicks,
                 isPlaying = isPlaying,
-                playlistItemId = playlistItemId?.let { java.util.UUID.fromString(it) }
-                    ?: java.util.UUID.randomUUID(),
+                playlistItemId = (playlistItemId ?: "00000000-0000-0000-0000-000000000000").toUUID(),
             )
         )
     }
@@ -933,12 +942,10 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getSyncPlayInfo(groupId: String?): Result<com.raulshma.jellyplay.core.model.SyncPlayGroupInfo> = apiResult {
+        val activeId = groupId ?: throw IllegalArgumentException("groupId is required for getSyncPlayInfo")
         val groups = requireApi().syncPlayApi.syncPlayGetGroups().content
-        val groupInfo = if (groupId != null) {
-            groups.find { it.groupId.toString() == groupId }
-        } else {
-            groups.firstOrNull()
-        } ?: throw IllegalStateException("Not in a SyncPlay group")
+        val groupInfo = groups.find { it.groupId.toString() == activeId }
+            ?: throw IllegalStateException("SyncPlay group $activeId not found")
         com.raulshma.jellyplay.core.model.SyncPlayGroupInfo(
             groupId = groupInfo.groupId.toString(),
             groupName = groupInfo.groupName ?: "",
@@ -960,7 +967,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayNextItem(
             org.jellyfin.sdk.model.api.NextItemRequestDto(
-                playlistItemId = java.util.UUID.fromString(playlistItemId),
+                playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
@@ -968,7 +975,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayPreviousItem(
             org.jellyfin.sdk.model.api.PreviousItemRequestDto(
-                playlistItemId = java.util.UUID.fromString(playlistItemId),
+                playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
@@ -997,13 +1004,36 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String?,
         startPositionTicks: Long,
     ): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlaySetNewQueue(
             org.jellyfin.sdk.model.api.PlayRequestDto(
-                playingQueue = itemIds.map { java.util.UUID.fromString(it) },
+                playingQueue = itemIds.map { it.toUUID() },
                 playingItemPosition = itemIds.indexOf(playingItemId).takeIf { it >= 0 } ?: 0,
                 startPositionTicks = startPositionTicks,
+            )
+        )
+    }
+
+    override suspend fun syncPlayQueue(
+        itemIds: List<String>,
+        mode: String,
+    ): Result<Unit> = apiResult {
+        val sdkMode = org.jellyfin.sdk.model.api.GroupQueueMode.fromNameOrNull(mode)
+            ?: org.jellyfin.sdk.model.api.GroupQueueMode.QUEUE
+        requireApi().syncPlayApi.syncPlayQueue(
+            org.jellyfin.sdk.model.api.QueueRequestDto(
+                itemIds = itemIds.map { it.toUUID() },
+                mode = sdkMode,
+            )
+        )
+    }
+
+    override suspend fun syncPlaySetPlaylistItem(playlistItemId: String): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlaySetPlaylistItem(
+            org.jellyfin.sdk.model.api.SetPlaylistItemRequestDto(
+                playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
@@ -1017,7 +1047,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayRemoveFromPlaylist(
             org.jellyfin.sdk.model.api.RemoveFromPlaylistRequestDto(
-                playlistItemIds = listOf(java.util.UUID.fromString(playlistItemId)),
+                playlistItemIds = listOf(playlistItemId.toUUID()),
                 clearPlayingItem = true,
                 clearPlaylist = false,
             )
@@ -1027,9 +1057,15 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> = apiResult {
         requireApi().syncPlayApi.syncPlayMovePlaylistItem(
             org.jellyfin.sdk.model.api.MovePlaylistItemRequestDto(
-                playlistItemId = java.util.UUID.fromString(playlistItemId),
+                playlistItemId = playlistItemId.toUUID(),
                 newIndex = newIndex,
             )
+        )
+    }
+
+    override suspend fun syncPlayPing(pingMs: Long): Result<Unit> = apiResult {
+        requireApi().syncPlayApi.syncPlayPing(
+            org.jellyfin.sdk.model.api.PingRequestDto(ping = pingMs)
         )
     }
 
@@ -1213,6 +1249,8 @@ class JellyfinApiClientImpl @Inject constructor(
         seriesId = seriesId?.toString(),
         seasonId = seasonId?.toString(),
         seriesName = seriesName,
+        seasonNumber = parentIndexNumber,
+        episodeNumber = indexNumber,
         indexNumber = indexNumber,
         childCount = childCount,
         albumArtist = albumArtist,
@@ -1268,7 +1306,7 @@ class JellyfinApiClientImpl @Inject constructor(
         try {
             withContext(Dispatchers.IO) {
                 requireApi().trickplayApi.getTrickplayTileImage(
-                    itemId = java.util.UUID.fromString(itemId),
+                    itemId = itemId.toUUID(),
                     width = width,
                     index = index,
                 ).content
@@ -1276,4 +1314,24 @@ class JellyfinApiClientImpl @Inject constructor(
         } catch (_: Exception) {
             null
         }
+
+    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = apiResult {
+        val response = requireApi().timeSyncApi.getUtcTime().content
+        com.raulshma.jellyplay.core.model.UtcTimeResponse(
+            requestReceptionTime = response.requestReceptionTime?.toString() ?: "",
+            responseTransmissionTime = response.responseTransmissionTime?.toString() ?: "",
+        )
+    }
+
+    override suspend fun postCapabilities(): Result<Unit> = apiResult {
+        requireApi().sessionApi.postCapabilities(
+            playableMediaTypes = listOf(
+                org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                org.jellyfin.sdk.model.api.MediaType.AUDIO,
+            ),
+            supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
+            supportsMediaControl = true,
+            supportsPersistentIdentifier = true,
+        )
+    }
 }

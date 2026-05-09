@@ -291,8 +291,22 @@ fun VideoPlayerScreen(
             else engine?.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekBack(uiState.seekDurationMs) } }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs) { { engine?.seekForward(uiState.seekDurationMs) } }
+    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+        {
+            engine?.let { eng ->
+                val target = (eng.currentPositionMs - uiState.seekDurationMs).coerceAtLeast(0)
+                doSeekTo(target)
+            }
+        }
+    }
+    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+        {
+            engine?.let { eng ->
+                val target = (eng.currentPositionMs + uiState.seekDurationMs).coerceAtMost(eng.durationMs.coerceAtLeast(0))
+                doSeekTo(target)
+            }
+        }
+    }
     val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
         derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }
@@ -580,6 +594,7 @@ fun VideoPlayerScreen(
             syncPlayGroupName = uiState.syncPlayGroupName,
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
             isSyncPlaySynced = uiState.isSyncPlaySynced,
+            isSyncPlaySyncing = uiState.isSyncPlaySyncing,
             modifier = Modifier.fillMaxSize(),
         )
 

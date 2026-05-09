@@ -204,9 +204,10 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String?,
         startPositionTicks: Long,
     ): Result<Unit> =
-        apiClient.syncPlaySetNewQueue(itemIds, playingItemId, startPositionTicks)
+        apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
 
     override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
         apiClient.syncPlaySetIgnoreWait(ignore)

@@ -36,14 +36,21 @@ class JellyfinWebSocketClient @Inject constructor(
     private var serverUrl: String? = null
     private var token: String? = null
     private var deviceId: String? = null
+    private var deviceName: String? = null
+    private var clientName: String? = null
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
 
-    fun connect(serverAddress: String, accessToken: String, device: String) {
+    private val _isConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
+
+    fun connect(serverAddress: String, accessToken: String, device: String, deviceName: String = "JellyPlay", client: String = "JellyPlay") {
         disconnect()
         serverUrl = serverAddress
         token = accessToken
         deviceId = device
+        this.deviceName = deviceName
+        clientName = client
         reconnectAttempts.set(0)
         connectInternal()
     }
@@ -54,24 +61,29 @@ class JellyfinWebSocketClient @Inject constructor(
         val device = deviceId ?: return
 
         val wsUrl = buildWsUrl(serverAddress, accessToken, device)
+        Log.d(TAG, "Connecting WebSocket to $wsUrl")
         val request = Request.Builder().url(wsUrl).build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket connected")
                 reconnectAttempts.set(0)
+                _isConnected.value = true
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                Log.d(TAG, "WebSocket message: $text")
                 handleMessage(text)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure", t)
+                _isConnected.value = false
                 scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code $reason")
+                _isConnected.value = false
             }
         })
     }
@@ -97,6 +109,7 @@ class JellyfinWebSocketClient @Inject constructor(
         token = null
         deviceId = null
         reconnectAttempts.set(maxReconnectAttempts + 1)
+        _isConnected.value = false
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null
     }
@@ -105,7 +118,9 @@ class JellyfinWebSocketClient @Inject constructor(
         val base = serverAddress.trim().trimEnd('/')
             .replace("https://", "wss://")
             .replace("http://", "ws://")
-        return "$base/socket?api_key=$accessToken&deviceId=$device"
+        val name = deviceName?.let { "&deviceName=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
+        val client = clientName?.let { "&client=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
+        return "$base/socket?api_key=$accessToken&deviceId=$device$name$client"
     }
 
     private fun handleMessage(text: String) {
@@ -133,6 +148,7 @@ class JellyfinWebSocketClient @Inject constructor(
 
     fun sendKeepAlive() {
         val msg = JSONObject().put("MessageType", "KeepAlive")
+        Log.d(TAG, "Sending keep-alive")
         webSocket?.send(msg.toString())
     }
 
@@ -141,6 +157,7 @@ class JellyfinWebSocketClient @Inject constructor(
             put("MessageType", messageType)
             put("Data", data)
         }
+        Log.d(TAG, "Sending WS message: $msg")
         webSocket?.send(msg.toString())
     }
 

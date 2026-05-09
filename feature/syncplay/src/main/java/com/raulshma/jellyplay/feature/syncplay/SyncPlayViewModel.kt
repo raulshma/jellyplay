@@ -15,7 +15,10 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -49,14 +52,15 @@ class SyncPlayViewModel @Inject constructor(
     var showCreateDialog by mutableStateOf(false)
         private set
 
-    var showQueueSheet by mutableStateOf(false)
-        private set
+    private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
+    val notifications: SharedFlow<String> = _notifications.asSharedFlow()
 
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
     val navigateToPlayer = _navigateToPlayer.asStateFlow()
 
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
+    private var autoJoinGroupId: String? = null
 
     init {
         loadGroups()
@@ -69,8 +73,16 @@ class SyncPlayViewModel @Inject constructor(
             mediaRepository.getSyncPlayGroups()
                 .onSuccess {
                     groups = it
-                    isInGroup = false
-                    currentGroup = null
+                    if (!isInGroup) {
+                        currentGroup = null
+                    }
+                    autoJoinGroupId?.let { gid ->
+                        val target = it.find { g -> g.groupId == gid }
+                        if (target != null) {
+                            autoJoinGroupId = null
+                            joinGroup(target.groupId)
+                        }
+                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to load groups"
@@ -88,6 +100,15 @@ class SyncPlayViewModel @Inject constructor(
                     isInGroup = true
                     loadCurrentGroup()
                     startCommandListener()
+                    val group = syncPlayManager.currentGroup
+                    val playingId = group?.playingItemId
+                    if (!playingId.isNullOrBlank()) {
+                        _navigateToPlayer.value = PlayItemRequest(
+                            itemId = playingId,
+                            positionTicks = group?.positionTicks ?: 0L,
+                        )
+                        lastHandledPlayingItemId = playingId
+                    }
                 }
                 .onFailure {
                     error = it.message ?: "Failed to join group"
@@ -126,6 +147,7 @@ class SyncPlayViewModel @Inject constructor(
                     if (newGroup != null) {
                         joinGroup(newGroup.groupId)
                     } else {
+                        autoJoinGroupId = null
                         loadGroups()
                     }
                 }
@@ -145,24 +167,24 @@ class SyncPlayViewModel @Inject constructor(
         commandJob = viewModelScope.launch {
             syncPlayManager.commands.collect { command ->
                 when (command) {
-                is SyncPlayCommand.PlayQueueUpdate -> {
-                    val current = currentGroup
-                    if (command.playingItemId.isNotBlank() && lastHandledPlayingItemId != command.playingItemId) {
-                        _navigateToPlayer.value = PlayItemRequest(
-                            itemId = command.playingItemId,
+                    is SyncPlayCommand.PlayQueueUpdate -> {
+                        val current = currentGroup
+                        if (command.playingItemId.isNotBlank() && lastHandledPlayingItemId != command.playingItemId) {
+                            _navigateToPlayer.value = PlayItemRequest(
+                                itemId = command.playingItemId,
+                                positionTicks = command.positionTicks,
+                            )
+                            lastHandledPlayingItemId = command.playingItemId
+                        }
+                        currentGroup = (current ?: SyncPlayGroupInfo(
+                            groupId = "",
+                            groupName = "",
+                        )).copy(
+                            playingItemId = command.playingItemId,
+                            isPlaying = command.isPlaying,
                             positionTicks = command.positionTicks,
                         )
-                        lastHandledPlayingItemId = command.playingItemId
                     }
-                    currentGroup = (current ?: SyncPlayGroupInfo(
-                        groupId = "",
-                        groupName = "",
-                    )).copy(
-                        playingItemId = command.playingItemId,
-                        isPlaying = command.isPlaying,
-                        positionTicks = command.positionTicks,
-                    )
-                }
                     is SyncPlayCommand.StateUpdate -> {
                         currentGroup = currentGroup?.copy(isPlaying = command.isPlaying)
                     }
@@ -174,6 +196,9 @@ class SyncPlayViewModel @Inject constructor(
                         } else {
                             loadCurrentGroup()
                         }
+                    }
+                    is SyncPlayCommand.Notification -> {
+                        _notifications.tryEmit(command.message)
                     }
                     else -> {}
                 }
@@ -226,20 +251,17 @@ class SyncPlayViewModel @Inject constructor(
         showCreateDialog = show
     }
 
-    fun updateShowQueueSheet(show: Boolean) {
-        showQueueSheet = show
-    }
-
     fun refreshGroups() {
         viewModelScope.launch {
             mediaRepository.getSyncPlayGroups()
                 .onSuccess { groups = it }
-                .onFailure { /* silently fail on background refresh */ }
+                .onFailure { }
         }
     }
 
     private suspend fun loadCurrentGroup() {
-        mediaRepository.getSyncPlayInfo(syncPlayManager.activeGroupId)
+        val groupId = syncPlayManager.activeGroupId ?: return
+        mediaRepository.getSyncPlayInfo(groupId)
             .onSuccess { currentGroup = it }
             .onFailure { currentGroup = null }
     }

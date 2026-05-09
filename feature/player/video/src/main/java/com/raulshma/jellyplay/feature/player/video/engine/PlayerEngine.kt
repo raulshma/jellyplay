@@ -66,6 +66,7 @@ interface PlayerEngine {
     fun setOnStateChanged(callback: ((isPlaying: Boolean) -> Unit)?)
     fun setOnTracksChanged(callback: (() -> Unit)?)
     fun setOnError(callback: ((error: String) -> Unit)?) {}
+    fun setOnPlaybackStateChanged(callback: ((playbackState: Int) -> Unit)?) {}
 
     fun setSubtitleStyle(style: SubtitleStyle, view: View?) {}
 

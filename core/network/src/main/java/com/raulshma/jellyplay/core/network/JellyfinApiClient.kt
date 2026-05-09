@@ -220,12 +220,14 @@ interface JellyfinApiClient {
         positionTicks: Long = 0L,
         isPlaying: Boolean = false,
         playlistItemId: String? = null,
+        whenMs: Long? = null,
     ): Result<Unit>
 
     suspend fun syncPlayBuffering(
         positionTicks: Long = 0L,
         isPlaying: Boolean = false,
         playlistItemId: String? = null,
+        whenMs: Long? = null,
     ): Result<Unit>
 
     suspend fun syncPlayPause(): Result<Unit>
@@ -249,14 +251,24 @@ interface JellyfinApiClient {
     suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
         playingItemId: String,
+        mediaSourceId: String? = null,
         startPositionTicks: Long = 0L,
     ): Result<Unit>
+
+    suspend fun syncPlayQueue(
+        itemIds: List<String>,
+        mode: String = "Queue",
+    ): Result<Unit>
+
+    suspend fun syncPlaySetPlaylistItem(playlistItemId: String): Result<Unit>
 
     suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit>
 
     suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit>
 
     suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit>
+
+    suspend fun syncPlayPing(pingMs: Long): Result<Unit>
 
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
 
@@ -267,4 +279,8 @@ interface JellyfinApiClient {
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
 
     suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray?
+    
+    suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse>
+
+    suspend fun postCapabilities(): Result<Unit>
 }

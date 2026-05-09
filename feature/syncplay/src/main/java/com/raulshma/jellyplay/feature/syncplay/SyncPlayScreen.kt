@@ -44,6 +44,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -51,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +83,7 @@ fun SyncPlayScreen(
     val showCreateDialog = viewModel.showCreateDialog
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isLoading,
         hasError = error != null,
@@ -97,6 +103,15 @@ fun SyncPlayScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.notifications.collect { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+
     navigateToPlayer?.let { request ->
         LaunchedEffect(request) {
             onPlayItem(request.itemId, request.positionTicks)
@@ -105,6 +120,11 @@ fun SyncPlayScreen(
     }
 
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(data)
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {

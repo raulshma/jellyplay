@@ -23,6 +23,7 @@ class MpvPlayerEngine(
     private var onStateChanged: ((Boolean) -> Unit)? = null
     private var onTracksChanged: (() -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
+    private var onPlaybackStateChanged: ((Int) -> Unit)? = null
     @Volatile private var _isPlaying = false
     @Volatile private var _speed = 1f
     @Volatile private var _audioDelayMs = 0L
@@ -51,23 +52,34 @@ class MpvPlayerEngine(
                     _isPlaying = !value
                     mainHandler.post { onStateChanged?.invoke(_isPlaying) }
                 }
+                if (property == "paused-for-cache") {
+                    val state = if (value) 2 else 3 // BUFFERING=2, READY=3
+                    mainHandler.post { onPlaybackStateChanged?.invoke(state) }
+                }
             }
             override fun eventProperty(property: String, value: String) {}
             override fun eventProperty(property: String, value: MPVNode) {}
             override fun event(eventId: Int, node: MPVNode) {
-                if (eventId == MPV.mpvEvent.MPV_EVENT_FILE_LOADED) {
-                    // Add external subtitles after file is loaded
-                    pendingSubtitles?.forEach { (subUrl, _) ->
-                        try {
-                            Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
-                            mpv.command("sub-add", subUrl)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
+                when (eventId) {
+                    MPV.mpvEvent.MPV_EVENT_START_FILE -> {
+                        mainHandler.post { onPlaybackStateChanged?.invoke(1) } // IDLE=1
+                    }
+                    MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
+                        // Add external subtitles after file is loaded
+                        pendingSubtitles?.forEach { (subUrl, _) ->
+                            try {
+                                Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
+                                mpv.command("sub-add", subUrl)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
+                            }
+                        }
+                        pendingSubtitles = null
+                        mainHandler.post {
+                            onPlaybackStateChanged?.invoke(3) // READY=3
+                            onTracksChanged?.invoke()
                         }
                     }
-                    pendingSubtitles = null
-                    
-                    mainHandler.post { onTracksChanged?.invoke() }
                 }
             }
         }
@@ -86,6 +98,7 @@ class MpvPlayerEngine(
             mpv.addObserver(observer)
             mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
+            mpv.observeProperty("paused-for-cache", MPV.mpvFormat.MPV_FORMAT_FLAG)
         }
 
         override fun observeProperties() {}
@@ -303,6 +316,10 @@ class MpvPlayerEngine(
 
     override fun setOnError(callback: ((String) -> Unit)?) {
         onError = callback
+    }
+
+    override fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
+        onPlaybackStateChanged = callback
     }
 
     override fun setDialogueBoostEnabled(enabled: Boolean) {
