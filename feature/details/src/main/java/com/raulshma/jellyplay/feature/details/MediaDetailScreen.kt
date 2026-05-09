@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.details
 
 import android.os.StatFs
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -83,7 +82,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -92,7 +90,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
-import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -161,7 +158,7 @@ fun MediaDetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailContent(
     itemId: String,
@@ -193,8 +190,6 @@ private fun DetailContent(
     val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
@@ -275,30 +270,17 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            val backdropModifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
-                    scaleX = scale
-                    scaleY = scale
-                }
-
-            val resolvedBackdropModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    backdropModifier.sharedElement(
-                        rememberSharedContentState(key = "backdrop_$itemId"),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                    )
-                }
-            } else {
-                backdropModifier
-            }
-
             MediaImage(
                 url = getBackdropUrl(targetBackdropId),
                 contentDescription = null,
                 blurHash = item?.blurHashes?.backdrop,
-                modifier = resolvedBackdropModifier,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        scaleX = scale
+                        scaleY = scale
+                    },
                 contentScale = ContentScale.Crop,
             )
 
@@ -356,28 +338,15 @@ private fun DetailContent(
                                 .offset(y = (-40).dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            val posterModifier = Modifier
-                                .width(120.dp)
-                                .aspectRatio(2f / 3f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .graphicsLayer { alpha = contentAlpha }
-
-                            val resolvedPosterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                with(sharedTransitionScope) {
-                                    posterModifier.sharedElement(
-                                        rememberSharedContentState(key = "poster_$itemId"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    )
-                                }
-                            } else {
-                                posterModifier
-                            }
-
                             MediaImage(
                                 url = getImageUrl(itemId),
                                 contentDescription = null,
                                 blurHash = item?.blurHashes?.primary,
-                                modifier = resolvedPosterModifier,
+                                modifier = Modifier
+                                    .width(120.dp)
+                                    .aspectRatio(2f / 3f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .graphicsLayer { alpha = contentAlpha },
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -389,7 +358,10 @@ private fun DetailContent(
                         AnimatedVisibility(
                             visible = contentVisible,
                             enter = fadeIn(tween(400, delayMillis = 100)) +
-                                    slideInVertically(tween(400, delayMillis = 100, easing = FastOutSlowInEasing)) { it / 8 },
+                                    slideInVertically(
+                                        initialOffsetY = { -it / 10 },
+                                        animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                                    ),
                         ) {
                             DetailContentBody(
                                 item = item,
@@ -533,10 +505,10 @@ private fun StaggeredDetailSection(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(200, delayMillis = delayIndex * 100)
+            animationSpec = tween(300, delayMillis = delayIndex * 80)
         ) + slideInVertically(
-            initialOffsetY = { it / 10 },
-            animationSpec = tween(200, delayMillis = delayIndex * 100),
+            initialOffsetY = { -it / 12 },
+            animationSpec = tween(300, delayMillis = delayIndex * 80, easing = FastOutSlowInEasing),
         ),
     ) {
         content()

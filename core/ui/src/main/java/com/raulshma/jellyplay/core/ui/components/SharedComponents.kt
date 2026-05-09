@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -54,7 +53,6 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -65,8 +63,6 @@ fun PosterCard(
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
     blurHash: String? = null,
-    sharedElementKey: String? = null,
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -76,7 +72,6 @@ fun PosterCard(
         animationSpec = tween(150),
         label = "cardScale",
     )
-    val sharedTransitionScope = LocalSharedTransitionScope.current
 
     Card(
         modifier = modifier
@@ -96,31 +91,14 @@ fun PosterCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
     ) {
         Box {
-            val imageModifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-
-            val resolvedModifier = if (
-                sharedElementKey != null &&
-                sharedTransitionScope != null &&
-                animatedVisibilityScope != null
-            ) {
-                with(sharedTransitionScope) {
-                    imageModifier.sharedElement(
-                        rememberSharedContentState(key = sharedElementKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                    )
-                }
-            } else {
-                imageModifier
-            }
-
             MediaImage(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 blurHash = blurHash,
-                modifier = resolvedModifier,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f),
                 contentScale = ContentScale.Crop,
             )
 
@@ -265,10 +243,10 @@ fun StaggeredSection(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(250, delayMillis = index * 80)
+            animationSpec = tween(300, delayMillis = index * 60)
         ) + slideInVertically(
-            initialOffsetY = { it / 8 },
-            animationSpec = tween(250, delayMillis = index * 80),
+            initialOffsetY = { -it / 12 },
+            animationSpec = tween(300, delayMillis = index * 60, easing = FastOutSlowInEasing),
         ),
     ) {
         content()
