@@ -99,6 +99,7 @@ data class VideoPlayerUiState(
 
     val shouldShowUpNext: Boolean
         get() {
+            if (isInSyncPlaySession) return false
             if (nextEpisode == null) return false
             if (seriesId == null) return false
             if (isInCredits) return true

@@ -99,7 +99,7 @@ class ExoPlayerEngine(
         onError = callback
     }
 
-    fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
+    override fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
         onPlaybackStateChangedCallback = callback
     }
 
