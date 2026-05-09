@@ -931,14 +931,23 @@ class VideoPlayerViewModel @Inject constructor(
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
-        // Always use engine tracks as source of truth for primary subtitles
         val subtitleTracks = if (engineSubOptions.isEmpty()) {
-            // No subtitle tracks available at all
             listOf(TrackOption(-1, "None", null, true))
         } else {
             val sel = selectedSubtitleTrackId
-            listOf(TrackOption(-1, "Off", null, sel == null)) + engineSubOptions.map { t ->
-                val isSel = sel != null && sel.first == t.index && sel.second == t.trackGroup
+            if (sel == null) {
+                val engineAutoSelected = engineSubOptions.find { it.isSelected }
+                if (engineAutoSelected != null) {
+                    selectedSubtitleTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
+                }
+            }
+            val resolvedSel = selectedSubtitleTrackId
+            listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + engineSubOptions.map { t ->
+                val isSel = if (resolvedSel != null) {
+                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
+                } else {
+                    t.isSelected
+                }
                 t.copy(isSelected = isSel)
             }
         }
