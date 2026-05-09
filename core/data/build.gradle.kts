@@ -33,6 +33,7 @@ dependencies {
     implementation(libs.paging.runtime)
     implementation(libs.work.runtime.ktx)
     implementation(libs.media3.session)
+    implementation(libs.media3.exoplayer)
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
     implementation(libs.play.services.cast.framework)

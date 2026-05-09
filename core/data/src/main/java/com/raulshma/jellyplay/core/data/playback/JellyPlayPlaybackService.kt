@@ -1,14 +1,12 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.pm.ServiceInfo
+import android.content.Context
 import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.DefaultMediaNotificationProvider
-import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
@@ -18,20 +16,13 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class JellyPlayPlaybackService : MediaSessionService() {
 
-    @Inject
-    lateinit var sessionManager: PlaybackSessionManager
+    @Inject lateinit var sessionManager: PlaybackSessionManager
+    @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setChannelId(CHANNEL_ID)
-                .build()
-                .apply {
-                    setSmallIcon(androidx.media3.session.R.drawable.media3_notification_small_icon)
-                }
-        )
+        setMediaNotificationProvider(createMediaNotificationProvider(this))
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -47,6 +38,7 @@ class JellyPlayPlaybackService : MediaSessionService() {
         if (player.playbackState != Player.STATE_IDLE && player.playbackState != Player.STATE_ENDED) {
             return
         }
+        audioPlaybackManager.stopAndRelease()
         stopSelf()
     }
 
@@ -61,16 +53,19 @@ class JellyPlayPlaybackService : MediaSessionService() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Media Playback",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Notification for media playback controls"
-                setShowBadge(false)
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    "Media Playback",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Media playback controls"
+                    setShowBadge(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+                manager.createNotificationChannel(channel)
             }
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
         }
     }
 
