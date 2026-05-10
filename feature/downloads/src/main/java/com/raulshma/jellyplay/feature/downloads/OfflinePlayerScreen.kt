@@ -78,15 +78,20 @@ fun OfflinePlayerScreen(
     val preferences by preferencesStore.preferences.collectAsStateWithLifecycle(initialValue = com.raulshma.jellyplay.core.model.UserPreferences())
     val seekDurationMs = preferences.videoSeekDurationMs
 
+    val resumePrefs = remember { context.getSharedPreferences("offline_player_resume", 0) }
+    val resumeKey = remember(filePath) { "pos_$filePath" }
+
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
     val exoPlayer = remember {
+        val savedPos = resumePrefs.getLong(resumeKey, 0L)
         ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.fromUri(filePath.toUri())
             setMediaItem(mediaItem)
             prepare()
+            if (savedPos > 0) seekTo(savedPos)
             playWhenReady = true
         }
     }
@@ -109,6 +114,13 @@ fun OfflinePlayerScreen(
         }
 
         onDispose {
+            val pos = exoPlayer.currentPosition
+            val dur = exoPlayer.duration.coerceAtLeast(0L)
+            if (dur > 0 && pos > 0 && pos < dur - 5000) {
+                resumePrefs.edit().putLong(resumeKey, pos).apply()
+            } else {
+                resumePrefs.edit().remove(resumeKey).apply()
+            }
             exoPlayer.removeListener(listener)
             exoPlayer.release()
             activity?.let {

@@ -182,6 +182,9 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
 
+        // Report stop position for the previous item before switching
+        reportCurrentItemStopped()
+
         val player = getOrCreatePlayer()
 
         scope.launch {
@@ -201,15 +204,17 @@ class AudioPlaybackManager @Inject constructor(
                     val file = localDownload?.let {
                         java.io.File(it.downloadPath).takeIf { f -> f.exists() }
                     }
+                    val resumeTicks = detail.item.playbackPositionTicks ?: 0L
                     val url = if (localDownload != null && file != null &&
                         localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
                     ) {
                         Uri.fromFile(file).toString()
                     } else {
-                        playbackRepository.getStreamUrl(itemId, source?.id ?: "")
+                        playbackRepository.getStreamUrl(itemId, source?.id ?: "", resumeTicks)
                     }
 
                     val artworkUri = Uri.parse(_albumArtUrl.value)
+                    val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
 
                     val mediaItem = MediaItem.Builder()
                         .setUri(url)
@@ -222,14 +227,9 @@ class AudioPlaybackManager @Inject constructor(
                                 .build()
                         )
                         .build()
-                    player.setMediaItem(mediaItem)
+                    player.setMediaItem(mediaItem, startPositionMs)
                     player.prepare()
                     player.playWhenReady = true
-
-                    val resumeTicks = detail.item.playbackPositionTicks ?: 0L
-                    if (resumeTicks > 0) {
-                        player.seekTo(resumeTicks / 10_000)
-                    }
 
                     if (_currentIndex.value < 0 || _queue.value.getOrNull(_currentIndex.value)?.id != itemId) {
                         val queueItem = AudioQueueItem(
@@ -487,6 +487,19 @@ class AudioPlaybackManager @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun reportCurrentItemStopped() {
+        val player = exoPlayer ?: return
+        val itemId = currentItemId ?: return
+        val sid = playSessionId
+        val pos = player.currentPosition * 10_000
+        if (pos > 0) {
+            scope.launch {
+                playbackRepository.reportPlaybackStopped(itemId, sid, pos)
+            }
+        }
+        playSessionId = UUID.randomUUID().toString()
     }
 
     fun stopAndRelease() {
