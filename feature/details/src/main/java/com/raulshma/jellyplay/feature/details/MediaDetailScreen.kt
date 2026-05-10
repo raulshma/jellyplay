@@ -719,8 +719,13 @@ private fun DetailContentBody(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
+                val isSeries = item.mediaType == MediaType.SERIES
                 val target = if (isSeriesOrEpisode) smartPlayTarget else null
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+                val isResolvingSeriesTarget = isSeries &&
+                    target == null &&
+                    (seasons.isEmpty() || fetchedSeasonIds.size < seasons.size)
+                val canPlayPrimary = isAudio || !isSeries || target != null
                 val progress = if (target != null) {
                     val t = target.startPositionTicks
                     val rt = target.episode.runTimeTicks
@@ -731,6 +736,8 @@ private fun DetailContentBody(
 
                 val playLabel = when {
                     target != null -> target.label
+                    isResolvingSeriesTarget -> "Finding Episode"
+                    isSeries -> "No Episodes"
                     hasProgress -> "Resume"
                     else -> "Play"
                 }
@@ -769,11 +776,18 @@ private fun DetailContentBody(
                         .weight(1f)
                         .height(56.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(
+                            if (canPlayPrimary) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                            }
+                        )
                         .graphicsLayer { scaleX = playScale; scaleY = playScale }
                         .clickable(
                             interactionSource = playInteractionSource,
                             indication = null,
+                            enabled = canPlayPrimary,
                         ) {
                             if (isAudio) {
                                 onAudioClick()
