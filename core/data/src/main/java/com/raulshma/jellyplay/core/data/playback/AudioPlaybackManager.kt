@@ -175,6 +175,13 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun play(itemId: String) {
+        if (currentItemId == itemId) {
+            val state = exoPlayer?.playbackState
+            if (state != null && state != Player.STATE_ENDED && state != Player.STATE_IDLE) {
+                return
+            }
+        }
+
         val player = getOrCreatePlayer()
 
         scope.launch {
