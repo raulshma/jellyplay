@@ -1,6 +1,21 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,12 +183,20 @@ fun KidsHomeScreen(
 
                     if (surpriseItem != null) {
                         item {
-                            SurpriseMeCard(
-                                item = surpriseItem,
-                                imageUrl = imageUrlBuilder(surpriseItem),
-                                fallbackUrls = fallbackImageUrlBuilder(surpriseItem),
-                                onClick = { onItemClick(surpriseItem.id) },
-                            )
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(tween(400)) + slideInVertically(
+                                    initialOffsetY = { it / 8 },
+                                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                                ),
+                            ) {
+                                SurpriseMeCard(
+                                    item = surpriseItem,
+                                    imageUrl = imageUrlBuilder(surpriseItem),
+                                    fallbackUrls = fallbackImageUrlBuilder(surpriseItem),
+                                    onClick = { onItemClick(surpriseItem.id) },
+                                )
+                            }
                         }
                     }
 
@@ -287,10 +311,26 @@ private fun KidsPosterCard(
     fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(150),
+        label = "cardScale",
+    )
+
     Column(
         modifier = Modifier
             .width(160.dp)
-            .clickable(onClick = onClick),
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Card(

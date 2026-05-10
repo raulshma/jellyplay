@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.os.StatFs
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -12,6 +13,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -941,13 +944,25 @@ private fun SeasonsSection(
             items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                 val index = seasons.indexOf(season)
                 val isSelected = index == selectedSeasonIndex
+                val targetColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f)
+                val targetContentColor = if (isSelected) Color.Black else Color.White
+                val surfaceColor by animateColorAsState(
+                    targetValue = targetColor,
+                    animationSpec = tween(250),
+                    label = "seasonColor",
+                )
+                val contentColor by animateColorAsState(
+                    targetValue = targetContentColor,
+                    animationSpec = tween(250),
+                    label = "seasonContentColor",
+                )
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { selectedSeasonIndex = index }
                         .tvFocusable(),
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
-                    contentColor = if (isSelected) Color.Black else Color.White,
+                    color = surfaceColor,
+                    contentColor = contentColor,
                 ) {
                     Text(
                         text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
@@ -966,42 +981,54 @@ private fun SeasonsSection(
         val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
         val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
 
-        when {
-            isLoading -> {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    userScrollEnabled = false,
-                ) {
-                    items(3, contentType = { "shimmer" }) {
-                        EpisodeCardSkeleton()
+        AnimatedContent(
+            targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
+            transitionSpec = {
+                fadeIn(tween(300)) togetherWith fadeOut(tween(150))
+            },
+            label = "seasonEpisodes",
+        ) { (seasonIdx, episodeCount) ->
+            val currentEpisodes = seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
+            val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
+            val currentIsLoading = currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched
+
+            when {
+                currentIsLoading -> {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        userScrollEnabled = false,
+                    ) {
+                        items(3, contentType = { "shimmer" }) {
+                            EpisodeCardSkeleton()
+                        }
                     }
                 }
-            }
-            seasonEpisodes != null && seasonEpisodes.isNotEmpty() -> {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    items(seasonEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
-                        EpisodeCard(
-                            episode = episode,
-                            getImageUrl = getImageUrl,
-                            isCurrentEpisode = episode.id == currentItemId,
-                            onPlayClick = { onEpisodePlayClick(episode) },
-                            onDetailClick = { onEpisodeDetailClick(episode) },
-                        )
+                currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(currentEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
+                            EpisodeCard(
+                                episode = episode,
+                                getImageUrl = getImageUrl,
+                                isCurrentEpisode = episode.id == currentItemId,
+                                onPlayClick = { onEpisodePlayClick(episode) },
+                                onDetailClick = { onEpisodeDetailClick(episode) },
+                            )
+                        }
                     }
                 }
-            }
-            else -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("No episodes available", color = Color.White.copy(alpha = 0.6f))
+                else -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("No episodes available", color = Color.White.copy(alpha = 0.6f))
+                    }
                 }
             }
         }

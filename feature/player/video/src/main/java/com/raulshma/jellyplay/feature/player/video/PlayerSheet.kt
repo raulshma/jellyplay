@@ -9,7 +9,7 @@ sealed class PlayerSheet {
     data object PlaybackInfo : PlayerSheet()
     data object AspectRatio : PlayerSheet()
     data object SubtitleStyle : PlayerSheet()
-    data object SecondarySubtitle : PlayerSheet()
+    
     data class TapToTranslate(val text: String) : PlayerSheet()
     data object OcrResult : PlayerSheet()
     data object AudioDelay : PlayerSheet()

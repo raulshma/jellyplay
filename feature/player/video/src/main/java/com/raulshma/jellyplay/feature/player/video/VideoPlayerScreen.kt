@@ -78,7 +78,6 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSh
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
-import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitlePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
@@ -116,7 +115,7 @@ fun VideoPlayerScreen(
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var isCasting by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
-    var secondarySubtitleText by remember { mutableStateOf<String?>(null) }
+    
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -354,15 +353,12 @@ fun VideoPlayerScreen(
                         }
                     },
                     onLongPress = {
-                        if (!uiState.gesturesEnabled) return@detectTapGestures
-                        if (!uiState.engineCapabilities.cues && secondarySubtitleText.isNullOrBlank()) return@detectTapGestures
-                        val primaryText = if (uiState.engineCapabilities.cues) viewModel.getCurrentPrimarySubtitleText() else null
-                        val secondaryText = secondarySubtitleText
-                        val text = listOfNotNull(primaryText, secondaryText)
-                            .joinToString("\n")
-                            .takeIf { it.isNotBlank() } ?: return@detectTapGestures
-                        currentSheet = PlayerSheet.TapToTranslate(text)
-                    },
+                            if (!uiState.gesturesEnabled) return@detectTapGestures
+                            if (!uiState.engineCapabilities.cues) return@detectTapGestures
+                            val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
+                            val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
+                            currentSheet = PlayerSheet.TapToTranslate(text)
+                        },
                 )
             },
     ) {
@@ -464,10 +460,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        SecondarySubtitleOverlay(
-            text = secondarySubtitleText,
-            fontSize = uiState.subtitleStyle.fontSize,
-        )
+        
 
         IntroSkipOverlay(
             isVisible = isInIntro && !isInPipMode,
@@ -588,7 +581,6 @@ fun VideoPlayerScreen(
             onAudioClick = { currentSheet = PlayerSheet.Audio },
             onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
             onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
-            onSecondarySubtitleClick = { currentSheet = PlayerSheet.SecondarySubtitle },
             onChapterClick = { currentSheet = PlayerSheet.Chapter },
             onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
             onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
@@ -688,14 +680,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.secondarySubtitleTrack) {
-        val track = uiState.secondarySubtitleTrack ?: return@LaunchedEffect
-        while (true) {
-            val pos = engine?.currentPositionMs ?: 0L
-            secondarySubtitleText = viewModel.getSecondarySubtitleText(pos)
-            delay(250)
-        }
-    }
+    
 
     LaunchedEffect(Unit) {
         viewModel.syncPlayNotifications.collect { message ->
@@ -719,31 +704,7 @@ fun VideoPlayerScreen(
     )
 }
 
-@Composable
-private fun BoxScope.SecondarySubtitleOverlay(
-    text: String?,
-    fontSize: Int,
-) {
-    text?.let {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(top = 60.dp, start = 16.dp, end = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = it,
-                color = Color.Yellow,
-                fontSize = (fontSize - 4).sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-        }
-    }
-}
+
 
 @Composable
 private fun BoxScope.AutoAspectRatioBadge(
@@ -876,17 +837,7 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
             )
         }
-        is PlayerSheet.SecondarySubtitle -> {
-            SecondarySubtitlePickerSheet(
-                mediaStreams = uiState.mediaStreams,
-                currentSecondary = uiState.secondarySubtitleTrack,
-                onSelect = { stream ->
-                    viewModel.selectSecondarySubtitleStream(stream)
-                    onSheetChange(PlayerSheet.None)
-                },
-                onDismiss = dismissSheet,
-            )
-        }
+        
         is PlayerSheet.TapToTranslate -> {
             TapToTranslateSheet(
                 text = sheet.text,

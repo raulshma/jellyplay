@@ -17,7 +17,6 @@ class PlayerSheetTest {
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
             PlayerSheet.SubtitleStyle,
-            PlayerSheet.SecondarySubtitle,
             PlayerSheet.TapToTranslate("hello"),
             PlayerSheet.OcrResult,
             PlayerSheet.AudioDelay,
