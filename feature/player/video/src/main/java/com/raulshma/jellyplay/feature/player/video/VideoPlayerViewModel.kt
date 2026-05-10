@@ -11,7 +11,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
-import com.raulshma.jellyplay.core.data.playback.PipStateHolder
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -67,7 +67,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
-    val pipStateHolder: PipStateHolder,
+    val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
 ) : ViewModel() {
 
@@ -77,13 +77,21 @@ class VideoPlayerViewModel @Inject constructor(
     private val _syncPlayPrefs = MutableStateFlow(com.raulshma.jellyplay.core.model.UserPreferences())
     private val syncPlayPrefs: StateFlow<com.raulshma.jellyplay.core.model.UserPreferences> = _syncPlayPrefs.asStateFlow()
 
-    private var playerEngine: PlayerEngine? = null
+    private val playerSessionManager = PlayerSessionManager(
+        context = context,
+        scope = viewModelScope,
+        mediaRepository = mediaRepository,
+        playbackRepository = playbackRepository,
+        downloadRepository = downloadRepository,
+        preferencesStore = preferencesStore,
+        playerLifecycleManager = playerLifecycleManager,
+        adaptiveBitrateManager = adaptiveBitrateManager,
+    )
+
     private var mediaDetail: MediaDetail? = null
     
     private var equalizerEnabled: Boolean = false
-    private var resolvedPlayMethod: PlayMethod = PlayMethod.DIRECT_PLAY
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
-    private var currentItemId: String? = null
     private var autoplayNext: Boolean = false
     private val trickplayManager = TrickplayManager(playbackRepository)
 
@@ -91,10 +99,10 @@ class VideoPlayerViewModel @Inject constructor(
         playbackRepository = playbackRepository,
         viewModel = this,
         uiState = _uiState,
-        getCurrentItemId = { currentItemId },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getPlaySessionId = { playSessionId },
-        getResolvedPlayMethod = { resolvedPlayMethod },
-        getPlayerEngine = { playerEngine },
+        getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
+        getMediaEngine = { playerSessionManager.engine },
         onAutoSkipIntro = { skipIntro() },
         onAutoSkipOutro = { skipCredits() },
     )
@@ -102,13 +110,13 @@ class VideoPlayerViewModel @Inject constructor(
         syncPlayManager = syncPlayManager,
         viewModel = this,
         uiState = _uiState,
-        getPlayerEngine = { playerEngine },
-        getCurrentItemId = { currentItemId },
+        getMediaEngine = { playerSessionManager.engine },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         onLoadItem = { itemId, positionTicks ->
-            if (currentItemId != itemId) {
+            if (playerSessionManager.sessionState.value.currentItemId != itemId) {
                 initialize(itemId, null, positionTicks)
             } else {
-                playerEngine?.seekTo(positionTicks / 10_000)
+                playerSessionManager.engine?.seekTo(positionTicks / 10_000)
             }
         },
         preferencesFlow = syncPlayPrefs,
@@ -121,70 +129,88 @@ class VideoPlayerViewModel @Inject constructor(
             }
         }
         syncPlayController.start()
+
+        // Sync UI state with Session Manager
+        viewModelScope.launch {
+            playerSessionManager.sessionState.collect { session ->
+                _uiState.update { state ->
+                    state.copy(
+                        title = session.title,
+                        subtitle = session.subtitle,
+                        currentMediaSource = session.currentMediaSource,
+                        mediaStreams = session.mediaStreams,
+                        playMethod = session.playMethodString,
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            playerSessionManager.engineFlow.collect { engine ->
+                if (engine != null) {
+                    _uiState.update { it.copy(
+                        engineCapabilities = engine.capabilities,
+                        audioDelayMs = preferencesStore.preferences.first().audioDelayMs,
+                        decoderMode = preferencesStore.preferences.first().decoderMode,
+                        audioPassthrough = preferencesStore.preferences.first().audioPassthrough,
+                        subtitleStyle = preferencesStore.preferences.first().subtitleStyle,
+                    )}
+                    launch { engine.isPlaying.collect { _uiState.update { s -> s.copy(isPlaying = it) } } }
+                    launch { engine.playbackState.collect { _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) } } }
+                    launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
+                    launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e) } } }
+                    launch { engine.positionFlow.collect { _uiState.update { s -> s.copy(currentPosition = it) } } }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            playerLifecycleManager.pipDismissed.collect { dismissed ->
+                if (dismissed) {
+                    playerSessionManager.engine?.pause()
+                }
+            }
+        }
     }
 
-    val playerEngineRef: PlayerEngine? get() = playerEngine
+    val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
     @Suppress("DEPRECATION")
     fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
-        if (currentItemId == itemId) return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId
+        if (currentItemId == itemId) {
+            val engine = playerSessionManager.engine
+            val state = engine?.playbackState?.value
+            if (state != null && state != com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED && state != com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE && state != com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR) {
+                if (startPositionTicks != 0L) return
+                val currentPos = engine.currentPositionMs
+                if (currentPos > 0) return
+            }
+        }
         val wasInSyncPlay = syncPlayManager.isInSyncPlaySession
 
         // Report stop position for the current item before switching
         reportCurrentPlaybackStopped()
 
-        val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId)
+        val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId) as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
         if (reclaimed != null) {
-            currentItemId = itemId
-            playerEngine = reclaimed
-            pipStateHolder.requestAutoEnterPip(true)
-
-            reclaimed.setOnStateChanged { playing ->
-                _uiState.update { it.copy(isPlaying = playing) }
-                syncPlayController.onIsPlayingChanged(playing)
-            }
-            reclaimed.setOnTracksChanged {
-                updateTracksFromEngine(reclaimed)
-            }
-            reclaimed.setOnPlaybackStateChanged { playbackState ->
-                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                    if (autoplayNext && !syncPlayManager.isInSyncPlaySession) playNextEpisode()
-                }
-                syncPlayController.onPlaybackStateChanged(playbackState)
-            }
-            _uiState.update {
-                it.copy(
-                    isPlaying = reclaimed.isPlaying,
-                    currentPosition = reclaimed.currentPositionMs,
-                    duration = reclaimed.durationMs,
-                )
-            }
-
             viewModelScope.launch {
-                mediaRepository.getMediaDetail(itemId)
-                    .onSuccess { detail ->
-                        mediaDetail = detail
-                        _uiState.update { state ->
-                            state.copy(
-                                title = detail.item.name,
-                                subtitle = detail.item.seriesName
-                                    ?: (detail.item.overview?.take(60) ?: ""),
-                            )
-                        }
-                        fetchIntroTimestamps(itemId)
-                        fetchCreditTimestamps(itemId)
-                        fetchNextEpisode(detail)
-                        loadSeriesEpisodes(detail)
-                    }
+                val detailResult = mediaRepository.getMediaDetail(itemId)
+                val detail = detailResult.getOrNull()
+                if (detail != null) {
+                    playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
+                    fetchIntroTimestamps(itemId)
+                    fetchCreditTimestamps(itemId)
+                    fetchNextEpisode(detail)
+                    loadSeriesEpisodes(detail)
+                }
             }
             return
         }
 
         releaseInternals()
         playSessionId = java.util.UUID.randomUUID().toString()
-        currentItemId = itemId
         trickplayManager.clear()
-        pipStateHolder.requestAutoEnterPip(true)
 
         if (wasInSyncPlay) {
             syncPlayController.reattachSession()
@@ -200,9 +226,7 @@ class VideoPlayerViewModel @Inject constructor(
                         mediaSourceId = mediaSourceId,
                         startPositionTicks = startPositionTicks
                     )
-                } catch (_: Exception) {
-                    // Ignore setNewQueue failures to avoid feedback loops
-                }
+                } catch (_: Exception) { }
             }
 
             val prefs = preferencesStore.preferences.first()
@@ -223,12 +247,6 @@ class VideoPlayerViewModel @Inject constructor(
 
             _uiState.update { it.copy(
                 preferredPlayerType = prefs.preferredPlayer,
-                subtitleStyle = prefs.subtitleStyle,
-                audioDelayMs = prefs.audioDelayMs,
-                decoderMode = prefs.decoderMode,
-                audioPassthrough = prefs.audioPassthrough,
-                frameRateMatching = prefs.frameRateMatching,
-                nightModeEnabled = prefs.nightModeEnabled,
                 seekDurationMs = prefs.videoSeekDurationMs,
                 defaultOrientation = prefs.videoDefaultOrientation,
                 controlsTimeoutMs = prefs.videoControlsTimeoutMs,
@@ -248,80 +266,22 @@ class VideoPlayerViewModel @Inject constructor(
             ) }
             autoplayNext = prefs.videoAutoplayNext
 
-            val detailResult = mediaRepository.getMediaDetail(itemId)
-            val detail = detailResult.getOrElse {
-                _uiState.update { it.copy(title = "Error loading media") }
-                return@launch
-            }
-
-            mediaDetail = detail
-            val source = if (mediaSourceId != null) {
-                detail.mediaSources.find { it.id == mediaSourceId }
-            } else {
-                detail.mediaSources.firstOrNull()
-            }
-            val streams = source?.mediaStreams ?: emptyList()
-            val detectedRatio = detectAspectRatio(streams)
-
-            val playMethodStr = when {
-                source?.supportsDirectPlay == true -> "Direct Play"
-                source?.supportsDirectStream == true -> "Direct Stream"
-                source?.supportsTranscoding == true -> "Transcode"
-                else -> "Direct Play"
-            }
-            resolvedPlayMethod = when {
-                source?.supportsDirectPlay == true -> PlayMethod.DIRECT_PLAY
-                source?.supportsDirectStream == true -> PlayMethod.DIRECT_STREAM
-                source?.supportsTranscoding == true -> PlayMethod.TRANSCODE
-                else -> PlayMethod.DIRECT_PLAY
-            }
-
-            _uiState.update { it.copy(
-                title = detail.item.name,
-                subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: ""),
-                chapters = detail.chapters,
-                currentMediaSource = source,
-                mediaStreams = streams,
-                detectedAspectRatio = detectedRatio,
-                playMethod = playMethodStr,
-                seriesId = detail.item.seriesId,
-                trickplayInfo = source?.trickplayInfo,
-            ) }
+            playerSessionManager.loadMedia(itemId, mediaSourceId, startPositionTicks)
+            
+            val sessionState = playerSessionManager.sessionState.value
+            val source = sessionState.currentMediaSource
+            val detail = sessionState.mediaDetail
 
             source?.trickplayInfo?.let { info ->
                 trickplayManager.initialize(itemId, info)
             }
-
-            val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-            val file = localDownload?.let {
-                java.io.File(it.downloadPath).takeIf { f -> f.exists() }
-            }
-            val url = if (localDownload != null && file != null &&
-                localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-            ) {
-                _uiState.update { it.copy(playMethod = "Offline") }
-                resolvedPlayMethod = PlayMethod.DIRECT_PLAY
-                Uri.fromFile(file).toString()
-            } else {
-                playbackRepository.getStreamUrl(
-                    itemId,
-                    source?.id ?: "",
-                    startPositionTicks,
-                )
-            }
-            _uiState.update { it.copy(streamUrl = url) }
-
-            val playerType = _uiState.value.preferredPlayerType
-            if (playerType == PlayerType.EXTERNAL) return@launch
-
-            initializeEngine(playerType, detail, source, url, startPositionTicks, prefs)
 
             playbackRepository.reportPlaybackStart(
                 com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                     itemId = itemId,
                     sessionId = playSessionId,
                     mediaSourceId = source?.id,
-                    playMethod = resolvedPlayMethod,
+                    playMethod = sessionState.playMethod,
                 )
             )
 
@@ -329,8 +289,10 @@ class VideoPlayerViewModel @Inject constructor(
             progressReporter.startProgressReporting()
             fetchIntroTimestamps(itemId)
             fetchCreditTimestamps(itemId)
-            fetchNextEpisode(detail)
-            loadSeriesEpisodes(detail)
+            if (detail != null) {
+                fetchNextEpisode(detail)
+                loadSeriesEpisodes(detail)
+            }
         }
     }
 
@@ -364,159 +326,14 @@ class VideoPlayerViewModel @Inject constructor(
         initialize(episodeId, null, startPositionTicks)
     }
 
-    private fun initializeEngine(
-        playerType: PlayerType,
-        detail: MediaDetail,
-        source: MediaSource?,
-        url: String,
-        startPositionTicks: Long,
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
-    ) {
-        val state = _uiState.value
-        val engine = PlayerEngineFactory.create(context, playerType)
-        playerEngine = engine
-
-        _uiState.update {
-            it.copy(
-                engineCapabilities = EngineCapabilities(
-                    audioDelay = engine.supportsAudioDelay,
-                    subtitleDelay = engine.supportsSubtitleDelay,
-                    audioPassthrough = engine.supportsAudioPassthrough,
-                    subtitleStyle = engine.supportsSubtitleStyle,
-                    dialogueBoost = engine.supportsDialogueBoost,
-                    nightMode = engine.supportsNightMode,
-                    ocr = engine.supportsOcr,
-                    cues = engine.supportsCues,
-                )
-            )
-        }
-
-        engine.setDecoderMode(state.decoderMode)
-        engine.setAudioDelay(state.audioDelayMs)
-        engine.setSubtitleDelay(state.subtitleStyle.offsetMs)
-        engine.setAudioPassthrough(state.audioPassthrough)
-
-        engine.setOnStateChanged { playing ->
-            _uiState.update { it.copy(isPlaying = playing) }
-            syncPlayController.onIsPlayingChanged(playing)
-        }
-        engine.setOnTracksChanged {
-            updateTracksFromEngine(engine)
-        }
-        engine.setOnError { errorMsg ->
-            _uiState.update { it.copy(playerError = errorMsg) }
-        }
-        engine.setOnPlaybackStateChanged { playbackState ->
-            if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                if (autoplayNext && !syncPlayManager.isInSyncPlaySession) playNextEpisode()
-            }
-            syncPlayController.onPlaybackStateChanged(playbackState)
-        }
-
-        if (engine is ExoPlayerEngine) {
-            (engine as ExoPlayerEngine).setOnPlaybackEnded {
-                // End-of-playback handled in setOnPlaybackStateChanged above
-            }
-
-            engine.setAuthInfo(
-                playbackRepository.getServerUrl(),
-                playbackRepository.getAccessToken(),
-            )
-
-            engine.createPlayer(
-                url = url,
-                title = detail.item.name,
-                startPositionMs = startPositionTicks / 10_000,
-            )
-
-            engine.setMediaSessionCallback(sessionManager, playSessionId)
-
-            val streams = source?.mediaStreams ?: emptyList()
-            val mediaSourceId = source?.id ?: ""
-            val subtitleConfigs = engine.buildSubtitleConfigurations(
-                streams,
-                getSubtitleDeliveryUrl = { playbackRepository.getSubtitleDeliveryUrl(it) },
-                buildSubtitleUrl = { index, codec ->
-                    playbackRepository.buildSubtitleDeliveryUrl(currentItemId ?: "", mediaSourceId, index, codec)
-                },
-            )
-            val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
-            engine.configureMedia(
-                url = url,
-                title = detail.item.name,
-                startPositionMs = startPositionTicks / 10_000,
-                subtitleConfigs = subtitleConfigs,
-                artworkUri = artworkUri,
-            )
-
-            engine.setPreferredAudioLanguage(prefs.preferredAudioLanguage)
-            engine.setPreferredSubtitleLanguage(prefs.preferredSubtitleLanguage)
-
-            val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)
-            if (maxBitrate != null) engine.setMaxVideoBitrate(maxBitrate.toInt())
-
-            _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
-            engine.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
-
-            _uiState.update { it.copy(nightModeEnabled = prefs.nightModeEnabled) }
-            engine.setNightModeEnabled(prefs.nightModeEnabled, prefs.audioNightModeGain)
-
-            equalizerEnabled = prefs.equalizerEnabled
-            if (equalizerEnabled) {
-                engine.setEqualizerEnabled(true, prefs.equalizerSettings)
-            }
-        } else {
-            // For MPV and LibVLC, configure external subtitles before initialization
-            val streams = source?.mediaStreams ?: emptyList()
-            val mediaSourceId = source?.id ?: ""
-            val externalSubtitles = streams
-                .filter { it.type == StreamType.SUBTITLE }
-                .mapNotNull { stream ->
-                    val subUrl = when {
-                        !stream.deliveryUrl.isNullOrBlank() -> playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                        stream.isExternal -> playbackRepository.buildSubtitleDeliveryUrl(
-                            currentItemId ?: "", mediaSourceId, stream.index, stream.codec,
-                        )
-                        else -> return@mapNotNull null
-                    }
-                    if (subUrl.isBlank()) return@mapNotNull null
-                    val label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown"
-                    subUrl to label
-                }
-            
-            if (externalSubtitles.isNotEmpty()) {
-                when (engine) {
-                    is com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine -> {
-                        engine.configureExternalSubtitles(externalSubtitles)
-                    }
-                    is com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine -> {
-                        engine.configureExternalSubtitles(externalSubtitles)
-                    }
-                }
-            }
-            
-            engine.initialize(url, detail.item.name, startPositionTicks / 10_000)
-            
-            // Apply dialogue boost setting for MPV and LibVLC
-            _uiState.update { it.copy(dialogueBoostEnabled = prefs.dialogueBoostEnabled) }
-            engine.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
-        }
-
-        val speed = state.defaultSpeed
-        if (speed != 1.0f) {
-            _uiState.update { it.copy(playbackSpeed = speed) }
-            engine.setPlaybackSpeed(speed)
-        }
-    }
-
     fun setPlaybackSpeed(speed: Float) {
         _uiState.update { it.copy(playbackSpeed = speed) }
-        playerEngine?.setPlaybackSpeed(speed)
+        playerSessionManager.engine?.setPlaybackSpeed(speed)
     }
 
     fun selectAudioTrack(option: TrackOption) {
-        val engine = playerEngine ?: return
-        engine.selectAudioTrack(option.index)
+        val engine = playerSessionManager.engine ?: return
+        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, option.index, option.trackGroup)
         _uiState.update { state ->
             val isDefault = option.index < 0
             state.copy(audioTracks = state.audioTracks.map { track ->
@@ -528,10 +345,10 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
-        val engine = playerEngine ?: return
+        val engine = playerSessionManager.engine ?: return
         
         // Apply selection to the player engine
-        engine.selectSubtitleTrack(option.index)
+        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, option.index, option.trackGroup)
         
         // Update internal state tracking
         if (option.index < 0) {
@@ -554,12 +371,10 @@ class VideoPlayerViewModel @Inject constructor(
     
 
     fun getCurrentPrimarySubtitleText(): String? {
-        val engine = playerEngine ?: return null
-        val cues = engine.getCurrentCues()
+        val engine = playerSessionManager.engine ?: return null
+        val cues = engine.currentCues.value
         if (cues.isEmpty()) return null
-        return cues.mapNotNull { it.text?.toString() }
-            .joinToString("\n")
-            .takeIf { it.isNotBlank() }
+        return cues.joinToString("\n").takeIf { it.isNotBlank() }
     }
 
     fun setAspectRatio(ratio: AspectRatio) {
@@ -587,21 +402,37 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
-        playerEngine?.setSubtitleDelay(style.offsetMs)
+        // We can just update preferences, and let the session manager or viewmodel push it
+        // Or we can manually push the update:
+        val prefs = _syncPlayPrefs.value
+        val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
+            decoderMode = _uiState.value.decoderMode,
+            audioPassthrough = _uiState.value.audioPassthrough,
+            audioDelayMs = _uiState.value.audioDelayMs,
+            subtitleDelayMs = style.offsetMs,
+            subtitleStyle = style,
+            audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
+                dialogueBoostEnabled = _uiState.value.dialogueBoostEnabled,
+                nightModeEnabled = _uiState.value.nightModeEnabled,
+                equalizerEnabled = equalizerEnabled,
+                equalizerSettings = prefs.equalizerSettings
+            )
+        )
+        playerSessionManager.engine?.updateConfig(config)
         viewModelScope.launch {
             preferencesStore.setSubtitleStyle(style)
         }
     }
 
     fun applySubtitleStyleToView(view: android.view.View?) {
-        val engine = playerEngine ?: return
-        engine.setSubtitleStyle(_uiState.value.subtitleStyle, view)
+        val engine = playerSessionManager.engine ?: return
+        if (view != null) engine.applySubtitleStyleToView(view, _uiState.value.subtitleStyle)
     }
 
     fun toggleDialogueBoost() {
         val newVal = !_uiState.value.dialogueBoostEnabled
         _uiState.update { it.copy(dialogueBoostEnabled = newVal) }
-        playerEngine?.setDialogueBoostEnabled(newVal)
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setDialogueBoostEnabled(newVal)
         }
@@ -610,7 +441,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun toggleNightMode() {
         val newVal = !_uiState.value.nightModeEnabled
         _uiState.update { it.copy(nightModeEnabled = newVal) }
-        playerEngine?.setNightModeEnabled(newVal)
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setNightModeEnabled(newVal)
         }
@@ -618,7 +449,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setAudioDelay(ms: Long) {
         _uiState.update { it.copy(audioDelayMs = ms) }
-        playerEngine?.setAudioDelay(ms)
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setAudioDelay(ms)
         }
@@ -626,7 +457,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setDecoderMode(mode: DecoderMode) {
         _uiState.update { it.copy(decoderMode = mode) }
-        playerEngine?.setDecoderMode(mode)
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setDecoderMode(mode)
         }
@@ -634,7 +465,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setAudioPassthrough(enabled: Boolean) {
         _uiState.update { it.copy(audioPassthrough = enabled) }
-        playerEngine?.setAudioPassthrough(enabled)
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setAudioPassthrough(enabled)
         }
@@ -649,23 +480,36 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun toggleEqualizer() {
         equalizerEnabled = !equalizerEnabled
-        val engine = playerEngine
-        if (engine is ExoPlayerEngine) {
-            engine.setEqualizerEnabled(equalizerEnabled)
-        }
+        updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setEqualizerEnabled(equalizerEnabled)
         }
     }
 
     fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
-        val engine = playerEngine
-        if (engine is ExoPlayerEngine) {
-            engine.setEqualizerEnabled(equalizerEnabled, settings)
-        }
+        // Will be updated via prefs flow, but let's push config immediately if needed
         viewModelScope.launch {
             preferencesStore.setEqualizerSettings(settings)
+            // Wait for pref update to propagate, then update engine config
         }
+    }
+    
+    private fun updateConfigWithUiState() {
+        val state = _uiState.value
+        val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
+            decoderMode = state.decoderMode,
+            audioPassthrough = state.audioPassthrough,
+            audioDelayMs = state.audioDelayMs,
+            subtitleDelayMs = state.subtitleStyle.offsetMs,
+            subtitleStyle = state.subtitleStyle,
+            audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
+                dialogueBoostEnabled = state.dialogueBoostEnabled,
+                nightModeEnabled = state.nightModeEnabled,
+                equalizerEnabled = equalizerEnabled,
+                equalizerSettings = _syncPlayPrefs.value.equalizerSettings
+            )
+        )
+        playerSessionManager.engine?.updateConfig(config)
     }
 
     fun playNextEpisode() {
@@ -674,6 +518,7 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val episodes = mediaRepository.getEpisodes(seriesId, detail.item.seasonId ?: return@launch)
                 .getOrElse { return@launch }
+            val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
@@ -693,7 +538,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipIntro() {
         val ts = _uiState.value.introTimestamps ?: return
         val targetMs = ts.introEndTicks / 10_000
-        playerEngine?.seekTo(targetMs)
+        playerSessionManager.engine?.seekTo(targetMs)
     }
 
     private fun fetchIntroTimestamps(itemId: String) {
@@ -715,6 +560,7 @@ class VideoPlayerViewModel @Inject constructor(
         val seasonId = currentDetail.item.seasonId ?: return
         viewModelScope.launch {
             val episodes = mediaRepository.getEpisodes(seriesId, seasonId).getOrElse { return@launch }
+            val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
                 _uiState.update { it.copy(nextEpisode = episodes[currentIndex + 1]) }
@@ -727,14 +573,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipCredits() {
         val ts = _uiState.value.creditTimestamps ?: return
         val targetMs = ts.creditEndTicks / 10_000
-        playerEngine?.seekTo(targetMs)
+        playerSessionManager.engine?.seekTo(targetMs)
     }
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
 
     fun loadRemoteSubtitles() {
-        val itemId = currentItemId ?: return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         _uiState.update { it.copy(isLoadingRemoteSubtitles = true) }
         viewModelScope.launch {
             val subs = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
@@ -743,7 +589,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) {
-        val itemId = currentItemId ?: return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         viewModelScope.launch {
             playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
             val detailResult = mediaRepository.getMediaDetail(itemId)
@@ -770,8 +616,8 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun syncPlayTogglePlayPause() {
         viewModelScope.launch {
-            if (playerEngine?.isPlaying == true) {
-                playerEngine?.pause()
+            if (playerSessionManager.engine?.isPlaying?.value == true) {
+                playerSessionManager.engine?.pause()
                 _uiState.update { it.copy(isPlaying = false) }
                 syncPlayManager.sendPause()
             } else {
@@ -782,6 +628,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun syncPlaySeekTo(positionMs: Long) {
         viewModelScope.launch {
+            playerSessionManager.engine?.seekTo(positionMs)
             syncPlayManager.sendSeek(positionMs * 10_000)
         }
     }
@@ -818,27 +665,23 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun castToDevice() {
         val state = _uiState.value
-        val engine = playerEngine ?: return
-        val currentMedia = if (engine is ExoPlayerEngine) {
-            engine.currentMediaItem
-        } else null
+        val engine = playerSessionManager.engine ?: return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId
 
-        val mediaItem = currentMedia ?: run {
-            val url = state.streamUrl ?: return
-            val artworkUri = currentItemId?.let {
-                try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
-            }
-            MediaItem.Builder()
-                .setUri(url)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(state.title)
-                        .setSubtitle(state.subtitle)
-                        .setArtworkUri(artworkUri)
-                        .build()
-                )
-                .build()
+        val url = state.streamUrl ?: return
+        val artworkUri = currentItemId?.let {
+            try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
         }
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(state.title)
+                    .setSubtitle(state.subtitle)
+                    .setArtworkUri(artworkUri)
+                    .build()
+            )
+            .build()
         val positionMs = engine.currentPositionMs
         castManager.loadMedia(mediaItem, positionMs, object : androidx.media3.common.Player.Listener {})
     }
@@ -865,7 +708,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun capturePlayerViewBitmap(): android.graphics.Bitmap? {
-        return playerEngine?.captureViewBitmap()
+        return playerSessionManager.engine?.captureViewBitmap()
     }
 
     fun clearOcrText() {
@@ -880,9 +723,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
 
-    private fun updateTracksFromEngine(engine: PlayerEngine) {
+    private fun updateTracksFromEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
         val streams = _uiState.value.mediaStreams
-        val audioOptions = engine.audioTracks.map { t ->
+        val audioOptions = engine.availableTracks.value.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO }.map { t ->
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
@@ -892,7 +735,7 @@ class VideoPlayerViewModel @Inject constructor(
             listOf(TrackOption(-1, "Default", null, true)) + audioOptions
         }
 
-        val engineSubOptions = engine.subtitleTracks.map { t ->
+        val engineSubOptions = engine.availableTracks.value.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE }.map { t ->
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
@@ -934,10 +777,9 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun reportCurrentPlaybackStopped() {
-        val itemId = currentItemId ?: return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = playSessionId
-        val engine = playerEngine
-        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         if (positionTicks > 0) {
             viewModelScope.launch {
                 playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
@@ -945,16 +787,12 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+
     private fun releaseInternals() {
         progressReporter.cancelJobs()
         syncPlayController.reset()
-        val engine = playerEngine
-        if (engine is ExoPlayerEngine) {
-            engine.releaseMediaSession(sessionManager)
-        }
-        playerEngine?.release()
-        playerEngine = null
-        currentItemId = null
+        playerSessionManager.release()
+        playerLifecycleManager.activeCallbacks = null
         trickplayManager.clear()
         selectedSubtitleTrackId = null
         
@@ -974,8 +812,8 @@ class VideoPlayerViewModel @Inject constructor(
         title: String,
         subtitle: String,
     ) {
-        val engine = playerEngine ?: return
-        val itemId = currentItemId ?: return
+        val engine = playerSessionManager.engine ?: return
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
 
         videoMiniPlayerState.enterMiniMode(
             engine = engine,
@@ -985,22 +823,17 @@ class VideoPlayerViewModel @Inject constructor(
             subtitle = subtitle,
         )
 
-        engine.setOnStateChanged(null)
-        engine.setOnTracksChanged(null)
-        engine.setOnPlaybackStateChanged(null)
-
-        playerEngine = null
-        currentItemId = null
+        playerSessionManager.detachEngine()
         progressReporter.cancelJobs()
-        pipStateHolder.requestAutoEnterPip(false)
+        playerLifecycleManager.activeCallbacks = null
+        playerLifecycleManager.requestAutoEnterPip(false)
     }
 
     fun release() {
-        val itemId = currentItemId
+        val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
-        val engine = playerEngine
-        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
-        pipStateHolder.requestAutoEnterPip(false)
+        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        playerLifecycleManager.requestAutoEnterPip(false)
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
@@ -1016,10 +849,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        val engine = playerEngine
-        val itemId = currentItemId
+        val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
-        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {

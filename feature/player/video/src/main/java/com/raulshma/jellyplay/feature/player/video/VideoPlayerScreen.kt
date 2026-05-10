@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.os.Build
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -61,7 +63,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
-import com.raulshma.jellyplay.core.data.playback.PipStateHolder
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -108,7 +109,7 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val isInPipMode by viewModel.pipStateHolder.isInPipMode.collectAsStateWithLifecycle()
+    val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(true) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
@@ -141,9 +142,27 @@ fun VideoPlayerScreen(
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.pipStateHolder.pipDismissed.collect {
+    // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
+    // ensures the dismiss signal survives lifecycle STOPPED→STARTED transitions.
+    // The old SharedFlow approach lost the event because LaunchedEffect's coroutine is
+    // cancelled during STOPPED and SharedFlow(replay=0) doesn't replay to new subscribers.
+    val pipDismissed by viewModel.playerLifecycleManager.pipDismissed.collectAsStateWithLifecycle()
+    LaunchedEffect(pipDismissed) {
+        if (pipDismissed) {
+            viewModel.playerLifecycleManager.clearPipDismissed()
             onBack()
+        }
+    }
+    // Restore immersive mode when leaving PiP
+    LaunchedEffect(isInPipMode) {
+        if (!isInPipMode) {
+            activity?.let {
+                val window = it.window
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
@@ -166,6 +185,9 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Guard against releasing the engine when the composable is torn down
+    // during a PiP transition. The engine must survive until PiP is dismissed.
+
     DisposableEffect(Unit) {
         activity?.let {
             val window = it.window
@@ -174,17 +196,23 @@ fun VideoPlayerScreen(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
         }
+
         onDispose {
-            activity?.let {
-                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val window = it.window
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            // If we're currently in PiP, don't release the engine or reset the UI.
+            // The engine needs to stay alive until PiP is dismissed or returned to.
+            val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
+            if (!currentlyInPip) {
+                activity?.let {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    val window = it.window
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+                activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
+                playerViewRef = null
+                viewModel.release()
             }
-            activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
-            playerViewRef = null
-            viewModel.release()
         }
     }
 
@@ -229,7 +257,11 @@ fun VideoPlayerScreen(
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
-        } else if (uiState.isPlaying) {
+        } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
+            // Only ExoPlayer supports mini-mode currently.
+            // MPV/LibVLC views are tied to this composable's AndroidView and can't
+            // survive being transferred easily.
+
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
@@ -361,7 +393,7 @@ fun VideoPlayerScreen(
                     },
                     onLongPress = {
                             if (!uiState.gesturesEnabled) return@detectTapGestures
-                            if (!uiState.engineCapabilities.cues) return@detectTapGestures
+                            if (!uiState.engineCapabilities.supportsOcr) return@detectTapGestures
                             val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
                             val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
                             currentSheet = PlayerSheet.TapToTranslate(text)
@@ -372,7 +404,7 @@ fun VideoPlayerScreen(
         if (engine != null) {
             AndroidView(
                 factory = { ctx ->
-                    engine.createPlayerView(ctx).also { view ->
+                    engine.createSurfaceView(ctx).also { view ->
                         playerViewRef = view
                         viewModel.applySubtitleStyleToView(view)
                     }
@@ -565,12 +597,12 @@ fun VideoPlayerScreen(
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls && !isInPipMode,
-            supportsSubtitleStyle = uiState.engineCapabilities.subtitleStyle,
-            supportsDialogueBoost = uiState.engineCapabilities.dialogueBoost,
-            supportsNightMode = uiState.engineCapabilities.nightMode,
-            supportsAudioDelay = uiState.engineCapabilities.audioDelay,
-            supportsAudioPassthrough = uiState.engineCapabilities.audioPassthrough,
-            supportsOcr = uiState.engineCapabilities.ocr,
+            supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
+            supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
+            supportsNightMode = uiState.engineCapabilities.supportsNightMode,
+            supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
+            supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
+            supportsOcr = uiState.engineCapabilities.supportsOcr,
             hasEpisodes = hasEpisodes,
             episodeBrowserEnabled = episodeBrowserEnabled,
             onPlayPause = { doTogglePlayPause() },
@@ -609,11 +641,7 @@ fun VideoPlayerScreen(
             onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
             onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
             onPipClick = {
-                viewModel.prepareForMiniMode(
-                    title = title,
-                    subtitle = subtitle,
-                )
-                onEnterMiniMode()
+                onEnterPip()
             },
             isInSyncPlaySession = isInSyncPlaySession,
             syncPlayGroupName = uiState.syncPlayGroupName,

@@ -1,0 +1,237 @@
+package com.raulshma.jellyplay.feature.player.video
+
+import android.content.Context
+import android.net.Uri
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class PlayerSessionState(
+    val currentItemId: String? = null,
+    val mediaDetail: MediaDetail? = null,
+    val currentMediaSource: MediaSource? = null,
+    val mediaStreams: List<MediaStream> = emptyList(),
+    val title: String = "",
+    val subtitle: String = "",
+    val playMethodString: String = "Direct Play",
+    val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    val isReady: Boolean = false,
+)
+
+class PlayerSessionManager(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val mediaRepository: MediaRepository,
+    private val playbackRepository: PlaybackRepository,
+    private val downloadRepository: DownloadRepository,
+    private val preferencesStore: UserPreferencesStore,
+    private val playerLifecycleManager: PlayerLifecycleManager,
+    private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
+) {
+    private val _sessionState = MutableStateFlow(PlayerSessionState())
+    val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
+
+    private val _engine = MutableStateFlow<MediaEngine?>(null)
+    val engineFlow: StateFlow<MediaEngine?> = _engine.asStateFlow()
+    val engine: MediaEngine? get() = _engine.value
+    
+    fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
+        _engine.value = engine
+        playerLifecycleManager.activeCallbacks = engine
+        playerLifecycleManager.requestAutoEnterPip(engine.capabilities.supportsPip)
+        
+        _sessionState.update { 
+            it.copy(
+                currentItemId = itemId,
+                mediaDetail = detail,
+                title = detail.item.name,
+                subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: ""),
+                isReady = true
+            )
+        }
+    }
+
+    suspend fun loadMedia(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+        _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
+
+        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detail = detailResult.getOrElse {
+            _sessionState.update { it.copy(title = "Error loading media") }
+            return
+        }
+
+        val source = if (mediaSourceId != null) {
+            detail.mediaSources.find { it.id == mediaSourceId }
+        } else {
+            detail.mediaSources.firstOrNull()
+        }
+        val streams = source?.mediaStreams ?: emptyList()
+
+        val playMethodStr = when {
+            source?.supportsDirectPlay == true -> "Direct Play"
+            source?.supportsDirectStream == true -> "Direct Stream"
+            source?.supportsTranscoding == true -> "Transcode"
+            else -> "Direct Play"
+        }
+        val resolvedPlayMethod = when {
+            source?.supportsDirectPlay == true -> PlayMethod.DIRECT_PLAY
+            source?.supportsDirectStream == true -> PlayMethod.DIRECT_STREAM
+            source?.supportsTranscoding == true -> PlayMethod.TRANSCODE
+            else -> PlayMethod.DIRECT_PLAY
+        }
+
+        _sessionState.update {
+            it.copy(
+                title = detail.item.name,
+                subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: ""),
+                mediaDetail = detail,
+                currentMediaSource = source,
+                mediaStreams = streams,
+                playMethodString = playMethodStr,
+                playMethod = resolvedPlayMethod,
+            )
+        }
+
+        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+        val file = localDownload?.let {
+            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+        }
+        
+        val url = if (localDownload != null && file != null &&
+            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
+        ) {
+            _sessionState.update { it.copy(playMethodString = "Offline", playMethod = PlayMethod.DIRECT_PLAY) }
+            Uri.fromFile(file).toString()
+        } else {
+            playbackRepository.getStreamUrl(
+                itemId,
+                source?.id ?: "",
+                startPositionTicks,
+            )
+        }
+
+        val prefs = preferencesStore.preferences.first()
+        val playerType = prefs.preferredPlayer
+        
+        if (playerType == PlayerType.EXTERNAL) {
+            _sessionState.update { it.copy(isReady = true) }
+            return
+        }
+
+        initializeEngine(playerType, detail, source, url, startPositionTicks, prefs)
+        _sessionState.update { it.copy(isReady = true) }
+    }
+
+    private fun initializeEngine(
+        playerType: PlayerType,
+        detail: MediaDetail,
+        source: MediaSource?,
+        url: String,
+        startPositionTicks: Long,
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+    ) {
+        val eng = PlayerEngineFactory.create(context, playerType)
+        _engine.value = eng
+        
+        playerLifecycleManager.activeCallbacks = eng
+        playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
+
+        val config = EngineConfig(
+            decoderMode = prefs.decoderMode,
+            audioPassthrough = prefs.audioPassthrough,
+            audioDelayMs = prefs.audioDelayMs,
+            subtitleDelayMs = prefs.subtitleStyle.offsetMs,
+            subtitleStyle = prefs.subtitleStyle,
+            audioEffects = AudioEffectsConfig(
+                dialogueBoostEnabled = prefs.dialogueBoostEnabled,
+                nightModeEnabled = prefs.nightModeEnabled,
+                nightModeGain = prefs.audioNightModeGain,
+                equalizerEnabled = prefs.equalizerEnabled,
+                equalizerSettings = prefs.equalizerSettings
+            )
+        )
+        eng.updateConfig(config)
+        eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
+
+        val externalSubtitles = source?.mediaStreams
+            ?.filter { it.type == StreamType.SUBTITLE }
+            ?.mapNotNull { stream ->
+                val subUrl = when {
+                    !stream.deliveryUrl.isNullOrBlank() -> playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    stream.isExternal -> playbackRepository.buildSubtitleDeliveryUrl(
+                        detail.item.id, source.id, stream.index, stream.codec,
+                    )
+                    else -> return@mapNotNull null
+                }
+                if (subUrl.isBlank()) return@mapNotNull null
+                
+                SubtitleSource(
+                    url = subUrl,
+                    label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown",
+                    language = stream.language,
+                    mimeType = null, // Will be mapped by engine using codec or extension
+                    codec = stream.codec,
+                    isDefault = stream.isDefault,
+                    isForced = stream.isForced,
+                    id = "external:${stream.index}"
+                )
+            } ?: emptyList()
+
+        val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
+        
+        val headers = mutableMapOf<String, String>()
+        val serverUrl = playbackRepository.getServerUrl()
+        val token = playbackRepository.getAccessToken()
+        if (!token.isNullOrBlank()) {
+            headers["X-Emby-Token"] = token
+        }
+
+        val request = PlaybackRequest(
+            uri = url,
+            title = detail.item.name,
+            startPositionMs = startPositionTicks / 10_000,
+            artworkUri = artworkUri,
+            externalSubtitles = externalSubtitles,
+            headers = headers,
+            preferredAudioLanguage = prefs.preferredAudioLanguage,
+            preferredSubtitleLanguage = prefs.preferredSubtitleLanguage,
+            maxVideoBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt(),
+            serverUrl = serverUrl,
+            authToken = token,
+        )
+
+        eng.load(request)
+    }
+
+    fun release() {
+        _engine.value?.release()
+        _engine.value = null
+        _sessionState.update { PlayerSessionState() }
+    }
+
+    fun detachEngine() {
+        _engine.value = null
+    }
+}
