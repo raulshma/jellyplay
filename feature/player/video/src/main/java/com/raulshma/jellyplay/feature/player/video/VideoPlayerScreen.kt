@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -165,10 +166,12 @@ fun VideoPlayerScreen(
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
             activity?.let {
                 it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 val window = it.window
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
@@ -179,14 +182,12 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls) {
+    LaunchedEffect(uiState.isPlaying) {
         activity?.let {
-            val window = it.window
-            val controller = WindowCompat.getInsetsController(window, window.decorView)
-            if (showControls) {
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            if (uiState.isPlaying) {
+                it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } else {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
+                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
     }
