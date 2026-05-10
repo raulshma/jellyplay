@@ -1,9 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,8 +25,10 @@ class VideoMiniPlayerState @Inject constructor() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    private var _engine: PlayerEngine? = null
-    val engine: PlayerEngine? get() = _engine
+    private var _engine: MediaEngine? = null
+    val engine: MediaEngine? get() = _engine
+
+    private var job: Job? = null
 
     private val _itemId = MutableStateFlow<String?>(null)
     val itemId: StateFlow<String?> = _itemId.asStateFlow()
@@ -31,7 +37,7 @@ class VideoMiniPlayerState @Inject constructor() {
     val mediaSourceId: String? get() = _mediaSourceId
 
     fun enterMiniMode(
-        engine: PlayerEngine,
+        engine: MediaEngine,
         itemId: String,
         mediaSourceId: String?,
         title: String,
@@ -42,14 +48,16 @@ class VideoMiniPlayerState @Inject constructor() {
         _mediaSourceId = mediaSourceId
         _title.value = title
         _subtitle.value = subtitle
-        _isPlaying.value = engine.isPlaying
-        engine.setOnStateChanged { playing ->
-            _isPlaying.value = playing
+        _isPlaying.value = engine.isPlaying.value
+        
+        job?.cancel()
+        job = CoroutineScope(Dispatchers.Main).launch {
+            engine.isPlaying.collect { _isPlaying.value = it }
         }
         _isMiniMode.value = true
     }
 
-    fun tryReclaimEngine(itemId: String): PlayerEngine? {
+    fun tryReclaimEngine(itemId: String): MediaEngine? {
         if (!_isMiniMode.value) return null
         if (_itemId.value != itemId) return null
         val engine = _engine
@@ -62,14 +70,13 @@ class VideoMiniPlayerState @Inject constructor() {
 
     fun togglePlayPause() {
         val engine = _engine ?: return
-        if (engine.isPlaying) engine.pause() else engine.play()
+        if (engine.isPlaying.value) engine.pause() else engine.play()
     }
 
     fun release() {
         val engine = _engine
-        engine?.setOnStateChanged(null)
-        engine?.setOnTracksChanged(null)
-        engine?.setOnPlaybackStateChanged(null)
+        job?.cancel()
+        job = null
         engine?.release()
         _engine = null
         _itemId.value = null

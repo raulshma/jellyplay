@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
-import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -21,7 +21,7 @@ internal class PlaybackProgressReporter(
     private val getCurrentItemId: () -> String?,
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,
-    private val getPlayerEngine: () -> PlayerEngine?,
+    private val getMediaEngine: () -> MediaEngine?,
     private val onAutoSkipIntro: () -> Unit,
     private val onAutoSkipOutro: () -> Unit,
 ) {
@@ -34,31 +34,14 @@ internal class PlaybackProgressReporter(
         positionJob?.cancel()
         lastIntroSkipPosition = -1
         lastOutroSkipPosition = -1
-        val engine = getPlayerEngine() ?: return
-        if (engine is ExoPlayerEngine) {
-            positionJob = viewModel.viewModelScope.launch {
-                engine.positionFlow().collect { pos ->
-                    uiState.update { it.copy(
-                        currentPosition = pos,
-                        duration = engine.durationMs.coerceAtLeast(0L),
-                    ) }
-                    checkAutoSkip(pos)
-                }
-            }
-        } else {
-            positionJob = viewModel.viewModelScope.launch {
-                while (true) {
-                    val eng = getPlayerEngine()
-                    if (eng != null) {
-                        val pos = eng.currentPositionMs
-                        uiState.update { it.copy(
-                            currentPosition = pos,
-                            duration = eng.durationMs.coerceAtLeast(0L),
-                        ) }
-                        checkAutoSkip(pos)
-                    }
-                    delay(250)
-                }
+        val engine = getMediaEngine() ?: return
+        positionJob = viewModel.viewModelScope.launch {
+            engine.positionFlow.collect { pos ->
+                uiState.update { it.copy(
+                    currentPosition = pos,
+                    duration = engine.durationMs.coerceAtLeast(0L),
+                ) }
+                checkAutoSkip(pos)
             }
         }
     }
@@ -98,10 +81,10 @@ internal class PlaybackProgressReporter(
         progressJob = viewModel.viewModelScope.launch {
             while (true) {
                 delay(10_000)
-                val engine = getPlayerEngine() ?: continue
+                val engine = getMediaEngine() ?: continue
                 val itemId = getCurrentItemId() ?: continue
                 val positionTicks = engine.currentPositionMs * 10_000
-                val isPaused = !engine.isPlaying
+                val isPaused = !engine.isPlaying.value
                 playbackRepository.reportPlaybackProgress(
                     PlaybackProgress(
                         itemId = itemId,
@@ -130,7 +113,7 @@ internal class PlaybackProgressReporter(
         itemId: String?,
         sessionId: String,
     ) {
-        val engine = getPlayerEngine()
+        val engine = getMediaEngine()
         val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         cancelJobs()
         if (itemId != null && positionTicks > 0) {

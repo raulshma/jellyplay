@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
-
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -121,13 +121,3 @@ data class VideoPlayerUiState(
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
 }
 
-data class EngineCapabilities(
-    val audioDelay: Boolean = false,
-    val subtitleDelay: Boolean = false,
-    val audioPassthrough: Boolean = false,
-    val subtitleStyle: Boolean = false,
-    val dialogueBoost: Boolean = false,
-    val nightMode: Boolean = false,
-    val ocr: Boolean = false,
-    val cues: Boolean = false,
-)

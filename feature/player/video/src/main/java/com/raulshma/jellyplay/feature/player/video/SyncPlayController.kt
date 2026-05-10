@@ -16,13 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
 internal class SyncPlayController(
     private val syncPlayManager: SyncPlayManager,
     private val viewModel: ViewModel,
     private val uiState: MutableStateFlow<VideoPlayerUiState>,
-    private val getPlayerEngine: () -> PlayerEngine?,
+    private val getMediaEngine: () -> MediaEngine?,
     private val getCurrentItemId: () -> String? = { null },
     private val onLoadItem: ((String, Long) -> Unit)? = null,
     private val preferencesFlow: StateFlow<UserPreferences>,
@@ -143,7 +143,7 @@ internal class SyncPlayController(
 
     fun onPlaybackStateChanged(playbackState: Int) {
         if (!isInSession) return
-        val engine = getPlayerEngine() ?: return
+        val engine = getMediaEngine() ?: return
         try {
             val posCheck = engine.currentPositionMs
         } catch (_: Exception) {
@@ -154,29 +154,29 @@ internal class SyncPlayController(
 
         when (playbackState) {
             1 -> {
-                Log.d(TAG, "STATE_IDLE: posTicks=$positionTicks, isPlaying=${engine.isPlaying}")
+                Log.d(TAG, "STATE_IDLE: posTicks=$positionTicks, isPlaying=${engine.isPlaying.value}")
                 stopSyncCorrection()
                 viewModel.viewModelScope.launch {
                     syncPlayManager.reportBuffering(
                         positionTicks = positionTicks,
-                        isPlaying = engine.isPlaying,
+                        isPlaying = engine.isPlaying.value,
                         playlistItemId = playlistItemId,
                     )
                 }
             }
             2 -> {
-                Log.d(TAG, "STATE_BUFFERING: posTicks=$positionTicks, isPlaying=${engine.isPlaying}")
+                Log.d(TAG, "STATE_BUFFERING: posTicks=$positionTicks, isPlaying=${engine.isPlaying.value}")
                 stopSyncCorrection()
                 viewModel.viewModelScope.launch {
                     syncPlayManager.reportBuffering(
                         positionTicks = positionTicks,
-                        isPlaying = engine.isPlaying,
+                        isPlaying = engine.isPlaying.value,
                         playlistItemId = playlistItemId,
                     )
                 }
             }
             3 -> {
-                Log.d(TAG, "STATE_READY: posTicks=$positionTicks, isPlaying=${engine.isPlaying}")
+                Log.d(TAG, "STATE_READY: posTicks=$positionTicks, isPlaying=${engine.isPlaying.value}")
                 if (pendingItemLoad) {
                     pendingItemLoad = false
                     engine.pause()
@@ -194,7 +194,7 @@ internal class SyncPlayController(
                     viewModel.viewModelScope.launch {
                         syncPlayManager.reportReady(
                             positionTicks = positionTicks,
-                            isPlaying = engine.isPlaying,
+                            isPlaying = engine.isPlaying.value,
                             playlistItemId = playlistItemId,
                         )
                     }
@@ -205,7 +205,7 @@ internal class SyncPlayController(
 
     fun onIsPlayingChanged(isPlaying: Boolean) {
         if (!isInSession) return
-        if (getPlayerEngine() == null) return
+        if (getMediaEngine() == null) return
         if (isPlaying) {
             suppressNextPausedReadyReport = false
             return
@@ -226,7 +226,7 @@ internal class SyncPlayController(
     }
 
     private fun processCommand(command: SyncPlayCommand) {
-        val engine = getPlayerEngine()
+        val engine = getMediaEngine()
         Log.d(TAG, "processCommand: $command")
 
         if (command is SyncPlayCommand.Play || command is SyncPlayCommand.Pause || command is SyncPlayCommand.Seek) {
@@ -258,7 +258,7 @@ internal class SyncPlayController(
                 val posTicks = command.positionTicks
                 val whenMs = command.whenMs
                 val correctedPosTicks = syncPlayManager.estimateCurrentTicks(posTicks, whenMs)
-                val durationMs = getPlayerEngine()?.durationMs ?: 0L
+                val durationMs = getMediaEngine()?.durationMs ?: 0L
                 val correctedPosMs = if (durationMs > 0) {
                     (correctedPosTicks / 10_000).coerceIn(0, durationMs)
                 } else {
@@ -288,7 +288,7 @@ internal class SyncPlayController(
                         Log.d(TAG, "Scheduled Play executed at waitMs=$waitMs, posMs=$finalPosMs")
                     }
                 } else {
-                    if (engine?.isPlaying == true && Math.abs(engine.currentPositionMs - correctedPosMs) < 500) {
+                    if (engine?.isPlaying?.value == true && Math.abs(engine.currentPositionMs - correctedPosMs) < 500) {
                         Log.d(TAG, "Play command ignored: already playing and within 500ms")
                         uiState.update { it.copy(isSyncPlaySynced = true) }
                         enableSyncCorrection()
@@ -312,7 +312,7 @@ internal class SyncPlayController(
                 val correctedPosTicks = if (posTicks > 0) {
                     syncPlayManager.estimateCurrentTicks(posTicks, whenMs)
                 } else {
-                    val engineNow = getPlayerEngine()?.currentPositionMs ?: 0L
+                    val engineNow = getMediaEngine()?.currentPositionMs ?: 0L
                     engineNow * 10_000
                 }
                 val correctedPosMs = correctedPosTicks / 10_000
@@ -392,10 +392,10 @@ internal class SyncPlayController(
                         if (diffMs > 300) {
                             engine.seekTo(safePosMs)
                         }
-                        if (command.isPlaying && !engine.isPlaying) {
+                        if (command.isPlaying && !engine.isPlaying.value) {
                             engine.play()
                             enableSyncCorrection()
-                        } else if (!command.isPlaying && engine.isPlaying) {
+                        } else if (!command.isPlaying && engine.isPlaying.value) {
                             engine.pause()
                             stopSyncCorrection()
                         }
@@ -467,7 +467,7 @@ internal class SyncPlayController(
     private fun stopSyncCorrection() {
         syncCorrectionEnabled = false
         syncCorrectionJob?.cancel()
-        val engine = getPlayerEngine()
+        val engine = getMediaEngine()
         if (engine != null && engine.playbackSpeed != 1.0f) {
             engine.setPlaybackSpeed(1.0f)
         }
@@ -481,8 +481,8 @@ internal class SyncPlayController(
             return
         }
         if (!isInSession) return
-        val engine = getPlayerEngine() ?: return
-        if (!engine.isPlaying) return
+        val engine = getMediaEngine() ?: return
+        if (!engine.isPlaying.value) return
 
         val minDelaySpeedToSync = prefs.syncPlaySpeedToSyncMinDelayMs.toDouble()
         val maxDelaySpeedToSync = prefs.syncPlaySpeedToSyncMaxDelayMs.toDouble()

@@ -46,12 +46,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
 @Composable
 fun VideoMiniPlayer(
     isVisible: Boolean,
-    engine: PlayerEngine?,
+    engine: MediaEngine?,
     title: String,
     subtitle: String,
     isPlaying: Boolean,
@@ -102,7 +102,7 @@ fun VideoMiniPlayer(
                     if (engine != null) {
                         AndroidView(
                             factory = { ctx ->
-                                engine.createPlayerView(ctx)
+                                engine.createSurfaceView(ctx)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )

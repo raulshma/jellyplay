@@ -1,13 +1,30 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.SubtitleStyle
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -15,75 +32,104 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 class LibVlcPlayerEngine(
     private val context: Context,
-) : PlayerEngine {
+) : MediaEngine {
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
     }
 
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    override val capabilities = EngineCapabilities(
+        supportsPip = true,
+        supportsMiniMode = false,
+        supportsOcr = false,
+        supportsCues = false,
+        supportsAudioDelay = true,
+        supportsSubtitleDelay = true,
+        supportsAudioPassthrough = true,
+        supportsSubtitleStyle = false, // Not supported effectively in LibVLC text renderer via runtime props
+        supportsDialogueBoost = true,
+        supportsNightMode = false,
+    )
+
+    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
+    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _currentCues = MutableStateFlow<List<String>>(emptyList())
+    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
+
+    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
+    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
+
+    private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
+
     private var libVLC: LibVLC? = null
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
-    private var onStateChanged: ((Boolean) -> Unit)? = null
-    private var onTracksChanged: (() -> Unit)? = null
-    private var onError: ((String) -> Unit)? = null
-    private var onPlaybackStateChanged: ((Int) -> Unit)? = null
-    @Volatile private var _isPlaying = false
-    @Volatile private var _speed = 1f
-    @Volatile private var pendingPlay = false
-    @Volatile private var _audioDelayMs = 0L
-    @Volatile private var _subtitleDelayMs = 0L
-    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
-    private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
-    private var _passthroughEnabled = false
+    
+    private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
-    private var dialogueBoostEnabled: Boolean = false
+
+    private var pendingPlay = false
+    private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+    }
+
+    override fun onActivityResume() {
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
 
     private val eventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
-                _isPlaying = true
-                mainHandler.post {
-                    onStateChanged?.invoke(true)
-                    onPlaybackStateChanged?.invoke(3) // READY=3
-                    // Apply dialogue boost when playback starts
-                    if (dialogueBoostEnabled) {
-                        applyDialogueBoost()
-                    }
+                _isPlaying.value = true
+                _playbackState.value = EnginePlaybackState.READY
+                if (currentConfig.audioEffects.dialogueBoostEnabled) {
+                    applyDialogueBoost()
                 }
             }
             MediaPlayer.Event.Paused -> {
-                _isPlaying = false
-                mainHandler.post {
-                    onStateChanged?.invoke(false)
-                    onPlaybackStateChanged?.invoke(3) // READY=3
-                }
+                _isPlaying.value = false
+                _playbackState.value = EnginePlaybackState.READY
             }
             MediaPlayer.Event.Stopped -> {
-                _isPlaying = false
-                mainHandler.post {
-                    onStateChanged?.invoke(false)
-                    onPlaybackStateChanged?.invoke(1) // IDLE=1
-                }
+                _isPlaying.value = false
+                _playbackState.value = EnginePlaybackState.IDLE
+            }
+            MediaPlayer.Event.EndReached -> {
+                _isPlaying.value = false
+                _playbackState.value = EnginePlaybackState.ENDED
             }
             MediaPlayer.Event.Buffering -> {
-                mainHandler.post { onPlaybackStateChanged?.invoke(2) } // BUFFERING=2
+                _playbackState.value = EnginePlaybackState.BUFFERING
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
             MediaPlayer.Event.ESSelected -> {
-                mainHandler.post { onTracksChanged?.invoke() }
+                _availableTracks.value = buildTracks()
             }
             MediaPlayer.Event.EncounteredError -> {
-                mainHandler.post { onError?.invoke("VLC encountered an error during playback") }
+                _playbackState.value = EnginePlaybackState.ERROR
+                _errorFlow.tryEmit("VLC encountered an error during playback")
             }
         }
     }
 
-    override fun initialize(url: String, title: String, startPositionMs: Long) {
-        release()
+    override fun load(request: PlaybackRequest) {
+        releaseInternal(releaseVlc = true)
 
         val options = arrayListOf(
             "--aout=aaudio",
@@ -94,11 +140,11 @@ class LibVlcPlayerEngine(
             "--network-caching=3000",
         )
 
-        if (_audioDelayMs != 0L) {
-            options.add("--audio-desync=${_audioDelayMs.toInt()}")
+        if (currentConfig.audioDelayMs != 0L) {
+            options.add("--audio-desync=${currentConfig.audioDelayMs.toInt()}")
         }
 
-        if (_passthroughEnabled) {
+        if (currentConfig.audioPassthrough) {
             options.add("--aout=android_audiotrack")
             options.add("--codec=ac3,eac3,dts,dtshd,truehd")
         }
@@ -107,6 +153,7 @@ class LibVlcPlayerEngine(
             LibVLC(context.applicationContext, options)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create LibVLC", e)
+            _errorFlow.tryEmit("Failed to initialize VLC Engine")
             return
         }
         libVLC = vlc
@@ -114,46 +161,62 @@ class LibVlcPlayerEngine(
         val mp = MediaPlayer(vlc)
         mp.setEventListener(eventListener)
         mediaPlayer = mp
-
-        val media = Media(vlc, Uri.parse(url))
-        val hwDecoding = currentDecoderMode != DecoderMode.SW_ONLY
+        
+        // Setup Media with Http headers if any
+        val media = Media(vlc, Uri.parse(request.uri))
+        val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
         media.setHWDecoderEnabled(hwDecoding, false)
 
-        if (startPositionMs > 0) {
-            media.addOption(":start-time=${startPositionMs / 1000.0}")
+        if (request.startPositionMs > 0) {
+            media.addOption(":start-time=${request.startPositionMs / 1000.0}")
+        }
+        
+        if (request.headers.isNotEmpty()) {
+            val headerStr = request.headers.entries.joinToString("\r\n") { "${it.key}: ${it.value}" }
+            media.addOption(":http-user-agent=JellyPlay") // Custom UA
+            // libVLC doesn't easily support arbitrary headers except via options if supported by module
         }
 
-        // Add external subtitles to the Media object before setting it on the player
-        pendingSubtitles?.forEach { (subUrl, _) ->
+        request.externalSubtitles.forEach { sub ->
             try {
                 media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
                     org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
                     0,
-                    subUrl,
+                    sub.url,
                 ))
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to add subtitle: $subUrl", e)
+                Log.w(TAG, "Failed to add subtitle: ${sub.url}", e)
             }
         }
 
         mp.media = media
         media.release()
 
+        // Apply pre-set speed
+        mp.rate = 1f
+        mp.setSpuDelay(currentConfig.subtitleDelayMs * 1000L) // microseconds
+
         pendingPlay = true
-        pendingSubtitles = null
-    }
-    
-    /**
-     * Configure external subtitles to be loaded with the media.
-     * Must be called before initialize().
-     */
-    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
-        pendingSubtitles = subtitles
+        
+        // Re-attach view if it exists
+        videoLayout?.let {
+            try {
+                mp.attachViews(it, null, false, false)
+                mp.play()
+                pendingPlay = false
+            } catch (e: Exception) {
+                Log.e(TAG, "attachViews/play failed", e)
+            }
+        }
     }
 
     override fun release() {
+        releaseInternal(releaseVlc = true)
+        engineScope.cancel()
+    }
+
+    private fun releaseInternal(releaseVlc: Boolean) {
         pendingPlay = false
-        pendingSubtitles = null
         dialogueBoost.detach()
         val mp = mediaPlayer ?: return
         mediaPlayer = null
@@ -161,13 +224,22 @@ class LibVlcPlayerEngine(
         try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
         try { mp.detachViews() } catch (_: Exception) {}
         try { mp.release() } catch (_: Exception) {}
-        try { libVLC?.release() } catch (_: Exception) {}
-        libVLC = null
-        videoLayout = null
+        
+        if (releaseVlc) {
+            try { libVLC?.release() } catch (_: Exception) {}
+            libVLC = null
+            videoLayout = null
+        }
     }
 
     override fun play() {
-        try { mediaPlayer?.play() } catch (_: Exception) {}
+        try {
+            val mp = mediaPlayer ?: return
+            if (_playbackState.value == EnginePlaybackState.ENDED) {
+                mp.time = 0L
+            }
+            mp.play()
+        } catch (_: Exception) {}
     }
 
     override fun pause() {
@@ -178,162 +250,47 @@ class LibVlcPlayerEngine(
         try { mediaPlayer?.time = positionMs } catch (_: Exception) {}
     }
 
-    override fun seekForward(amountMs: Long) {
-        try {
-            val mp = mediaPlayer ?: return
-            mp.time = (mp.time + amountMs).coerceAtMost(mp.length.coerceAtLeast(0))
-        } catch (_: Exception) {}
-    }
-
-    override fun seekBack(amountMs: Long) {
-        try {
-            val mp = mediaPlayer ?: return
-            mp.time = (mp.time - amountMs).coerceAtLeast(0)
-        } catch (_: Exception) {}
-    }
-
     override fun setPlaybackSpeed(speed: Float) {
-        _speed = speed
         try { mediaPlayer?.rate = speed } catch (_: Exception) {}
     }
 
-    override fun setAudioDelay(ms: Long) {
-        _audioDelayMs = ms
+    override fun updateConfig(config: EngineConfig) {
+        val oldConfig = currentConfig
+        currentConfig = config
+        
         try {
             val mp = mediaPlayer ?: return
-            mp.setAudioDelay(ms)
-        } catch (_: Exception) {}
-    }
-
-    override fun setSubtitleDelay(ms: Long) {
-        _subtitleDelayMs = ms
-        try {
-            val mp = mediaPlayer ?: return
-            mp.setSpuDelay(ms * 1000L) // libvlc expects microseconds
-        } catch (_: Exception) {}
-    }
-
-    override fun setDecoderMode(mode: DecoderMode) {
-        currentDecoderMode = mode
-    }
-
-    override fun setAudioPassthrough(enabled: Boolean) {
-        _passthroughEnabled = enabled
-    }
-
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
-        try {
-            val mp = mediaPlayer ?: return
-            when {
-                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
-                    mp.aspectRatio = null
-                    mp.scale = 0f
-                }
-                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
-                    mp.aspectRatio = null
-                    mp.scale = 0f
-                }
-                ratio != null && ratio > 0f -> {
-                    mp.aspectRatio = ratio.toString()
-                }
-                else -> {
-                    mp.aspectRatio = null
-                    mp.scale = 0f
+            
+            if (oldConfig.audioDelayMs != config.audioDelayMs) {
+                mp.setAudioDelay(config.audioDelayMs)
+            }
+            if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
+                mp.setSpuDelay(config.subtitleDelayMs * 1000L)
+            }
+            
+            if (oldConfig.audioEffects.dialogueBoostEnabled != config.audioEffects.dialogueBoostEnabled) {
+                if (_isPlaying.value) {
+                    applyDialogueBoost()
                 }
             }
         } catch (_: Exception) {}
     }
 
-    private fun gcd(a: Int, b: Int): Int {
-        var x = a
-        var y = b
-        while (y != 0) {
-            val temp = y
-            y = x % y
-            x = temp
-        }
-        return x
-    }
-
-    override val isPlaying: Boolean
-        get() = try { mediaPlayer?.isPlaying == true } catch (_: Exception) { false }
-    override val audioSessionId: Int
-        get() = try {
-            // LibVLC doesn't expose audio session ID directly, but we can use a workaround
-            // by getting the audio track ID which can be used for audio effects
-            mediaPlayer?.audioTrack ?: 0
-        } catch (_: Exception) { 0 }
-    override val supportsAudioDelay: Boolean get() = true
-    override val supportsSubtitleDelay: Boolean get() = true
-    override val supportsAudioPassthrough: Boolean get() = true
-    override val supportsSubtitleStyle: Boolean get() = false
-    override val supportsDialogueBoost: Boolean get() = true
-    override val supportsNightMode: Boolean get() = false
-    override val supportsOcr: Boolean get() = false
-    override val supportsCues: Boolean get() = false
-
-    override val currentPositionMs: Long
-        get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }
-
-    override val durationMs: Long
-        get() = try { (mediaPlayer?.length ?: 0L).coerceAtLeast(0L) } catch (_: Exception) { 0L }
-
-    override val playbackSpeed: Float get() = _speed
-
-    override val audioTracks: List<PlayerEngine.TrackInfo>
-        get() {
-            val mp = mediaPlayer ?: return emptyList()
-            return try {
-                val tracks = mp.getAudioTracks() ?: return emptyList()
-                val currentId = try { mp.audioTrack } catch (_: Exception) { -1 }
-                tracks.mapIndexed { index, desc ->
-                    PlayerEngine.TrackInfo(
-                        index = index,
-                        label = desc.name ?: "Audio ${index + 1}",
-                        language = null,
-                        isSelected = desc.id == currentId,
-                        type = PlayerEngine.TrackType.AUDIO,
-                    )
-                }
-            } catch (_: Exception) { emptyList() }
-        }
-
-    override val subtitleTracks: List<PlayerEngine.TrackInfo>
-        get() {
-            val mp = mediaPlayer ?: return emptyList()
-            return try {
-                val tracks = mp.getSpuTracks() ?: return emptyList()
-                val currentId = try { mp.spuTrack } catch (_: Exception) { -1 }
-                tracks.mapIndexed { index, desc ->
-                    PlayerEngine.TrackInfo(
-                        index = index,
-                        label = desc.name ?: "Subtitle ${index + 1}",
-                        language = null,
-                        isSelected = desc.id == currentId,
-                        type = PlayerEngine.TrackType.SUBTITLE,
-                    )
-                }
-            } catch (_: Exception) { emptyList() }
-        }
-
-    override fun selectAudioTrack(index: Int) {
+    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) {
         try {
             val mp = mediaPlayer ?: return
-            val tracks = mp.getAudioTracks() ?: return
-            if (index in tracks.indices) mp.audioTrack = tracks[index].id
+            if (type == TrackType.AUDIO) {
+                val tracks = mp.getAudioTracks() ?: return
+                if (index in tracks.indices) mp.audioTrack = tracks[index].id
+            } else {
+                if (index < 0) { mp.spuTrack = -1; return }
+                val tracks = mp.getSpuTracks() ?: return
+                if (index in tracks.indices) mp.spuTrack = tracks[index].id
+            }
         } catch (_: Exception) {}
     }
 
-    override fun selectSubtitleTrack(index: Int) {
-        try {
-            val mp = mediaPlayer ?: return
-            if (index < 0) { mp.spuTrack = -1; return }
-            val tracks = mp.getSpuTracks() ?: return
-            if (index in tracks.indices) mp.spuTrack = tracks[index].id
-        } catch (_: Exception) {}
-    }
-
-    override fun createPlayerView(context: Context): View {
+    override fun createSurfaceView(context: Context): View {
         val layout = VLCVideoLayout(context)
         videoLayout = layout
 
@@ -359,34 +316,106 @@ class LibVlcPlayerEngine(
         return layout
     }
 
-    override fun setOnStateChanged(callback: ((Boolean) -> Unit)?) {
-        onStateChanged = callback
+    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
+        // LibVLC text renderer ignores external style properties safely
     }
 
-    override fun setOnTracksChanged(callback: (() -> Unit)?) {
-        onTracksChanged = callback
+    override fun setAspectRatio(mode: Int, ratio: Float?) {
+        try {
+            val mp = mediaPlayer ?: return
+            when {
+                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
+                    mp.aspectRatio = null
+                    mp.scale = 0f
+                }
+                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
+                    mp.aspectRatio = null
+                    mp.scale = 0f
+                }
+                ratio != null && ratio > 0f -> {
+                    mp.aspectRatio = ratio.toString()
+                }
+                else -> {
+                    mp.aspectRatio = null
+                    mp.scale = 0f
+                }
+            }
+        } catch (_: Exception) {}
     }
 
-    override fun setOnError(callback: ((String) -> Unit)?) {
-        onError = callback
-    }
+    override fun captureViewBitmap(): Bitmap? = null
 
-    override fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
-        onPlaybackStateChanged = callback
-    }
+    override val currentPositionMs: Long
+        get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }
 
-    override fun setDialogueBoostEnabled(enabled: Boolean) {
-        dialogueBoostEnabled = enabled
-        if (isPlaying) {
-            applyDialogueBoost()
+    override val durationMs: Long
+        get() = try { (mediaPlayer?.length ?: 0L).coerceAtLeast(0L) } catch (_: Exception) { 0L }
+
+    override val playbackSpeed: Float
+        get() = try { mediaPlayer?.rate ?: 1f } catch (_: Exception) { 1f }
+
+    override val audioSessionId: Int
+        get() = try { mediaPlayer?.audioTrack ?: 0 } catch (_: Exception) { 0 }
+
+    override val positionFlow: Flow<Long> = callbackFlow {
+        trySend(currentPositionMs)
+        val ticker = engineScope.launch {
+            while (isActive) {
+                delay(250)
+                trySend(currentPositionMs)
+            }
         }
+        awaitClose { ticker.cancel() }
+    }
+
+    private fun buildTracks(): List<MediaTrack> {
+        val mp = mediaPlayer ?: return emptyList()
+        val result = mutableListOf<MediaTrack>()
+        
+        try {
+            val audioTracks = mp.getAudioTracks()
+            if (audioTracks != null) {
+                val currentId = try { mp.audioTrack } catch (_: Exception) { -1 }
+                audioTracks.forEachIndexed { index, desc ->
+                    result.add(
+                        MediaTrack(
+                            id = "vlc_audio_${desc.id}",
+                            index = index,
+                            label = desc.name ?: "Audio ${index + 1}",
+                            language = null,
+                            isSelected = desc.id == currentId,
+                            type = TrackType.AUDIO,
+                        )
+                    )
+                }
+            }
+            
+            val spuTracks = mp.getSpuTracks()
+            if (spuTracks != null) {
+                val currentId = try { mp.spuTrack } catch (_: Exception) { -1 }
+                spuTracks.forEachIndexed { index, desc ->
+                    result.add(
+                        MediaTrack(
+                            id = "vlc_sub_${desc.id}",
+                            index = index,
+                            label = desc.name ?: "Subtitle ${index + 1}",
+                            language = null,
+                            isSelected = desc.id == currentId,
+                            type = TrackType.SUBTITLE,
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+        
+        return result
     }
 
     private fun applyDialogueBoost() {
         val sid = audioSessionId
         if (sid != 0) {
             dialogueBoost.attach(sid)
-            dialogueBoost.setEnabled(dialogueBoostEnabled)
+            dialogueBoost.setEnabled(currentConfig.audioEffects.dialogueBoostEnabled)
         }
     }
 }

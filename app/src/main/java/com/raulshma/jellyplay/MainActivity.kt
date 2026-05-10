@@ -15,19 +15,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.data.playback.PipStateHolder
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.ui.components.PinLockScreen
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var pipStateHolder: PipStateHolder
+    @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -36,6 +40,25 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Observe shouldAutoEnterPip and update the system-level PiP params.
+        // On Android 12+, setAutoEnterEnabled is a sticky system flag — we must
+        // explicitly toggle it when the engine type changes (ExoPlayer vs MPV/LibVLC).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    playerLifecycleManager.shouldAutoEnterPip.collect { shouldAutoEnter ->
+                        val params = PictureInPictureParams.Builder()
+                            .setAutoEnterEnabled(shouldAutoEnter)
+                            .build()
+                        setPictureInPictureParams(params)
+                    }
+                }
+            }
+        }
+
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
             var isPinUnlocked by rememberSaveable { mutableStateOf(false) }
@@ -76,7 +99,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (pipStateHolder.shouldAutoEnterPip.value) {
+        if (playerLifecycleManager.shouldAutoEnterPip.value) {
             enterPipMode()
         }
     }
@@ -102,19 +125,31 @@ class MainActivity : ComponentActivity() {
         if (!isInPictureInPictureMode) {
             justExitedPip = true
         }
-        pipStateHolder.setPipMode(isInPictureInPictureMode)
+        playerLifecycleManager.setPipMode(isInPictureInPictureMode)
+    }
+
+    // ── Activity lifecycle → direct engine delegation ──
+    // No StateFlow indirection: calls go straight to the engine's
+    // onActivityPause/Resume via PlayerLifecycleManager.
+
+    override fun onPause() {
+        super.onPause()
+        if (!isInPictureInPictureMode) {
+            playerLifecycleManager.onActivityPause()
+        }
     }
 
     override fun onResume() {
         super.onResume()
         justExitedPip = false
+        playerLifecycleManager.onActivityResume()
     }
 
     override fun onStop() {
         super.onStop()
         if (justExitedPip) {
             justExitedPip = false
-            pipStateHolder.notifyPipDismissed()
+            playerLifecycleManager.notifyPipDismissed()
         }
     }
 
@@ -122,13 +157,15 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
 
+        val shouldAutoEnter = playerLifecycleManager.shouldAutoEnterPip.value
+
         val params = PictureInPictureParams.Builder().apply {
             val ratio = aspectRatio ?: Rational(16, 9)
             val clamped = clampAspectRatio(ratio)
             setAspectRatio(clamped)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setAutoEnterEnabled(true)
-                setSeamlessResizeEnabled(true)
+                setAutoEnterEnabled(shouldAutoEnter)
+                setSeamlessResizeEnabled(shouldAutoEnter)
             }
         }.build()
 
