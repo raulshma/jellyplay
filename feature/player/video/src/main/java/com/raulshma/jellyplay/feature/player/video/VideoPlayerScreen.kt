@@ -141,6 +141,12 @@ fun VideoPlayerScreen(
         viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.pipStateHolder.pipDismissed.collect {
+            onBack()
+        }
+    }
+
     val preferredPlayer = uiState.preferredPlayerType
     val streamUrl = uiState.streamUrl
 
