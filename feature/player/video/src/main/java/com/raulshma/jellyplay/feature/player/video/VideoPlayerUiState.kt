@@ -56,7 +56,6 @@ data class VideoPlayerUiState(
     val brightnessLevel: Float = 0.5f,
     val frameRateMatching: Boolean = false,
     val audioDelayMs: Long = 0L,
-    val secondarySubtitleTrack: MediaStream? = null,
     val introTimestamps: IntroTimestamps? = null,
     val creditTimestamps: CreditTimestamps? = null,
     val seriesId: String? = null,

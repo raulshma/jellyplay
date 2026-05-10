@@ -1,5 +1,11 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -35,11 +41,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -108,23 +118,35 @@ fun DownloadsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items = downloads, key = { it.id }, contentType = { "downloadItem" }) { download ->
-                    DownloadItemRow(
-                        item = download,
-                        formatBytes = { viewModel.formatBytes(it) },
-                        formatSpeed = { viewModel.formatSpeed(it) },
-                        formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
-                        onClick = {
-                            if (download.status == DownloadStatus.COMPLETED) {
-                                onPlayOffline(download.downloadPath, download.name)
-                            }
-                        },
-                        onCancel = { viewModel.cancelDownload(download) },
-                        onPause = { viewModel.pauseDownload(download) },
-                        onResume = { viewModel.resumeDownload(download) },
-                        onDelete = { viewModel.deleteDownload(download) },
-                        onRetry = { viewModel.retryDownload(download) },
-                    )
+                itemsIndexed(items = downloads, key = { _, it -> it.id }, contentType = { _, _ -> "downloadItem" }) { index, download ->
+                    val visible = remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { visible.value = true }
+                    AnimatedVisibility(
+                        visible = visible.value,
+                        enter = fadeIn(
+                            animationSpec = tween(300, delayMillis = index * 50)
+                        ) + slideInVertically(
+                            initialOffsetY = { it / 10 },
+                            animationSpec = tween(300, delayMillis = index * 50, easing = FastOutSlowInEasing),
+                        ),
+                    ) {
+                        DownloadItemRow(
+                            item = download,
+                            formatBytes = { viewModel.formatBytes(it) },
+                            formatSpeed = { viewModel.formatSpeed(it) },
+                            formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
+                            onClick = {
+                                if (download.status == DownloadStatus.COMPLETED) {
+                                    onPlayOffline(download.downloadPath, download.name)
+                                }
+                            },
+                            onCancel = { viewModel.cancelDownload(download) },
+                            onPause = { viewModel.pauseDownload(download) },
+                            onResume = { viewModel.resumeDownload(download) },
+                            onDelete = { viewModel.deleteDownload(download) },
+                            onRetry = { viewModel.retryDownload(download) },
+                        )
+                    }
                 }
             }
         }
@@ -144,6 +166,15 @@ private fun DownloadItemRow(
     onDelete: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    val progress = if (item.totalSizeBytes > 0) {
+        item.downloadedBytes.toFloat() / item.totalSizeBytes
+    } else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(300),
+        label = "downloadProgress",
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -166,11 +197,11 @@ private fun DownloadItemRow(
             if (imageUrl != null) {
                 MediaImage(
                     url = imageUrl,
-                        contentDescription = item.name,
-                        blurHash = item.imageBlurHash,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
+                    contentDescription = item.name,
+                    blurHash = item.imageBlurHash,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
                 } else {
                     Icon(
                         when (item.mediaType) {
@@ -196,11 +227,8 @@ private fun DownloadItemRow(
                 Spacer(Modifier.height(2.dp))
                 when (item.status) {
                     DownloadStatus.DOWNLOADING -> {
-                        val progress = if (item.totalSizeBytes > 0) {
-                            item.downloadedBytes.toFloat() / item.totalSizeBytes
-                        } else 0f
                         LinearProgressIndicator(
-                            progress = { progress },
+                            progress = { animatedProgress },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(2.dp))

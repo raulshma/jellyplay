@@ -1,8 +1,14 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -82,7 +88,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -169,6 +177,11 @@ fun SettingsScreen(
         },
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
     ) { padding ->
+        var visibleItemCount by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            visibleItemCount = Int.MAX_VALUE
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -177,101 +190,123 @@ fun SettingsScreen(
         ) {
             if (userName.isNotBlank()) {
                 item {
-                    SettingsProfileBanner(
-                        userName = userName,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    AnimatedSettingsEntrance(0, visibleItemCount) {
+                        SettingsProfileBanner(
+                            userName = userName,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            item {
+                AnimatedSettingsEntrance(1, visibleItemCount) {
+                    SettingsSectionHeader(title = "Account")
+                }
+            }
+
+            item {
+                AnimatedSettingsEntrance(2, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Dns,
+                        title = "Servers",
+                        subtitle = "Manage your Jellyfin servers",
+                        onClick = onServerManagement,
                     )
                 }
             }
 
             item {
-                SettingsSectionHeader(title = "Account")
+                AnimatedSettingsEntrance(3, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Person,
+                        title = "Switch User",
+                        subtitle = userName.ifBlank { "Manage users" },
+                        onClick = onUserManagement,
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Dns,
-                    title = "Servers",
-                    subtitle = "Manage your Jellyfin servers",
-                    onClick = onServerManagement,
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Person,
-                    title = "Switch User",
-                    subtitle = userName.ifBlank { "Manage users" },
-                    onClick = onUserManagement,
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.AutoMirrored.Filled.Logout,
-                    title = "Sign Out",
-                    subtitle = "Log out of current account",
-                    isDestructive = true,
-                    onClick = {
-                        viewModel.logout()
-                        onLogout()
-                    },
-                )
+                AnimatedSettingsEntrance(4, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = "Sign Out",
+                        subtitle = "Log out of current account",
+                        isDestructive = true,
+                        onClick = {
+                            viewModel.logout()
+                            onLogout()
+                        },
+                    )
+                }
             }
 
             item {
                 Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Video Player")
+                AnimatedSettingsEntrance(5, visibleItemCount) {
+                    SettingsSectionHeader(title = "Video Player")
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.PlayCircle,
-                    title = "Player Engine",
-                    subtitle = "Choose media playback engine",
-                    trailingText = preferences.preferredPlayer.displayName,
-                    onClick = { showPlayerPicker = true },
-                )
+                AnimatedSettingsEntrance(6, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.PlayCircle,
+                        title = "Player Engine",
+                        subtitle = "Choose media playback engine",
+                        trailingText = preferences.preferredPlayer.displayName,
+                        onClick = { showPlayerPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.FastForward,
-                    title = "Seek Duration",
-                    subtitle = "Double-tap to seek",
-                    trailingText = "${preferences.videoSeekDurationMs / 1000}s",
-                    onClick = { showVideoSeekDurationPicker = true },
-                )
+                AnimatedSettingsEntrance(7, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.FastForward,
+                        title = "Seek Duration",
+                        subtitle = "Double-tap to seek",
+                        trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                        onClick = { showVideoSeekDurationPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.ScreenLockLandscape,
-                    title = "Orientation",
-                    subtitle = "Default screen orientation",
-                    trailingText = preferences.videoDefaultOrientation.displayName,
-                    onClick = { showOrientationPicker = true },
-                )
+                AnimatedSettingsEntrance(8, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.ScreenLockLandscape,
+                        title = "Orientation",
+                        subtitle = "Default screen orientation",
+                        trailingText = preferences.videoDefaultOrientation.displayName,
+                        onClick = { showOrientationPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Timer,
-                    title = "Controls Timeout",
-                    subtitle = "Auto-hide player controls",
-                    trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
-                    onClick = { showControlsTimeoutPicker = true },
-                )
+                AnimatedSettingsEntrance(9, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Controls Timeout",
+                        subtitle = "Auto-hide player controls",
+                        trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                        onClick = { showControlsTimeoutPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingToggleItem(
-                    icon = Icons.Default.Gesture,
-                    title = "Gestures",
-                    subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
-                    checked = preferences.videoGesturesEnabled,
-                    onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
-                )
+                AnimatedSettingsEntrance(10, visibleItemCount) {
+                    SettingToggleItem(
+                        icon = Icons.Default.Gesture,
+                        title = "Gestures",
+                        subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
+                        checked = preferences.videoGesturesEnabled,
+                        onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
+                    )
+                }
             }
 
             item {
@@ -1682,6 +1717,25 @@ private fun SettingInfoItem(
             containerColor = Color.Transparent,
         ),
     )
+}
+
+@Composable
+private fun AnimatedSettingsEntrance(
+    index: Int,
+    visibleCount: Int,
+    content: @Composable () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = index < visibleCount,
+        enter = fadeIn(
+            animationSpec = tween(250, delayMillis = (index % 8) * 30)
+        ) + slideInVertically(
+            initialOffsetY = { it / 12 },
+            animationSpec = tween(250, delayMillis = (index % 8) * 30, easing = FastOutSlowInEasing),
+        ),
+    ) {
+        content()
+    }
 }
 
 private data class RadioOption(

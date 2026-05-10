@@ -119,7 +119,6 @@ internal fun PlayerControls(
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onSubtitleStyleClick: () -> Unit,
-    onSecondarySubtitleClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -414,10 +413,7 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onSubtitleStyleClick()
                                 },
-                                onSecondarySubtitleClick = {
-                                    showOverflow = false
-                                    onSecondarySubtitleClick()
-                                },
+                                
                                 onDialogueBoostClick = {
                                     showOverflow = false
                                     onDialogueBoostClick()
@@ -718,7 +714,6 @@ private fun PlayerOverflowMenu(
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
     onSubtitleStyleClick: () -> Unit,
-    onSecondarySubtitleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onNightModeClick: () -> Unit,
     onAudioDelayClick: () -> Unit,
@@ -740,11 +735,7 @@ private fun PlayerOverflowMenu(
                 onClick = onSubtitleStyleClick,
             )
         }
-        OverflowMenuItem(
-            icon = Icons.Default.ClosedCaption,
-            label = "Dual Subtitles",
-            onClick = onSecondarySubtitleClick,
-        )
+        
         if (supportsDialogueBoost) {
             OverflowMenuItem(
                 icon = Icons.Default.Audiotrack,

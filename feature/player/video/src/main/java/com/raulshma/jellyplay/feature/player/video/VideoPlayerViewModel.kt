@@ -32,8 +32,7 @@ import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
-import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
+
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -80,8 +79,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var playerEngine: PlayerEngine? = null
     private var mediaDetail: MediaDetail? = null
-    private var secondarySubtitleCues: List<TimedCue> = emptyList()
-    private var secondarySubtitleOffsetMs: Long = 0L
+    
     private var equalizerEnabled: Boolean = false
     private var resolvedPlayMethod: PlayMethod = PlayMethod.DIRECT_PLAY
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
@@ -533,60 +531,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun selectSecondarySubtitleStream(stream: MediaStream?) {
-        _uiState.update { it.copy(secondarySubtitleTrack = stream) }
-        if (stream == null) {
-            secondarySubtitleCues = emptyList()
-            return
-        }
-        viewModelScope.launch {
-            loadSecondarySubtitle(stream)
-        }
-    }
-
-    fun setSecondarySubtitleOffset(offsetMs: Long) {
-        secondarySubtitleOffsetMs = offsetMs
-    }
-
-    private suspend fun loadSecondarySubtitle(stream: MediaStream) {
-        try {
-            val url = if (!stream.deliveryUrl.isNullOrBlank()) {
-                playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-            } else {
-                val itemId = currentItemId ?: return
-                val sourceId = _uiState.value.currentMediaSource?.id ?: return
-                val codec = stream.codec ?: "srt"
-                val ext = when (codec.lowercase()) {
-                    "ass", "ssa" -> "ass"
-                    "vtt", "webvtt" -> "vtt"
-                    "ttml", "dfxp" -> "ttml"
-                    "mov_text" -> "vtt"
-                    else -> "srt"
-                }
-                playbackRepository.getSubtitleDeliveryUrl("/Videos/$itemId/$sourceId/Subtitles/${stream.index}/0.$ext")
-            }
-            val mimeType = mapSubtitleCodecToMime(stream.codec)
-            val request = okhttp3.Request.Builder().url(url).build()
-            val response = okHttpClient.newCall(request).execute()
-            response.use { resp ->
-                val bytes = resp.body?.bytes() ?: return
-                secondarySubtitleCues = SubtitleParserHelper.parseSubtitles(bytes, mimeType)
-            }
-        } catch (_: Exception) {
-            secondarySubtitleCues = emptyList()
-        }
-    }
-
-    fun getSecondarySubtitleText(positionMs: Long): String? {
-        val cues = secondarySubtitleCues
-        if (cues.isEmpty()) return null
-        val cue = SubtitleParserHelper.findActiveCue(
-            cues,
-            positionMs * 1000L,
-            secondarySubtitleOffsetMs * 1000L,
-        ) ?: return null
-        return cue.text.toString().takeIf { it.isNotBlank() }
-    }
+    
 
     fun getCurrentPrimarySubtitleText(): String? {
         val engine = playerEngine ?: return null
@@ -980,7 +925,7 @@ class VideoPlayerViewModel @Inject constructor(
         currentItemId = null
         trickplayManager.clear()
         selectedSubtitleTrackId = null
-        secondarySubtitleCues = emptyList()
+        
         _uiState.update { it.copy(
             introTimestamps = null,
             creditTimestamps = null,
