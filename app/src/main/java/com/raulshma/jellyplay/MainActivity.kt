@@ -81,10 +81,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var justExitedPip = false
+
     @Deprecated("Deprecated in Java")
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode)
-        pipStateHolder.setPipMode(isInPictureInPictureMode)
+        onPipModeChanged(isInPictureInPictureMode)
     }
 
     @Suppress("DEPRECATION")
@@ -93,7 +95,27 @@ class MainActivity : ComponentActivity() {
         newConfig: android.content.res.Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        onPipModeChanged(isInPictureInPictureMode)
+    }
+
+    private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
+        if (!isInPictureInPictureMode) {
+            justExitedPip = true
+        }
         pipStateHolder.setPipMode(isInPictureInPictureMode)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        justExitedPip = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (justExitedPip) {
+            justExitedPip = false
+            pipStateHolder.notifyPipDismissed()
+        }
     }
 
     fun enterPipMode(aspectRatio: Rational? = null) {
