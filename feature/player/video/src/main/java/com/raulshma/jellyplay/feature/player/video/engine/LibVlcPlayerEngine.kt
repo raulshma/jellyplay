@@ -123,18 +123,21 @@ class LibVlcPlayerEngine(
             media.addOption(":start-time=${startPositionMs / 1000.0}")
         }
 
-        mp.media = media
-        media.release()
-        
-        // Add external subtitles after media is set
-        // LibVLC addSlave: type (0=subtitle, 1=audio), priority, uri
+        // Add external subtitles to the Media object before setting it on the player
         pendingSubtitles?.forEach { (subUrl, _) ->
             try {
-                mp.addSlave(0, subUrl, false) // 0 = subtitle type
+                media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
+                    org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
+                    0,
+                    subUrl,
+                ))
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to add subtitle: $subUrl", e)
             }
         }
+
+        mp.media = media
+        media.release()
 
         pendingPlay = true
         pendingSubtitles = null
