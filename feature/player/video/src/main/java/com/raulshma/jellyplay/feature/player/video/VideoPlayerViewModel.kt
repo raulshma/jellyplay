@@ -130,6 +130,9 @@ class VideoPlayerViewModel @Inject constructor(
         if (currentItemId == itemId) return
         val wasInSyncPlay = syncPlayManager.isInSyncPlaySession
 
+        // Report stop position for the current item before switching
+        reportCurrentPlaybackStopped()
+
         val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId)
         if (reclaimed != null) {
             currentItemId = itemId
@@ -930,6 +933,18 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    private fun reportCurrentPlaybackStopped() {
+        val itemId = currentItemId ?: return
+        val sessionId = playSessionId
+        val engine = playerEngine
+        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
+        if (positionTicks > 0) {
+            viewModelScope.launch {
+                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+            }
+        }
+    }
+
     private fun releaseInternals() {
         progressReporter.cancelJobs()
         syncPlayController.reset()
@@ -1001,6 +1016,16 @@ class VideoPlayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        val engine = playerEngine
+        val itemId = currentItemId
+        val sessionId = playSessionId
+        val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         releaseInternals()
+        castManager.release()
+        if (itemId != null && positionTicks > 0) {
+            kotlinx.coroutines.GlobalScope.launch {
+                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+            }
+        }
     }
 }
