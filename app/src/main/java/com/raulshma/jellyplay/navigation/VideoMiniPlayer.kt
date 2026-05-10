@@ -2,11 +2,17 @@ package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,14 +32,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,8 +62,14 @@ fun VideoMiniPlayer(
 ) {
     AnimatedVisibility(
         visible = isVisible && engine != null,
-        enter = slideInVertically(initialOffsetY = { it }),
-        exit = slideOutVertically(targetOffsetY = { it }),
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = spring(stiffness = 400f),
+        ) + fadeIn(tween(300)),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(200),
+        ) + fadeOut(tween(150)),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
@@ -66,6 +78,12 @@ fun VideoMiniPlayer(
             animationSpec = tween(400),
             label = "videoMiniPlayerColor",
         )
+        val contentAlpha by animateFloatAsState(
+            targetValue = 1f,
+            animationSpec = tween(400),
+            label = "videoMiniContentAlpha",
+        )
+
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = animatedColor,
@@ -78,7 +96,7 @@ fun VideoMiniPlayer(
                         .fillMaxWidth()
                         .height(112.dp)
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                        .background(androidx.compose.ui.graphics.Color.Black)
+                        .background(Color.Black)
                         .clickable(onClick = onClick),
                 ) {
                     if (engine != null) {
@@ -90,18 +108,15 @@ fun VideoMiniPlayer(
                         )
                     }
 
-                    IconButton(
+                    IconButtonWithPressAnimation(
                         onClick = onClose,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(32.dp)
-                            .padding(4.dp),
+                        size = 32.dp,
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Close",
                             modifier = Modifier.size(16.dp),
-                            tint = androidx.compose.ui.graphics.Color.White,
+                            tint = Color.White,
                         )
                     }
                 }
@@ -110,6 +125,7 @@ fun VideoMiniPlayer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(animatedColor)
+                        .graphicsLayer { alpha = contentAlpha }
                         .clickable(onClick = onClick)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -139,9 +155,9 @@ fun VideoMiniPlayer(
                         }
                     }
 
-                    IconButton(
+                    IconButtonWithPressAnimation(
                         onClick = onPlayPause,
-                        modifier = Modifier.size(36.dp),
+                        size = 36.dp,
                     ) {
                         Icon(
                             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -153,5 +169,30 @@ fun VideoMiniPlayer(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun IconButtonWithPressAnimation(
+    onClick: () -> Unit,
+    size: androidx.compose.ui.unit.Dp,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(stiffness = 600f),
+        label = "videoMiniButtonScale",
+    )
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(size)
+            .padding(4.dp)
+            .scale(scale),
+    ) {
+        content()
     }
 }

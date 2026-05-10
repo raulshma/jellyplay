@@ -39,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -250,13 +251,22 @@ fun StaggeredSection(
     index: Int,
     content: @Composable () -> Unit,
 ) {
+    var shouldShow by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        shouldShow = visible
+    }
+
     AnimatedVisibility(
-        visible = visible,
+        visible = visible && shouldShow,
         enter = fadeIn(
-            animationSpec = tween(300, delayMillis = index * 60)
+            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
         ) + slideInVertically(
-            initialOffsetY = { -it / 12 },
-            animationSpec = tween(300, delayMillis = index * 60, easing = FastOutSlowInEasing),
+            initialOffsetY = { it / 14 },
+            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
+        ),
+        exit = fadeOut(tween(160)) + slideOutVertically(
+            targetOffsetY = { -it / 24 },
+            animationSpec = tween(180, easing = FastOutSlowInEasing),
         ),
     ) {
         content()
@@ -340,4 +350,28 @@ fun rememberAnimatedItemVisibility(index: Int): Boolean {
         visible = true
     }
     return visible
+}
+
+@Composable
+fun AnimatedMediaItem(
+    index: Int,
+    delayPerItem: Int = 40,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(
+            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
+        ) + slideInVertically(
+            initialOffsetY = { it / 10 },
+            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
+        ),
+        exit = fadeOut(tween(140)),
+    ) {
+        content()
+    }
 }

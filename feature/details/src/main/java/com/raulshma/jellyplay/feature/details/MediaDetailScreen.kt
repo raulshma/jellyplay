@@ -10,13 +10,21 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -273,19 +281,37 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            MediaImage(
-                url = getBackdropUrl(targetBackdropId),
-                contentDescription = null,
-                blurHash = item?.blurHashes?.backdrop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
-                        scaleX = scale
-                        scaleY = scale
-                    },
-                contentScale = ContentScale.Crop,
-            )
+            AnimatedContent(
+                targetState = targetBackdropId,
+                transitionSpec = {
+                    fadeIn(
+                        animationSpec = tween(460, easing = FastOutSlowInEasing),
+                    ) + scaleIn(
+                        initialScale = 1.035f,
+                        animationSpec = tween(620, easing = FastOutSlowInEasing),
+                    ) togetherWith fadeOut(
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    ) + scaleOut(
+                        targetScale = 0.99f,
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    )
+                },
+                label = "detailBackdrop",
+            ) { backdropId ->
+                MediaImage(
+                    url = getBackdropUrl(backdropId),
+                    contentDescription = null,
+                    blurHash = item?.blurHashes?.backdrop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                    contentScale = ContentScale.Crop,
+                )
+            }
 
             Box(
                 modifier = Modifier
@@ -341,17 +367,34 @@ private fun DetailContent(
                                 .offset(y = (-40).dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            MediaImage(
-                                url = getImageUrl(itemId),
-                                contentDescription = null,
-                                blurHash = item?.blurHashes?.primary,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .aspectRatio(2f / 3f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .graphicsLayer { alpha = contentAlpha },
-                                contentScale = ContentScale.Crop,
-                            )
+                            AnimatedVisibility(
+                                visible = contentVisible,
+                                enter = fadeIn(
+                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                ) + slideInVertically(
+                                    initialOffsetY = { it / 8 },
+                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                ) + scaleIn(
+                                    initialScale = 0.96f,
+                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                ),
+                                exit = fadeOut(tween(160)) + scaleOut(
+                                    targetScale = 0.98f,
+                                    animationSpec = tween(160, easing = FastOutSlowInEasing),
+                                ),
+                            ) {
+                                MediaImage(
+                                    url = getImageUrl(itemId),
+                                    contentDescription = null,
+                                    blurHash = item?.blurHashes?.primary,
+                                    modifier = Modifier
+                                        .width(120.dp)
+                                        .aspectRatio(2f / 3f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .graphicsLayer { alpha = contentAlpha },
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
                         }
                     }
 
@@ -362,9 +405,13 @@ private fun DetailContent(
                             visible = contentVisible,
                             enter = fadeIn(tween(400, delayMillis = 100)) +
                                     slideInVertically(
-                                        initialOffsetY = { -it / 10 },
+                                        initialOffsetY = { it / 12 },
                                         animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
                                     ),
+                            exit = fadeOut(tween(180)) + slideOutVertically(
+                                targetOffsetY = { -it / 24 },
+                                animationSpec = tween(180, easing = FastOutSlowInEasing),
+                            ),
                         ) {
                             DetailContentBody(
                                 item = item,
@@ -505,13 +552,28 @@ private fun StaggeredDetailSection(
     delayIndex: Int,
     content: @Composable () -> Unit,
 ) {
+    var shouldShow by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        shouldShow = visible
+    }
+
     AnimatedVisibility(
-        visible = visible,
+        visible = visible && shouldShow,
         enter = fadeIn(
-            animationSpec = tween(300, delayMillis = delayIndex * 80)
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
         ) + slideInVertically(
-            initialOffsetY = { -it / 12 },
-            animationSpec = tween(300, delayMillis = delayIndex * 80, easing = FastOutSlowInEasing),
+            initialOffsetY = { it / 14 },
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
+        ) + scaleIn(
+            initialScale = 0.985f,
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
+        ),
+        exit = fadeOut(tween(160)) + slideOutVertically(
+            targetOffsetY = { -it / 24 },
+            animationSpec = tween(180, easing = FastOutSlowInEasing),
+        ) + scaleOut(
+            targetScale = 0.99f,
+            animationSpec = tween(180, easing = FastOutSlowInEasing),
         ),
     ) {
         content()
@@ -540,7 +602,7 @@ private fun DetailContentBody(
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
 ) {
-    val showContent = detail != null
+    val showContent = true
 
     Column(
         modifier = Modifier
@@ -673,13 +735,46 @@ private fun DetailContentBody(
                     else -> "Play"
                 }
 
+                val playInteractionSource = remember { MutableInteractionSource() }
+                val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+                val playScale by animateFloatAsState(
+                    targetValue = if (isPlayPressed) 0.95f else 1f,
+                    animationSpec = spring(stiffness = 400f),
+                    label = "playButtonScale",
+                )
+                val markInteractionSource = remember { MutableInteractionSource() }
+                val isMarkPressed by markInteractionSource.collectIsPressedAsState()
+                val markScale by animateFloatAsState(
+                    targetValue = if (isMarkPressed) 0.9f else 1f,
+                    animationSpec = spring(stiffness = 400f),
+                    label = "markButtonScale",
+                )
+                val favoriteInteractionSource = remember { MutableInteractionSource() }
+                val isFavoritePressed by favoriteInteractionSource.collectIsPressedAsState()
+                val favoriteScale by animateFloatAsState(
+                    targetValue = if (isFavoritePressed) 0.9f else 1f,
+                    animationSpec = spring(stiffness = 400f),
+                    label = "favoriteButtonScale",
+                )
+                val downloadInteractionSource = remember { MutableInteractionSource() }
+                val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
+                val downloadScale by animateFloatAsState(
+                    targetValue = if (isDownloadPressed) 0.9f else 1f,
+                    animationSpec = spring(stiffness = 400f),
+                    label = "downloadButtonScale",
+                )
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable {
+                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                        .clickable(
+                            interactionSource = playInteractionSource,
+                            indication = null,
+                        ) {
                             if (isAudio) {
                                 onAudioClick()
                             } else if (target != null) {
@@ -719,6 +814,11 @@ private fun DetailContentBody(
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
+                        .clickable(
+                            interactionSource = markInteractionSource,
+                            indication = null,
+                        ) { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() }
                         .tvFocusable()
                 ) {
                     Icon(
@@ -734,6 +834,11 @@ private fun DetailContentBody(
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
+                        .clickable(
+                            interactionSource = favoriteInteractionSource,
+                            indication = null,
+                        ) { onToggleFavorite() }
                         .tvFocusable()
                 ) {
                     Icon(
@@ -760,6 +865,11 @@ private fun DetailContentBody(
                             .size(56.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color.White.copy(alpha = 0.15f))
+                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
+                            .clickable(
+                                interactionSource = downloadInteractionSource,
+                                indication = null,
+                            ) { onDownloadClick() }
                             .tvFocusable()
                     ) {
                         if (isDownloading || isDownloadActive) {
@@ -984,7 +1094,18 @@ private fun SeasonsSection(
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
-                fadeIn(tween(300)) togetherWith fadeOut(tween(150))
+                val direction = if (targetState.first >= initialState.first) 1 else -1
+                fadeIn(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                ) + slideInHorizontally(
+                    initialOffsetX = { direction * it / 10 },
+                    animationSpec = tween(320, easing = FastOutSlowInEasing),
+                ) togetherWith fadeOut(
+                    animationSpec = tween(170, easing = FastOutSlowInEasing),
+                ) + slideOutHorizontally(
+                    targetOffsetX = { -direction * it / 12 },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                )
             },
             label = "seasonEpisodes",
         ) { (seasonIdx, episodeCount) ->
@@ -1115,6 +1236,21 @@ private fun EpisodeCard(
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
 ) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.96f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "episodeCardScale",
+    )
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.85f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "episodePlayScale",
+    )
+
     Column(
         modifier = Modifier
             .width(280.dp)
@@ -1127,7 +1263,12 @@ private fun EpisodeCard(
                 if (isCurrentEpisode) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 else Modifier
             )
-            .clickable(onClick = onDetailClick)
+            .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
+            .clickable(
+                interactionSource = cardInteractionSource,
+                indication = null,
+                onClick = onDetailClick,
+            )
             .tvFocusable()
     ) {
         Box(
@@ -1151,8 +1292,13 @@ private fun EpisodeCard(
                 tint = Color.White,
                 modifier = Modifier
                     .size(48.dp)
+                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .clickable(onClick = onPlayClick)
+                    .clickable(
+                        interactionSource = playInteractionSource,
+                        indication = null,
+                        onClick = onPlayClick,
+                    )
                     .padding(8.dp)
             )
 
@@ -1211,11 +1357,24 @@ private fun PersonItem(
     imageUrl: String,
     onClick: () -> Unit = {},
 ) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "personScale",
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(80.dp)
-            .clickable(onClick = onClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
             .tvFocusable(),
     ) {
         MediaImage(

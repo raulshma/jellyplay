@@ -7,14 +7,21 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -448,16 +456,18 @@ fun SearchScreen(
                             ) { index ->
                                 val item = pagedResults[index]
                                 if (item != null) {
-                                    PosterCard(
-                                        item = item,
-                                        imageUrl = viewModel.getImageUrl(item.id),
-                                        onClick = { onItemClick(item.id) },
-                                        showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                        progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                            (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                        } else 0f,
-                                        blurHash = item.blurHashes.primary,
-                                    )
+                                    AnimatedSearchItem(index = index) {
+                                        PosterCard(
+                                            item = item,
+                                            imageUrl = viewModel.getImageUrl(item.id),
+                                            onClick = { onItemClick(item.id) },
+                                            showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                            progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                            } else 0f,
+                                            blurHash = item.blurHashes.primary,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -582,11 +592,24 @@ private fun GlassDismissTag(
     label: String,
     onDismiss: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "tagScale",
+    )
+
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.12f))
-            .clickable(onClick = onDismiss)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDismiss,
+            )
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -603,5 +626,43 @@ private fun GlassDismissTag(
             modifier = Modifier.size(14.dp),
             tint = Color.White.copy(alpha = 0.5f),
         )
+    }
+}
+
+@Composable
+private fun AnimatedSearchItem(
+    index: Int,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(300, delayMillis = (index % 12) * 30),
+        label = "searchItemAlpha",
+    )
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) 0f else 20f,
+        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
+        label = "searchItemOffsetY",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.95f,
+        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
+        label = "searchItemScale",
+    )
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            this.alpha = alpha
+            translationY = offsetY
+            scaleX = scale
+            scaleY = scale
+        },
+    ) {
+        content()
     }
 }

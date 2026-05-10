@@ -27,7 +27,7 @@ class HomeViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     companion object {
@@ -54,6 +54,7 @@ class HomeViewModel @Inject constructor(
 
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
+    private var homeScrollPosition = HomeScrollPosition()
 
     init {
         // First, listen for user changes 
@@ -63,6 +64,7 @@ class HomeViewModel @Inject constructor(
                 if (previousUserId != null && previousUserId != userId) {
                     // User switched, force a full refresh with cleared state
                     refreshJob?.cancel()
+                    resetHomeScrollPosition()
                     sections = emptyList()
                     favorites = emptyList()
                     error = null
@@ -101,6 +103,7 @@ class HomeViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             isLoading = true
+            resetHomeScrollPosition()
             sections = emptyList()
             favorites = emptyList()
             error = null
@@ -181,4 +184,22 @@ class HomeViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+
+    fun getHomeScrollPosition(): HomeScrollPosition = homeScrollPosition
+
+    fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) {
+        homeScrollPosition = HomeScrollPosition(
+            firstVisibleItemIndex = firstVisibleItemIndex.coerceAtLeast(0),
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset.coerceAtLeast(0),
+        )
+    }
+
+    fun resetHomeScrollPosition() {
+        homeScrollPosition = HomeScrollPosition()
+    }
 }
+
+data class HomeScrollPosition(
+    val firstVisibleItemIndex: Int = 0,
+    val firstVisibleItemScrollOffset: Int = 0,
+)
