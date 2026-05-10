@@ -1,9 +1,14 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -424,13 +429,61 @@ private fun MainNavDisplay(
         backStack = currentBackStack,
         onBack = { navigator.goBack() },
         transitionSpec = {
-            fadeIn(tween(350)) togetherWith fadeOut(tween(150))
+            fadeIn(
+                animationSpec = tween(320, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { it / 10 },
+                animationSpec = tween(360, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 0.985f,
+                animationSpec = tween(360, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(180),
+            ) + slideOutHorizontally(
+                targetOffsetX = { -it / 18 },
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 1.015f,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            )
         },
         popTransitionSpec = {
-            fadeIn(tween(200)) togetherWith fadeOut(tween(300))
+            fadeIn(
+                animationSpec = tween(260, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { -it / 12 },
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 1.015f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(220),
+            ) + slideOutHorizontally(
+                targetOffsetX = { it / 10 },
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 0.985f,
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            )
         },
         predictivePopTransitionSpec = { _ ->
-            fadeIn(tween(200)) togetherWith fadeOut(tween(300))
+            fadeIn(
+                animationSpec = tween(260, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { -it / 12 },
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 1.015f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(220),
+            ) + slideOutHorizontally(
+                targetOffsetX = { it / 10 },
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 0.985f,
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            )
         },
         entryProvider = entryProvider {
             homeSection(

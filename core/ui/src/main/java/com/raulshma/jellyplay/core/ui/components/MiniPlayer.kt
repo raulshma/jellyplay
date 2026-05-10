@@ -2,15 +2,22 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,18 +31,23 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -55,8 +67,14 @@ fun MiniPlayer(
 ) {
     AnimatedVisibility(
         visible = isVisible && title.isNotBlank(),
-        enter = slideInVertically(initialOffsetY = { it }),
-        exit = slideOutVertically(targetOffsetY = { it }),
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = spring(stiffness = 400f),
+        ) + fadeIn(tween(300)),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(200),
+        ) + fadeOut(tween(150)),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
@@ -65,6 +83,12 @@ fun MiniPlayer(
             animationSpec = tween(400),
             label = "miniPlayerColor",
         )
+        val contentAlpha by animateFloatAsState(
+            targetValue = 1f,
+            animationSpec = tween(400),
+            label = "miniPlayerContentAlpha",
+        )
+
         Surface(
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             color = animatedColor,
@@ -76,6 +100,7 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
+                    .graphicsLayer { alpha = contentAlpha }
                     .clickable(onClick = onClick)
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -130,45 +155,78 @@ fun MiniPlayer(
                     )
                 }
 
-                IconButton(
+                AnimatedIconButton(
                     onClick = onPlayPause,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                ) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                    size = 40.dp,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    iconVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    iconDescription = if (isPlaying) "Pause" else "Play",
+                    iconSize = 22.dp,
+                )
 
-                IconButton(
+                AnimatedIconButton(
                     onClick = onSkipNext,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        Icons.Default.SkipNext,
-                        "Skip Next",
-                        modifier = Modifier.size(22.dp),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                    size = 40.dp,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    iconVector = Icons.Default.SkipNext,
+                    iconDescription = "Skip Next",
+                    iconSize = 22.dp,
+                )
 
-                IconButton(
+                AnimatedIconButton(
                     onClick = onStop,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        "Close",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                    size = 36.dp,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    iconVector = Icons.Default.Close,
+                    iconDescription = "Close",
+                    iconSize = 18.dp,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun AnimatedIconButton(
+    onClick: () -> Unit,
+    size: Dp,
+    containerColor: Color? = null,
+    contentColor: Color,
+    iconVector: ImageVector,
+    iconDescription: String,
+    iconSize: Dp,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(stiffness = 600f),
+        label = "miniPlayerButtonScale",
+    )
+
+    val shape = RoundedCornerShape(size / 2)
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .scale(scale)
+            .then(
+                if (containerColor != null) {
+                    Modifier.clip(shape).background(containerColor)
+                } else Modifier
+            ),
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Icon(
+                imageVector = iconVector,
+                contentDescription = iconDescription,
+                tint = contentColor,
+                modifier = Modifier.size(iconSize),
+            )
         }
     }
 }
