@@ -415,6 +415,11 @@ class VideoPlayerViewModel @Inject constructor(
                 // End-of-playback handled in setOnPlaybackStateChanged above
             }
 
+            engine.setAuthInfo(
+                playbackRepository.getServerUrl(),
+                playbackRepository.getAccessToken(),
+            )
+
             engine.createPlayer(
                 url = url,
                 title = detail.item.name,
@@ -424,9 +429,13 @@ class VideoPlayerViewModel @Inject constructor(
             engine.setMediaSessionCallback(sessionManager, playSessionId)
 
             val streams = source?.mediaStreams ?: emptyList()
+            val mediaSourceId = source?.id ?: ""
             val subtitleConfigs = engine.buildSubtitleConfigurations(
                 streams,
                 getSubtitleDeliveryUrl = { playbackRepository.getSubtitleDeliveryUrl(it) },
+                buildSubtitleUrl = { index, codec ->
+                    playbackRepository.buildSubtitleDeliveryUrl(currentItemId ?: "", mediaSourceId, index, codec)
+                },
             )
             val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
             engine.configureMedia(
@@ -456,10 +465,18 @@ class VideoPlayerViewModel @Inject constructor(
         } else {
             // For MPV and LibVLC, configure external subtitles before initialization
             val streams = source?.mediaStreams ?: emptyList()
+            val mediaSourceId = source?.id ?: ""
             val externalSubtitles = streams
-                .filter { it.type == StreamType.SUBTITLE && !it.deliveryUrl.isNullOrBlank() }
-                .map { stream ->
-                    val subUrl = playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                .filter { it.type == StreamType.SUBTITLE }
+                .mapNotNull { stream ->
+                    val subUrl = when {
+                        !stream.deliveryUrl.isNullOrBlank() -> playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                        stream.isExternal -> playbackRepository.buildSubtitleDeliveryUrl(
+                            currentItemId ?: "", mediaSourceId, stream.index, stream.codec,
+                        )
+                        else -> return@mapNotNull null
+                    }
+                    if (subUrl.isBlank()) return@mapNotNull null
                     val label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown"
                     subUrl to label
                 }
@@ -900,16 +917,16 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
     }
 
-    private fun mapSubtitleCodecToMime(codec: String?): String {
-        if (codec == null) return MimeTypes.TEXT_UNKNOWN
+    private fun mapSubtitleCodecToMime(codec: String?): String? {
+        if (codec == null) return null
         return when (codec.lowercase()) {
             "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
             "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt", "webvtt" -> MimeTypes.APPLICATION_SUBRIP
+            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
             "mov_text" -> MimeTypes.APPLICATION_SUBRIP
-            else -> MimeTypes.TEXT_UNKNOWN
+            else -> null
         }
     }
 

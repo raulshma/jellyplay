@@ -66,10 +66,10 @@ class MpvPlayerEngine(
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
                         // Add external subtitles after file is loaded
-                        pendingSubtitles?.forEach { (subUrl, _) ->
+                        pendingSubtitles?.forEach { (subUrl, label) ->
                             try {
                                 Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
-                                mpv.command("sub-add", subUrl)
+                                mpv.command("sub-add", subUrl, "select", label)
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
                             }

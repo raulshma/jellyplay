@@ -16,6 +16,11 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -56,6 +61,10 @@ class ExoPlayerEngine(
     private var onTracksChanged: (() -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
     private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
+
+    private var mediaSourceFactory: DefaultMediaSourceFactory? = null
+    private var serverAuthority: String? = null
+    private var accessToken: String? = null
 
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
@@ -105,6 +114,34 @@ class ExoPlayerEngine(
 
     fun setOnPlaybackEnded(callback: (() -> Unit)?) {
         onPlaybackEndedCallback = callback
+    }
+
+    fun setAuthInfo(serverUrl: String?, token: String?) {
+        serverAuthority = serverUrl?.let { Uri.parse(it).authority }
+        accessToken = token
+    }
+
+    private fun createAuthenticatedDataSourceFactory(): DataSource.Factory {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("JellyPlay")
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(15_000)
+        val baseFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+        val authority = serverAuthority
+        val token = accessToken
+        if (authority != null && token != null) {
+            return ResolvingDataSource.Factory(baseFactory) { dataSpec ->
+                if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
+                    dataSpec.withRequestHeaders(
+                        mapOf("X-Emby-Token" to token) + dataSpec.httpRequestHeaders
+                    )
+                } else {
+                    dataSpec
+                }
+            }
+        }
+        return baseFactory
     }
 
     fun configureMedia(
@@ -175,32 +212,29 @@ class ExoPlayerEngine(
     fun buildSubtitleConfigurations(
         streams: List<MediaStream>,
         getSubtitleDeliveryUrl: (String) -> String,
+        buildSubtitleUrl: ((index: Int, codec: String?) -> String)? = null,
     ): List<MediaItem.SubtitleConfiguration> {
         return streams
             .filter { it.type == StreamType.SUBTITLE }
             .mapNotNull { stream ->
-                // Build URL for external subtitles
                 val url = when {
-                    // External subtitle with delivery URL
-                    !stream.deliveryUrl.isNullOrBlank() -> {
-                        getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                    }
-                    // External subtitle without delivery URL - skip, will be handled by embedded tracks
-                    stream.isExternal -> null
-                    // Embedded subtitle - skip, already in container
-                    else -> null
+                    !stream.deliveryUrl.isNullOrBlank() -> getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    stream.isExternal && buildSubtitleUrl != null -> buildSubtitleUrl(stream.index, stream.codec)
+                    else -> return@mapNotNull null
                 }
-                
-                if (url == null) return@mapNotNull null
-                
-                val mimeType = mapSubtitleCodecToMime(stream.codec)
+
+                if (url.isBlank()) return@mapNotNull null
+
+                val mimeType = mapSubtitleCodecToMime(stream.codec) ?: return@mapNotNull null
+
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
+                    .setId("external:${stream.index}")
                     .setMimeType(mimeType)
                     .setLanguage(stream.language)
                     .setLabel(stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown")
                     .setSelectionFlags(
-                        if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0 or
-                        if (stream.isForced) C.SELECTION_FLAG_FORCED else 0
+                        (if (stream.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
+                        (if (stream.isForced) C.SELECTION_FLAG_FORCED else 0)
                     )
                     .build()
             }
@@ -240,7 +274,10 @@ class ExoPlayerEngine(
                 )
             )
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
+
+        val dataSourceFactory = createAuthenticatedDataSourceFactory()
+        val msf = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+        mediaSourceFactory = msf
 
         val audioAttrs = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -249,7 +286,7 @@ class ExoPlayerEngine(
 
         val exo = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
@@ -288,7 +325,10 @@ class ExoPlayerEngine(
                 )
             )
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
+
+        val dataSourceFactory = createAuthenticatedDataSourceFactory()
+        val msf = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+        mediaSourceFactory = msf
 
         val audioAttrs = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -297,7 +337,7 @@ class ExoPlayerEngine(
 
         val exo = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
@@ -331,6 +371,7 @@ class ExoPlayerEngine(
         player?.release()
         player = null
         trackSelector = null
+        mediaSourceFactory = null
         releaseAudioEffects()
     }
 
@@ -350,6 +391,8 @@ class ExoPlayerEngine(
     override fun setSubtitleDelay(ms: Long) {
         if (_subtitleDelayMs == ms) return
         _subtitleDelayMs = ms
+        // The OffsettingSubtitleParserFactory picks up the new delay on next parse.
+        // A re-prepare is needed for existing subtitles to use the new offset.
         val p = player ?: return
         val currentPosition = p.currentPosition
         val currentMediaItem = p.currentMediaItem
@@ -357,6 +400,7 @@ class ExoPlayerEngine(
             val wasPlaying = p.playWhenReady
             p.setMediaItem(currentMediaItem)
             p.seekTo(currentPosition)
+            p.prepare()
             p.playWhenReady = wasPlaying
         }
     }
@@ -618,16 +662,16 @@ class ExoPlayerEngine(
         return listOfNotNull(lang, codec, channels).joinToString(" · ").ifBlank { "Unknown" }
     }
 
-    private fun mapSubtitleCodecToMime(codec: String?): String {
-        if (codec == null) return MimeTypes.TEXT_UNKNOWN
+    private fun mapSubtitleCodecToMime(codec: String?): String? {
+        if (codec == null) return null
         return when (codec.lowercase()) {
             "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
             "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt", "webvtt" -> MimeTypes.APPLICATION_SUBRIP
+            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
             "mov_text" -> MimeTypes.APPLICATION_SUBRIP
-            else -> MimeTypes.TEXT_UNKNOWN
+            else -> null
         }
     }
 }
