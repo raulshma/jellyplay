@@ -1118,14 +1118,6 @@ private fun DetailContentBody(
                     }
                 }
 
-                item.runTimeTicks?.let { ticks ->
-                    Spacer(Modifier.height(14.dp))
-                    InfoBadge(
-                        text = "${ticks / 600_000_000}m",
-                        highlight = true,
-                    )
-                }
-
                 item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
                     Spacer(Modifier.height(14.dp))
                     LazyRow(

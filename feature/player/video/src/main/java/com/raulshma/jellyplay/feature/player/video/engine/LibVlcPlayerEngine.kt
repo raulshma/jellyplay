@@ -48,7 +48,7 @@ class LibVlcPlayerEngine(
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
-        supportsSubtitleStyle = false, // Not supported effectively in LibVLC text renderer via runtime props
+        supportsSubtitleStyle = true,
         supportsDialogueBoost = true,
         supportsNightMode = false,
     )
@@ -71,6 +71,7 @@ class LibVlcPlayerEngine(
     private var libVLC: LibVLC? = null
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
+    private var currentPlaybackRequest: PlaybackRequest? = null
     
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
@@ -131,6 +132,8 @@ class LibVlcPlayerEngine(
     override fun load(request: PlaybackRequest) {
         releaseInternal(releaseVlc = true)
 
+        currentPlaybackRequest = request
+
         val options = arrayListOf(
             "--aout=aaudio",
             "--audio-time-stretch",
@@ -153,6 +156,7 @@ class LibVlcPlayerEngine(
             LibVLC(context.applicationContext, options)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create LibVLC", e)
+            currentPlaybackRequest = null
             _errorFlow.tryEmit("Failed to initialize VLC Engine")
             return
         }
@@ -162,32 +166,12 @@ class LibVlcPlayerEngine(
         mp.setEventListener(eventListener)
         mediaPlayer = mp
         
-        // Setup Media with Http headers if any
-        val media = Media(vlc, Uri.parse(request.uri))
-        val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
-        media.setHWDecoderEnabled(hwDecoding, false)
-
-        if (request.startPositionMs > 0) {
-            media.addOption(":start-time=${request.startPositionMs / 1000.0}")
-        }
-        
-        if (request.headers.isNotEmpty()) {
-            val headerStr = request.headers.entries.joinToString("\r\n") { "${it.key}: ${it.value}" }
-            media.addOption(":http-user-agent=JellyPlay") // Custom UA
-            // libVLC doesn't easily support arbitrary headers except via options if supported by module
-        }
-
-        request.externalSubtitles.forEach { sub ->
-            try {
-                media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
-                    org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
-                    0,
-                    sub.url,
-                ))
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to add subtitle: ${sub.url}", e)
-            }
-        }
+        val media = buildMedia(
+            vlc = vlc,
+            request = request,
+            subtitleStyle = currentConfig.subtitleStyle,
+            startPositionMs = request.startPositionMs,
+        )
 
         mp.media = media
         media.release()
@@ -217,6 +201,7 @@ class LibVlcPlayerEngine(
 
     private fun releaseInternal(releaseVlc: Boolean) {
         pendingPlay = false
+        currentPlaybackRequest = null
         dialogueBoost.detach()
         val mp = mediaPlayer ?: return
         mediaPlayer = null
@@ -273,6 +258,10 @@ class LibVlcPlayerEngine(
                     applyDialogueBoost()
                 }
             }
+
+            if (oldConfig.subtitleStyle != config.subtitleStyle) {
+                reloadMediaForSubtitleStyleChange()
+            }
         } catch (_: Exception) {}
     }
 
@@ -317,8 +306,103 @@ class LibVlcPlayerEngine(
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
-        // LibVLC text renderer ignores external style properties safely
+        if (currentConfig.subtitleStyle != style) {
+            currentConfig = currentConfig.copy(subtitleStyle = style)
+            reloadMediaForSubtitleStyleChange()
+        }
     }
+
+    private fun reloadMediaForSubtitleStyleChange() {
+        val mp = mediaPlayer ?: return
+        val vlc = libVLC ?: return
+        val request = currentPlaybackRequest ?: return
+
+        val currentPositionMs = try { mp.time.coerceAtLeast(0L) } catch (_: Exception) { 0L }
+        val wasPlaying = try { mp.isPlaying } catch (_: Exception) { false }
+
+        try {
+            val media = buildMedia(
+                vlc = vlc,
+                request = request,
+                subtitleStyle = currentConfig.subtitleStyle,
+                startPositionMs = currentPositionMs,
+            )
+            mp.media = media
+            media.release()
+            if (currentPositionMs > 0) {
+                try { mp.time = currentPositionMs } catch (_: Exception) {}
+            }
+            if (wasPlaying) {
+                try { mp.play() } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reload media for subtitle style change", e)
+        }
+    }
+
+    private fun buildMedia(
+        vlc: LibVLC,
+        request: PlaybackRequest,
+        subtitleStyle: SubtitleStyle,
+        startPositionMs: Long,
+    ): Media {
+        val media = Media(vlc, Uri.parse(request.uri))
+        val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
+        media.setHWDecoderEnabled(hwDecoding, false)
+
+        if (startPositionMs > 0) {
+            media.addOption(":start-time=${startPositionMs / 1000.0}")
+        }
+
+        if (request.headers.isNotEmpty()) {
+            media.addOption(":http-user-agent=JellyPlay")
+        }
+
+        request.externalSubtitles.forEach { sub ->
+            try {
+                media.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave(
+                    org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
+                    0,
+                    sub.url,
+                ))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to add subtitle: ${sub.url}", e)
+            }
+        }
+
+        media.applySubtitleStyle(subtitleStyle)
+        return media
+    }
+
+    private fun Media.applySubtitleStyle(style: SubtitleStyle) {
+        val fontColor = colorToVlcHex(style.fontColor.value)
+        val backgroundColor = colorToVlcHex(style.backgroundColor.value)
+        val edgeColor = colorToVlcHex(style.edgeColor.value)
+
+        addOption(":freetype-rel-fontsize=${style.fontSize}")
+        addOption(":freetype-color=$fontColor")
+        addOption(":freetype-background-color=$backgroundColor")
+        addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
+        addOption(":freetype-outline-color=$edgeColor")
+
+        when (style.edgeType) {
+            com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
+            com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
+            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
+                addOption(":freetype-outline-thickness=0")
+                addOption(":freetype-shadow-opacity=255")
+            }
+            com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
+            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
+                addOption(":freetype-outline-thickness=1")
+                addOption(":freetype-shadow-opacity=255")
+            }
+        }
+
+        addOption(":sub-margin-y=${(style.verticalPosition * 100).toInt().coerceIn(0, 100)}")
+    }
+
+    private fun colorToVlcHex(color: Int): String = String.format("#%08X", color)
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {
         try {
