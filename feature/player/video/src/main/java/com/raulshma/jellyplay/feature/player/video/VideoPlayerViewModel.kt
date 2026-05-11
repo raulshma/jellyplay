@@ -10,6 +10,9 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
@@ -94,6 +97,7 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var autoplayNext: Boolean = false
     private val trickplayManager = TrickplayManager(playbackRepository)
+    private var videoMediaSession: MediaSession? = null
 
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
@@ -229,6 +233,12 @@ class VideoPlayerViewModel @Inject constructor(
                 val detail = detailResult.getOrNull()
                 if (detail != null) {
                     playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
+                    val sessionState = playerSessionManager.sessionState.value
+                    createVideoMediaSession(
+                        itemId,
+                        sessionState.title,
+                        sessionState.subtitle,
+                    )
                     progressReporter.startPositionTracking()
                     progressReporter.startProgressReporting()
                     fetchIntroTimestamps(itemId)
@@ -299,10 +309,13 @@ class VideoPlayerViewModel @Inject constructor(
             autoplayNext = prefs.videoAutoplayNext
 
             playerSessionManager.loadMedia(itemId, mediaSourceId, startPositionTicks)
-            
+
             val sessionState = playerSessionManager.sessionState.value
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
+
+            // Create MediaSession for notification / lock screen controls
+            createVideoMediaSession(itemId, sessionState.title, sessionState.subtitle)
 
             if (detail != null) {
                 applyMediaDetail(detail)
@@ -895,10 +908,44 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Creates a MediaSession for the video player so that the notification
+     * and lock screen controls work during video playback.
+     */
+    @OptIn(UnstableApi::class)
+    private fun createVideoMediaSession(
+        itemId: String,
+        title: String,
+        subtitle: String,
+    ) {
+        // Release any existing video session
+        releaseVideoMediaSession()
+
+        val engine = playerSessionManager.engine ?: return
+        val player = engine.underlyingPlayer ?: return
+
+        val session = MediaSession.Builder(context, player)
+            .setId("jellyplay_video_${itemId}")
+            .build()
+        videoMediaSession = session
+        sessionManager.setActiveSession(session)
+    }
+
+    private fun releaseVideoMediaSession() {
+        val session = videoMediaSession ?: return
+        // Only clear if this is still the active session.
+        // Use try-catch to guard against double-release.
+        if (sessionManager.currentSession === session) {
+            sessionManager.clearSession(session)
+        }
+        try { session.release() } catch (_: Exception) { }
+        videoMediaSession = null
+    }
 
     private fun releaseInternals() {
         progressReporter.cancelJobs()
         syncPlayController.reset()
+        releaseVideoMediaSession()
         playerSessionManager.release()
         playerLifecycleManager.activeCallbacks = null
         trickplayManager.clear()

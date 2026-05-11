@@ -1,10 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
-import android.os.Build
+import android.content.Intent
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -21,15 +17,28 @@ class JellyPlayPlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        setMediaNotificationProvider(createMediaNotificationProvider(this))
+        setMediaNotificationProvider(JellyPlayNotificationProvider(this))
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return sessionManager.currentSession
     }
 
-    override fun onTaskRemoved(rootIntent: android.content.Intent?) {
+    /**
+     * When the app starts the service (via `startService`), we need to ensure the current
+     * session is added to this service so the MediaNotificationManager tracks it and posts
+     * the notification. This also handles media button events when a controller connects.
+     */
+    @UnstableApi
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val session = sessionManager.currentSession
+        if (session != null && !isSessionAdded(session)) {
+            addSession(session)
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
         val session = sessionManager.currentSession
         val player = session?.player ?: run {
             stopSelf()
@@ -46,30 +55,8 @@ class JellyPlayPlaybackService : MediaSessionService() {
         val session = sessionManager.currentSession
         if (session != null) {
             sessionManager.clearSession(session)
-            session.release()
+            try { session.release() } catch (_: Exception) { }
         }
         super.onDestroy()
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    "Media Playback",
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    description = "Media playback controls"
-                    setShowBadge(false)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                }
-                manager.createNotificationChannel(channel)
-            }
-        }
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "jellyplay_media_playback"
     }
 }
