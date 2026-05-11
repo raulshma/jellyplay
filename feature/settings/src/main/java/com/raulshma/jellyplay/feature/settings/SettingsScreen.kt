@@ -126,6 +126,8 @@ import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,6 +140,7 @@ fun SettingsScreen(
 ) {
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
+    val adaptiveInfo = LocalAdaptiveInfo.current
 
     var showPinDialog by remember { mutableStateOf(false) }
     var showPlayerPicker by remember { mutableStateOf(false) }
@@ -195,7 +198,11 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(bottom = 80.dp),
+            contentPadding = PaddingValues(
+                start = adaptiveInfo.contentPadding(isTvDevice()) - 16.dp,
+                end = adaptiveInfo.contentPadding(isTvDevice()) - 16.dp,
+                bottom = 80.dp,
+            ),
         ) {
             if (userName.isNotBlank()) {
                 item {

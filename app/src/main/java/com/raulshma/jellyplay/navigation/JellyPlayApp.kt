@@ -13,8 +13,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
@@ -65,6 +67,7 @@ import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -373,8 +376,9 @@ private fun TvMainLayout(
         if (!isPlayerScreen) {
             NavigationRail(
                 containerColor = animatedNavBarColor,
-                modifier = Modifier.padding(vertical = 48.dp),
+                modifier = Modifier.padding(vertical = 24.dp),
             ) {
+                Spacer(Modifier.height(24.dp))
                 activeTopLevelRoutes.forEach { (route, label) ->
                     NavigationRailItem(
                         selected = route == currentTopLevel,
@@ -382,7 +386,12 @@ private fun TvMainLayout(
                         icon = {
                             NavIcon(route, label)
                         },
-                        label = { Text(label) },
+                        label = {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        },
                     )
                 }
             }
