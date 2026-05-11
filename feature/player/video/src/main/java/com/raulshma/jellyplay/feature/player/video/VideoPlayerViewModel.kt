@@ -274,6 +274,7 @@ class VideoPlayerViewModel @Inject constructor(
 
             source?.trickplayInfo?.let { info ->
                 trickplayManager.initialize(itemId, info)
+                _uiState.update { it.copy(trickplayInfo = info) }
             }
 
             playbackRepository.reportPlaybackStart(
