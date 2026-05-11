@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -66,8 +67,9 @@ private fun SkipButtonOverlay(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black.copy(alpha = 0.85f))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                 .clickable(onClick = onSkip)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
