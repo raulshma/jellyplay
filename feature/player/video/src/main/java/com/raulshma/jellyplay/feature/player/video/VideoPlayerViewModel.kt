@@ -179,7 +179,6 @@ class VideoPlayerViewModel @Inject constructor(
                     } }
                     launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
                     launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e) } } }
-                    launch { engine.positionFlow.collect { _uiState.update { s -> s.copy(currentPosition = it) } } }
                 }
             }
         }
@@ -230,6 +229,8 @@ class VideoPlayerViewModel @Inject constructor(
                 val detail = detailResult.getOrNull()
                 if (detail != null) {
                     playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
+                    progressReporter.startPositionTracking()
+                    progressReporter.startProgressReporting()
                     fetchIntroTimestamps(itemId)
                     fetchCreditTimestamps(itemId)
                     fetchNextEpisode(detail)
@@ -572,9 +573,21 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipIntro() {
-        val ts = _uiState.value.introTimestamps ?: return
-        val targetMs = ts.introEndTicks / 10_000
-        playerSessionManager.engine?.seekTo(targetMs)
+        val state = _uiState.value
+        val ts = state.introTimestamps
+        
+        // Prefer API timestamps if they are valid
+        val endTicks = if (ts != null && ts.hasIntro) {
+            ts.introEndTicks
+        } else {
+            // Fall back to chapter-based segment end
+            state.introSegmentEndTicks
+        }
+
+        if (endTicks != null && endTicks > 0) {
+            val targetMs = endTicks / 10_000
+            playerSessionManager.engine?.seekTo(targetMs)
+        }
     }
 
     private fun fetchIntroTimestamps(itemId: String) {
@@ -607,9 +620,27 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun skipCredits() {
-        val ts = _uiState.value.creditTimestamps ?: return
-        val targetMs = ts.creditEndTicks / 10_000
-        playerSessionManager.engine?.seekTo(targetMs)
+        val state = _uiState.value
+        
+        // If we are in credits and near the end, and autoplay is on, just play next
+        if (state.isOutroNearEnd && state.nextEpisode != null && autoplayNext) {
+            playNextEpisode()
+            return
+        }
+
+        val ts = state.creditTimestamps
+        // Prefer API timestamps if they are valid
+        val endTicks = if (ts != null && ts.hasCredits) {
+            ts.creditEndTicks
+        } else {
+            // Fall back to chapter-based segment end
+            state.creditSegmentEndTicks
+        }
+
+        if (endTicks != null && endTicks > 0) {
+            val targetMs = endTicks / 10_000
+            playerSessionManager.engine?.seekTo(targetMs)
+        }
     }
 
     private fun applyMediaDetail(detail: MediaDetail) {
