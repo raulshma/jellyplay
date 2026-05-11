@@ -514,7 +514,7 @@ fun VideoPlayerScreen(
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 200.dp),
+                .padding(bottom = 100.dp, end = 40.dp),
         )
 
         CreditsSkipOverlay(
@@ -522,7 +522,7 @@ fun VideoPlayerScreen(
             onSkip = { viewModel.skipCredits() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 200.dp),
+                .padding(bottom = 100.dp, end = 40.dp),
         )
 
         if (nextEpisode != null) {
@@ -539,8 +539,7 @@ fun VideoPlayerScreen(
                 isPlaying = isPlaying,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 200.dp)
-                    .fillMaxWidth(0.7f),
+                    .padding(bottom = 40.dp, end = 40.dp),
             )
         }
 
