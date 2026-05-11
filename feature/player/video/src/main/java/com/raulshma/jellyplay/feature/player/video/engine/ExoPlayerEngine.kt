@@ -56,7 +56,7 @@ class ExoPlayerEngine(
     private val context: Context,
 ) : MediaEngine {
 
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -130,7 +130,8 @@ class ExoPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         release()
-        
+        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
         val selector = DefaultTrackSelector(context)
         if (request.preferredAudioLanguage != null) {
             selector.setParameters(

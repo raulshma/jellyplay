@@ -36,7 +36,7 @@ class MpvPlayerEngine(
         private const val TAG = "MpvPlayerEngine"
     }
 
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
