@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.ui.adaptive
 
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -61,7 +61,7 @@ fun AdaptiveTwoPane(
             }
         }
     } else {
-        BoxWithConstraints(modifier = modifier) {
+        Box(modifier = modifier) {
             listPane()
         }
     }

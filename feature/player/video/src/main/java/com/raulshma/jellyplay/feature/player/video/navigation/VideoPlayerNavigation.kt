@@ -8,13 +8,19 @@ import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 
 fun EntryProviderScope<NavKey>.videoPlayerSection(
     navigator: Navigator,
+    onEnterPip: () -> Unit = {},
+    onEnterMiniMode: () -> Unit = {},
 ) {
     entry<Route.VideoPlayer> { key ->
         VideoPlayerScreen(
             itemId = key.itemId,
             mediaSourceId = key.mediaSourceId,
             startPositionTicks = key.startPositionTicks,
+            subtitleStreamIndex = key.subtitleStreamIndex,
+            audioStreamIndex = key.audioStreamIndex,
             onBack = { navigator.goBack() },
+            onEnterPip = onEnterPip,
+            onEnterMiniMode = onEnterMiniMode,
         )
     }
     entry<Route.LiveTvChannelPlayer> { key ->
@@ -23,6 +29,8 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             mediaSourceId = null,
             startPositionTicks = 0L,
             onBack = { navigator.goBack() },
+            onEnterPip = onEnterPip,
+            onEnterMiniMode = onEnterMiniMode,
         )
     }
 }

@@ -17,7 +17,6 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -27,10 +26,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -68,7 +64,34 @@ class DetailViewModel @Inject constructor(
     var smartPlayTarget by mutableStateOf<SmartPlayTarget?>(null)
         private set
 
-    private var currentMediaItemId: String? = null
+    var selectedSubtitleIndex by mutableStateOf<Int?>(null)
+        private set
+    var selectedAudioIndex by mutableStateOf<Int?>(null)
+        private set
+
+    fun selectSubtitle(index: Int?) {
+        selectedSubtitleIndex = index
+        val itemId = _detail.value?.item?.id ?: return
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                subtitleStreamIndex = index,
+                audioStreamIndex = selectedAudioIndex,
+            )
+        }
+    }
+
+    fun selectAudio(index: Int?) {
+        selectedAudioIndex = index
+        val itemId = _detail.value?.item?.id ?: return
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = index,
+                subtitleStreamIndex = selectedSubtitleIndex,
+            )
+        }
+    }
 
     data class SmartPlayTarget(
         val episode: MediaItem,
@@ -96,9 +119,34 @@ class DetailViewModel @Inject constructor(
             episodes = emptyMap()
             fetchedSeasonIds = emptySet()
             smartPlayTarget = null
+            selectedSubtitleIndex = null
+            selectedAudioIndex = null
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
+                    val streams = detail.mediaSources.firstOrNull()?.mediaStreams.orEmpty()
+                    val storedSelections = preferences.value.mediaStreamSelections
+                    val storedSelection = storedSelections[itemId]
+                    val hasStoredSelection = storedSelections.containsKey(itemId)
+
+                    selectedSubtitleIndex = if (hasStoredSelection) {
+                        storedSelection?.subtitleStreamIndex
+                    } else {
+                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.isDefault }?.index
+                    }
+                    selectedAudioIndex = if (hasStoredSelection) {
+                        storedSelection?.audioStreamIndex
+                    } else {
+                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.isDefault }?.index
+                    }
+
+                    viewModelScope.launch {
+                        preferencesStore.setMediaStreamSelection(
+                            itemId = itemId,
+                            audioStreamIndex = selectedAudioIndex,
+                            subtitleStreamIndex = selectedSubtitleIndex,
+                        )
+                    }
                     if (detail.item.mediaType == MediaType.SERIES) {
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
@@ -147,7 +195,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private suspend fun maybeComputeSmartPlayTarget() {
+    private fun maybeComputeSmartPlayTarget() {
         val item = _detail.value?.item ?: return
         when (item.mediaType) {
             MediaType.SERIES -> computeSeriesSmartPlayTarget()
@@ -156,30 +204,20 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private suspend fun computeSeriesSmartPlayTarget() {
+    private fun computeSeriesSmartPlayTarget() {
         val allEpisodes = episodes.values.flatten()
         if (allEpisodes.isEmpty()) {
             smartPlayTarget = null
             return
         }
-        val sorted = allEpisodes.sortedWith(
-            compareBy(
-                { it.seasonNumber ?: it.parentId ?: "" },
-                { it.indexNumber ?: Int.MAX_VALUE }
-            )
-        )
-        val downloadedIds = downloadRepository.getAllDownloads()
-            .first()
-            .filter { it.status == DownloadStatus.COMPLETED }
-            .map { it.mediaItemId }
-            .toSet()
-        // Priority 1: first partially watched (has progress but not played) and downloaded
-        val resumeEpisode = sorted.firstOrNull {
-            (it.playbackPositionTicks ?: 0) > 0 && !it.isPlayed && it.id in downloadedIds
-        }
+        val sorted = allEpisodes.sortedByPlaybackOrder()
+
+        // Match Jellyfin's "next thing to watch" behavior: resume in-progress
+        // episodes first, then continue with the first unwatched episode.
+        val resumeEpisode = sorted.firstOrNull { it.hasResumeProgress() }
         if (resumeEpisode != null) {
             val s = resumeEpisode.seasonNumber ?: 1
-            val e = resumeEpisode.indexNumber ?: 1
+            val e = resumeEpisode.episodeNumber ?: resumeEpisode.indexNumber ?: 1
             smartPlayTarget = SmartPlayTarget(
                 episode = resumeEpisode,
                 label = "Resume S${s}:E${e}",
@@ -187,15 +225,18 @@ class DetailViewModel @Inject constructor(
             )
             return
         }
-        // Priority 2: first unwatched and downloaded
-        val nextEpisode = sorted.firstOrNull { !it.isPlayed && it.id in downloadedIds }
+
+        val nextEpisode = sorted.firstOrNull { !it.isPlayed }
         if (nextEpisode != null) {
             val s = nextEpisode.seasonNumber ?: 1
-            val e = nextEpisode.indexNumber ?: 1
-            val label = if (sorted.all { it.id == nextEpisode.id || it.isPlayed }) {
-                "Play S${s}:E${e}"
-            } else {
+            val e = nextEpisode.episodeNumber ?: nextEpisode.indexNumber ?: 1
+            val hasWatchedBefore = sorted
+                .takeWhile { it.id != nextEpisode.id }
+                .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
+            val label = if (hasWatchedBefore) {
                 "Play Next S${s}:E${e}"
+            } else {
+                "Play S${s}:E${e}"
             }
             smartPlayTarget = SmartPlayTarget(
                 episode = nextEpisode,
@@ -204,26 +245,19 @@ class DetailViewModel @Inject constructor(
             )
             return
         }
-        // Priority 3: all watched -> replay first downloaded
-        val first = sorted.firstOrNull { it.id in downloadedIds }
-        if (first != null) {
-            val s = first.seasonNumber ?: 1
-            val e = first.indexNumber ?: 1
-            smartPlayTarget = SmartPlayTarget(
-                episode = first,
-                label = "Replay S${s}:E${e}",
-                startPositionTicks = 0,
-            )
-        }
+
+        val first = sorted.first()
+        val s = first.seasonNumber ?: 1
+        val e = first.episodeNumber ?: first.indexNumber ?: 1
+        smartPlayTarget = SmartPlayTarget(
+            episode = first,
+            label = "Replay S${s}:E${e}",
+            startPositionTicks = 0,
+        )
     }
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
-        val allEpisodes = episodes.values.flatten().sortedWith(
-            compareBy(
-                { it.seasonNumber ?: it.parentId ?: "" },
-                { it.indexNumber ?: Int.MAX_VALUE }
-            )
-        )
+        val allEpisodes = episodes.values.flatten().sortedByPlaybackOrder()
         if (allEpisodes.isEmpty()) {
             smartPlayTarget = null
             return
@@ -242,6 +276,18 @@ class DetailViewModel @Inject constructor(
             startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
         )
     }
+
+    private fun MediaItem.hasResumeProgress(): Boolean =
+        (playbackPositionTicks ?: 0L) > 0L && !isPlayed
+
+    private fun List<MediaItem>.sortedByPlaybackOrder(): List<MediaItem> =
+        sortedWith(
+            compareBy<MediaItem>(
+                { it.seasonNumber ?: Int.MAX_VALUE },
+                { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                { it.name },
+            )
+        )
 
     fun toggleFavorite() {
         val itemId = _detail.value?.item?.id ?: return

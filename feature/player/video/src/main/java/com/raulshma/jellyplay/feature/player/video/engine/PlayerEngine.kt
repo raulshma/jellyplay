@@ -3,12 +3,13 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import android.content.Context
 import android.graphics.Bitmap
 import android.view.View
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
 
-interface PlayerEngine {
+interface PlayerEngine : PlayerLifecycleCallbacks {
 
     fun initialize(
         url: String,
@@ -36,6 +37,8 @@ interface PlayerEngine {
     val playbackSpeed: Float
     val audioSessionId: Int
 
+    // ── Engine capabilities ──
+
     val supportsAudioDelay: Boolean get() = false
     val supportsSubtitleDelay: Boolean get() = false
     val supportsAudioPassthrough: Boolean get() = false
@@ -44,6 +47,19 @@ interface PlayerEngine {
     val supportsNightMode: Boolean get() = false
     val supportsOcr: Boolean get() = false
     val supportsCues: Boolean get() = false
+
+    /** Whether this engine's view can render inside a PiP window. */
+    val supportsPip: Boolean get() = false
+
+    /** Whether this engine can be transferred to a mini-player overlay. */
+    val supportsMiniMode: Boolean get() = false
+
+    // ── Lifecycle ──
+    // onActivityPause() and onActivityResume() are inherited from
+    // PlayerLifecycleCallbacks with default no-op implementations.
+    // MPV and LibVLC override them to pause/resume audio.
+    // ExoPlayer leaves them as no-ops (PlayerView handles lifecycle).
+    // ── Tracks ──
 
     data class TrackInfo(
         val index: Int,

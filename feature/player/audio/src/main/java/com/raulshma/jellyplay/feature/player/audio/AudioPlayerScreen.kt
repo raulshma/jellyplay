@@ -3,14 +3,19 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +71,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -92,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
@@ -121,10 +127,6 @@ fun AudioPlayerScreen(
 
     LaunchedEffect(Unit) {
         contentAlpha.animateTo(1f, tween(600, delayMillis = 200))
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { viewModel.release() }
     }
 
     BackHandler {
@@ -317,44 +319,82 @@ private fun QueueSheet(
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(queue, key = { _, item -> item.id }, contentType = { _, _ -> "queueItem" }) { index, item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(index) }
-                            .tvFocusable()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                item.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (index == currentIndex) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (index == currentIndex) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                item.artist,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (index == currentIndex) {
-                            Text(
-                                "\u25B6",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(end = 8.dp),
-                            )
-                        }
-                    }
+                itemsIndexed(
+                    queue,
+                    key = { _, item -> item.id },
+                    contentType = { _, _ -> "queueItem" },
+                ) { index, item ->
+                    AnimatedQueueItem(
+                        index = index,
+                        currentIndex = currentIndex,
+                        item = item,
+                        onSelect = { onSelect(index) },
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AnimatedQueueItem(
+    index: Int,
+    currentIndex: Int,
+    item: AudioQueueItem,
+    onSelect: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "queueItemScale",
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = tween(100),
+        label = "queueItemAlpha",
+    )
+    val isCurrentItem = index == currentIndex
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onSelect,
+            )
+            .tvFocusable()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isCurrentItem) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isCurrentItem) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                item.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (isCurrentItem) {
+            Text(
+                "\u25B6",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(end = 8.dp),
+            )
         }
     }
 }
@@ -758,64 +798,128 @@ private fun TransportControls(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onToggleShuffle, modifier = Modifier.tvFocusable()) {
-            Icon(
-                Icons.Default.Shuffle,
-                "Shuffle",
-                tint = if (shuffleMode) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        IconButton(
+        IconButtonWithPressAnimation(
+            onClick = onToggleShuffle,
+            tint = if (shuffleMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
+            icon = {
+                Icon(
+                    Icons.Default.Shuffle,
+                    "Shuffle",
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+        )
+        IconButtonWithPressAnimation(
             onClick = onSkipPrevious,
-            modifier = Modifier.size(48.dp).tvFocusable(),
-        ) {
-            Icon(
-                Icons.Default.SkipPrevious, "Previous",
-                modifier = Modifier.size(32.dp),
-                tint = Color.White,
-            )
-        }
-        FilledIconButton(
+            icon = {
+                Icon(
+                    Icons.Default.SkipPrevious, "Previous",
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White,
+                )
+            },
+            size = 48.dp,
+        )
+        PlayPauseButtonWithAnimation(
+            isPlaying = isPlaying,
             onClick = onTogglePlayPause,
-            modifier = Modifier.size(68.dp).tvFocusable(),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ),
-        ) {
-            Icon(
-                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                if (isPlaying) "Pause" else "Play",
-                modifier = Modifier.size(36.dp),
-            )
-        }
-        IconButton(
+        )
+        IconButtonWithPressAnimation(
             onClick = onSkipNext,
-            modifier = Modifier.size(48.dp).tvFocusable(),
+            icon = {
+                Icon(
+                    Icons.Default.SkipNext, "Next",
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White,
+                )
+            },
+            size = 48.dp,
+        )
+        IconButtonWithPressAnimation(
+            onClick = onCycleRepeatMode,
+            tint = if (repeatMode > 0) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
+            icon = {
+                Icon(
+                    if (repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                    when (repeatMode) {
+                        0 -> "Repeat off"
+                        1 -> "Repeat all"
+                        else -> "Repeat one"
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun IconButtonWithPressAnimation(
+    onClick: () -> Unit,
+    tint: Color = Color.White,
+    icon: @Composable () -> Unit,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(stiffness = 600f),
+        label = "transportScale",
+    )
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .tvFocusable(),
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides tint
         ) {
-            Icon(
-                Icons.Default.SkipNext, "Next",
-                modifier = Modifier.size(32.dp),
-                tint = Color.White,
-            )
+            icon()
         }
-        IconButton(onClick = onCycleRepeatMode, modifier = Modifier.tvFocusable()) {
-            Icon(
-                if (repeatMode == 2) Icons.Default.RepeatOne
-                else Icons.Default.Repeat,
-                when (repeatMode) {
-                    0 -> "Repeat off"
-                    1 -> "Repeat all"
-                    else -> "Repeat one"
-                },
-                tint = if (repeatMode > 0) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.size(22.dp),
-            )
-        }
+    }
+}
+
+@Composable
+private fun PlayPauseButtonWithAnimation(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "playPauseScale",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "playPauseIconScale",
+    )
+
+    FilledIconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(68.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .tvFocusable(),
+        shape = CircleShape,
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black,
+        ),
+    ) {
+        Icon(
+            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            if (isPlaying) "Pause" else "Play",
+            modifier = Modifier
+                .size(36.dp)
+                .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+        )
     }
 }
 

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -71,127 +72,127 @@ class EngineCapabilitiesCrossPlayerTest {
     @Test
     fun exoPlayerCapabilities_subtitleStyleSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.subtitleStyle)
+        assertTrue(caps.supportsSubtitleStyle)
     }
 
     @Test
     fun exoPlayerCapabilities_dialogueBoostSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.dialogueBoost)
+        assertTrue(caps.supportsDialogueBoost)
     }
 
     @Test
     fun exoPlayerCapabilities_nightModeSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.nightMode)
+        assertTrue(caps.supportsNightMode)
     }
 
     @Test
     fun exoPlayerCapabilities_ocrSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.ocr)
+        assertTrue(caps.supportsOcr)
     }
 
     @Test
     fun exoPlayerCapabilities_cuesSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertTrue(caps.cues)
+        assertTrue(caps.supportsCues)
     }
 
     @Test
     fun exoPlayerCapabilities_audioDelayNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertFalse(caps.audioDelay)
+        assertFalse(caps.supportsAudioDelay)
     }
 
     @Test
     fun exoPlayerCapabilities_audioPassthroughNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
-        assertFalse(caps.audioPassthrough)
+        assertFalse(caps.supportsAudioPassthrough)
     }
 
     @Test
     fun mpvCapabilities_audioDelaySupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertTrue(caps.audioDelay)
+        assertTrue(caps.supportsAudioDelay)
     }
 
     @Test
     fun mpvCapabilities_audioPassthroughSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertTrue(caps.audioPassthrough)
+        assertTrue(caps.supportsAudioPassthrough)
     }
 
     @Test
-    fun mpvCapabilities_subtitleStyleNotSupported() {
+    fun mpvCapabilities_subtitleStyleSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.subtitleStyle)
+        assertTrue(caps.supportsSubtitleStyle)
     }
 
     @Test
-    fun mpvCapabilities_dialogueBoostNotSupported() {
+    fun mpvCapabilities_dialogueBoostSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.dialogueBoost)
+        assertTrue(caps.supportsDialogueBoost)
     }
 
     @Test
     fun mpvCapabilities_nightModeNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.nightMode)
+        assertFalse(caps.supportsNightMode)
     }
 
     @Test
     fun mpvCapabilities_ocrNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.ocr)
+        assertFalse(caps.supportsOcr)
     }
 
     @Test
     fun mpvCapabilities_cuesNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.cues)
+        assertFalse(caps.supportsCues)
     }
 
     @Test
     fun libvlcCapabilities_audioDelaySupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertTrue(caps.audioDelay)
+        assertTrue(caps.supportsAudioDelay)
     }
 
     @Test
     fun libvlcCapabilities_audioPassthroughSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertTrue(caps.audioPassthrough)
+        assertTrue(caps.supportsAudioPassthrough)
     }
 
     @Test
-    fun libvlcCapabilities_subtitleStyleNotSupported() {
+    fun libvlcCapabilities_subtitleStyleSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.subtitleStyle)
+        assertTrue(caps.supportsSubtitleStyle)
     }
 
     @Test
-    fun libvlcCapabilities_dialogueBoostNotSupported() {
+    fun libvlcCapabilities_dialogueBoostSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.dialogueBoost)
+        assertTrue(caps.supportsDialogueBoost)
     }
 
     @Test
     fun libvlcCapabilities_nightModeNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.nightMode)
+        assertFalse(caps.supportsNightMode)
     }
 
     @Test
     fun libvlcCapabilities_ocrNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.ocr)
+        assertFalse(caps.supportsOcr)
     }
 
     @Test
     fun libvlcCapabilities_cuesNotSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.cues)
+        assertFalse(caps.supportsCues)
     }
 
     @Test
@@ -199,13 +200,13 @@ class EngineCapabilitiesCrossPlayerTest {
         val mpvCaps = getCapabilitiesForType(PlayerType.MPV)
         val vlcCaps = getCapabilitiesForType(PlayerType.LIBVLC)
 
-        assertEquals(mpvCaps.audioDelay, vlcCaps.audioDelay)
-        assertEquals(mpvCaps.audioPassthrough, vlcCaps.audioPassthrough)
-        assertEquals(mpvCaps.subtitleStyle, vlcCaps.subtitleStyle)
-        assertEquals(mpvCaps.dialogueBoost, vlcCaps.dialogueBoost)
-        assertEquals(mpvCaps.nightMode, vlcCaps.nightMode)
-        assertEquals(mpvCaps.ocr, vlcCaps.ocr)
-        assertEquals(mpvCaps.cues, vlcCaps.cues)
+        assertEquals(mpvCaps.supportsAudioDelay, vlcCaps.supportsAudioDelay)
+        assertEquals(mpvCaps.supportsAudioPassthrough, vlcCaps.supportsAudioPassthrough)
+        assertEquals(mpvCaps.supportsSubtitleStyle, vlcCaps.supportsSubtitleStyle)
+        assertEquals(mpvCaps.supportsDialogueBoost, vlcCaps.supportsDialogueBoost)
+        assertEquals(mpvCaps.supportsNightMode, vlcCaps.supportsNightMode)
+        assertEquals(mpvCaps.supportsOcr, vlcCaps.supportsOcr)
+        assertEquals(mpvCaps.supportsCues, vlcCaps.supportsCues)
     }
 
     @Test
@@ -213,40 +214,49 @@ class EngineCapabilitiesCrossPlayerTest {
         val exoCaps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
         val mpvCaps = getCapabilitiesForType(PlayerType.MPV)
 
-        assertFalse(exoCaps.audioDelay == mpvCaps.audioDelay)
-        assertFalse(exoCaps.audioPassthrough == mpvCaps.audioPassthrough)
-        assertFalse(exoCaps.subtitleStyle == mpvCaps.subtitleStyle)
-        assertFalse(exoCaps.dialogueBoost == mpvCaps.dialogueBoost)
+        assertFalse(exoCaps.supportsAudioDelay == mpvCaps.supportsAudioDelay)
+        assertFalse(exoCaps.supportsAudioPassthrough == mpvCaps.supportsAudioPassthrough)
+        assertFalse(exoCaps.supportsOcr == mpvCaps.supportsOcr)
+        assertFalse(exoCaps.supportsCues == mpvCaps.supportsCues)
     }
 
     private fun getCapabilitiesForType(playerType: PlayerType): EngineCapabilities {
         return when (playerType) {
             PlayerType.EXO_PLAYER -> EngineCapabilities(
-                audioDelay = false,
-                audioPassthrough = false,
-                subtitleStyle = true,
-                dialogueBoost = true,
-                nightMode = true,
-                ocr = true,
-                cues = true,
+                supportsPip = true,
+                supportsMiniMode = true,
+                supportsOcr = true,
+                supportsCues = true,
+                supportsAudioDelay = false,
+                supportsSubtitleDelay = true,
+                supportsAudioPassthrough = false,
+                supportsSubtitleStyle = true,
+                supportsDialogueBoost = true,
+                supportsNightMode = true,
             )
             PlayerType.MPV -> EngineCapabilities(
-                audioDelay = true,
-                audioPassthrough = true,
-                subtitleStyle = false,
-                dialogueBoost = false,
-                nightMode = false,
-                ocr = false,
-                cues = false,
+                supportsPip = true,
+                supportsMiniMode = false,
+                supportsOcr = false,
+                supportsCues = false,
+                supportsAudioDelay = true,
+                supportsSubtitleDelay = true,
+                supportsAudioPassthrough = true,
+                supportsSubtitleStyle = true,
+                supportsDialogueBoost = true,
+                supportsNightMode = false,
             )
             PlayerType.LIBVLC -> EngineCapabilities(
-                audioDelay = true,
-                audioPassthrough = true,
-                subtitleStyle = false,
-                dialogueBoost = false,
-                nightMode = false,
-                ocr = false,
-                cues = false,
+                supportsPip = true,
+                supportsMiniMode = false,
+                supportsOcr = false,
+                supportsCues = false,
+                supportsAudioDelay = true,
+                supportsSubtitleDelay = true,
+                supportsAudioPassthrough = true,
+                supportsSubtitleStyle = true,
+                supportsDialogueBoost = true,
+                supportsNightMode = false,
             )
             PlayerType.EXTERNAL -> EngineCapabilities()
         }

@@ -1,8 +1,18 @@
 package com.raulshma.jellyplay.feature.syncplay
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,10 +66,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -151,7 +162,11 @@ fun SyncPlayScreen(
             )
         },
         floatingActionButton = {
-            if (!isInGroup) {
+            AnimatedVisibility(
+                visible = !isInGroup,
+                enter = fadeIn(tween(200)) + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut(tween(150)) + slideOutVertically(targetOffsetY = { it }),
+            ) {
                 FloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
                 ) {
@@ -180,15 +195,24 @@ fun SyncPlayScreen(
                 }
 
                 isInGroup && currentGroup != null -> {
-                    ActiveGroupView(
-                        groupInfo = currentGroup,
-                        onTogglePlayback = { viewModel.togglePlayback() },
-                        onStop = { viewModel.stop() },
-                        onLeave = { viewModel.leaveGroup() },
-                        onSetRepeatMode = { viewModel.setRepeatMode(it) },
-                        onSetShuffleMode = { viewModel.setShuffleMode(it) },
-                        onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
-                    )
+                    AnimatedContent(
+                        targetState = currentGroup,
+                        transitionSpec = {
+                            (fadeIn(tween(300)) + slideInHorizontally(initialOffsetX = { it }))
+                                .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(targetOffsetX = { -it }))
+                        },
+                        label = "activeGroup",
+                    ) { group ->
+                        ActiveGroupView(
+                            groupInfo = group,
+                            onTogglePlayback = { viewModel.togglePlayback() },
+                            onStop = { viewModel.stop() },
+                            onLeave = { viewModel.leaveGroup() },
+                            onSetRepeatMode = { viewModel.setRepeatMode(it) },
+                            onSetShuffleMode = { viewModel.setShuffleMode(it) },
+                            onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
+                        )
+                    }
                 }
 
                 else -> {
@@ -222,11 +246,23 @@ fun SyncPlayScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            items(groups, key = { it.groupId }, contentType = { "syncPlayGroup" }) { group ->
-                                SyncPlayGroupCard(
-                                    group = group,
-                                    onJoin = { viewModel.joinGroup(group.groupId) },
-                                )
+                            itemsIndexed(groups, key = { _, it -> it.groupId }, contentType = { _, _ -> "syncPlayGroup" }) { index, group ->
+                                val visible = remember { mutableStateOf(false) }
+                                LaunchedEffect(Unit) { visible.value = true }
+                                AnimatedVisibility(
+                                    visible = visible.value,
+                                    enter = fadeIn(
+                                        animationSpec = tween(300, delayMillis = index * 80)
+                                    ) + slideInVertically(
+                                        initialOffsetY = { it / 10 },
+                                        animationSpec = tween(300, delayMillis = index * 80, easing = FastOutSlowInEasing),
+                                    ),
+                                ) {
+                                    SyncPlayGroupCard(
+                                        group = group,
+                                        onJoin = { viewModel.joinGroup(group.groupId) },
+                                    )
+                                }
                             }
                         }
                     }

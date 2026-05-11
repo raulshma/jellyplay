@@ -1,26 +1,38 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.statusBarsPadding
-
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,9 +58,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.*
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +90,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -162,14 +182,25 @@ fun MusicHomeScreen(
                             )
                         }
 
-                        items(sections.size, contentType = { "musicHomeSection" }) { index ->
-                            val section = sections[index]
-                            MusicSectionRow(
-                                section = section,
-                                imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                onItemClick = { onItemClick(it.id) },
-                                modifier = Modifier.padding(top = if (index == 0) 8.dp else 16.dp),
-                            )
+                        itemsIndexed(sections, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
+                            val visible = remember { mutableStateOf(false) }
+                            androidx.compose.runtime.LaunchedEffect(Unit) { visible.value = true }
+                            AnimatedVisibility(
+                                visible = visible.value,
+                                enter = fadeIn(
+                                    animationSpec = tween(350, delayMillis = index * 80)
+                                ) + slideInVertically(
+                                    initialOffsetY = { it / 12 },
+                                    animationSpec = tween(350, delayMillis = index * 80, easing = FastOutSlowInEasing),
+                                ),
+                            ) {
+                                MusicSectionRow(
+                                    section = section,
+                                    imageUrlBuilder = { viewModel.getImageUrl(it.id) },
+                                    onItemClick = { onItemClick(it.id) },
+                                    modifier = Modifier.padding(top = if (index == 0) 8.dp else 16.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -258,98 +289,112 @@ private fun MusicHeroHeader(
     imageUrlBuilder: (String) -> String,
     onClick: (String) -> Unit,
     scrollOffset: Float,
-    height: androidx.compose.ui.unit.Dp,
+    height: Dp,
 ) {
-    val featuredItem = remember(sections) {
-        sections.flatMap { it.items }.firstOrNull { it.mediaType == MediaType.ALBUM }
-            ?: sections.firstOrNull()?.items?.firstOrNull()
+    val allItems = remember(sections) { sections.flatMap { it.items } }
+    val currentIndex = remember { mutableStateOf(0) }
+    val featuredItem = remember(allItems, currentIndex.value) {
+        allItems.filter { it.mediaType == MediaType.ALBUM || it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.ARTIST }
+            .let { filtered -> filtered.getOrNull(currentIndex.value % filtered.size.coerceAtLeast(1)) }
+            ?: allItems.firstOrNull()
     }
 
-    Box(
+    AnimatedContent(
+        targetState = featuredItem?.id,
+        transitionSpec = {
+            (fadeIn(tween(500)) togetherWith fadeOut(tween(300)))
+        },
+        label = "heroRotation",
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .then(
-                featuredItem?.let {
-                    Modifier.clickable { onClick(it.id) }
-                } ?: Modifier
-            )
-            .graphicsLayer { translationY = scrollOffset * 0.5f }
-    ) {
-        if (featuredItem != null) {
-            MediaImage(
-                url = featuredItem.parentId?.let { backdropUrlBuilder(it) }
-                    ?: imageUrlBuilder(featuredItem.id),
-                contentDescription = featuredItem.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        }
-
+            .graphicsLayer { translationY = scrollOffset * 0.5f },
+    ) { _ ->
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.4f),
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.background,
-                        ),
-                        startY = 0f,
-                        endY = Float.POSITIVE_INFINITY,
-                    )
+                .fillMaxWidth()
+                .height(height)
+                .then(
+                    featuredItem?.let {
+                        Modifier.clickable { onClick(it.id) }
+                    } ?: Modifier
+                ),
+        ) {
+            featuredItem?.let { item ->
+                MediaImage(
+                    url = item.parentId?.let { backdropUrlBuilder(it) }
+                        ?: imageUrlBuilder(item.id),
+                    contentDescription = item.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
                 )
-        )
+            }
 
-        if (featuredItem != null) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp)
-            ) {
-                Text(
-                    text = featuredItem.name,
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    featuredItem.albumArtist?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.8f),
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.4f),
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.background,
+                            ),
+                            startY = 0f,
+                            endY = Float.POSITIVE_INFINITY,
                         )
-                    }
-                    featuredItem.year?.let {
-                        Text(
-                            text = it.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.8f),
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = { onClick(featuredItem.id) },
-                    modifier = Modifier.height(44.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
+                    )
+            )
+
+            featuredItem?.let { item ->
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp),
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Play", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item.albumArtist?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White.copy(alpha = 0.8f),
+                            )
+                        }
+                        item.year?.let {
+                            Text(
+                                text = it.toString(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White.copy(alpha = 0.8f),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { onClick(item.id) },
+                        modifier = Modifier.height(44.dp),
+                        shape = RoundedCornerShape(22.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Play", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    }
                 }
             }
         }

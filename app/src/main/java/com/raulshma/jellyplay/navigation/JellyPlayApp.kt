@@ -1,16 +1,20 @@
 package com.raulshma.jellyplay.navigation
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
@@ -28,26 +32,31 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveLayout
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
-import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
+import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -135,6 +144,8 @@ private fun MainContent(
             currentRoute is Route.OfflinePlayer ||
             currentRoute is Route.LiveTvChannelPlayer
 
+    val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
+
     val activeTopLevelRoutes = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
@@ -146,6 +157,35 @@ private fun MainContent(
     }
 
     var lastNavigatedAt by remember { mutableStateOf(0L) }
+
+    val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
+    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsState()
+    val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsState()
+    val audioTitle by audioPlaybackManager.title.collectAsState()
+    val audioArtist by audioPlaybackManager.artist.collectAsState()
+    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsState()
+    val showMiniPlayer = isAudioPlaying && !isAudioPlayerScreen && !isPlayerScreen
+
+    val videoMiniPlayerState = viewModel.videoMiniPlayerState
+    val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsState()
+    val videoMiniTitle by videoMiniPlayerState.title.collectAsState()
+    val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsState()
+    val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsState()
+    val videoMiniItemId by videoMiniPlayerState.itemId.collectAsState()
+
+    val context = LocalContext.current
+
+    val enterPip: () -> Unit = remember(context) {
+        {
+            (context as? MainActivity)?.enterPipMode()
+        }
+    }
+
+    val enterVideoMiniMode: () -> Unit = remember(navigator) {
+        {
+            navigator.goBack()
+        }
+    }
 
     androidx.compose.runtime.LaunchedEffect(viewModel.syncPlayManager) {
         viewModel.syncPlayManager.commands.collect { command ->
@@ -195,63 +235,118 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
+                        enterPip = enterPip,
+                        enterVideoMiniMode = enterVideoMiniMode,
                     )
                 }
             } else {
                 Scaffold(
                     bottomBar = {
                         if (!isPlayerScreen && !isExpanded) {
-                            NavigationBar(containerColor = animatedNavBarColor) {
-                                activeTopLevelRoutes.forEach { (route, label) ->
-                                    NavigationBarItem(
-                                        selected = route == currentTopLevel,
-                                        onClick = { navigator.navigate(route) },
-                                        icon = {
-                                            NavIcon(route, label)
-                                        },
-                                        label = { Text(label) },
-                                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                            indicatorColor = Color.White.copy(alpha = 0.15f),
-                                            selectedIconColor = Color.White,
-                                            selectedTextColor = Color.White,
-                                            unselectedIconColor = Color.White.copy(alpha = 0.6f),
-                                            unselectedTextColor = Color.White.copy(alpha = 0.6f),
-                                        ),
-                                    )
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                MiniPlayer(
+                                    isVisible = showMiniPlayer,
+                                    title = audioTitle,
+                                    artist = audioArtist,
+                                    artworkUri = audioArtworkUrl,
+                                    isPlaying = isAudioPlaying,
+                                    onClick = {
+                                        val itemId = audioItemId ?: return@MiniPlayer
+                                        navigator.navigate(Route.AudioPlayer(itemId))
+                                    },
+                                    onStop = {
+                                        audioPlaybackManager.stopAndRelease()
+                                    },
+                                    onPlayPause = {
+                                        audioPlaybackManager.togglePlayPause()
+                                    },
+                                    onSkipNext = {
+                                        audioPlaybackManager.skipToNext()
+                                    },
+                                )
+                                NavigationBar(containerColor = animatedNavBarColor) {
+                                    activeTopLevelRoutes.forEach { (route, label) ->
+                                        NavigationBarItem(
+                                            selected = route == currentTopLevel,
+                                            onClick = { navigator.navigate(route) },
+                                            icon = {
+                                                NavIcon(route, label)
+                                            },
+                                            label = { Text(label) },
+                                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                                indicatorColor = Color.White.copy(alpha = 0.15f),
+                                                selectedIconColor = Color.White,
+                                                selectedTextColor = Color.White,
+                                                unselectedIconColor = Color.White.copy(alpha = 0.6f),
+                                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                            ),
+                                        )
+                                    }
                                 }
                             }
                         }
                     },
                 ) { innerPadding ->
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
-                        if (!isPlayerScreen && isExpanded) {
-                            NavigationRail(
-                                containerColor = animatedNavBarColor,
-                            ) {
-                                activeTopLevelRoutes.forEach { (route, label) ->
-                                    NavigationRailItem(
-                                        selected = route == currentTopLevel,
-                                        onClick = { navigator.navigate(route) },
-                                        icon = {
-                                            NavIcon(route, label)
-                                        },
-                                        label = { Text(label) },
-                                    )
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (!isPlayerScreen && isExpanded) {
+                                NavigationRail(
+                                    containerColor = animatedNavBarColor,
+                                ) {
+                                    activeTopLevelRoutes.forEach { (route, label) ->
+                                        NavigationRailItem(
+                                            selected = route == currentTopLevel,
+                                            onClick = { navigator.navigate(route) },
+                                            icon = {
+                                                NavIcon(route, label)
+                                            },
+                                            label = { Text(label) },
+                                        )
+                                    }
                                 }
                             }
+                            MainNavDisplay(
+                                navigationState = navigationState,
+                                navigator = navigator,
+                                onLogout = onLogout,
+                                homeMode = homeMode,
+                                onModeChange = onModeChange,
+                                enterPip = enterPip,
+                                enterVideoMiniMode = enterVideoMiniMode,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
-                        MainNavDisplay(
-                            navigationState = navigationState,
-                            navigator = navigator,
-                            onLogout = onLogout,
-                            homeMode = homeMode,
-                            onModeChange = onModeChange,
-                            modifier = Modifier.weight(1f),
-                        )
+
+                        if (isVideoMiniMode && !isPlayerScreen) {
+                            VideoMiniPlayer(
+                                isVisible = true,
+                                engine = videoMiniPlayerState.engine,
+                                title = videoMiniTitle,
+                                subtitle = videoMiniSubtitle,
+                                isPlaying = videoMiniIsPlaying,
+                                onClick = {
+                                    val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                                    navigator.navigate(Route.VideoPlayer(itemId))
+                                },
+                                onClose = {
+                                    videoMiniPlayerState.release()
+                                },
+                                onPlayPause = {
+                                    videoMiniPlayerState.togglePlayPause()
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 8.dp, bottom = 8.dp)
+                                    .fillMaxWidth(0.45f),
+                            )
+                        }
                     }
                 }
             }
@@ -271,6 +366,8 @@ private fun TvMainLayout(
     onLogout: () -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
+    enterPip: () -> Unit,
+    enterVideoMiniMode: () -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxSize()) {
         if (!isPlayerScreen) {
@@ -296,6 +393,8 @@ private fun TvMainLayout(
             onLogout = onLogout,
             homeMode = homeMode,
             onModeChange = onModeChange,
+            enterPip = enterPip,
+            enterVideoMiniMode = enterVideoMiniMode,
             modifier = Modifier.weight(1f),
         )
     }
@@ -313,7 +412,6 @@ private fun NavIcon(route: Route, label: String) {
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
@@ -321,71 +419,105 @@ private fun MainNavDisplay(
     onLogout: () -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
+    enterPip: () -> Unit,
+    enterVideoMiniMode: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
-            NavDisplay(
-                backStack = currentBackStack,
-                onBack = { navigator.goBack() },
-                transitionSpec = {
-                    slideInHorizontally(
-                        initialOffsetX = { it / 3 },
-                        animationSpec = tween(350),
-                    ) + fadeIn(tween(350)) togetherWith
-                            slideOutHorizontally(
-                                targetOffsetX = { -it / 3 },
-                                animationSpec = tween(350),
-                            ) + fadeOut(tween(350))
-                },
-                popTransitionSpec = {
-                    slideInHorizontally(
-                        initialOffsetX = { -it / 3 },
-                        animationSpec = tween(350),
-                    ) + fadeIn(tween(350)) togetherWith
-                            slideOutHorizontally(
-                                targetOffsetX = { it / 3 },
-                                animationSpec = tween(350),
-                            ) + fadeOut(tween(350))
-                },
-                sharedTransitionScope = this@SharedTransitionLayout,
-                entryProvider =                 entryProvider {
-                            homeSection(
-                                navigator = navigator,
-                                homeMode = homeMode,
-                                onModeChange = onModeChange,
-                                musicContent = {
-                                    MusicHomeScreen(
-                                        homeMode = homeMode,
-                                        onModeChange = onModeChange,
-                                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                                        onSettingsClick = { navigator.navigate(Route.Settings) },
-                                        onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-                                        onDownloadsClick = { navigator.navigate(Route.Downloads) },
-                                        onArtistsClick = { navigator.navigate(Route.Artists) },
-                                        onAlbumsClick = { navigator.navigate(Route.Albums) },
-                                        onTracksClick = { navigator.navigate(Route.Tracks) },
-                                        onGenresClick = { navigator.navigate(Route.Genres) },
-                                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                                    )
-                                },
-                            )
-                            librarySection(navigator)
-                            searchSection(navigator)
-                            liveTvSection(navigator)
-                            detailsSection(navigator)
-                            videoPlayerSection(navigator)
-                            audioPlayerSection(navigator)
-                            downloadsSection(navigator)
-                            authSection(navigator) { navigator.goBack() }
-                            settingsSection(navigator, onLogout)
-                            musicSection(navigator)
-                            syncPlaySection(navigator)
-                        },
-                        modifier = modifier,
+    NavDisplay(
+        backStack = currentBackStack,
+        onBack = { navigator.goBack() },
+        transitionSpec = {
+            fadeIn(
+                animationSpec = tween(320, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { it / 10 },
+                animationSpec = tween(360, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 0.985f,
+                animationSpec = tween(360, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(180),
+            ) + slideOutHorizontally(
+                targetOffsetX = { -it / 18 },
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 1.015f,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            )
+        },
+        popTransitionSpec = {
+            fadeIn(
+                animationSpec = tween(260, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { -it / 12 },
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 1.015f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(220),
+            ) + slideOutHorizontally(
+                targetOffsetX = { it / 10 },
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 0.985f,
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            )
+        },
+        predictivePopTransitionSpec = { _ ->
+            fadeIn(
+                animationSpec = tween(260, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { -it / 12 },
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 1.015f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(220),
+            ) + slideOutHorizontally(
+                targetOffsetX = { it / 10 },
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 0.985f,
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+            )
+        },
+        entryProvider = entryProvider {
+            homeSection(
+                navigator = navigator,
+                homeMode = homeMode,
+                onModeChange = onModeChange,
+                musicContent = {
+                    MusicHomeScreen(
+                        homeMode = homeMode,
+                        onModeChange = onModeChange,
+                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                        onSettingsClick = { navigator.navigate(Route.Settings) },
+                        onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
+                        onDownloadsClick = { navigator.navigate(Route.Downloads) },
+                        onArtistsClick = { navigator.navigate(Route.Artists) },
+                        onAlbumsClick = { navigator.navigate(Route.Albums) },
+                        onTracksClick = { navigator.navigate(Route.Tracks) },
+                        onGenresClick = { navigator.navigate(Route.Genres) },
+                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
                     )
-        }
-    }
+                },
+            )
+            librarySection(navigator)
+            searchSection(navigator)
+            liveTvSection(navigator)
+            detailsSection(navigator)
+            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            audioPlayerSection(navigator)
+            downloadsSection(navigator)
+            authSection(navigator) { navigator.goBack() }
+            settingsSection(navigator, onLogout)
+            musicSection(navigator)
+            syncPlaySection(navigator)
+        },
+        modifier = modifier,
+    )
 }

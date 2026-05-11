@@ -1,5 +1,10 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -122,22 +127,34 @@ fun UserManagementScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(serverUsers, key = { it.id }, contentType = { "user" }) { user ->
+                    itemsIndexed(serverUsers, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
                         val isCurrentUser = currentUser?.id == user.id
-                        UserManagementCard(
-                            user = user,
-                            isCurrentUser = isCurrentUser,
-                            onClick = {
-                                if (!isCurrentUser) {
-                                    viewModel.switchUser(user.id) {
-                                        onBack()
+                        val visible = remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { visible.value = true }
+                        AnimatedVisibility(
+                            visible = visible.value,
+                            enter = fadeIn(
+                                animationSpec = tween(300, delayMillis = index * 50)
+                            ) + slideInVertically(
+                                initialOffsetY = { it / 10 },
+                                animationSpec = tween(300, delayMillis = index * 50, easing = FastOutSlowInEasing),
+                            ),
+                        ) {
+                            UserManagementCard(
+                                user = user,
+                                isCurrentUser = isCurrentUser,
+                                onClick = {
+                                    if (!isCurrentUser) {
+                                        viewModel.switchUser(user.id) {
+                                            onBack()
+                                        }
                                     }
-                                }
-                            },
-                            onRemove = {
-                                viewModel.removeUser(user.id)
-                            },
-                        )
+                                },
+                                onRemove = {
+                                    viewModel.removeUser(user.id)
+                                },
+                            )
+                        }
                     }
                 }
             }

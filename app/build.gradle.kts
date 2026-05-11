@@ -130,6 +130,8 @@ dependencies {
 
     implementation(libs.play.services.cast.framework)
 
+    implementation(libs.media3.session)
+
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 

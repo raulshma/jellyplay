@@ -1,10 +1,21 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,7 +93,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,6 +105,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -108,6 +122,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -137,6 +152,9 @@ fun SettingsScreen(
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
     var showAudioDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayMinDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayMaxDelayPicker by remember { mutableStateOf(false) }
+    var showSyncPlayDurationPicker by remember { mutableStateOf(false) }
     var showSubtitleFontPicker by remember { mutableStateOf(false) }
     var showSubtitleColorPicker by remember { mutableStateOf(false) }
     var showSubtitleBgColorPicker by remember { mutableStateOf(false) }
@@ -166,6 +184,11 @@ fun SettingsScreen(
         },
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
     ) { padding ->
+        var visibleItemCount by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            visibleItemCount = Int.MAX_VALUE
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -174,101 +197,123 @@ fun SettingsScreen(
         ) {
             if (userName.isNotBlank()) {
                 item {
-                    SettingsProfileBanner(
-                        userName = userName,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    AnimatedSettingsEntrance(0, visibleItemCount) {
+                        SettingsProfileBanner(
+                            userName = userName,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            item {
+                AnimatedSettingsEntrance(1, visibleItemCount) {
+                    SettingsSectionHeader(title = "Account")
+                }
+            }
+
+            item {
+                AnimatedSettingsEntrance(2, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Dns,
+                        title = "Servers",
+                        subtitle = "Manage your Jellyfin servers",
+                        onClick = onServerManagement,
                     )
                 }
             }
 
             item {
-                SettingsSectionHeader(title = "Account")
+                AnimatedSettingsEntrance(3, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Person,
+                        title = "Switch User",
+                        subtitle = userName.ifBlank { "Manage users" },
+                        onClick = onUserManagement,
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Dns,
-                    title = "Servers",
-                    subtitle = "Manage your Jellyfin servers",
-                    onClick = onServerManagement,
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Person,
-                    title = "Switch User",
-                    subtitle = userName.ifBlank { "Manage users" },
-                    onClick = onUserManagement,
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.AutoMirrored.Filled.Logout,
-                    title = "Sign Out",
-                    subtitle = "Log out of current account",
-                    isDestructive = true,
-                    onClick = {
-                        viewModel.logout()
-                        onLogout()
-                    },
-                )
+                AnimatedSettingsEntrance(4, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = "Sign Out",
+                        subtitle = "Log out of current account",
+                        isDestructive = true,
+                        onClick = {
+                            viewModel.logout()
+                            onLogout()
+                        },
+                    )
+                }
             }
 
             item {
                 Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Video Player")
+                AnimatedSettingsEntrance(5, visibleItemCount) {
+                    SettingsSectionHeader(title = "Video Player")
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.PlayCircle,
-                    title = "Player Engine",
-                    subtitle = "Choose media playback engine",
-                    trailingText = preferences.preferredPlayer.displayName,
-                    onClick = { showPlayerPicker = true },
-                )
+                AnimatedSettingsEntrance(6, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.PlayCircle,
+                        title = "Player Engine",
+                        subtitle = "Choose media playback engine",
+                        trailingText = preferences.preferredPlayer.displayName,
+                        onClick = { showPlayerPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.FastForward,
-                    title = "Seek Duration",
-                    subtitle = "Double-tap to seek",
-                    trailingText = "${preferences.videoSeekDurationMs / 1000}s",
-                    onClick = { showVideoSeekDurationPicker = true },
-                )
+                AnimatedSettingsEntrance(7, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.FastForward,
+                        title = "Seek Duration",
+                        subtitle = "Double-tap to seek",
+                        trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                        onClick = { showVideoSeekDurationPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.ScreenLockLandscape,
-                    title = "Orientation",
-                    subtitle = "Default screen orientation",
-                    trailingText = preferences.videoDefaultOrientation.displayName,
-                    onClick = { showOrientationPicker = true },
-                )
+                AnimatedSettingsEntrance(8, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.ScreenLockLandscape,
+                        title = "Orientation",
+                        subtitle = "Default screen orientation",
+                        trailingText = preferences.videoDefaultOrientation.displayName,
+                        onClick = { showOrientationPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Timer,
-                    title = "Controls Timeout",
-                    subtitle = "Auto-hide player controls",
-                    trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
-                    onClick = { showControlsTimeoutPicker = true },
-                )
+                AnimatedSettingsEntrance(9, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Controls Timeout",
+                        subtitle = "Auto-hide player controls",
+                        trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                        onClick = { showControlsTimeoutPicker = true },
+                    )
+                }
             }
 
             item {
-                SettingToggleItem(
-                    icon = Icons.Default.Gesture,
-                    title = "Gestures",
-                    subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
-                    checked = preferences.videoGesturesEnabled,
-                    onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
-                )
+                AnimatedSettingsEntrance(10, visibleItemCount) {
+                    SettingToggleItem(
+                        icon = Icons.Default.Gesture,
+                        title = "Gestures",
+                        subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
+                        checked = preferences.videoGesturesEnabled,
+                        onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
+                    )
+                }
             }
 
             item {
@@ -524,6 +569,60 @@ fun SettingsScreen(
                     checked = preferences.syncPlayDefaultIgnoreWait,
                     onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
                 )
+            }
+
+            item {
+                SettingToggleItem(
+                    icon = Icons.Default.Speed,
+                    title = "Sync Correction",
+                    subtitle = "Automatically correct playback sync drift",
+                    checked = preferences.syncPlaySyncCorrection,
+                    onCheckedChange = { viewModel.setSyncPlaySyncCorrection(it) },
+                )
+            }
+
+            if (preferences.syncPlaySyncCorrection) {
+                item {
+                    SettingToggleItem(
+                        icon = Icons.Default.Speed,
+                        title = "Speed Correction",
+                        subtitle = "Adjust playback speed to fix small sync drift",
+                        checked = preferences.syncPlaySpeedToSyncEnabled,
+                        onCheckedChange = { viewModel.setSyncPlaySpeedToSyncEnabled(it) },
+                    )
+                }
+            }
+
+            if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Min Delay",
+                        subtitle = "Minimum delay before speed correction activates",
+                        trailingText = "${preferences.syncPlaySpeedToSyncMinDelayMs}ms",
+                        onClick = { showSyncPlayMinDelayPicker = true },
+                    )
+                }
+
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Max Delay",
+                        subtitle = "Maximum delay for speed correction (seeks above this)",
+                        trailingText = "${preferences.syncPlaySpeedToSyncMaxDelayMs}ms",
+                        onClick = { showSyncPlayMaxDelayPicker = true },
+                    )
+                }
+
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Timer,
+                        title = "Speed Correction Duration",
+                        subtitle = "How long the speed adjustment lasts",
+                        trailingText = "${preferences.syncPlaySpeedToSyncDurationMs}ms",
+                        onClick = { showSyncPlayDurationPicker = true },
+                    )
+                }
             }
 
             item {
@@ -1147,6 +1246,45 @@ fun SettingsScreen(
         )
     }
 
+    if (showSyncPlayMinDelayPicker) {
+        val values = listOf(30L, 50L, 60L, 100L, 150L, 200L, 300L, 500L)
+        RadioPickerDialog(
+            title = "Speed Correction Min Delay",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMinDelayMs) },
+            onDismiss = { showSyncPlayMinDelayPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncMinDelayMs(values[index])
+                showSyncPlayMinDelayPicker = false
+            },
+        )
+    }
+
+    if (showSyncPlayMaxDelayPicker) {
+        val values = listOf(1000L, 2000L, 3000L, 5000L, 10000L)
+        RadioPickerDialog(
+            title = "Speed Correction Max Delay",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMaxDelayMs) },
+            onDismiss = { showSyncPlayMaxDelayPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncMaxDelayMs(values[index])
+                showSyncPlayMaxDelayPicker = false
+            },
+        )
+    }
+
+    if (showSyncPlayDurationPicker) {
+        val values = listOf(300L, 500L, 1000L, 1500L, 2000L, 3000L)
+        RadioPickerDialog(
+            title = "Speed Correction Duration",
+            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncDurationMs) },
+            onDismiss = { showSyncPlayDurationPicker = false },
+            onSelect = { index ->
+                viewModel.setSyncPlaySpeedToSyncDurationMs(values[index])
+                showSyncPlayDurationPicker = false
+            },
+        )
+    }
+
     if (showSubtitleFontPicker) {
         val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
         RadioPickerDialog(
@@ -1449,59 +1587,84 @@ private fun SettingListItem(
     isDestructive: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "settingItemScale",
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = tween(100),
+        label = "settingItemAlpha",
+    )
+
     val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     val supportingColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
     val iconColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
 
-    ListItem(
-        headlineContent = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = headlineColor,
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
             )
-        },
-        supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
-            {
+            .then(if (isTvDevice()) Modifier.tvFocusable() else Modifier)
+    ) {
+        ListItem(
+            headlineContent = {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = supportingColor,
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = headlineColor,
                 )
-            }
-        },
-        leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(24.dp),
-            )
-        },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                trailingText?.let { text ->
+            },
+            supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
+                {
                     Text(
-                        text = text,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = supportingColor,
                     )
-                    Spacer(Modifier.width(4.dp))
                 }
+            },
+            leadingContent = {
                 Icon(
-                    Icons.AutoMirrored.Filled.NavigateNext,
+                    imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp),
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp),
                 )
-            }
-        },
-        modifier = Modifier.clickable(onClick = onClick).tvFocusable(),
-        colors = ListItemDefaults.colors(
-            containerColor = Color.Transparent,
-        ),
-    )
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    trailingText?.let { text ->
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.NavigateNext,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = Color.Transparent,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -1513,44 +1676,71 @@ private fun SettingToggleItem(
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null,
 ) {
-    ListItem(
-        headlineContent = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-            )
-        },
-        supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
-            {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
-        },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-            )
-        },
-        modifier = Modifier.clickable {
-            onClick?.invoke() ?: onCheckedChange(!checked)
-        }.tvFocusable(),
-        colors = ListItemDefaults.colors(
-            containerColor = Color.Transparent,
-        ),
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "toggleItemScale",
     )
+    val rowAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = tween(100),
+        label = "toggleItemAlpha",
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(200),
+        label = "toggleIconColor",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale; alpha = rowAlpha }
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) { onClick?.invoke() ?: onCheckedChange(!checked) }
+            .then(if (isTvDevice()) Modifier.tvFocusable() else Modifier)
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+            },
+            supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
+                {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            leadingContent = {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp),
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = Color.Transparent,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -1586,6 +1776,25 @@ private fun SettingInfoItem(
             containerColor = Color.Transparent,
         ),
     )
+}
+
+@Composable
+private fun AnimatedSettingsEntrance(
+    index: Int,
+    visibleCount: Int,
+    content: @Composable () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = index < visibleCount,
+        enter = fadeIn(
+            animationSpec = tween(250, delayMillis = (index % 8) * 30)
+        ) + slideInVertically(
+            initialOffsetY = { it / 12 },
+            animationSpec = tween(250, delayMillis = (index % 8) * 30, easing = FastOutSlowInEasing),
+        ),
+    ) {
+        content()
+    }
 }
 
 private data class RadioOption(

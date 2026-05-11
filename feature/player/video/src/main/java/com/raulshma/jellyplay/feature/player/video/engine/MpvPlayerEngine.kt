@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -8,34 +9,86 @@ import android.view.View
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
-import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.SubtitleStyle
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 class MpvPlayerEngine(
     private val context: Context,
-) : PlayerEngine {
+) : MediaEngine {
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
     }
 
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    override val capabilities = EngineCapabilities(
+        supportsPip = true,
+        supportsMiniMode = false, // Mini-mode reparenting breaks SurfaceView
+        supportsOcr = false,
+        supportsCues = false,
+        supportsAudioDelay = true,
+        supportsSubtitleDelay = true,
+        supportsAudioPassthrough = true,
+        supportsSubtitleStyle = true, // Basic MPV subtitle properties
+        supportsDialogueBoost = true,
+        supportsNightMode = false,
+    )
+
+    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
+    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _currentCues = MutableStateFlow<List<String>>(emptyList())
+    override val currentCues: StateFlow<List<String>> = _currentCues.asStateFlow()
+
+    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
+    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
+
+    private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
+
     private var mpvView: PlayerMPVView? = null
-    private var onStateChanged: ((Boolean) -> Unit)? = null
-    private var onTracksChanged: (() -> Unit)? = null
-    private var onError: ((String) -> Unit)? = null
-    private var onPlaybackStateChanged: ((Int) -> Unit)? = null
-    @Volatile private var _isPlaying = false
-    @Volatile private var _speed = 1f
-    @Volatile private var _audioDelayMs = 0L
-    @Volatile private var _subtitleDelayMs = 0L
     private var pendingUrl: String? = null
-    private var pendingSubtitles: List<Pair<String, String>>? = null // List of (url, label) pairs
-    private var currentDecoderMode: DecoderMode = DecoderMode.HW_PREFERRED
-    private var _passthroughEnabled = false
+    private var pendingStartPositionMs: Long = 0L
+    private var pendingSubtitles: List<SubtitleSource> = emptyList()
+    
+    private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
-    private var dialogueBoostEnabled: Boolean = false
+
+    private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+    }
+
+    override fun onActivityResume() {
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
 
     private inner class PlayerMPVView(
         ctx: Context,
@@ -44,17 +97,13 @@ class MpvPlayerEngine(
         private val observer = object : MPV.EventObserver {
             override fun eventProperty(property: String) {}
             override fun eventProperty(property: String, value: Long) {}
-            override fun eventProperty(property: String, value: Double) {
-                if (property == "speed") _speed = value.toFloat()
-            }
+            override fun eventProperty(property: String, value: Double) {}
             override fun eventProperty(property: String, value: Boolean) {
                 if (property == "pause") {
-                    _isPlaying = !value
-                    mainHandler.post { onStateChanged?.invoke(_isPlaying) }
+                    _isPlaying.value = !value
                 }
                 if (property == "paused-for-cache") {
-                    val state = if (value) 2 else 3 // BUFFERING=2, READY=3
-                    mainHandler.post { onPlaybackStateChanged?.invoke(state) }
+                    _playbackState.value = if (value) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
                 }
             }
             override fun eventProperty(property: String, value: String) {}
@@ -62,36 +111,39 @@ class MpvPlayerEngine(
             override fun event(eventId: Int, node: MPVNode) {
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
-                        mainHandler.post { onPlaybackStateChanged?.invoke(1) } // IDLE=1
+                        _playbackState.value = EnginePlaybackState.IDLE
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
-                        // Add external subtitles after file is loaded
-                        pendingSubtitles?.forEach { (subUrl, _) ->
+                        pendingSubtitles.forEach { sub ->
                             try {
-                                Log.d(TAG, "Adding subtitle after file loaded: $subUrl")
-                                mpv.command("sub-add", subUrl)
+                                val cleanUrl = if (sub.url.contains("api_key=")) sub.url.substringBefore("?") else sub.url
+                                mpv.command("sub-add", cleanUrl, "auto", sub.label)
                             } catch (e: Exception) {
-                                Log.e(TAG, "Failed to add subtitle after file loaded: $subUrl", e)
+                                Log.e(TAG, "Failed to add subtitle: ${sub.url}", e)
                             }
                         }
-                        pendingSubtitles = null
-                        mainHandler.post {
-                            onPlaybackStateChanged?.invoke(3) // READY=3
-                            onTracksChanged?.invoke()
-                        }
+                        pendingSubtitles = emptyList()
+                        _playbackState.value = EnginePlaybackState.READY
+                        _availableTracks.value = buildTracks()
+                    }
+                    MPV.mpvEvent.MPV_EVENT_END_FILE -> {
+                        _playbackState.value = EnginePlaybackState.ENDED
                     }
                 }
             }
         }
 
         override fun initOptions() {
-            mpv.setOptionString("hwdec", when (currentDecoderMode) {
+            mpv.setOptionString("hwdec", when (currentConfig.decoderMode) {
                 DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
                 DecoderMode.SW_ONLY -> "no"
             })
             mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
+            if (currentConfig.audioPassthrough) {
+                mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
+            }
         }
 
         override fun postInitOptions() {
@@ -108,45 +160,53 @@ class MpvPlayerEngine(
         }
     }
 
-    override fun initialize(url: String, title: String, startPositionMs: Long) {
-        pendingUrl = url
+    override fun load(request: PlaybackRequest) {
+        pendingUrl = request.uri
+        pendingStartPositionMs = request.startPositionMs
+        pendingSubtitles = request.externalSubtitles
 
         mpvView?.let { view ->
             try {
-                if (startPositionMs > 0) {
-                    view.mpv.setOptionString("start", "+${startPositionMs / 1000.0}")
+                if (request.startPositionMs > 0) {
+                    view.mpv.setOptionString("start", "+${request.startPositionMs / 1000.0}")
                 }
-                view.playFile(url)
-                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
+                
+                // HTTP Headers for auth (if needed for MPV)
+                if (request.headers.isNotEmpty()) {
+                    val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
+                    view.mpv.setOptionString("http-header-fields", headerStr)
+                }
+
+                view.playFile(request.uri)
                 pendingUrl = null
+                pendingStartPositionMs = 0L
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
+                _errorFlow.tryEmit(e.message ?: "Failed to start MPV playback")
             }
         }
-    }
-    
-    /**
-     * Configure external subtitles to be loaded with the media.
-     * Must be called before initialize() or after createPlayerView().
-     */
-    fun configureExternalSubtitles(subtitles: List<Pair<String, String>>) {
-        pendingSubtitles = subtitles
-        Log.d(TAG, "Configured ${subtitles.size} external subtitles")
     }
 
     override fun release() {
         pendingUrl = null
-        pendingSubtitles = null
+        pendingStartPositionMs = 0L
+        pendingSubtitles = emptyList()
         dialogueBoost.detach()
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
         }
         mpvView = null
+        engineScope.cancel()
     }
 
     override fun play() {
-        try { mpvView?.mpv?.setPropertyBoolean("pause", false) } catch (_: Exception) {}
+        try {
+            if (_playbackState.value == EnginePlaybackState.ENDED) {
+                mpvView?.mpv?.command("seek", "0", "absolute")
+            }
+            mpvView?.mpv?.setPropertyBoolean("pause", false)
+        } catch (_: Exception) {}
     }
 
     override fun pause() {
@@ -157,47 +217,102 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.command("seek", "${positionMs / 1000.0}", "absolute") } catch (_: Exception) {}
     }
 
-    override fun seekForward(amountMs: Long) {
-        try { mpvView?.mpv?.command("seek", "${amountMs / 1000.0}", "relative") } catch (_: Exception) {}
-    }
-
-    override fun seekBack(amountMs: Long) {
-        try { mpvView?.mpv?.command("seek", "-${amountMs / 1000.0}", "relative") } catch (_: Exception) {}
-    }
-
     override fun setPlaybackSpeed(speed: Float) {
-        _speed = speed
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (_: Exception) {}
     }
 
-    override fun setAudioDelay(ms: Long) {
-        _audioDelayMs = ms
-        try { mpvView?.mpv?.setPropertyDouble("audio-delay", ms / 1000.0) } catch (_: Exception) {}
-    }
-
-    override fun setSubtitleDelay(ms: Long) {
-        _subtitleDelayMs = ms
-        try { mpvView?.mpv?.setPropertyDouble("sub-delay", ms / 1000.0) } catch (_: Exception) {}
-    }
-
-    override fun setDecoderMode(mode: DecoderMode) {
-        currentDecoderMode = mode
+    override fun updateConfig(config: EngineConfig) {
+        currentConfig = config
+        
         try {
-            mpvView?.mpv?.setPropertyString("hwdec", when (mode) {
+            mpvView?.mpv?.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
+            mpvView?.mpv?.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
+            
+            mpvView?.mpv?.setPropertyString("hwdec", when (config.decoderMode) {
                 DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
                 DecoderMode.SW_ONLY -> "no"
             })
-        } catch (_: Exception) {}
-    }
-
-    override fun setAudioPassthrough(enabled: Boolean) {
-        _passthroughEnabled = enabled
-        try {
-            if (enabled) {
+            
+            if (config.audioPassthrough) {
                 mpvView?.mpv?.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             } else {
                 mpvView?.mpv?.setOptionString("audio-spdif", "")
             }
+
+            applySubtitleStyleInternal(config.subtitleStyle)
+            
+            val sid = audioSessionId
+            if (sid != 0) {
+                dialogueBoost.attach(sid)
+                dialogueBoost.setEnabled(config.audioEffects.dialogueBoostEnabled)
+            }
+        } catch (_: Exception) {}
+    }
+
+    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) {
+        try {
+            val m = mpvView?.mpv ?: return
+            if (type == TrackType.AUDIO) {
+                if (index < 0) m.setPropertyString("aid", "auto")
+                else m.setPropertyString("aid", "${index + 1}") // MPV 1-indexed?
+            } else {
+                if (index < 0) m.setPropertyString("sid", "no")
+                else m.setPropertyString("sid", "${index + 1}")
+            }
+        } catch (_: Exception) {}
+    }
+
+    override fun createSurfaceView(context: Context): View {
+        val view = try {
+            PlayerMPVView(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create PlayerMPVView", e)
+            return View(context).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+            }
+        }
+        mpvView = view
+
+        try {
+            view.initialize("gpu", "android")
+            applySubtitleStyleInternal(currentConfig.subtitleStyle)
+        } catch (e: Exception) {
+            Log.e(TAG, "MPV initialize failed", e)
+            return view
+        }
+
+        pendingUrl?.let { url ->
+            pendingUrl = null
+            val startPos = pendingStartPositionMs
+            pendingStartPositionMs = 0L
+            try {
+                if (startPos > 0) {
+                    view.mpv.setOptionString("start", "+${startPos / 1000.0}")
+                }
+                view.playFile(url)
+            } catch (e: Exception) {
+                Log.e(TAG, "playFile failed", e)
+            }
+        }
+
+        return view
+    }
+
+    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
+        // Not used via view in MPV, we apply via mpv properties
+        applySubtitleStyleInternal(style)
+    }
+    
+    private fun applySubtitleStyleInternal(style: SubtitleStyle) {
+        try {
+            val m = mpvView?.mpv ?: return
+            val colorHex = String.format("#%06X", (0xFFFFFF and style.fontColor.value.toInt()))
+            val bgHex = String.format("#%06X", (0xFFFFFF and style.backgroundColor.value.toInt()))
+            val alphaHex = String.format("%02X", (style.backgroundOpacity * 255).toInt())
+            
+            m.setPropertyString("sub-color", colorHex)
+            m.setPropertyString("sub-back-color", "#${alphaHex}${bgHex.substring(1)}")
+            m.setPropertyDouble("sub-scale", (style.fontSize / 16.0).coerceIn(0.5, 3.0))
         } catch (_: Exception) {}
     }
 
@@ -216,30 +331,7 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
     }
 
-    private fun gcd(a: Int, b: Int): Int {
-        var x = a
-        var y = b
-        while (y != 0) {
-            val temp = y
-            y = x % y
-            x = temp
-        }
-        return x
-    }
-
-    override val isPlaying: Boolean get() = _isPlaying
-    override val audioSessionId: Int
-        get() = try {
-            mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
-        } catch (_: Exception) { 0 }
-    override val supportsAudioDelay: Boolean get() = true
-    override val supportsSubtitleDelay: Boolean get() = true
-    override val supportsAudioPassthrough: Boolean get() = true
-    override val supportsSubtitleStyle: Boolean get() = false
-    override val supportsDialogueBoost: Boolean get() = true
-    override val supportsNightMode: Boolean get() = false
-    override val supportsOcr: Boolean get() = false
-    override val supportsCues: Boolean get() = false
+    override fun captureViewBitmap(): Bitmap? = null
 
     override val currentPositionMs: Long
         get() = try {
@@ -251,93 +343,38 @@ class MpvPlayerEngine(
             ((mpvView?.mpv?.getPropertyDouble("duration") ?: 0.0) * 1000).toLong().coerceAtLeast(0)
         } catch (_: Exception) { 0L }
 
-    override val playbackSpeed: Float get() = _speed
+    override val playbackSpeed: Float
+        get() = try {
+            mpvView?.mpv?.getPropertyDouble("speed")?.toFloat() ?: 1f
+        } catch (_: Exception) { 1f }
 
-    override val audioTracks: List<PlayerEngine.TrackInfo>
-        get() = try { getTracksOfType("audio", PlayerEngine.TrackType.AUDIO) } catch (_: Exception) { emptyList() }
+    override val audioSessionId: Int
+        get() = try {
+            mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
+        } catch (_: Exception) { 0 }
 
-    override val subtitleTracks: List<PlayerEngine.TrackInfo>
-        get() = try { getTracksOfType("sub", PlayerEngine.TrackType.SUBTITLE) } catch (_: Exception) { emptyList() }
-
-    override fun selectAudioTrack(index: Int) {
-        try {
-            val m = mpvView?.mpv ?: return
-            if (index < 0) m.setPropertyString("aid", "auto")
-            else m.setPropertyString("aid", "${index + 1}")
-        } catch (_: Exception) {}
-    }
-
-    override fun selectSubtitleTrack(index: Int) {
-        try {
-            val m = mpvView?.mpv ?: return
-            if (index < 0) m.setPropertyString("sid", "no")
-            else m.setPropertyString("sid", "${index + 1}")
-        } catch (_: Exception) {}
-    }
-
-    override fun createPlayerView(context: Context): View {
-        val view = try {
-            PlayerMPVView(context)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to create PlayerMPVView", e)
-            return View(context).apply {
-                setBackgroundColor(android.graphics.Color.BLACK)
+    override val positionFlow: Flow<Long> = callbackFlow {
+        trySend(currentPositionMs)
+        val ticker = engineScope.launch {
+            while (isActive) {
+                delay(250)
+                trySend(currentPositionMs)
             }
         }
-        mpvView = view
-
-        try {
-            view.initialize("gpu", "android")
-        } catch (e: Exception) {
-            Log.e(TAG, "MPV initialize failed", e)
-            return view
-        }
-
-        pendingUrl?.let { url ->
-            pendingUrl = null
-            try {
-                view.playFile(url)
-                // Note: External subtitles will be added in MPV_EVENT_FILE_LOADED event
-            } catch (e: Exception) {
-                Log.e(TAG, "playFile failed", e)
-            }
-        }
-
-        return view
+        awaitClose { ticker.cancel() }
     }
 
-    override fun setOnStateChanged(callback: ((Boolean) -> Unit)?) {
-        onStateChanged = callback
-    }
-
-    override fun setOnTracksChanged(callback: (() -> Unit)?) {
-        onTracksChanged = callback
-    }
-
-    override fun setOnError(callback: ((String) -> Unit)?) {
-        onError = callback
-    }
-
-    override fun setOnPlaybackStateChanged(callback: ((Int) -> Unit)?) {
-        onPlaybackStateChanged = callback
-    }
-
-    override fun setDialogueBoostEnabled(enabled: Boolean) {
-        dialogueBoostEnabled = enabled
-        val sid = audioSessionId
-        if (sid != 0) {
-            dialogueBoost.attach(sid)
-            dialogueBoost.setEnabled(enabled)
-        }
-    }
-
-    private fun getTracksOfType(type: String, trackType: PlayerEngine.TrackType): List<PlayerEngine.TrackInfo> {
+    private fun buildTracks(): List<MediaTrack> {
         val m = mpvView?.mpv ?: return emptyList()
-        val count = m.getPropertyInt("track-list/count") ?: 0
-        val result = mutableListOf<PlayerEngine.TrackInfo>()
+        val count = try { m.getPropertyInt("track-list/count") ?: 0 } catch (_: Exception) { 0 }
+        val result = mutableListOf<MediaTrack>()
         for (i in 0 until count) {
             val t = m.getPropertyString("track-list/$i/type") ?: continue
-            if (t != type) continue
+            val trackType = when (t) {
+                "audio" -> TrackType.AUDIO
+                "sub" -> TrackType.SUBTITLE
+                else -> continue
+            }
             val id = m.getPropertyInt("track-list/$i/id") ?: continue
             val lang = m.getPropertyString("track-list/$i/lang")
             val title = m.getPropertyString("track-list/$i/title")
@@ -348,9 +385,11 @@ class MpvPlayerEngine(
                 title,
                 codec,
             ).joinToString(" · ").ifBlank { "Track $id" }
+            
             result.add(
-                PlayerEngine.TrackInfo(
-                    index = id - 1,
+                MediaTrack(
+                    id = "mpv_${t}_${id}",
+                    index = id - 1, // MPV indices might be 1-based but UI selects 0-based index? Wait, the UI selector maps `index` directly.
                     label = label,
                     language = lang,
                     isSelected = selected,
@@ -359,5 +398,16 @@ class MpvPlayerEngine(
             )
         }
         return result
+    }
+
+    private fun gcd(a: Int, b: Int): Int {
+        var x = a
+        var y = b
+        while (y != 0) {
+            val temp = y
+            y = x % y
+            x = temp
+        }
+        return x
     }
 }

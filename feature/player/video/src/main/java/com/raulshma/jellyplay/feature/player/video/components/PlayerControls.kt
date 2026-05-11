@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -118,7 +120,6 @@ internal fun PlayerControls(
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onSubtitleStyleClick: () -> Unit,
-    onSecondarySubtitleClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -132,6 +133,7 @@ internal fun PlayerControls(
     onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
+    onPipClick: () -> Unit = {},
     isInSyncPlaySession: Boolean = false,
     syncPlayGroupName: String? = null,
     syncPlayParticipantCount: Int = 0,
@@ -279,7 +281,8 @@ internal fun PlayerControls(
                             )
                         )
                     )
-                    .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
+                    .navigationBarsPadding()
+                    .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
                 YouTubeStyleSeekBar(
                     currentPosition = currentPosition,
@@ -301,14 +304,15 @@ internal fun PlayerControls(
                     exit = fadeOut() + scaleOut(targetScale = 0.8f),
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.End,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(24.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(Color.Black.copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                             .clickable(onClick = onSkipSegment)
                             .tvFocusable()
                             .padding(horizontal = 20.dp, vertical = 10.dp),
@@ -385,6 +389,8 @@ internal fun PlayerControls(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        PipButton(onClick = onPipClick)
+
                         var showOverflow by remember { mutableStateOf(false) }
                         Box {
                             PlayerIconButton(
@@ -409,10 +415,7 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onSubtitleStyleClick()
                                 },
-                                onSecondarySubtitleClick = {
-                                    showOverflow = false
-                                    onSecondarySubtitleClick()
-                                },
+                                
                                 onDialogueBoostClick = {
                                     showOverflow = false
                                     onDialogueBoostClick()
@@ -713,7 +716,6 @@ private fun PlayerOverflowMenu(
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
     onSubtitleStyleClick: () -> Unit,
-    onSecondarySubtitleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onNightModeClick: () -> Unit,
     onAudioDelayClick: () -> Unit,
@@ -735,11 +737,7 @@ private fun PlayerOverflowMenu(
                 onClick = onSubtitleStyleClick,
             )
         }
-        OverflowMenuItem(
-            icon = Icons.Default.ClosedCaption,
-            label = "Dual Subtitles",
-            onClick = onSecondarySubtitleClick,
-        )
+        
         if (supportsDialogueBoost) {
             OverflowMenuItem(
                 icon = Icons.Default.Audiotrack,
