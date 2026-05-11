@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import android.content.Context
-import android.content.Intent
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
@@ -161,17 +160,7 @@ class AudioPlaybackManager @Inject constructor(
         mediaSession = session
         sessionManager.setActiveSession(session)
 
-        startPlaybackService()
-
         return player
-    }
-
-    private fun startPlaybackService() {
-        try {
-            val intent = Intent(context, JellyPlayPlaybackService::class.java)
-            context.startService(intent)
-        } catch (_: Exception) {
-        }
     }
 
     fun play(itemId: String) {

@@ -119,4 +119,11 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     // Internal state access (needed for some specific features, but keep to a minimum)
     val playbackSpeed: Float
     val audioSessionId: Int
+
+    /**
+     * Provides access to the underlying AndroidX Player instance (e.g. ExoPlayer).
+     * Used by the video player ViewModel to create a MediaSession for notification
+     * and lock screen controls. Returns null for engines that don't use Media3.
+     */
+    val underlyingPlayer: androidx.media3.common.Player? get() = null
 }

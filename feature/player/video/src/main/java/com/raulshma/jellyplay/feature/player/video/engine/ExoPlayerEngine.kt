@@ -89,6 +89,8 @@ class ExoPlayerEngine(
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
+
+    override val underlyingPlayer: androidx.media3.common.Player? get() = player
     
     private var currentConfig = EngineConfig()
 

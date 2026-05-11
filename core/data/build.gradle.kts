@@ -38,4 +38,8 @@ dependencies {
     implementation(libs.media3.datasource)
     implementation(libs.play.services.cast.framework)
     implementation(libs.okhttp)
+    implementation(libs.palette.ktx)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }
