@@ -48,30 +48,22 @@ internal class PlaybackProgressReporter(
 
     private fun checkAutoSkip(currentPositionMs: Long) {
         val state = uiState.value
-        
+
         // Auto-skip intro
         if (state.autoSkipIntro && state.isInIntro) {
-            val introTs = state.introTimestamps
-            if (introTs != null && introTs.hasIntro) {
-                val introStartMs = introTs.introStartTicks / 10_000
-                // Only skip once per intro (check if we're at a different intro than last time)
-                if (lastIntroSkipPosition != introStartMs) {
-                    lastIntroSkipPosition = introStartMs
-                    onAutoSkipIntro()
-                }
+            val endTicks = state.introSegmentEndTicks
+            if (endTicks != null && lastIntroSkipPosition != endTicks) {
+                lastIntroSkipPosition = endTicks
+                onAutoSkipIntro()
             }
         }
-        
+
         // Auto-skip outro/credits
         if (state.autoSkipOutro && state.isInCredits) {
-            val creditTs = state.creditTimestamps
-            if (creditTs != null && creditTs.hasCredits) {
-                val creditStartMs = creditTs.creditStartTicks / 10_000
-                // Only skip once per credits (check if we're at different credits than last time)
-                if (lastOutroSkipPosition != creditStartMs) {
-                    lastOutroSkipPosition = creditStartMs
-                    onAutoSkipOutro()
-                }
+            val endTicks = state.creditSegmentEndTicks
+            if (endTicks != null && lastOutroSkipPosition != endTicks) {
+                lastOutroSkipPosition = endTicks
+                onAutoSkipOutro()
             }
         }
     }
