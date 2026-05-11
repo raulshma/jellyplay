@@ -177,6 +177,17 @@ interface JellyfinApiClient {
         deliveryUrl: String,
     ): String
 
+    fun getServerUrl(): String?
+
+    fun getAccessToken(): String?
+
+    fun buildSubtitleDeliveryUrl(
+        itemId: String,
+        mediaSourceId: String,
+        index: Int,
+        codec: String?,
+    ): String
+
     suspend fun getLiveTvChannels(
         startIndex: Int = 0,
         limit: Int = 50,

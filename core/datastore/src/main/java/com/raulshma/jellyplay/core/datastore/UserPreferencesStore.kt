@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -34,6 +35,7 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
+        val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
@@ -81,9 +83,38 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_NOTIFY_CHAT_MESSAGES = stringPreferencesKey("syncplay_notify_chat_messages")
         val SYNCPLAY_NOTIFY_SYNC_ISSUES = stringPreferencesKey("syncplay_notify_sync_issues")
         val SYNCPLAY_DEFAULT_IGNORE_WAIT = stringPreferencesKey("syncplay_default_ignore_wait")
+        val SYNCPLAY_SYNC_CORRECTION = stringPreferencesKey("syncplay_sync_correction")
+        val SYNCPLAY_SPEED_TO_SYNC_ENABLED = stringPreferencesKey("syncplay_speed_to_sync_enabled")
+        val SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_min_delay_ms")
+        val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
+        val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
+        val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
+        return try {
+            json.decodeFromString<Map<String, MediaStreamSelection>>(raw)
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private suspend fun writeMediaStreamSelections(
+        itemId: String,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
+        context.dataStore.edit { prefs ->
+            val current = readMediaStreamSelections(prefs).toMutableMap()
+            current[itemId] = MediaStreamSelection(
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+            prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
+        }
+    }
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         val subtitleStyle = try {
@@ -104,6 +135,7 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
+            mediaStreamSelections = readMediaStreamSelections(prefs),
             dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
@@ -156,6 +188,11 @@ class UserPreferencesStore @Inject constructor(
             syncPlayNotifyChatMessages = prefs[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES]?.toBoolean() ?: true,
             syncPlayNotifySyncIssues = prefs[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES]?.toBoolean() ?: true,
             syncPlayDefaultIgnoreWait = prefs[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT]?.toBoolean() ?: false,
+            syncPlaySyncCorrection = prefs[Keys.SYNCPLAY_SYNC_CORRECTION]?.toBoolean() ?: false,
+            syncPlaySpeedToSyncEnabled = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED]?.toBoolean() ?: true,
+            syncPlaySpeedToSyncMinDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS]?.toLongOrNull() ?: 60,
+            syncPlaySpeedToSyncMaxDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS]?.toLongOrNull() ?: 3000,
+            syncPlaySpeedToSyncDurationMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS]?.toLongOrNull() ?: 1000,
         )
     }
 
@@ -186,6 +223,18 @@ class UserPreferencesStore @Inject constructor(
             if (language != null) it[Keys.PREFERRED_AUDIO_LANG] = language
             else it.remove(Keys.PREFERRED_AUDIO_LANG)
         }
+    }
+
+    suspend fun setMediaStreamSelection(
+        itemId: String,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
+        writeMediaStreamSelections(
+            itemId = itemId,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+        )
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
@@ -392,6 +441,26 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySyncCorrection(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SYNC_CORRECTION] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncMinDelayMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS] = ms.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncMaxDelayMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS] = ms.toString() }
+    }
+
+    suspend fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS] = ms.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

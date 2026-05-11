@@ -22,6 +22,17 @@ interface PlaybackRepository {
 
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
+    fun getServerUrl(): String?
+
+    fun getAccessToken(): String?
+
+    fun buildSubtitleDeliveryUrl(
+        itemId: String,
+        mediaSourceId: String,
+        index: Int,
+        codec: String?,
+    ): String
+
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
 
     suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>

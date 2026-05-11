@@ -318,59 +318,7 @@ class PlayerEngineSeekContractTest {
     }
 }
 
-class SecondarySubtitleTextRetrievalTest {
 
-    @Test
-    fun getSecondarySubtitleText_nullCues_returnsNull() {
-        val cues = emptyList<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>()
-        val result = findActiveCue(cues, 1_000_000L, 0L)
-        assertEquals(null, result)
-    }
-
-    @Test
-    fun getSecondarySubtitleText_positionMsToUs_conversion() {
-        val positionMs = 90_000L
-        val positionUs = positionMs * 1000L
-        assertEquals(90_000_000L, positionUs)
-    }
-
-    @Test
-    fun getSecondarySubtitleText_offsetMsToUs_conversion() {
-        val offsetMs = 2000L
-        val offsetUs = offsetMs * 1000L
-        assertEquals(2_000_000L, offsetUs)
-    }
-
-    @Test
-    fun getSecondarySubtitleText_negativeOffset() {
-        val offsetMs = -2000L
-        val offsetUs = offsetMs * 1000L
-        assertEquals(-2_000_000L, offsetUs)
-    }
-
-    @Test
-    fun getSecondarySubtitleText_multipleCues_returnsCorrectOne() {
-        val cues = listOf(
-            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(0L, 5_000_000L, "First"),
-            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(5_000_000L, 10_000_000L, "Second"),
-            com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue(10_000_000L, 15_000_000L, "Third"),
-        )
-        val positionUs = 7_000_000L
-        val result = findActiveCue(cues, positionUs, 0L)
-        assertEquals("Second", result?.text.toString())
-    }
-
-    private fun findActiveCue(
-        cues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>,
-        positionUs: Long,
-        offsetUs: Long,
-    ): com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue? {
-        val adjustedPosition = positionUs + offsetUs
-        return cues.find { cue ->
-            adjustedPosition >= cue.startTimeUs && adjustedPosition < cue.endTimeUs
-        }
-    }
-}
 
 class PlaybackPositionTicksTest {
 

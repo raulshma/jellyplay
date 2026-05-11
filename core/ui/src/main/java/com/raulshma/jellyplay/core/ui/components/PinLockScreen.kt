@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,14 +72,22 @@ fun PinLockScreen(
         ) {
             repeat(maxDigits) { index ->
                 val filled = index < pin.length
+                val dotSize by animateDpAsState(
+                    targetValue = if (filled) 20.dp else 16.dp,
+                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 500f),
+                    label = "dotSize$index",
+                )
+                val dotColor by animateColorAsState(
+                    targetValue = if (filled) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    animationSpec = tween(200),
+                    label = "dotColor$index",
+                )
                 Box(
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(dotSize)
                         .clip(CircleShape)
-                        .background(
-                            if (filled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant
-                        ),
+                        .background(dotColor),
                 )
             }
         }

@@ -769,7 +769,30 @@ class JellyfinApiClientImpl @Inject constructor(
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
         val server = _currentServer.value ?: return ""
-        return if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
+        val user = _currentUser.value ?: return ""
+        val baseUrl = if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
+        val separator = if ("?" in baseUrl) "&" else "?"
+        return "$baseUrl${separator}api_key=${user.accessToken}"
+    }
+
+    override fun getServerUrl(): String? = _currentServer.value?.address
+
+    override fun getAccessToken(): String? = _currentUser.value?.accessToken
+
+    override fun buildSubtitleDeliveryUrl(
+        itemId: String,
+        mediaSourceId: String,
+        index: Int,
+        codec: String?,
+    ): String {
+        val server = _currentServer.value ?: return ""
+        val user = _currentUser.value ?: return ""
+        val format = when ((codec ?: "srt").lowercase()) {
+            "subrip" -> "srt"
+            "ass", "ssa" -> codec!!.lowercase()
+            else -> (codec ?: "srt").lowercase()
+        }
+        return "${server.address}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=${user.accessToken}"
     }
 
     override suspend fun getLiveTvChannels(

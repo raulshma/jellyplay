@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
-
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -56,7 +56,6 @@ data class VideoPlayerUiState(
     val brightnessLevel: Float = 0.5f,
     val frameRateMatching: Boolean = false,
     val audioDelayMs: Long = 0L,
-    val secondarySubtitleTrack: MediaStream? = null,
     val introTimestamps: IntroTimestamps? = null,
     val creditTimestamps: CreditTimestamps? = null,
     val seriesId: String? = null,
@@ -76,26 +75,38 @@ data class VideoPlayerUiState(
     val isLoadingEpisodes: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
 ) {
+    /** Chapter names that indicate an intro segment (case-insensitive). */
+    private val introChapterNames: Set<String> get() = setOf("intro", "introduction", "opening", "op")
+
+    /** Chapter names that indicate an outro/credits segment (case-insensitive). */
+    private val outroChapterNames: Set<String> get() = setOf("outro", "credits", "end credits", "ending", "ed")
+
     val isInIntro: Boolean
         get() {
             if (!skipIntroEnabled) return false
-            val ts = introTimestamps ?: return false
-            if (!ts.hasIntro) return false
-            val posTicks = currentPosition * 10_000
-            val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.introStartTicks
-            val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.introEndTicks
-            return posTicks >= promptStart && posTicks < promptEnd
+            val ts = introTimestamps
+            if (ts != null && ts.hasIntro) {
+                val posTicks = currentPosition * 10_000
+                val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.introStartTicks
+                val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.introEndTicks
+                if (posTicks >= promptStart && posTicks < promptEnd) return true
+            }
+            // Fallback: check chapter-based intro segment
+            return isInChapterSegment(introChapterNames)
         }
 
     val isInCredits: Boolean
         get() {
             if (!skipOutroEnabled) return false
-            val ts = creditTimestamps ?: return false
-            if (!ts.hasCredits) return false
-            val posTicks = currentPosition * 10_000
-            val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.creditStartTicks
-            val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.creditEndTicks
-            return posTicks >= promptStart && posTicks < promptEnd
+            val ts = creditTimestamps
+            if (ts != null && ts.hasCredits) {
+                val posTicks = currentPosition * 10_000
+                val promptStart = if (ts.showSkipPromptAtTicks > 0) ts.showSkipPromptAtTicks else ts.creditStartTicks
+                val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.creditEndTicks
+                if (posTicks >= promptStart && posTicks < promptEnd) return true
+            }
+            // Fallback: check chapter-based outro/credits segment
+            return isInChapterSegment(outroChapterNames)
         }
 
     val shouldShowUpNext: Boolean
@@ -103,12 +114,107 @@ data class VideoPlayerUiState(
             if (isInSyncPlaySession) return false
             if (nextEpisode == null) return false
             if (seriesId == null) return false
-            if (isInCredits) return true
-            val ct = creditTimestamps
-            if (ct == null || !ct.hasCredits) {
-                if (duration > 0 && currentPosition >= duration - 30_000) return true
-            }
+
+            // Priority 1: We are in an outro segment that goes near the end
+            if (isOutroNearEnd) return true
+
+            // Priority 2: Generic "near end of video" fallback (30s)
+            if (duration > 0 && currentPosition >= (duration - 30_000)) return true
+
             return false
+        }
+
+    /**
+     * Checks if the current playback position falls within a chapter whose name
+     * matches one of the given segment names (case-insensitive).
+     *
+     * A chapter segment spans from the chapter's [ChapterInfo.startPositionTicks]
+     * to the start of the next chapter (or the end of the video if it's the last chapter).
+     */
+    private fun isInChapterSegment(segmentNames: Set<String>): Boolean {
+        if (chapters.isEmpty()) return false
+        val posTicks = currentPosition * 10_000
+
+        // Find the chapter that contains the current position
+        val currentChapterIndex = chapters.indexOfLast { it.startPositionTicks <= posTicks }
+        if (currentChapterIndex < 0) return false
+
+        val chapter = chapters[currentChapterIndex]
+        val name = chapter.name.lowercase().trim()
+        
+        // Strict matching for short codes, contains matching for full words
+        val isMatch = segmentNames.any { keyword ->
+            if (keyword.length <= 2) name == keyword || name.startsWith("$keyword ") || name.endsWith(" $keyword") || name.contains(" $keyword ")
+            else name.contains(keyword)
+        }
+        if (!isMatch) return false
+
+        // Make sure we're still within the chapter bounds
+        val chapterEndTicks = if (currentChapterIndex + 1 < chapters.size) {
+            chapters[currentChapterIndex + 1].startPositionTicks
+        } else {
+            duration * 10_000
+        }
+
+        return posTicks < chapterEndTicks
+    }
+
+    /**
+     * Finds the outro/credits chapter that the current position is within,
+     * or null if there is no matching chapter.
+     */
+    private fun findCurrentOutroChapter(): ChapterInfo? {
+        if (chapters.isEmpty()) return null
+        val posTicks = currentPosition * 10_000
+
+        val currentChapterIndex = chapters.indexOfLast { it.startPositionTicks <= posTicks }
+        if (currentChapterIndex < 0) return null
+
+        val chapter = chapters[currentChapterIndex]
+        val chapterNameLower = chapter.name.trim().lowercase()
+        if (chapterNameLower !in outroChapterNames) return null
+
+        return chapter
+    }
+
+    /** The end position of the current intro segment in ticks, or null if not in an intro. */
+    val introSegmentEndTicks: Long?
+        get() {
+            val ts = introTimestamps
+            if (ts != null && ts.hasIntro && isInIntro) return ts.introEndTicks
+            // Chapter-based fallback
+            if (chapters.isEmpty() || !isInIntro) return null
+            val posTicks = currentPosition * 10_000
+            val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
+            if (idx < 0) return null
+            val chapterNameLower = chapters[idx].name.trim().lowercase()
+            if (chapterNameLower !in introChapterNames) return null
+            return if (idx + 1 < chapters.size) chapters[idx + 1].startPositionTicks else duration * 10_000
+        }
+
+    /** The end position of the current credits/outro segment in ticks, or null if not in credits. */
+    val creditSegmentEndTicks: Long?
+        get() {
+            val ts = creditTimestamps
+            if (ts != null && ts.hasCredits && isInCredits) return ts.creditEndTicks
+            // Chapter-based fallback
+            if (chapters.isEmpty() || !isInCredits) return null
+            val posTicks = currentPosition * 10_000
+            val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
+            if (idx < 0) return null
+            val chapterNameLower = chapters[idx].name.trim().lowercase()
+            if (chapterNameLower !in outroChapterNames) return null
+            return if (idx + 1 < chapters.size) chapters[idx + 1].startPositionTicks else duration * 10_000
+        }
+
+    /** Whether the outro/credits segment end is near the video duration, indicating the next episode should play. */
+    val isOutroNearEnd: Boolean
+        get() {
+            val outroEnd = creditSegmentEndTicks ?: return false
+            val durationTicks = duration * 10_000
+            if (durationTicks <= 0) return false
+            // If the outro end is within 30 seconds of the video duration
+            return (durationTicks - outroEnd).coerceAtLeast(0) < 300_000_000 // 30s in ticks
         }
 
     val hdrType: String?
@@ -122,13 +228,3 @@ data class VideoPlayerUiState(
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
 }
 
-data class EngineCapabilities(
-    val audioDelay: Boolean = false,
-    val subtitleDelay: Boolean = false,
-    val audioPassthrough: Boolean = false,
-    val subtitleStyle: Boolean = false,
-    val dialogueBoost: Boolean = false,
-    val nightMode: Boolean = false,
-    val ocr: Boolean = false,
-    val cues: Boolean = false,
-)

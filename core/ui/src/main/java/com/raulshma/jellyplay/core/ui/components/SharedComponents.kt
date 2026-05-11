@@ -1,12 +1,15 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,8 +39,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +60,6 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -65,8 +70,6 @@ fun PosterCard(
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
     blurHash: String? = null,
-    sharedElementKey: String? = null,
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -76,7 +79,6 @@ fun PosterCard(
         animationSpec = tween(150),
         label = "cardScale",
     )
-    val sharedTransitionScope = LocalSharedTransitionScope.current
 
     Card(
         modifier = modifier
@@ -96,31 +98,14 @@ fun PosterCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
     ) {
         Box {
-            val imageModifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-
-            val resolvedModifier = if (
-                sharedElementKey != null &&
-                sharedTransitionScope != null &&
-                animatedVisibilityScope != null
-            ) {
-                with(sharedTransitionScope) {
-                    imageModifier.sharedElement(
-                        rememberSharedContentState(key = sharedElementKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                    )
-                }
-            } else {
-                imageModifier
-            }
-
             MediaImage(
                 url = imageUrl,
                 fallbackUrls = fallbackUrls,
                 contentDescription = item.name,
                 blurHash = blurHash,
-                modifier = resolvedModifier,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f),
                 contentScale = ContentScale.Crop,
             )
 
@@ -220,11 +205,13 @@ fun MediaRow(
 
 @Composable
 fun LoadingScreen(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator()
+    AnimatedEntrance(visible = true) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator()
+        }
     }
 }
 
@@ -234,22 +221,24 @@ fun ErrorScreen(
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.error,
-            )
-            if (onRetry != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                androidx.compose.material3.TextButton(onClick = onRetry) {
-                    Text("Retry")
+    AnimatedEntrance(visible = true) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                if (onRetry != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.TextButton(onClick = onRetry) {
+                        Text("Retry")
+                    }
                 }
             }
         }
@@ -262,14 +251,126 @@ fun StaggeredSection(
     index: Int,
     content: @Composable () -> Unit,
 ) {
+    var shouldShow by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        shouldShow = visible
+    }
+
+    AnimatedVisibility(
+        visible = visible && shouldShow,
+        enter = fadeIn(
+            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
+        ) + slideInVertically(
+            initialOffsetY = { it / 14 },
+            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
+        ),
+        exit = fadeOut(tween(160)) + slideOutVertically(
+            targetOffsetY = { -it / 24 },
+            animationSpec = tween(180, easing = FastOutSlowInEasing),
+        ),
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun AnimatedEntrance(
+    visible: Boolean,
+    delayMillis: Int = 0,
+    content: @Composable AnimatedVisibilityScope.() -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(350, delayMillis = delayMillis)) +
+                slideInVertically(
+                    initialOffsetY = { it / 10 },
+                    animationSpec = tween(350, delayMillis = delayMillis, easing = FastOutSlowInEasing),
+                ),
+        exit = fadeOut(tween(200)) + slideOutVertically(targetOffsetY = { it / 10 }, animationSpec = tween(200)),
+        content = content,
+    )
+}
+
+@Composable
+fun AnimatedScaleEntrance(
+    visible: Boolean,
+    delayMillis: Int = 0,
+    content: @Composable AnimatedVisibilityScope.() -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(300, delayMillis = delayMillis)) +
+                androidx.compose.animation.scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = tween(300, delayMillis = delayMillis, easing = FastOutSlowInEasing),
+                ),
+        exit = fadeOut(tween(150)) +
+                androidx.compose.animation.scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = tween(150),
+                ),
+        content = content,
+    )
+}
+
+@Composable
+fun PressScaleBox(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    scaleDown: Float = 0.95f,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) scaleDown else 1f,
+        animationSpec = tween(120),
+        label = "pressScale",
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun rememberAnimatedItemVisibility(index: Int): Boolean {
+    var visible by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        visible = true
+    }
+    return visible
+}
+
+@Composable
+fun AnimatedMediaItem(
+    index: Int,
+    delayPerItem: Int = 40,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(250, delayMillis = index * 80)
+            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
         ) + slideInVertically(
-            initialOffsetY = { it / 8 },
-            animationSpec = tween(250, delayMillis = index * 80),
+            initialOffsetY = { it / 10 },
+            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
         ),
+        exit = fadeOut(tween(140)),
     ) {
         content()
     }

@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.os.Build
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -77,7 +80,6 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSh
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
-import com.raulshma.jellyplay.feature.player.video.components.SecondarySubtitlePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
@@ -96,7 +98,11 @@ fun VideoPlayerScreen(
     itemId: String,
     mediaSourceId: String?,
     startPositionTicks: Long,
+    subtitleStreamIndex: Int? = null,
+    audioStreamIndex: Int? = null,
     onBack: () -> Unit,
+    onEnterPip: () -> Unit = {},
+    onEnterMiniMode: () -> Unit = {},
     viewModel: VideoPlayerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -105,13 +111,15 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
+
     var showControls by remember { mutableStateOf(true) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var isCasting by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
-    var secondarySubtitleText by remember { mutableStateOf<String?>(null) }
+    
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -125,13 +133,45 @@ fun VideoPlayerScreen(
     var isGestureSeeking by remember { mutableStateOf(false) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
 
+    var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+
     var syncPlayChatVisible by remember { mutableStateOf(false) }
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(itemId) {
-        viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
+        viewModel.initialize(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startPositionTicks = startPositionTicks,
+            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = audioStreamIndex,
+        )
+    }
+
+    // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
+    // ensures the dismiss signal survives lifecycle STOPPED→STARTED transitions.
+    // The old SharedFlow approach lost the event because LaunchedEffect's coroutine is
+    // cancelled during STOPPED and SharedFlow(replay=0) doesn't replay to new subscribers.
+    val pipDismissed by viewModel.playerLifecycleManager.pipDismissed.collectAsStateWithLifecycle()
+    LaunchedEffect(pipDismissed) {
+        if (pipDismissed) {
+            viewModel.playerLifecycleManager.clearPipDismissed()
+            onBack()
+        }
+    }
+    // Restore immersive mode when leaving PiP
+    LaunchedEffect(isInPipMode) {
+        if (!isInPipMode) {
+            activity?.let {
+                val window = it.window
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
     }
 
     val preferredPlayer = uiState.preferredPlayerType
@@ -153,34 +193,43 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Guard against releasing the engine when the composable is torn down
+    // during a PiP transition. The engine must survive until PiP is dismissed.
+
     DisposableEffect(Unit) {
         activity?.let {
             val window = it.window
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
         }
+
         onDispose {
-            activity?.let {
-                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                val window = it.window
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            // If we're currently in PiP, don't release the engine or reset the UI.
+            // The engine needs to stay alive until PiP is dismissed or returned to.
+            val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
+            if (!currentlyInPip) {
+                activity?.let {
+                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    val window = it.window
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+                activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
+                playerViewRef = null
+                viewModel.release()
             }
-            activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
-            playerViewRef = null
-            viewModel.release()
         }
     }
 
-    LaunchedEffect(showControls) {
+    LaunchedEffect(uiState.isPlaying) {
         activity?.let {
-            val window = it.window
-            val controller = WindowCompat.getInsetsController(window, window.decorView)
-            if (showControls) {
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            if (uiState.isPlaying) {
+                it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } else {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
+                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
     }
@@ -216,6 +265,16 @@ fun VideoPlayerScreen(
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
+        } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
+            // Only ExoPlayer supports mini-mode currently.
+            // MPV/LibVLC views are tied to this composable's AndroidView and can't
+            // survive being transferred easily.
+
+            viewModel.prepareForMiniMode(
+                title = uiState.title,
+                subtitle = uiState.subtitle,
+            )
+            onEnterMiniMode()
         } else {
             onBack()
         }
@@ -341,22 +400,19 @@ fun VideoPlayerScreen(
                         }
                     },
                     onLongPress = {
-                        if (!uiState.gesturesEnabled) return@detectTapGestures
-                        if (!uiState.engineCapabilities.cues && secondarySubtitleText.isNullOrBlank()) return@detectTapGestures
-                        val primaryText = if (uiState.engineCapabilities.cues) viewModel.getCurrentPrimarySubtitleText() else null
-                        val secondaryText = secondarySubtitleText
-                        val text = listOfNotNull(primaryText, secondaryText)
-                            .joinToString("\n")
-                            .takeIf { it.isNotBlank() } ?: return@detectTapGestures
-                        currentSheet = PlayerSheet.TapToTranslate(text)
-                    },
+                            if (!uiState.gesturesEnabled) return@detectTapGestures
+                            if (!uiState.engineCapabilities.supportsOcr) return@detectTapGestures
+                            val primaryText = viewModel.getCurrentPrimarySubtitleText() ?: return@detectTapGestures
+                            val text = primaryText.takeIf { it.isNotBlank() } ?: return@detectTapGestures
+                            currentSheet = PlayerSheet.TapToTranslate(text)
+                        },
                 )
             },
     ) {
         if (engine != null) {
             AndroidView(
                 factory = { ctx ->
-                    engine.createPlayerView(ctx).also { view ->
+                    engine.createSurfaceView(ctx).also { view ->
                         playerViewRef = view
                         viewModel.applySubtitleStyleToView(view)
                     }
@@ -407,11 +463,16 @@ fun VideoPlayerScreen(
                     audioManager?.let { am ->
                         val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                         val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val step = 1
-                        val newVol = if (delta > 0) (current + step).coerceAtMost(max)
-                        else (current - step).coerceAtLeast(0)
-                        am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                        volumeOverlay = newVol.toFloat() / max.toFloat()
+                        val currentNorm = current.toFloat() / max.toFloat()
+                        val stepThreshold = 1f / max.toFloat()
+                        volumeGestureAccumulator += delta
+                        volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
+                        val steps = (volumeGestureAccumulator / stepThreshold).toInt()
+                        if (steps != 0) {
+                            volumeGestureAccumulator -= steps * stepThreshold
+                            val newVol = (current + steps).coerceIn(0, max)
+                            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                        }
                     }
                 }
             },
@@ -426,6 +487,7 @@ fun VideoPlayerScreen(
                 seekOffsetMs = 0L
                 brightnessOverlay = -1f
                 volumeOverlay = -1f
+                volumeGestureAccumulator = 0f
                 isGestureSeeking = false
             },
         )
@@ -445,25 +507,22 @@ fun VideoPlayerScreen(
             )
         }
 
-        SecondarySubtitleOverlay(
-            text = secondarySubtitleText,
-            fontSize = uiState.subtitleStyle.fontSize,
-        )
+        
 
         IntroSkipOverlay(
-            isVisible = isInIntro,
+            isVisible = isInIntro && !isInPipMode,
             onSkip = { viewModel.skipIntro() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 200.dp),
+                .padding(bottom = 100.dp, end = 40.dp),
         )
 
         CreditsSkipOverlay(
-            isVisible = isInCredits && !shouldShowUpNext,
+            isVisible = isInCredits && !shouldShowUpNext && !isInPipMode,
             onSkip = { viewModel.skipCredits() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 200.dp),
+                .padding(bottom = 100.dp, end = 40.dp),
         )
 
         if (nextEpisode != null) {
@@ -480,8 +539,7 @@ fun VideoPlayerScreen(
                 isPlaying = isPlaying,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 200.dp)
-                    .fillMaxWidth(0.7f),
+                    .padding(bottom = 40.dp, end = 40.dp),
             )
         }
 
@@ -545,13 +603,13 @@ fun VideoPlayerScreen(
             onSkipSegment = onSkipSegment,
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
-            isVisible = showControls,
-            supportsSubtitleStyle = uiState.engineCapabilities.subtitleStyle,
-            supportsDialogueBoost = uiState.engineCapabilities.dialogueBoost,
-            supportsNightMode = uiState.engineCapabilities.nightMode,
-            supportsAudioDelay = uiState.engineCapabilities.audioDelay,
-            supportsAudioPassthrough = uiState.engineCapabilities.audioPassthrough,
-            supportsOcr = uiState.engineCapabilities.ocr,
+            isVisible = showControls && !isInPipMode,
+            supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
+            supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
+            supportsNightMode = uiState.engineCapabilities.supportsNightMode,
+            supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
+            supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
+            supportsOcr = uiState.engineCapabilities.supportsOcr,
             hasEpisodes = hasEpisodes,
             episodeBrowserEnabled = episodeBrowserEnabled,
             onPlayPause = { doTogglePlayPause() },
@@ -569,7 +627,6 @@ fun VideoPlayerScreen(
             onAudioClick = { currentSheet = PlayerSheet.Audio },
             onSubtitleClick = { currentSheet = PlayerSheet.Subtitle },
             onSubtitleStyleClick = { currentSheet = PlayerSheet.SubtitleStyle },
-            onSecondarySubtitleClick = { currentSheet = PlayerSheet.SecondarySubtitle },
             onChapterClick = { currentSheet = PlayerSheet.Chapter },
             onInfoClick = { currentSheet = PlayerSheet.PlaybackInfo },
             onAspectRatioClick = { currentSheet = PlayerSheet.AspectRatio },
@@ -590,6 +647,9 @@ fun VideoPlayerScreen(
             },
             onEpisodesClick = { currentSheet = PlayerSheet.Episodes },
             onSyncPlayClick = { currentSheet = PlayerSheet.SyncPlay },
+            onPipClick = {
+                onEnterPip()
+            },
             isInSyncPlaySession = isInSyncPlaySession,
             syncPlayGroupName = uiState.syncPlayGroupName,
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
@@ -662,14 +722,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.secondarySubtitleTrack) {
-        val track = uiState.secondarySubtitleTrack ?: return@LaunchedEffect
-        while (true) {
-            val pos = engine?.currentPositionMs ?: 0L
-            secondarySubtitleText = viewModel.getSecondarySubtitleText(pos)
-            delay(250)
-        }
-    }
+    
 
     LaunchedEffect(Unit) {
         viewModel.syncPlayNotifications.collect { message ->
@@ -693,31 +746,7 @@ fun VideoPlayerScreen(
     )
 }
 
-@Composable
-private fun BoxScope.SecondarySubtitleOverlay(
-    text: String?,
-    fontSize: Int,
-) {
-    text?.let {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(top = 60.dp, start = 16.dp, end = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = it,
-                color = Color.Yellow,
-                fontSize = (fontSize - 4).sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-        }
-    }
-}
+
 
 @Composable
 private fun BoxScope.AutoAspectRatioBadge(
@@ -850,17 +879,7 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
             )
         }
-        is PlayerSheet.SecondarySubtitle -> {
-            SecondarySubtitlePickerSheet(
-                mediaStreams = uiState.mediaStreams,
-                currentSecondary = uiState.secondarySubtitleTrack,
-                onSelect = { stream ->
-                    viewModel.selectSecondarySubtitleStream(stream)
-                    onSheetChange(PlayerSheet.None)
-                },
-                onDismiss = dismissSheet,
-            )
-        }
+        
         is PlayerSheet.TapToTranslate -> {
             TapToTranslateSheet(
                 text = sheet.text,

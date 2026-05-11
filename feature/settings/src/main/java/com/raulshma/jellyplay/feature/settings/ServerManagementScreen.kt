@@ -1,5 +1,10 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -33,7 +38,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,18 +125,30 @@ fun ServerManagementScreen(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
-                items(servers, key = { it.id }, contentType = { "server" }) { server ->
-                    ServerCard(
-                        server = server,
-                        isActive = server.id == activeServerId,
-                        isSwitching = isSwitching,
-                        onSwitch = {
-                            viewModel.switchServer(server.id) {
-                                onServerSwitched()
-                            }
-                        },
-                        onDelete = { viewModel.removeServer(server.id) },
-                    )
+                itemsIndexed(servers, key = { _, it -> it.id }, contentType = { _, _ -> "server" }) { index, server ->
+                    val visible = remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { visible.value = true }
+                    AnimatedVisibility(
+                        visible = visible.value,
+                        enter = fadeIn(
+                            animationSpec = tween(300, delayMillis = index * 60)
+                        ) + slideInVertically(
+                            initialOffsetY = { it / 10 },
+                            animationSpec = tween(300, delayMillis = index * 60, easing = FastOutSlowInEasing),
+                        ),
+                    ) {
+                        ServerCard(
+                            server = server,
+                            isActive = server.id == activeServerId,
+                            isSwitching = isSwitching,
+                            onSwitch = {
+                                viewModel.switchServer(server.id) {
+                                    onServerSwitched()
+                                }
+                            },
+                            onDelete = { viewModel.removeServer(server.id) },
+                        )
+                    }
                 }
             }
         }

@@ -145,7 +145,6 @@ class PlayerSheetNavigationTest {
         openSheet(PlayerSheet.PlaybackInfo)
         openSheet(PlayerSheet.AspectRatio)
         openSheet(PlayerSheet.SubtitleStyle)
-        openSheet(PlayerSheet.SecondarySubtitle)
         openSheet(PlayerSheet.AudioDelay)
         openSheet(PlayerSheet.Decoder)
         openSheet(PlayerSheet.SubtitleDownload)

@@ -1,15 +1,17 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +38,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
@@ -53,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,18 +95,15 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
-import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
-import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -200,8 +202,24 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
+        val savedScrollPosition = remember { viewModel.getHomeScrollPosition() }
         val listState = rememberSaveable(saver = LazyListState.Saver) {
-            LazyListState()
+            LazyListState(
+                firstVisibleItemIndex = savedScrollPosition.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = savedScrollPosition.firstVisibleItemScrollOffset,
+            )
+        }
+        val saveHomeScrollPosition = {
+            viewModel.saveHomeScrollPosition(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+            )
+        }
+
+        DisposableEffect(listState) {
+            onDispose {
+                saveHomeScrollPosition()
+            }
         }
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -233,20 +251,24 @@ fun HomeScreen(
             val navBarColor = LocalNavigationBarColor.current
             navBarColor.value = backgroundColor
 
-            val scrollOffset by remember {
+            val appBarCollapsed by remember {
                 derivedStateOf {
-                    listState.firstVisibleItemScrollOffset.toFloat() +
-                            (listState.firstVisibleItemIndex * 1000f)
+                    listState.firstVisibleItemIndex > 0 ||
+                            listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
                 }
             }
-            val scrollFraction by remember {
-                derivedStateOf {
-                    (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+            val heroScrollOffsetProvider = remember(listState, headerHeightPx) {
+                {
+                    if (listState.firstVisibleItemIndex == 0) {
+                        listState.firstVisibleItemScrollOffset.toFloat()
+                    } else {
+                        headerHeightPx
+                    }
                 }
             }
 
             val appBarColor by animateFloatAsState(
-                targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+                targetValue = if (appBarCollapsed) 1f else 0f,
                 animationSpec = tween(300),
                 label = "appBarColor",
             )
@@ -257,8 +279,6 @@ fun HomeScreen(
                 appBarColor,
             )
 
-            val sectionsVisible = sections.isNotEmpty()
-
             val currentOnItemClick by rememberUpdatedState(onItemClick)
             val currentViewModel by rememberUpdatedState(viewModel)
             val mediaImageUrlBuilder = remember {
@@ -268,7 +288,10 @@ fun HomeScreen(
                 { item: MediaItem -> currentViewModel.getBackdropUrl(item.id) }
             }
             val mediaOnItemClick = remember {
-                { item: MediaItem -> currentOnItemClick(item.id) }
+                { item: MediaItem ->
+                    saveHomeScrollPosition()
+                    currentOnItemClick(item.id)
+                }
             }
 
             val showLandscapeHero = adaptiveInfo.isLandscape &&
@@ -299,22 +322,17 @@ fun HomeScreen(
                                             .fillMaxHeight()
                                             .weight(0.55f)
                                     ) {
-                                        AnimatedContent(
-                                            targetState = featuredItem,
-                                            transitionSpec = {
-                                                fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+                                        AnimatedHeroHeader(
+                                            featuredItem = featuredItem,
+                                            getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                                            scrollOffsetProvider = { 0f },
+                                            height = headerHeight,
+                                            backgroundColor = backgroundColor,
+                                            onItemClick = {
+                                                saveHomeScrollPosition()
+                                                onItemClick(it)
                                             },
-                                            label = "heroRotation",
-                                        ) { currentFeatured ->
-                                            HeroHeader(
-                                                item = currentFeatured,
-                                                backdropUrl = viewModel.getBackdropUrl(currentFeatured.id),
-                                                scrollOffset = 0f,
-                                                height = headerHeight,
-                                                backgroundColor = backgroundColor,
-                                                onClick = { onItemClick(currentFeatured.id) },
-                                            )
-                                        }
+                                        )
                                     }
                                 }
                                 LazyColumn(
@@ -330,29 +348,24 @@ fun HomeScreen(
                                 ) {
                                     items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
                                         val section = sections[index]
-                                        StaggeredSection(
-                                            visible = sectionsVisible,
-                                            index = index,
+                                        if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                            section.type == HomeSectionType.NEXT_UP
                                         ) {
-                                            if (section.type == HomeSectionType.CONTINUE_WATCHING ||
-                                                section.type == HomeSectionType.NEXT_UP
-                                            ) {
-                                                ContinueWatchingRow(
-                                                    title = section.title,
-                                                    items = section.items,
-                                                    imageUrlBuilder = mediaImageUrlBuilder,
-                                                    backdropUrlBuilder = mediaBackdropUrlBuilder,
-                                                    onItemClick = mediaOnItemClick,
-                                                )
-                                            } else {
-                                                HomeMediaRow(
-                                                    title = section.title,
-                                                    items = section.items,
-                                                    imageUrlBuilder = mediaImageUrlBuilder,
-                                                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                                    onItemClick = mediaOnItemClick,
-                                                )
-                                            }
+                                            ContinueWatchingRow(
+                                                title = section.title,
+                                                items = section.items,
+                                                imageUrlBuilder = mediaImageUrlBuilder,
+                                                backdropUrlBuilder = mediaBackdropUrlBuilder,
+                                                onItemClick = mediaOnItemClick,
+                                            )
+                                        } else {
+                                            HomeMediaRow(
+                                                title = section.title,
+                                                items = section.items,
+                                                imageUrlBuilder = mediaImageUrlBuilder,
+                                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                                onItemClick = mediaOnItemClick,
+                                            )
                                         }
                                     }
                                 }
@@ -365,22 +378,17 @@ fun HomeScreen(
                             ) {
                                 if (featuredItem != null) {
                                     item {
-                                        AnimatedContent(
-                                            targetState = featuredItem,
-                                            transitionSpec = {
-                                                fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+                                        AnimatedHeroHeader(
+                                            featuredItem = featuredItem,
+                                            getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                                            scrollOffsetProvider = heroScrollOffsetProvider,
+                                            height = headerHeight,
+                                            backgroundColor = backgroundColor,
+                                            onItemClick = {
+                                                saveHomeScrollPosition()
+                                                onItemClick(it)
                                             },
-                                            label = "heroRotation",
-                                        ) { currentFeatured ->
-                                            HeroHeader(
-                                                item = currentFeatured,
-                                                backdropUrl = viewModel.getBackdropUrl(currentFeatured.id),
-                                                scrollOffset = scrollOffset,
-                                                height = headerHeight,
-                                                backgroundColor = backgroundColor,
-                                                onClick = { onItemClick(currentFeatured.id) },
-                                            )
-                                        }
+                                        )
                                     }
                                 } else {
                                     item { Spacer(Modifier.height(100.dp)) }
@@ -406,31 +414,26 @@ fun HomeScreen(
                                         )
                                         .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
 
-                                    StaggeredSection(
-                                        visible = sectionsVisible,
-                                        index = index,
+                                    if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                        section.type == HomeSectionType.NEXT_UP
                                     ) {
-                                        if (section.type == HomeSectionType.CONTINUE_WATCHING ||
-                                            section.type == HomeSectionType.NEXT_UP
-                                        ) {
-                                            ContinueWatchingRow(
-                                                title = section.title,
-                                                items = section.items,
-                                                imageUrlBuilder = mediaImageUrlBuilder,
-                                                backdropUrlBuilder = mediaBackdropUrlBuilder,
-                                                onItemClick = mediaOnItemClick,
-                                                modifier = sectionModifier,
-                                            )
-                                        } else {
-                                            HomeMediaRow(
-                                                title = section.title,
-                                                items = section.items,
-                                                imageUrlBuilder = mediaImageUrlBuilder,
-                                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                                onItemClick = mediaOnItemClick,
-                                                modifier = sectionModifier,
-                                            )
-                                        }
+                                        ContinueWatchingRow(
+                                            title = section.title,
+                                            items = section.items,
+                                            imageUrlBuilder = mediaImageUrlBuilder,
+                                            backdropUrlBuilder = mediaBackdropUrlBuilder,
+                                            onItemClick = mediaOnItemClick,
+                                            modifier = sectionModifier,
+                                        )
+                                    } else {
+                                        HomeMediaRow(
+                                            title = section.title,
+                                            items = section.items,
+                                            imageUrlBuilder = mediaImageUrlBuilder,
+                                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                            onItemClick = mediaOnItemClick,
+                                            modifier = sectionModifier,
+                                        )
                                     }
                                 }
                             }
@@ -481,7 +484,10 @@ fun HomeScreen(
                                 )
                             }
                             IconButton(
-                                onClick = onSyncPlayClick,
+                                onClick = {
+                                    saveHomeScrollPosition()
+                                    onSyncPlayClick()
+                                },
                                 modifier = Modifier.tvFocusable(),
                             ) {
                                 Icon(
@@ -498,7 +504,10 @@ fun HomeScreen(
                                 }
                             ) {
                                 IconButton(
-                                    onClick = onDownloadsClick,
+                                    onClick = {
+                                        saveHomeScrollPosition()
+                                        onDownloadsClick()
+                                    },
                                     modifier = Modifier.tvFocusable(),
                                 ) {
                                     Icon(
@@ -509,7 +518,10 @@ fun HomeScreen(
                                 }
                             }
                             IconButton(
-                                onClick = onSettingsClick,
+                                onClick = {
+                                    saveHomeScrollPosition()
+                                    onSettingsClick()
+                                },
                                 modifier = Modifier.tvFocusable(),
                             ) {
                                 Icon(
@@ -528,23 +540,78 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun AnimatedHeroHeader(
+    featuredItem: MediaItem,
+    getBackdropUrl: (String) -> String,
+    scrollOffsetProvider: () -> Float,
+    height: androidx.compose.ui.unit.Dp,
+    backgroundColor: Color,
+    onItemClick: (String) -> Unit,
+) {
+    AnimatedContent(
+        targetState = featuredItem,
+        transitionSpec = {
+            fadeIn(
+                animationSpec = tween(520, easing = FastOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 1.035f,
+                animationSpec = tween(700, easing = FastOutSlowInEasing),
+            ) + slideInHorizontally(
+                initialOffsetX = { it / 24 },
+                animationSpec = tween(520, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(320, easing = FastOutSlowInEasing),
+            ) + scaleOut(
+                targetScale = 0.985f,
+                animationSpec = tween(320, easing = FastOutSlowInEasing),
+            ) + slideOutHorizontally(
+                targetOffsetX = { -it / 36 },
+                animationSpec = tween(320, easing = FastOutSlowInEasing),
+            )
+        },
+        label = "heroRotation",
+    ) { currentFeatured ->
+        HeroHeader(
+            item = currentFeatured,
+            backdropUrl = getBackdropUrl(currentFeatured.id),
+            scrollOffsetProvider = scrollOffsetProvider,
+            height = height,
+            backgroundColor = backgroundColor,
+            onClick = { onItemClick(currentFeatured.id) },
+        )
+    }
+}
+
 @Composable
 private fun HeroHeader(
     item: MediaItem,
     backdropUrl: String,
-    scrollOffset: Float,
+    scrollOffsetProvider: () -> Float,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = tween(150),
         label = "heroPress",
+    )
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "playButtonScale",
+    )
+    val detailsInteractionSource = remember { MutableInteractionSource() }
+    val isDetailsPressed by detailsInteractionSource.collectIsPressedAsState()
+    val detailsScale by animateFloatAsState(
+        targetValue = if (isDetailsPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "detailsButtonScale",
     )
 
     Box(
@@ -554,7 +621,7 @@ private fun HeroHeader(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                translationY = scrollOffset * 0.5f
+                translationY = scrollOffsetProvider() * 0.5f
             }
             .clickable(
                 interactionSource = interactionSource,
@@ -563,23 +630,11 @@ private fun HeroHeader(
             )
             .tvFocusable()
     ) {
-        val imageModifier = Modifier.fillMaxSize()
-        val resolvedModifier = if (sharedTransitionScope != null) {
-            with(sharedTransitionScope) {
-                imageModifier.sharedElement(
-                    rememberSharedContentState(key = "backdrop_${item.id}"),
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
-                )
-            }
-        } else {
-            imageModifier
-        }
-
         MediaImage(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
-            modifier = resolvedModifier,
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
 
@@ -713,9 +768,14 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable(onClick = onClick)
+                        .clickable(
+                            interactionSource = playInteractionSource,
+                            indication = null,
+                            onClick = onClick,
+                        )
                         .tvFocusable()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 24.dp)
+                        .graphicsLayer { scaleX = playScale; scaleY = playScale },
                     contentAlignment = Alignment.Center,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -739,9 +799,14 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color.White.copy(alpha = 0.15f))
-                        .clickable(onClick = onClick)
+                        .clickable(
+                            interactionSource = detailsInteractionSource,
+                            indication = null,
+                            onClick = onClick,
+                        )
                         .tvFocusable()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 24.dp)
+                        .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -755,7 +820,6 @@ private fun HeroHeader(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ContinueWatchingRow(
     title: String,
@@ -779,7 +843,12 @@ private fun ContinueWatchingRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
+            items(
+                count = items.size,
+                key = { items[it].id },
+                contentType = { "continueWatchingCard" },
+            ) { index ->
+                val item = items[index]
                 WideMediaCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -792,16 +861,14 @@ private fun ContinueWatchingRow(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
     imageUrl: String,
     backdropUrl: String,
     onClick: () -> Unit,
-    cardWidth: androidx.compose.ui.unit.Dp = 260.dp,
+    cardWidth: androidx.compose.ui.unit.Dp,
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -810,102 +877,65 @@ private fun WideMediaCard(
         label = "wideCardScale",
     )
 
-    Column(
+    Card(
         modifier = Modifier
             .width(cardWidth)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.08f))
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
             )
             .tvFocusable(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f),
-            contentAlignment = Alignment.Center,
-        ) {
-            val imageModifier = Modifier.fillMaxSize()
-            val resolvedModifier = if (sharedTransitionScope != null) {
-                with(sharedTransitionScope) {
-                    imageModifier.sharedElement(
-                        rememberSharedContentState(key = "backdrop_${item.id}"),
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
-                    )
-                }
-            } else {
-                imageModifier
-            }
-
+        Box {
             MediaImage(
                 url = backdropUrl,
-                fallbackUrls = listOf(imageUrl),
+                fallbackUrls = listOf(imageUrl).filter { it.isNotBlank() },
                 contentDescription = item.name,
-                blurHash = item.blurHashes.primary,
-                modifier = resolvedModifier,
+                blurHash = item.blurHashes.backdrop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f),
                 contentScale = ContentScale.Crop,
             )
 
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
-
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = Color.White,
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .padding(8.dp),
-            )
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+                        )
+                    )
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
-            if (item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0) {
-                val progress = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                    (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
-                } else 0f
+            if (item.playbackPositionTicks != null && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth(progress)
+                        .fillMaxWidth()
                         .height(3.dp)
-                        .background(MaterialTheme.colorScheme.primary),
-                )
-            }
-        }
-
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (item.mediaType == MediaType.EPISODE) {
-                item.seriesName?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-            } else {
-                item.runTimeTicks?.let { ticks ->
-                    Text(
-                        text = "${ticks / 600_000_000}m",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(
+                                (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!.toFloat()).coerceIn(0f, 1f)
+                            )
+                            .background(MaterialTheme.colorScheme.primary)
                     )
                 }
             }
@@ -913,7 +943,6 @@ private fun WideMediaCard(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun HomeMediaRow(
     title: String,
@@ -941,7 +970,12 @@ private fun HomeMediaRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
+            items(
+                count = items.size,
+                key = { items[it].id },
+                contentType = { "homePosterCard" },
+            ) { index ->
+                val item = items[index]
                 PosterCard(
                     item = item,
                     imageUrl = imageUrlBuilder(item),
@@ -953,8 +987,6 @@ private fun HomeMediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = item.blurHashes.primary,
-                    sharedElementKey = "poster_${item.id}",
-                    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
                 )
             }
         }
