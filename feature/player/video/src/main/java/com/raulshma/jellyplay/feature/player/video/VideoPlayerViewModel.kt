@@ -126,6 +126,13 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
                 _syncPlayPrefs.value = prefs
+
+                if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
+                    _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
+                    playerSessionManager.engine?.let {
+                        updateConfigWithUiState()
+                    }
+                }
             }
         }
         syncPlayController.start()
@@ -295,6 +302,10 @@ class VideoPlayerViewModel @Inject constructor(
             val sessionState = playerSessionManager.sessionState.value
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
+
+            if (detail != null) {
+                applyMediaDetail(detail)
+            }
 
             source?.trickplayInfo?.let { info ->
                 trickplayManager.initialize(itemId, info)
@@ -601,6 +612,17 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.seekTo(targetMs)
     }
 
+    private fun applyMediaDetail(detail: MediaDetail) {
+        mediaDetail = detail
+        _uiState.update { state ->
+            state.copy(
+                chapters = detail.chapters,
+                seriesId = detail.item.seriesId,
+                currentSeasonId = detail.item.seasonId ?: state.currentSeasonId,
+            )
+        }
+    }
+
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         playbackRepository.getImageUrl(itemId, "Primary", maxWidth)
 
@@ -619,7 +641,7 @@ class VideoPlayerViewModel @Inject constructor(
             playbackRepository.downloadSubtitle(itemId, subtitleInfo.id)
             val detailResult = mediaRepository.getMediaDetail(itemId)
             detailResult.getOrNull()?.let { detail ->
-                mediaDetail = detail
+                applyMediaDetail(detail)
                 val source = detail.mediaSources.firstOrNull()
                 val streams = source?.mediaStreams ?: emptyList()
                 _uiState.update { it.copy(
@@ -857,7 +879,9 @@ class VideoPlayerViewModel @Inject constructor(
             introTimestamps = null,
             creditTimestamps = null,
             nextEpisode = null,
+            seriesId = null,
             remoteSubtitles = emptyList(),
+            chapters = emptyList(),
             seriesSeasons = emptyList(),
             seasonEpisodes = emptyList(),
             currentSeasonId = null,
