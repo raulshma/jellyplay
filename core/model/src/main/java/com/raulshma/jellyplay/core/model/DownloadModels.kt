@@ -50,6 +50,7 @@ data class UserPreferences(
     val kidsModeEnabled: Boolean = false,
     val kidsModeMaxRating: String = "PG",
     val dialogueBoostEnabled: Boolean = false,
+    val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val equalizerEnabled: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
     val audioDelayMs: Long = 0L,
@@ -57,6 +58,7 @@ data class UserPreferences(
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
     val nightModeEnabled: Boolean = false,
+    val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
@@ -187,6 +189,14 @@ data class EqualizerSettings(
     companion object {
         val BAND_FREQUENCIES = listOf(60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000)
     }
+}
+
+@Immutable
+@Serializable
+enum class EffectStrength(val displayName: String) {
+    LOW("Low"),
+    MODERATE("Moderate"),
+    HIGH("High"),
 }
 
 @Immutable

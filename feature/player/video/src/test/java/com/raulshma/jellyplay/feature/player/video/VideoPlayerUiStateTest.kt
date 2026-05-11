@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -27,7 +28,9 @@ class VideoPlayerUiStateTest {
         assertTrue(state.subtitleTracks.isEmpty())
         assertTrue(state.chapters.isEmpty())
         assertFalse(state.dialogueBoostEnabled)
+        assertEquals(EffectStrength.MODERATE, state.dialogueBoostStrength)
         assertFalse(state.nightModeEnabled)
+        assertEquals(EffectStrength.MODERATE, state.nightModeStrength)
         assertFalse(state.audioPassthrough)
         assertFalse(state.isOcrRunning)
         assertNull(state.detectedAspectRatio)

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.formatDuration
@@ -89,7 +91,9 @@ internal fun PlayerControls(
     playbackSpeed: Float,
     chapters: List<ChapterInfo>,
     dialogueBoostEnabled: Boolean,
+    dialogueBoostStrength: EffectStrength,
     nightModeEnabled: Boolean,
+    nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     isCasting: Boolean,
     isOcrRunning: Boolean,
@@ -124,7 +128,9 @@ internal fun PlayerControls(
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
+    onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
+    onNightModeStrengthChange: (EffectStrength) -> Unit,
     onAudioDelayClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
@@ -408,7 +414,9 @@ internal fun PlayerControls(
                                 supportsAudioPassthrough = supportsAudioPassthrough,
                                 supportsOcr = supportsOcr,
                                 dialogueBoostEnabled = dialogueBoostEnabled,
+                                dialogueBoostStrength = dialogueBoostStrength,
                                 nightModeEnabled = nightModeEnabled,
+                                nightModeStrength = nightModeStrength,
                                 audioPassthrough = audioPassthrough,
                                 isOcrRunning = isOcrRunning,
                                 onSubtitleStyleClick = {
@@ -420,10 +428,12 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onDialogueBoostClick()
                                 },
+                                onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
                                 onNightModeClick = {
                                     showOverflow = false
                                     onNightModeClick()
                                 },
+                                onNightModeStrengthChange = onNightModeStrengthChange,
                                 onAudioDelayClick = {
                                     showOverflow = false
                                     onAudioDelayClick()
@@ -712,18 +722,25 @@ private fun PlayerOverflowMenu(
     supportsAudioPassthrough: Boolean,
     supportsOcr: Boolean,
     dialogueBoostEnabled: Boolean,
+    dialogueBoostStrength: EffectStrength,
     nightModeEnabled: Boolean,
+    nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
     onSubtitleStyleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
+    onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
+    onNightModeStrengthChange: (EffectStrength) -> Unit,
     onAudioDelayClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onOcrClick: () -> Unit,
 ) {
+    var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
+    var showNightModeSubmenu by remember { mutableStateOf(false) }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
@@ -739,20 +756,88 @@ private fun PlayerOverflowMenu(
         }
         
         if (supportsDialogueBoost) {
-            OverflowMenuItem(
-                icon = Icons.Default.Audiotrack,
-                label = "Dialogue Boost",
-                onClick = onDialogueBoostClick,
-                tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
-            )
+            if (showDialogueBoostSubmenu) {
+                OverflowMenuItem(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    label = "Dialogue Boost",
+                    onClick = { showDialogueBoostSubmenu = false },
+                )
+                EffectStrength.entries.forEach { strength ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                strength.displayName,
+                                color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
+                                    MaterialTheme.colorScheme.primary else Color.White,
+                            )
+                        },
+                        onClick = {
+                            if (!dialogueBoostEnabled) onDialogueBoostClick()
+                            onDialogueBoostStrengthChange(strength)
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        },
+                    )
+                }
+            } else {
+                OverflowMenuItem(
+                    icon = Icons.Default.Audiotrack,
+                    label = if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
+                    onClick = { showDialogueBoostSubmenu = true },
+                    tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
         }
         if (supportsNightMode) {
-            OverflowMenuItem(
-                icon = Icons.Default.MoreVert,
-                label = "Night Mode",
-                onClick = onNightModeClick,
-                tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
-            )
+            if (showNightModeSubmenu) {
+                OverflowMenuItem(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    label = "Night Mode",
+                    onClick = { showNightModeSubmenu = false },
+                )
+                EffectStrength.entries.forEach { strength ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                strength.displayName,
+                                color = if (nightModeEnabled && nightModeStrength == strength)
+                                    MaterialTheme.colorScheme.primary else Color.White,
+                            )
+                        },
+                        onClick = {
+                            if (!nightModeEnabled) onNightModeClick()
+                            onNightModeStrengthChange(strength)
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            if (nightModeEnabled && nightModeStrength == strength) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        },
+                    )
+                }
+            } else {
+                OverflowMenuItem(
+                    icon = Icons.Default.MoreVert,
+                    label = if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode",
+                    onClick = { showNightModeSubmenu = true },
+                    tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
         }
         if (supportsAudioDelay) {
             OverflowMenuItem(

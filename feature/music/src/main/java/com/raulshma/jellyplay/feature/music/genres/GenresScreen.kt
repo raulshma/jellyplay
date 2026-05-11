@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -135,16 +138,18 @@ fun GenresScreen(
                         }
                     }
                     else -> {
+                        val adaptiveInfo = LocalAdaptiveInfo.current
+                        val isTv = isTvDevice()
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(120.dp),
+                            columns = GridCells.Adaptive(adaptiveInfo.gridMinSize(isTv)),
                             contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
+                                start = adaptiveInfo.contentPadding(isTv),
+                                end = adaptiveInfo.contentPadding(isTv),
                                 top = 8.dp,
-                                bottom = 100.dp,
+                                bottom = adaptiveInfo.bottomPadding(isTv),
                             ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             items(genres, key = { it.id }, contentType = { "genre" }) { genre ->

@@ -114,6 +114,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
@@ -230,12 +231,14 @@ private fun DetailContent(
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
 
     val density = LocalDensity.current
     val backdropHeight = when {
-        adaptiveInfo.isLandscape && isExpanded -> 320.dp
-        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> 400.dp
-        else -> 450.dp
+        isTv -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Tv
+        adaptiveInfo.isLandscape && isExpanded -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.LandscapeExpanded
+        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Expanded
+        else -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Portrait
     }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
     val scrollOffset by remember {
@@ -389,7 +392,7 @@ private fun DetailContent(
                     ) {
                         Row(
                             modifier = Modifier
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = adaptiveInfo.contentPadding(isTv))
                                 .offset(y = (-40).dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
@@ -409,12 +412,17 @@ private fun DetailContent(
                                     animationSpec = tween(160, easing = FastOutSlowInEasing),
                                 ),
                             ) {
+                                val posterWidth = when {
+                                    isTv -> 160.dp
+                                    isExpanded -> 140.dp
+                                    else -> 120.dp
+                                }
                                 MediaImage(
                                     url = getImageUrl(itemId),
                                     contentDescription = null,
                                     blurHash = item?.blurHashes?.primary,
                                     modifier = Modifier
-                                        .width(120.dp)
+                                        .width(posterWidth)
                                         .aspectRatio(2f / 3f)
                                         .clip(RoundedCornerShape(8.dp))
                                         .graphicsLayer { alpha = contentAlpha },

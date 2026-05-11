@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.playback
 import android.media.audiofx.LoudnessEnhancer
 import android.util.Log
 import androidx.media3.common.C
+import com.raulshma.jellyplay.core.model.EffectStrength
 
 class NightModeHelper {
 
@@ -12,12 +13,21 @@ class NightModeHelper {
     var isEnabled: Boolean = false
         private set
 
-    var targetGain: Int = 3000
+    var strength: EffectStrength = EffectStrength.MODERATE
         private set
 
-    fun setTargetGain(gain: Int) {
-        targetGain = gain
-        enhancer?.setTargetGain(gain.toInt())
+    private val targetGainForStrength: Int
+        get() = when (strength) {
+            EffectStrength.LOW -> 1500
+            EffectStrength.MODERATE -> 3000
+            EffectStrength.HIGH -> 4500
+        }
+
+    fun setStrength(strength: EffectStrength) {
+        this.strength = strength
+        if (isEnabled) {
+            enhancer?.setTargetGain(targetGainForStrength)
+        }
     }
 
     fun attach(audioSessionId: Int) {
@@ -29,7 +39,7 @@ class NightModeHelper {
 
         enhancer = try {
             LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(targetGain.toInt())
+                setTargetGain(targetGainForStrength)
                 enabled = isEnabled
             }
         } catch (e: Exception) {

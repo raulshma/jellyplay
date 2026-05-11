@@ -45,6 +45,9 @@ import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,10 +137,12 @@ fun TracksScreen(
                                 )
                             }
                         } else {
+                            val adaptiveInfo = LocalAdaptiveInfo.current
+                            val isTv = isTvDevice()
                             LazyColumn(
                                 contentPadding = PaddingValues(
                                     top = 8.dp,
-                                    bottom = 100.dp,
+                                    bottom = adaptiveInfo.bottomPadding(isTv),
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                                 modifier = Modifier.fillMaxSize(),

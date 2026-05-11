@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.view.View
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
@@ -46,7 +47,9 @@ data class EngineConfig(
 
 data class AudioEffectsConfig(
     val dialogueBoostEnabled: Boolean = false,
+    val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeEnabled: Boolean = false,
+    val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeGain: Int = 0,
     val equalizerEnabled: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
@@ -119,4 +122,11 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     // Internal state access (needed for some specific features, but keep to a minimum)
     val playbackSpeed: Float
     val audioSessionId: Int
+
+    /**
+     * Provides access to the underlying AndroidX Player instance (e.g. ExoPlayer).
+     * Used by the video player ViewModel to create a MediaSession for notification
+     * and lock screen controls. Returns null for engines that don't use Media3.
+     */
+    val underlyingPlayer: androidx.media3.common.Player? get() = null
 }

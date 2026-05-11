@@ -89,6 +89,8 @@ class ExoPlayerEngine(
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
+
+    override val underlyingPlayer: androidx.media3.common.Player? get() = player
     
     private var currentConfig = EngineConfig()
 
@@ -452,10 +454,11 @@ class ExoPlayerEngine(
         if (sid == C.AUDIO_SESSION_ID_UNSET) return
         
         dialogueBoost.attach(sid)
+        dialogueBoost.setStrength(currentConfig.audioEffects.dialogueBoostStrength)
         dialogueBoost.setEnabled(currentConfig.audioEffects.dialogueBoostEnabled)
         
         nightMode.attach(sid)
-        nightMode.setTargetGain(currentConfig.audioEffects.nightModeGain)
+        nightMode.setStrength(currentConfig.audioEffects.nightModeStrength)
         nightMode.setEnabled(currentConfig.audioEffects.nightModeEnabled)
         
         equalizerHelper.attach(sid)

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
@@ -36,7 +37,9 @@ fun PlaybackInfoOverlay(
     decoderMode: String = "Unknown",
     aspectRatio: String = "Auto",
     nightModeEnabled: Boolean = false,
+    nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     dialogueBoostEnabled: Boolean = false,
+    dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     audioPassthrough: Boolean = false,
     audioTracks: List<TrackOption> = emptyList(),
     subtitleTracks: List<TrackOption> = emptyList(),
@@ -146,8 +149,8 @@ fun PlaybackInfoOverlay(
                 InfoRow("Speed", "${playbackSpeed}x")
                 if (audioDelayMs != 0L) InfoRow("Audio Delay", "${audioDelayMs} ms")
                 InfoRow("Aspect Ratio", aspectRatio)
-                InfoRow("Night Mode", if (nightModeEnabled) "On" else "Off")
-                InfoRow("Dialogue Boost", if (dialogueBoostEnabled) "On" else "Off")
+                InfoRow("Night Mode", if (nightModeEnabled) nightModeStrength.displayName else "Off")
+                InfoRow("Dialogue Boost", if (dialogueBoostEnabled) dialogueBoostStrength.displayName else "Off")
                 InfoRow("Audio Passthrough", if (audioPassthrough) "On" else "Off")
                 
                 val activeAudio = audioTracks.find { it.isSelected }?.label ?: "Unknown"
