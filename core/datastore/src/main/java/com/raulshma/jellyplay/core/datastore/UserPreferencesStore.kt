@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -47,6 +48,7 @@ class UserPreferencesStore @Inject constructor(
         val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
         val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
         val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
+        val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
         val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
         val AUDIO_DELAY_MS = stringPreferencesKey("audio_delay_ms")
@@ -54,6 +56,7 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_PASSTHROUGH = stringPreferencesKey("audio_passthrough")
         val FRAME_RATE_MATCHING = stringPreferencesKey("frame_rate_matching")
         val NIGHT_MODE_ENABLED = stringPreferencesKey("night_mode_enabled")
+        val NIGHT_MODE_STRENGTH = stringPreferencesKey("night_mode_strength")
         val HOME_MODE = stringPreferencesKey("home_mode")
         val VIDEO_SEEK_DURATION_MS = stringPreferencesKey("video_seek_duration_ms")
         val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
@@ -146,6 +149,9 @@ class UserPreferencesStore @Inject constructor(
             kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
             kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
             dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
+            dialogueBoostStrength = try {
+                EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
+            } catch (_: Exception) { EffectStrength.MODERATE },
             equalizerEnabled = prefs[Keys.EQUALIZER_ENABLED]?.toBoolean() ?: false,
             equalizerSettings = equalizerSettings ?: EqualizerSettings(),
             audioDelayMs = prefs[Keys.AUDIO_DELAY_MS]?.toLongOrNull() ?: 0L,
@@ -155,6 +161,9 @@ class UserPreferencesStore @Inject constructor(
             audioPassthrough = prefs[Keys.AUDIO_PASSTHROUGH]?.toBoolean() ?: false,
             frameRateMatching = prefs[Keys.FRAME_RATE_MATCHING]?.toBoolean() ?: false,
             nightModeEnabled = prefs[Keys.NIGHT_MODE_ENABLED]?.toBoolean() ?: false,
+            nightModeStrength = try {
+                EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
+            } catch (_: Exception) { EffectStrength.MODERATE },
             homeMode = try {
                 HomeMode.valueOf(prefs[Keys.HOME_MODE] ?: HomeMode.VIDEO.name)
             } catch (_: Exception) { HomeMode.VIDEO },
@@ -299,6 +308,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled.toString() }
     }
 
+    suspend fun setDialogueBoostStrength(strength: EffectStrength) {
+        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_STRENGTH] = strength.name }
+    }
+
     suspend fun setEqualizerEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled.toString() }
     }
@@ -325,6 +338,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setNightModeStrength(strength: EffectStrength) {
+        context.dataStore.edit { it[Keys.NIGHT_MODE_STRENGTH] = strength.name }
     }
 
     suspend fun setHomeMode(mode: HomeMode) {

@@ -72,6 +72,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Palette
@@ -115,6 +116,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -450,10 +452,27 @@ fun SettingsScreen(
                 SettingToggleItem(
                     icon = Icons.Default.RecordVoiceOver,
                     title = "Dialogue Boost",
-                    subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
+                    subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
                     checked = preferences.dialogueBoostEnabled,
                     onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
                 )
+            }
+
+            if (preferences.dialogueBoostEnabled) {
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Audiotrack,
+                        title = "Dialogue Boost Strength",
+                        subtitle = preferences.dialogueBoostStrength.displayName,
+                        trailingText = preferences.dialogueBoostStrength.displayName,
+                        onClick = {
+                            val strengths = EffectStrength.entries
+                            val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
+                            val nextIndex = (currentIndex + 1) % strengths.size
+                            viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                        },
+                    )
+                }
             }
 
             item {
@@ -695,20 +714,54 @@ fun SettingsScreen(
                 SettingToggleItem(
                     icon = Icons.Default.RecordVoiceOver,
                     title = "Dialogue Boost",
-                    subtitle = if (preferences.dialogueBoostEnabled) "Enhanced vocal clarity" else "Off",
+                    subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
                     checked = preferences.dialogueBoostEnabled,
                     onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
                 )
+            }
+
+            if (preferences.dialogueBoostEnabled) {
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Audiotrack,
+                        title = "Dialogue Boost Strength",
+                        subtitle = preferences.dialogueBoostStrength.displayName,
+                        trailingText = preferences.dialogueBoostStrength.displayName,
+                        onClick = {
+                            val strengths = EffectStrength.entries
+                            val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
+                            val nextIndex = (currentIndex + 1) % strengths.size
+                            viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                        },
+                    )
+                }
             }
 
             item {
                 SettingToggleItem(
                     icon = Icons.Default.Speed,
                     title = "Night Mode",
-                    subtitle = if (preferences.nightModeEnabled) "Dynamic range compression active" else "Off",
+                    subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
                     checked = preferences.nightModeEnabled,
                     onCheckedChange = { viewModel.setNightModeEnabled(it) },
                 )
+            }
+
+            if (preferences.nightModeEnabled) {
+                item {
+                    SettingListItem(
+                        icon = Icons.Default.Nightlight,
+                        title = "Night Mode Strength",
+                        subtitle = preferences.nightModeStrength.displayName,
+                        trailingText = preferences.nightModeStrength.displayName,
+                        onClick = {
+                            val strengths = EffectStrength.entries
+                            val currentIndex = strengths.indexOf(preferences.nightModeStrength)
+                            val nextIndex = (currentIndex + 1) % strengths.size
+                            viewModel.setNightModeStrength(strengths[nextIndex])
+                        },
+                    )
+                }
             }
 
             item {

@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -180,7 +181,9 @@ fun AudioPlayerScreen(
                     onBack = onBack,
                     speed = viewModel.speed,
                     dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
+                    dialogueBoostStrength = viewModel.dialogueBoostStrength,
                     nightModeEnabled = viewModel.nightModeEnabled,
+                    nightModeStrength = viewModel.nightModeStrength,
                     hasLyrics = viewModel.lyrics.isNotEmpty(),
                     albumArtUrl = viewModel.albumArtUrl,
                     title = viewModel.title,
@@ -191,7 +194,9 @@ fun AudioPlayerScreen(
                     onSpeedClick = { showMenu = false; showSpeedPicker = true },
                     onEqualizerClick = { showMenu = false; showEqualizer = true },
                     onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
+                    onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
+                    onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onLyricsClick = { showMenu = false; showLyrics = true },
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
                 )
@@ -579,7 +584,9 @@ private fun PlayerTopBar(
     onBack: () -> Unit,
     speed: Float,
     dialogueBoostEnabled: Boolean,
+    dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength,
     nightModeEnabled: Boolean,
+    nightModeStrength: com.raulshma.jellyplay.core.model.EffectStrength,
     hasLyrics: Boolean,
     albumArtUrl: String,
     title: String,
@@ -590,10 +597,15 @@ private fun PlayerTopBar(
     onSpeedClick: () -> Unit,
     onEqualizerClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
+    onDialogueBoostStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
+    onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onLyricsClick: () -> Unit,
     onAmbientClick: () -> Unit,
 ) {
+    var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
+    var showNightModeSubmenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -638,16 +650,78 @@ private fun PlayerTopBar(
                     onClick = onEqualizerClick,
                     leadingIcon = { Icon(Icons.Default.Tune, null) },
                 )
-                DropdownMenuItem(
-                    text = { Text(if (dialogueBoostEnabled) "Dialogue Boost ✓" else "Dialogue Boost") },
-                    onClick = onDialogueBoostClick,
-                    leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
-                )
-                DropdownMenuItem(
-                    text = { Text(if (nightModeEnabled) "Night Mode ✓" else "Night Mode") },
-                    onClick = onNightModeClick,
-                    leadingIcon = { Icon(Icons.Default.Nightlight, null) },
-                )
+                if (showDialogueBoostSubmenu) {
+                    DropdownMenuItem(
+                        text = { Text("← Dialogue Boost") },
+                        onClick = { showDialogueBoostSubmenu = false },
+                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                    )
+                    com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    strength.displayName,
+                                    color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
+                                        MaterialTheme.colorScheme.primary else Color.White,
+                                )
+                            },
+                            onClick = {
+                                if (!dialogueBoostEnabled) onDialogueBoostClick()
+                                onDialogueBoostStrengthChange(strength)
+                                onMenuToggle(false)
+                            },
+                            leadingIcon = {
+                                if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
+                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost")
+                        },
+                        onClick = { showDialogueBoostSubmenu = true },
+                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                    )
+                }
+                if (showNightModeSubmenu) {
+                    DropdownMenuItem(
+                        text = { Text("← Night Mode") },
+                        onClick = { showNightModeSubmenu = false },
+                        leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                    )
+                    com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    strength.displayName,
+                                    color = if (nightModeEnabled && nightModeStrength == strength)
+                                        MaterialTheme.colorScheme.primary else Color.White,
+                                )
+                            },
+                            onClick = {
+                                if (!nightModeEnabled) onNightModeClick()
+                                onNightModeStrengthChange(strength)
+                                onMenuToggle(false)
+                            },
+                            leadingIcon = {
+                                if (nightModeEnabled && nightModeStrength == strength) {
+                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode")
+                        },
+                        onClick = { showNightModeSubmenu = true },
+                        leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                    )
+                }
                 if (hasLyrics) {
                     DropdownMenuItem(
                         text = { Text("Lyrics") },

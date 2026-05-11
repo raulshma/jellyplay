@@ -9,45 +9,86 @@
     <path android:pathData="M0,0h320v180h-320z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="320"
-                android:endY="180"
                 android:startX="0"
                 android:startY="0"
+                android:endX="320"
+                android:endY="180"
                 android:type="linear">
-                <item android:color="#4F2F7D" android:offset="0" />
-                <item android:color="#8E54E9" android:offset="1" />
+                <item android:color="#140d2b" android:offset="0" />
+                <item android:color="#090514" android:offset="1" />
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- Stylized 3D Jellyfish Icon for Banner -->
-    <group android:translateX="30" android:translateY="40" android:scaleX="0.2" android:scaleY="0.2">
-        <path android:pathData="M 131 235 A 125 125 0 0 1 381 235 Z">
-             <aapt:attr name="android:fillColor">
-                <gradient android:centerX="256" android:centerY="200" android:gradientRadius="150" android:type="radial">
-                    <item android:color="#FFFFFF" android:offset="0" />
-                    <item android:color="#E0E0E0" android:offset="1" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M 116 220 L 396 220 Q 411 220 411 235 Q 411 250 396 250 L 116 250 Q 101 250 101 235 Q 101 220 116 220 Z">
+    <group android:translateX="92" android:translateY="18" android:scaleX="0.27" android:scaleY="0.27">
+        <path android:pathData="M16,16h480v480h-480z">
             <aapt:attr name="android:fillColor">
-                <gradient android:startX="101" android:startY="235" android:endX="411" android:endY="235" android:type="linear">
-                    <item android:color="#F5F5F5" android:offset="0" />
-                    <item android:color="#FFFFFF" android:offset="0.5" />
-                    <item android:color="#F5F5F5" android:offset="1" />
+                <gradient
+                    android:startX="16"
+                    android:startY="16"
+                    android:endX="496"
+                    android:endY="496"
+                    android:type="linear">
+                    <item android:color="#140d2b" android:offset="0" />
+                    <item android:color="#090514" android:offset="1" />
                 </gradient>
             </aapt:attr>
         </path>
-        <!-- Simplified tentacles for banner -->
-        <path android:fillColor="#FFFFFF" android:pathData="M 156 240 L 176 240 L 176 350 Q 176 360 166 360 Q 156 360 156 350 Z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M 246 240 L 266 240 L 266 410 Q 266 420 256 420 Q 246 420 246 410 Z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M 336 240 L 356 240 L 356 350 Q 356 360 346 360 Q 336 360 336 350 Z" />
-    </group>
 
-    <!-- Text: JellyPlay (Modernized Font Look) -->
-    <group android:translateX="110" android:translateY="80">
-        <!-- Simplified text paths or just use a nice pill/rect if paths are too complex -->
-         <path android:fillColor="#FFFFFF" android:pathData="M0,0h80v12h-80z" /> <!-- Placeholder for text area -->
+        <path
+            android:fillColor="#4d8a2be2"
+            android:pathData="M256,256m-160,0a160,160 0 1,0 320,0a160,160 0 1,0 -320,0" />
+
+        <group android:rotation="-15" android:pivotX="130" android:pivotY="300">
+            <path
+                android:pathData="M90,240h80v120a16,16 0 0,1 -16,16h-48a16,16 0 0,1 -16,-16z"
+                android:fillColor="#0dffffff" />
+        </group>
+
+        <group android:rotation="10" android:pivotX="370" android:pivotY="130">
+            <path
+                android:pathData="M340,100h100v60a16,16 0 0,1 -16,16h-68a16,16 0 0,1 -16,-16z"
+                android:fillColor="#0dffffff" />
+        </group>
+
+        <path
+            android:fillColor="#3300f2fe"
+            android:pathData="M140,380m-12,0a12,12 0 1,0 24,0a12,12 0 1,0 -24,0" />
+
+        <path
+            android:pathData="M120,140h16m-8,-8v16"
+            android:strokeColor="#668a2be2"
+            android:strokeLineCap="round"
+            android:strokeWidth="4" />
+
+        <group android:translateX="24" android:translateY="12">
+            <group android:translateY="12">
+                <path
+                    android:pathData="M156,154v180l156,-90z"
+                    android:fillColor="#33000000" />
+            </group>
+
+            <path
+                android:pathData="M132,142v180l156,-90z"
+                android:fillColor="#408a2be2" />
+
+            <path
+                android:pathData="M156,154v180l156,-90z"
+                android:fillColor="#664facfe" />
+
+            <path android:pathData="M180,166v180l156,-90z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:startX="180"
+                        android:startY="166"
+                        android:endX="336"
+                        android:endY="346"
+                        android:type="linear">
+                        <item android:color="#ff00f2fe" android:offset="0" />
+                        <item android:color="#ff8a2be2" android:offset="1" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
     </group>
 </vector>

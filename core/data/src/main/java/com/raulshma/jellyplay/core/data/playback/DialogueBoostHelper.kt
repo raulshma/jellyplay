@@ -3,15 +3,8 @@ package com.raulshma.jellyplay.core.data.playback
 import android.media.audiofx.Equalizer
 import android.util.Log
 import androidx.media3.common.C
+import com.raulshma.jellyplay.core.model.EffectStrength
 
-/**
- * Dialogue Boost DSP processor that enhances vocal clarity by boosting
- * frequencies in the human voice range (approximately 1 kHz – 4 kHz).
- *
- * This helper wraps [android.media.audiofx.Equalizer] and is designed to be
- * attached to an ExoPlayer audio session. It is safe to call [attach] multiple
- * times — previous instances are released automatically.
- */
 class DialogueBoostHelper {
 
     private var equalizer: Equalizer? = null
@@ -20,6 +13,21 @@ class DialogueBoostHelper {
 
     var isEnabled: Boolean = false
         private set
+
+    var strength: EffectStrength = EffectStrength.MODERATE
+        private set
+
+    fun setStrength(strength: EffectStrength) {
+        this.strength = strength
+        if (isEnabled) {
+            equalizer?.apply {
+                val bandLevels = boostVocalBands()
+                bandLevels.forEach { (band, level) ->
+                    try { setBandLevel(band.toShort(), level.toShort()) } catch (_: Exception) {}
+                }
+            }
+        }
+    }
 
     fun attach(audioSessionId: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
@@ -74,23 +82,21 @@ class DialogueBoostHelper {
         savedBandLevels = emptyMap()
     }
 
-    /**
-     * Computes which bands to boost and by how much.
-     * Targets the 1 kHz – 4 kHz range with a gentle +6 dB shelf.
-     */
     private fun Equalizer.boostVocalBands(): Map<Int, Int> {
         val numBands = numberOfBands.toInt()
         val result = mutableMapOf<Int, Int>()
+        val (coreVocal, upperHarmonics, lowMidWarmth) = when (strength) {
+            EffectStrength.LOW -> Triple(300, 150, 100)
+            EffectStrength.MODERATE -> Triple(600, 300, 200)
+            EffectStrength.HIGH -> Triple(900, 450, 300)
+        }
 
         for (i in 0 until numBands) {
-            val centerFreq = getCenterFreq(i.toShort()) // Hz
+            val centerFreq = getCenterFreq(i.toShort())
             val level = when {
-                // Core vocal range: 1 kHz – 4 kHz  → +6 dB
-                centerFreq in 1_000_000..4_000_000 -> +600
-                // Upper harmonics / presence: 4 kHz – 8 kHz → +3 dB
-                centerFreq in 4_000_000..8_000_000 -> +300
-                // Low-mid warmth: 500 Hz – 1 kHz → +2 dB
-                centerFreq in 500_000..1_000_000 -> +200
+                centerFreq in 1_000_000..4_000_000 -> coreVocal
+                centerFreq in 4_000_000..8_000_000 -> upperHarmonics
+                centerFreq in 500_000..1_000_000 -> lowMidWarmth
                 else -> 0
             }
             if (level != 0) {

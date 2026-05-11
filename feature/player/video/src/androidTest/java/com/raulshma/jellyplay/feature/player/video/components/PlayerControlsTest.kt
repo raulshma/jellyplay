@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +38,9 @@ class PlayerControlsTest {
         currentAspectRatio: AspectRatio = AspectRatio.AUTO,
         detectedAspectRatio: AspectRatio? = null,
         dialogueBoostEnabled: Boolean = false,
+        dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
         nightModeEnabled: Boolean = false,
+        nightModeStrength: EffectStrength = EffectStrength.MODERATE,
         audioPassthrough: Boolean = false,
         isCasting: Boolean = false,
         isOcrRunning: Boolean = false,
@@ -53,7 +56,9 @@ class PlayerControlsTest {
                     playbackSpeed = playbackSpeed,
                     chapters = chapters,
                     dialogueBoostEnabled = dialogueBoostEnabled,
+                    dialogueBoostStrength = dialogueBoostStrength,
                     nightModeEnabled = nightModeEnabled,
+                    nightModeStrength = nightModeStrength,
                     audioPassthrough = audioPassthrough,
                     isCasting = isCasting,
                     isOcrRunning = isOcrRunning,
@@ -82,7 +87,9 @@ class PlayerControlsTest {
                     onInfoClick = {},
                     onAspectRatioClick = {},
                     onDialogueBoostClick = {},
+                    onDialogueBoostStrengthChange = {},
                     onNightModeClick = {},
+                    onNightModeStrengthChange = {},
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
@@ -328,7 +335,9 @@ class PlayerControlsTest {
                     onInfoClick = {},
                     onAspectRatioClick = {},
                     onDialogueBoostClick = {},
+                    onDialogueBoostStrengthChange = {},
                     onNightModeClick = {},
+                    onNightModeStrengthChange = {},
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
@@ -379,7 +388,9 @@ class PlayerControlsTest {
                     onInfoClick = {},
                     onAspectRatioClick = {},
                     onDialogueBoostClick = {},
+                    onDialogueBoostStrengthChange = {},
                     onNightModeClick = {},
+                    onNightModeStrengthChange = {},
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},

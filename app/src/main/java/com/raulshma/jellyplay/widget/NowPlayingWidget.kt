@@ -102,7 +102,7 @@ class NowPlayingWidget : AppWidgetProvider() {
 
             for (appWidgetId in appWidgetIds) {
                 val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                views.setTextViewText(R.id.widget_title, title ?: "JellyPlay")
+                views.setTextViewText(R.id.widget_title, title ?: context.getString(R.string.app_name))
                 views.setTextViewText(R.id.widget_subtitle, subtitle ?: "Not playing")
                 views.setImageViewResource(
                     R.id.widget_play_pause,

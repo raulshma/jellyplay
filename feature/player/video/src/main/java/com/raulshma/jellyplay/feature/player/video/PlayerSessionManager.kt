@@ -166,7 +166,9 @@ class PlayerSessionManager(
             subtitleStyle = prefs.subtitleStyle,
             audioEffects = AudioEffectsConfig(
                 dialogueBoostEnabled = prefs.dialogueBoostEnabled,
+                dialogueBoostStrength = prefs.dialogueBoostStrength,
                 nightModeEnabled = prefs.nightModeEnabled,
+                nightModeStrength = prefs.nightModeStrength,
                 nightModeGain = prefs.audioNightModeGain,
                 equalizerEnabled = prefs.equalizerEnabled,
                 equalizerSettings = prefs.equalizerSettings

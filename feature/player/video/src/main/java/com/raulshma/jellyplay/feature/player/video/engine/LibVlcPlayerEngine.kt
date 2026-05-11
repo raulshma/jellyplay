@@ -8,6 +8,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
@@ -50,7 +51,7 @@ class LibVlcPlayerEngine(
         supportsAudioPassthrough = true,
         supportsSubtitleStyle = true,
         supportsDialogueBoost = true,
-        supportsNightMode = false,
+        supportsNightMode = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -75,6 +76,7 @@ class LibVlcPlayerEngine(
     
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
+    private val nightMode = NightModeHelper()
 
     private var pendingPlay = false
     private var wasPlayingBeforeActivityPause = false
@@ -100,6 +102,9 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.READY
                 if (currentConfig.audioEffects.dialogueBoostEnabled) {
                     applyDialogueBoost()
+                }
+                if (currentConfig.audioEffects.nightModeEnabled) {
+                    applyNightMode()
                 }
             }
             MediaPlayer.Event.Paused -> {
@@ -203,6 +208,7 @@ class LibVlcPlayerEngine(
         pendingPlay = false
         currentPlaybackRequest = null
         dialogueBoost.detach()
+        nightMode.detach()
         val mp = mediaPlayer ?: return
         mediaPlayer = null
         mp.setEventListener(null)
@@ -253,9 +259,19 @@ class LibVlcPlayerEngine(
                 mp.setSpuDelay(config.subtitleDelayMs * 1000L)
             }
             
-            if (oldConfig.audioEffects.dialogueBoostEnabled != config.audioEffects.dialogueBoostEnabled) {
+            if (oldConfig.audioEffects.dialogueBoostEnabled != config.audioEffects.dialogueBoostEnabled
+                || oldConfig.audioEffects.dialogueBoostStrength != config.audioEffects.dialogueBoostStrength
+            ) {
                 if (_isPlaying.value) {
                     applyDialogueBoost()
+                }
+            }
+
+            if (oldConfig.audioEffects.nightModeEnabled != config.audioEffects.nightModeEnabled
+                || oldConfig.audioEffects.nightModeStrength != config.audioEffects.nightModeStrength
+            ) {
+                if (_isPlaying.value) {
+                    applyNightMode()
                 }
             }
 
@@ -499,7 +515,17 @@ class LibVlcPlayerEngine(
         val sid = audioSessionId
         if (sid != 0) {
             dialogueBoost.attach(sid)
+            dialogueBoost.setStrength(currentConfig.audioEffects.dialogueBoostStrength)
             dialogueBoost.setEnabled(currentConfig.audioEffects.dialogueBoostEnabled)
+        }
+    }
+
+    private fun applyNightMode() {
+        val sid = audioSessionId
+        if (sid != 0) {
+            nightMode.attach(sid)
+            nightMode.setStrength(currentConfig.audioEffects.nightModeStrength)
+            nightMode.setEnabled(currentConfig.audioEffects.nightModeEnabled)
         }
     }
 }

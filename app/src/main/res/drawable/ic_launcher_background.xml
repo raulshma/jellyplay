@@ -3,22 +3,19 @@
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path android:pathData="M0,0h108v108h-108z">
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <path android:pathData="M16,16h480v480h-480z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="108"
-                android:endY="108"
-                android:startX="0"
-                android:startY="0"
+                android:startX="16"
+                android:startY="16"
+                android:endX="496"
+                android:endY="496"
                 android:type="linear">
-                <item
-                    android:color="#4F2F7D"
-                    android:offset="0" />
-                <item
-                    android:color="#8E54E9"
-                    android:offset="1" />
+                <item android:color="#140d2b" android:offset="0" />
+                <item android:color="#090514" android:offset="1" />
             </gradient>
         </aapt:attr>
     </path>

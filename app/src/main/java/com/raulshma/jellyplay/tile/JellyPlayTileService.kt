@@ -5,6 +5,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.MainActivity
 
 @RequiresApi(Build.VERSION_CODES.N)
@@ -14,8 +15,8 @@ class JellyPlayTileService : TileService() {
         super.onStartListening()
         qsTile?.apply {
             state = Tile.STATE_INACTIVE
-            label = "JellyPlay"
-            contentDescription = "Open JellyPlay"
+            label = getString(R.string.app_name)
+            contentDescription = getString(R.string.open_app_description, getString(R.string.app_name))
             updateTile()
         }
     }
