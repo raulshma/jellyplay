@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
@@ -30,7 +31,9 @@ data class VideoPlayerUiState(
     val playMethod: String = "Direct Play",
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val dialogueBoostEnabled: Boolean = false,
+    val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeEnabled: Boolean = false,
+    val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val audioPassthrough: Boolean = false,
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val ocrText: String? = null,

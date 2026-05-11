@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -179,12 +180,20 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setDialogueBoostEnabled(enabled) }
     }
 
+    fun setDialogueBoostStrength(strength: EffectStrength) {
+        viewModelScope.launch { preferencesStore.setDialogueBoostStrength(strength) }
+    }
+
     fun setEqualizerEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setEqualizerEnabled(enabled) }
     }
 
     fun setNightModeEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setNightModeEnabled(enabled) }
+    }
+
+    fun setNightModeStrength(strength: EffectStrength) {
+        viewModelScope.launch { preferencesStore.setNightModeStrength(strength) }
     }
 
     fun setDecoderMode(mode: DecoderMode) {

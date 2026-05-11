@@ -55,6 +55,9 @@ import com.raulshma.jellyplay.core.model.SmartPlaylist
 import com.raulshma.jellyplay.core.model.SmartPlaylistSort
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @Composable
 fun SmartPlaylistsScreen(
@@ -115,15 +118,17 @@ fun SmartPlaylistsScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            val adaptiveInfo = LocalAdaptiveInfo.current
+            val isTv = isTvDevice()
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
+                    start = adaptiveInfo.contentPadding(isTv),
+                    end = adaptiveInfo.contentPadding(isTv),
                     top = 8.dp,
-                    bottom = 100.dp,
+                    bottom = adaptiveInfo.bottomPadding(isTv),
                 ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
             ) {
                 items(playlists.size, key = { playlists[it].id }, contentType = { "smartPlaylist" }) { index ->
                     val playlist = playlists[index]

@@ -33,6 +33,8 @@ class ModelSerializationTest {
             kidsModeEnabled = true,
             kidsModeMaxRating = "PG-13",
             dialogueBoostEnabled = true,
+            dialogueBoostStrength = EffectStrength.HIGH,
+            nightModeStrength = EffectStrength.LOW,
         )
 
         val serialized = json.encodeToString(original)
@@ -58,6 +60,8 @@ class ModelSerializationTest {
         assertEquals(false, defaults.kidsModeEnabled)
         assertEquals("PG", defaults.kidsModeMaxRating)
         assertEquals(false, defaults.dialogueBoostEnabled)
+        assertEquals(EffectStrength.MODERATE, defaults.dialogueBoostStrength)
+        assertEquals(EffectStrength.MODERATE, defaults.nightModeStrength)
     }
 
     @Test

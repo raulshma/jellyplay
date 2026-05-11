@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -140,18 +141,18 @@ fun PosterCard(
         }
 
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(if (isTv) 12.dp else 8.dp),
         ) {
             Text(
                 text = item.name,
-                style = MaterialTheme.typography.bodySmall,
+                style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (item.year != null) {
                 Text(
                     text = item.year.toString(),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -169,21 +170,22 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val titleStyle = if (isTv) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
+
     Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = titleStyle,
+            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        val adaptiveInfo = LocalAdaptiveInfo.current
-        val cardWidth = when (adaptiveInfo.windowSizeClass) {
-            WindowSizeClass.Expanded -> 200.dp
-            WindowSizeClass.Medium -> 180.dp
-            WindowSizeClass.Compact -> 160.dp
-        }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
         ) {
             items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(

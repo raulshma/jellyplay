@@ -88,6 +88,9 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import kotlinx.coroutines.launch
@@ -156,10 +159,12 @@ fun MusicHomeScreen(
                         )
                     }
                 } else {
+                    val adaptiveInfo = LocalAdaptiveInfo.current
+                    val isTv = isTvDevice()
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 100.dp),
+                        contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
                     ) {
                         item {
                             MusicHeroHeader(

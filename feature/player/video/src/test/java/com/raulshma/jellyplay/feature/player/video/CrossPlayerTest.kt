@@ -136,9 +136,9 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun mpvCapabilities_nightModeNotSupported() {
+    fun mpvCapabilities_nightModeSupported() {
         val caps = getCapabilitiesForType(PlayerType.MPV)
-        assertFalse(caps.supportsNightMode)
+        assertTrue(caps.supportsNightMode)
     }
 
     @Test
@@ -178,9 +178,9 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun libvlcCapabilities_nightModeNotSupported() {
+    fun libvlcCapabilities_nightModeSupported() {
         val caps = getCapabilitiesForType(PlayerType.LIBVLC)
-        assertFalse(caps.supportsNightMode)
+        assertTrue(caps.supportsNightMode)
     }
 
     @Test
@@ -210,7 +210,7 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 
     @Test
-    fun exoPlayerAndNativeEngines_capabilitiesDiffer() {
+    fun exoPlayerAndNativeEngines_someCapabilitiesDiffer() {
         val exoCaps = getCapabilitiesForType(PlayerType.EXO_PLAYER)
         val mpvCaps = getCapabilitiesForType(PlayerType.MPV)
 
@@ -218,6 +218,7 @@ class EngineCapabilitiesCrossPlayerTest {
         assertFalse(exoCaps.supportsAudioPassthrough == mpvCaps.supportsAudioPassthrough)
         assertFalse(exoCaps.supportsOcr == mpvCaps.supportsOcr)
         assertFalse(exoCaps.supportsCues == mpvCaps.supportsCues)
+        assertTrue(exoCaps.supportsNightMode == mpvCaps.supportsNightMode)
     }
 
     private fun getCapabilitiesForType(playerType: PlayerType): EngineCapabilities {
@@ -244,7 +245,7 @@ class EngineCapabilitiesCrossPlayerTest {
                 supportsAudioPassthrough = true,
                 supportsSubtitleStyle = true,
                 supportsDialogueBoost = true,
-                supportsNightMode = false,
+                supportsNightMode = true,
             )
             PlayerType.LIBVLC -> EngineCapabilities(
                 supportsPip = true,
@@ -256,7 +257,7 @@ class EngineCapabilitiesCrossPlayerTest {
                 supportsAudioPassthrough = true,
                 supportsSubtitleStyle = true,
                 supportsDialogueBoost = true,
-                supportsNightMode = false,
+                supportsNightMode = true,
             )
             PlayerType.EXTERNAL -> EngineCapabilities()
         }

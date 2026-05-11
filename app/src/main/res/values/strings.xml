@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">JellyPlay</string>
+    <string name="open_app_description">Open %1$s</string>
 </resources>

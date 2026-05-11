@@ -91,6 +91,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -226,9 +227,10 @@ fun HomeScreen(
         val isTv = isTvDevice()
 
         val headerHeight = when {
-            isTv -> 420.dp
-            adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact -> 320.dp
-            else -> 520.dp
+            isTv -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.Tv
+            adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact ->
+                com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.LandscapeMedium
+            else -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.PortraitCompact
         }
         val headerHeightPx = with(density) { headerHeight.toPx() }
 
@@ -342,8 +344,8 @@ fun HomeScreen(
                                         .fillMaxHeight(),
                                     contentPadding = PaddingValues(
                                         top = 100.dp,
-                                        bottom = 100.dp,
-                                        end = 24.dp,
+                                        bottom = adaptiveInfo.bottomPadding(isTv),
+                                        end = adaptiveInfo.contentPadding(isTv),
                                     ),
                                 ) {
                                     items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
@@ -374,7 +376,7 @@ fun HomeScreen(
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 100.dp),
+                                contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
                             ) {
                                 if (featuredItem != null) {
                                     item {
@@ -830,18 +832,26 @@ private fun ContinueWatchingRow(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val cardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 320.dp else 260.dp
+    val isTv = isTvDevice()
+    val cardWidth = when {
+        isTv -> 400.dp
+        adaptiveInfo.windowSizeClass != WindowSizeClass.Compact -> 320.dp
+        else -> 260.dp
+    }
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
 
     Column(modifier = modifier) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+                   else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = Color.White,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
         ) {
             items(
                 count = items.size,
@@ -953,22 +963,22 @@ private fun HomeMediaRow(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val cardWidth = when (adaptiveInfo.windowSizeClass) {
-        WindowSizeClass.Expanded -> 180.dp
-        WindowSizeClass.Medium -> 160.dp
-        WindowSizeClass.Compact -> if (adaptiveInfo.isLandscape) 160.dp else 140.dp
-    }
+    val isTv = isTvDevice()
+    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
 
     Column(modifier = modifier) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+                   else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = Color.White,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
         ) {
             items(
                 count = items.size,

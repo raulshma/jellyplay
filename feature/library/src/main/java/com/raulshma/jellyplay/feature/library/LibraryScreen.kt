@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
@@ -114,19 +115,20 @@ fun LibraryScreen(
     // Entrance animation for header
     var headerVisible by remember { mutableStateOf(true) }
 
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val bottomPad = adaptiveInfo.bottomPadding(isTv)
+
     val gridPadding = PaddingValues(
-        start = 16.dp,
-        end = 16.dp,
+        start = contentPad,
+        end = contentPad,
         top = 8.dp,
-        bottom = 100.dp,
+        bottom = bottomPad,
     )
 
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val gridCellSize = when (adaptiveInfo.windowSizeClass) {
-        WindowSizeClass.Expanded -> 180.dp
-        WindowSizeClass.Medium -> 160.dp
-        WindowSizeClass.Compact -> 150.dp
-    }
+    val gridCellSize = adaptiveInfo.gridCellSize(isTv)
 
     Box(
         modifier = Modifier
@@ -394,8 +396,8 @@ fun LibraryScreen(
                                     state = gridState,
                                     columns = GridCells.Adaptive(gridCellSize),
                                     contentPadding = gridPadding,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                                    verticalArrangement = Arrangement.spacedBy(spacing),
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
                                     items(

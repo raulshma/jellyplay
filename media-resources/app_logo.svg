@@ -1,42 +1,33 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
     <defs>
-        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#4F2F7D;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#8E54E9;stop-opacity:1" />
+        <linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#140d2b" />
+            <stop offset="100%" stop-color="#090514" />
         </linearGradient>
-        <radialGradient id="domeGradient" cx="50%" cy="40%" r="50%" fx="50%" fy="30%">
-            <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#E0E0E0;stop-opacity:1" />
-        </radialGradient>
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="10" />
-            <feOffset dx="5" dy="10" result="offsetblur" />
-            <feComponentTransfer>
-                <feFuncA type="linear" slope="0.3" />
-            </feComponentTransfer>
-            <feMerge>
-                <feMergeNode />
-                <feMergeNode in="SourceGraphic" />
-            </feMerge>
+        <linearGradient id="d" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00f2fe" />
+            <stop offset="100%" stop-color="#8a2be2" />
+        </linearGradient>
+        <filter id="c" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="48" />
         </filter>
+        <filter id="e" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity=".6" />
+        </filter>
+        <pattern id="b" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.5" fill="rgba(255, 255, 255, 0.05)" />
+        </pattern>
     </defs>
-    
-    <!-- Background -->
-    <rect width="512" height="512" rx="100" fill="url(#bgGradient)" />
-    
-    <!-- Jellyfish with Shadow -->
-    <g filter="url(#shadow)">
-        <!-- Dome -->
-        <path d="M 131 235 A 125 125 0 0 1 381 235 Z" fill="url(#domeGradient)" />
-
-        <!-- Base -->
-        <path d="M 116 220 L 396 220 Q 411 220 411 235 Q 411 250 396 250 L 116 250 Q 101 250 101 235 Q 101 220 116 220 Z" fill="#FFFFFF" />
-
-        <!-- Tentacles -->
-        <path d="M 156 240 L 176 240 L 176 350 Q 176 360 166 360 Q 156 360 156 350 Z" fill="#F0F0F0" />
-        <path d="M 201 240 L 221 240 L 221 380 Q 221 390 211 390 Q 201 390 201 380 Z" fill="#F5F5F5" />
-        <path d="M 246 240 L 266 240 L 266 410 Q 266 420 256 420 Q 246 420 246 410 Z" fill="#FFFFFF" />
-        <path d="M 291 240 L 311 240 L 311 380 Q 311 390 301 390 Q 291 390 291 380 Z" fill="#F5F5F5" />
-        <path d="M 336 240 L 356 240 L 356 350 Q 356 360 346 360 Q 336 360 336 350 Z" fill="#F0F0F0" />
+    <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#a)" />
+    <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#b)" />
+    <circle cx="256" cy="256" r="160" fill="#8a2be2" opacity=".3" filter="url(#c)" />
+    <rect x="90" y="240" width="80" height="120" rx="16" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" stroke-width="2" transform="rotate(-15 130 300)" />
+    <rect x="340" y="100" width="100" height="60" rx="16" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" stroke-width="2" transform="rotate(10 370 130)" />
+    <circle cx="140" cy="380" r="12" fill="#00f2fe" opacity=".2" />
+    <path d="M120 140h16m-8-8v16" stroke="#8a2be2" stroke-width="4" stroke-linecap="round" opacity=".4" />
+    <g stroke-width="28" stroke-linejoin="round">
+        <path fill="#8a2be2" stroke="#8a2be2" opacity=".25" d="M132 142v180l156-90z" transform="translate(24 12)" />
+        <path fill="#4facfe" stroke="#4facfe" opacity=".5" d="M156 154v180l156-90z" transform="translate(24 12)" />
+        <path fill="url(#d)" stroke="url(#d)" filter="url(#e)" d="M180 166v180l156-90z" transform="translate(24 12)" />
     </g>
 </svg>
