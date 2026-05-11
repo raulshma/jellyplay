@@ -68,6 +68,7 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingUrl: String? = null
+    private var pendingStartPositionMs: Long = 0L
     private var pendingSubtitles: List<SubtitleSource> = emptyList()
     
     private var currentConfig = EngineConfig()
@@ -161,6 +162,7 @@ class MpvPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         pendingUrl = request.uri
+        pendingStartPositionMs = request.startPositionMs
         pendingSubtitles = request.externalSubtitles
 
         mpvView?.let { view ->
@@ -177,6 +179,7 @@ class MpvPlayerEngine(
 
                 view.playFile(request.uri)
                 pendingUrl = null
+                pendingStartPositionMs = 0L
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
                 _errorFlow.tryEmit(e.message ?: "Failed to start MPV playback")
@@ -186,6 +189,7 @@ class MpvPlayerEngine(
 
     override fun release() {
         pendingUrl = null
+        pendingStartPositionMs = 0L
         pendingSubtitles = emptyList()
         dialogueBoost.detach()
         mpvView?.let { view ->
@@ -279,7 +283,12 @@ class MpvPlayerEngine(
 
         pendingUrl?.let { url ->
             pendingUrl = null
+            val startPos = pendingStartPositionMs
+            pendingStartPositionMs = 0L
             try {
+                if (startPos > 0) {
+                    view.mpv.setOptionString("start", "+${startPos / 1000.0}")
+                }
                 view.playFile(url)
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
