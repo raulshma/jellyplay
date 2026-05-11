@@ -27,6 +27,8 @@ sealed class Route : NavKey {
         val itemId: String,
         val mediaSourceId: String? = null,
         val startPositionTicks: Long = 0,
+        val subtitleStreamIndex: Int? = null,
+        val audioStreamIndex: Int? = null,
     ) : Route()
 
     @Serializable data class AudioPlayer(val itemId: String) : Route()

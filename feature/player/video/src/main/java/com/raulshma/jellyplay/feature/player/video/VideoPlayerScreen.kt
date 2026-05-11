@@ -98,6 +98,8 @@ fun VideoPlayerScreen(
     itemId: String,
     mediaSourceId: String?,
     startPositionTicks: Long,
+    subtitleStreamIndex: Int? = null,
+    audioStreamIndex: Int? = null,
     onBack: () -> Unit,
     onEnterPip: () -> Unit = {},
     onEnterMiniMode: () -> Unit = {},
@@ -139,7 +141,13 @@ fun VideoPlayerScreen(
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(itemId) {
-        viewModel.initialize(itemId, mediaSourceId, startPositionTicks)
+        viewModel.initialize(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startPositionTicks = startPositionTicks,
+            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = audioStreamIndex,
+        )
     }
 
     // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
