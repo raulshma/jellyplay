@@ -50,6 +50,9 @@ import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @Composable
 fun MoodPlaylistsScreen(
@@ -109,17 +112,19 @@ fun MoodPlaylistsScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            val adaptiveInfo = LocalAdaptiveInfo.current
+            val isTv = isTvDevice()
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
+                columns = GridCells.Adaptive(minSize = adaptiveInfo.gridMinSize(isTv)),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
+                    start = adaptiveInfo.contentPadding(isTv),
+                    end = adaptiveInfo.contentPadding(isTv),
                     top = 8.dp,
-                    bottom = 100.dp,
+                    bottom = adaptiveInfo.bottomPadding(isTv),
                 ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
             ) {
                 items(MoodPlaylistsPreset.all.size, key = { MoodPlaylistsPreset.all[it].id }, contentType = { "moodPlaylist" }) { index ->
                     val playlist = MoodPlaylistsPreset.all[index]

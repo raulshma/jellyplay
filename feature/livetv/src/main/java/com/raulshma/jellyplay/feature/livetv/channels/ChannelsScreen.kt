@@ -201,15 +201,19 @@ fun ChannelsScreen(
                         }
                     }
                 } else {
+                    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+                    val contentPad = if (isTv) 48.dp else 16.dp
+                    val bottomPad = if (isTv) 80.dp else 100.dp
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
+                            start = contentPad,
+                            end = contentPad,
                             top = 8.dp,
-                            bottom = 100.dp,
+                            bottom = bottomPad,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTv) 12.dp else 8.dp),
                     ) {
                         items(
                             items = viewModel.channels,
