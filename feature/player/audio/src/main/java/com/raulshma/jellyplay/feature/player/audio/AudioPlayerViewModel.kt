@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -69,6 +70,12 @@ class AudioPlayerViewModel @Inject constructor(
 
     var dialogueBoostEnabled by mutableStateOf(false)
         private set
+
+    private var _dialogueBoostStrength = mutableStateOf(EffectStrength.MODERATE)
+    val dialogueBoostStrength: EffectStrength by _dialogueBoostStrength
+
+    private var _nightModeStrength = mutableStateOf(EffectStrength.MODERATE)
+    val nightModeStrength: EffectStrength by _nightModeStrength
 
     var equalizerEnabled by mutableStateOf(false)
         private set
@@ -152,6 +159,10 @@ class AudioPlayerViewModel @Inject constructor(
             skipPreviousThresholdMs = prefs.audioSkipPreviousThresholdMs
             audioPlaybackManager.setNightModeParams(prefs.audioNightModeVolume, prefs.audioNightModeGain)
             audioPlaybackManager.setSkipPreviousThreshold(prefs.audioSkipPreviousThresholdMs)
+            _dialogueBoostStrength.value = prefs.dialogueBoostStrength
+            _nightModeStrength.value = prefs.nightModeStrength
+            audioPlaybackManager.setDialogueBoostStrength(prefs.dialogueBoostStrength)
+            audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
         }
 
         fetchBlurHash(itemId)
@@ -210,6 +221,21 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.playFromQueue(index)
     }
 
+    fun toggleDialogueBoost() {
+        audioPlaybackManager.toggleDialogueBoost()
+        viewModelScope.launch {
+            preferencesStore.setDialogueBoostEnabled(dialogueBoostEnabled)
+        }
+    }
+
+    fun setDialogueBoostStrength(strength: EffectStrength) {
+        _dialogueBoostStrength.value = strength
+        audioPlaybackManager.setDialogueBoostStrength(strength)
+        viewModelScope.launch {
+            preferencesStore.setDialogueBoostStrength(strength)
+        }
+    }
+
     fun toggleNightMode() {
         audioPlaybackManager.toggleNightMode()
         viewModelScope.launch {
@@ -217,10 +243,11 @@ class AudioPlayerViewModel @Inject constructor(
         }
     }
 
-    fun toggleDialogueBoost() {
-        audioPlaybackManager.toggleDialogueBoost()
+    fun setNightModeStrength(strength: EffectStrength) {
+        _nightModeStrength.value = strength
+        audioPlaybackManager.setNightModeStrength(strength)
         viewModelScope.launch {
-            preferencesStore.setDialogueBoostEnabled(dialogueBoostEnabled)
+            preferencesStore.setNightModeStrength(strength)
         }
     }
 

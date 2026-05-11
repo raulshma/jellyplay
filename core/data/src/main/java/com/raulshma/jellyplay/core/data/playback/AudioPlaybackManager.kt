@@ -60,6 +60,9 @@ class AudioPlaybackManager @Inject constructor(
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
 
+    private var _dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
+    private var _nightModeStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
+
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
 
@@ -116,6 +119,20 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _equalizerSettings = MutableStateFlow(com.raulshma.jellyplay.core.model.EqualizerSettings())
     val equalizerSettings: StateFlow<com.raulshma.jellyplay.core.model.EqualizerSettings> = _equalizerSettings.asStateFlow()
+
+    private val nightModeVolumeForStrength: Float
+        get() = when (_nightModeStrength) {
+            com.raulshma.jellyplay.core.model.EffectStrength.LOW -> 0.7f
+            com.raulshma.jellyplay.core.model.EffectStrength.MODERATE -> 0.4f
+            com.raulshma.jellyplay.core.model.EffectStrength.HIGH -> 0.2f
+        }
+
+    private val nightModeGainForStrength: Int
+        get() = when (_nightModeStrength) {
+            com.raulshma.jellyplay.core.model.EffectStrength.LOW -> 1500
+            com.raulshma.jellyplay.core.model.EffectStrength.MODERATE -> 3000
+            com.raulshma.jellyplay.core.model.EffectStrength.HIGH -> 4500
+        }
 
     var nightModeVolume = 0.4f
     var nightModeGain = 1200
@@ -346,6 +363,17 @@ class AudioPlaybackManager @Inject constructor(
         applyDialogueBoost()
     }
 
+    fun setDialogueBoostStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
+        _dialogueBoostStrength = strength
+        dialogueBoost.setStrength(strength)
+        if (_dialogueBoostEnabled.value) applyDialogueBoost()
+    }
+
+    fun setNightModeStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
+        _nightModeStrength = strength
+        if (_nightModeEnabled.value) applyNightMode()
+    }
+
     fun toggleEqualizer() {
         _equalizerEnabled.value = !_equalizerEnabled.value
         applyEqualizer()
@@ -376,8 +404,8 @@ class AudioPlaybackManager @Inject constructor(
     private fun applyNightMode() {
         val player = exoPlayer ?: return
         if (_nightModeEnabled.value) {
-            player.volume = nightModeVolume
-            attachLoudnessEnhancer(player.audioSessionId)
+            player.volume = nightModeVolumeForStrength
+            attachLoudnessEnhancer(player.audioSessionId, nightModeGainForStrength)
         } else {
             player.volume = 1.0f
             loudnessEnhancer?.enabled = false
@@ -391,6 +419,7 @@ class AudioPlaybackManager @Inject constructor(
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         dialogueBoost.attach(audioSessionId)
+        dialogueBoost.setStrength(_dialogueBoostStrength)
         dialogueBoost.setEnabled(_dialogueBoostEnabled.value)
     }
 
@@ -403,13 +432,12 @@ class AudioPlaybackManager @Inject constructor(
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
-    private fun attachLoudnessEnhancer(audioSessionId: Int) {
+    private fun attachLoudnessEnhancer(audioSessionId: Int, gain: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        val currentGain = nightModeGain
         loudnessEnhancer?.release()
         loudnessEnhancer = try {
             LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(currentGain)
+                setTargetGain(gain)
                 enabled = true
             }
         } catch (_: Exception) {

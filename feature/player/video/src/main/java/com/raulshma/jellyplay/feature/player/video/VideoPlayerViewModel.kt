@@ -159,12 +159,17 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             playerSessionManager.engineFlow.collect { engine ->
                 if (engine != null) {
+                    val prefs = preferencesStore.preferences.first()
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
-                        audioDelayMs = preferencesStore.preferences.first().audioDelayMs,
-                        decoderMode = preferencesStore.preferences.first().decoderMode,
-                        audioPassthrough = preferencesStore.preferences.first().audioPassthrough,
-                        subtitleStyle = preferencesStore.preferences.first().subtitleStyle,
+                        audioDelayMs = prefs.audioDelayMs,
+                        decoderMode = prefs.decoderMode,
+                        audioPassthrough = prefs.audioPassthrough,
+                        subtitleStyle = prefs.subtitleStyle,
+                        dialogueBoostEnabled = prefs.dialogueBoostEnabled,
+                        dialogueBoostStrength = prefs.dialogueBoostStrength,
+                        nightModeEnabled = prefs.nightModeEnabled,
+                        nightModeStrength = prefs.nightModeStrength,
                     )}
                     launch { engine.isPlaying.collect { isPlaying ->
                         _uiState.update { s -> s.copy(isPlaying = isPlaying) }
@@ -463,7 +468,9 @@ class VideoPlayerViewModel @Inject constructor(
             subtitleStyle = style,
             audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
                 dialogueBoostEnabled = _uiState.value.dialogueBoostEnabled,
+                dialogueBoostStrength = _uiState.value.dialogueBoostStrength,
                 nightModeEnabled = _uiState.value.nightModeEnabled,
+                nightModeStrength = _uiState.value.nightModeStrength,
                 equalizerEnabled = equalizerEnabled,
                 equalizerSettings = prefs.equalizerSettings
             )
@@ -488,12 +495,28 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    fun setDialogueBoostStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
+        _uiState.update { it.copy(dialogueBoostStrength = strength) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setDialogueBoostStrength(strength)
+        }
+    }
+
     fun toggleNightMode() {
         val newVal = !_uiState.value.nightModeEnabled
         _uiState.update { it.copy(nightModeEnabled = newVal) }
         updateConfigWithUiState()
         viewModelScope.launch {
             preferencesStore.setNightModeEnabled(newVal)
+        }
+    }
+
+    fun setNightModeStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
+        _uiState.update { it.copy(nightModeStrength = strength) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setNightModeStrength(strength)
         }
     }
 
@@ -554,7 +577,9 @@ class VideoPlayerViewModel @Inject constructor(
             subtitleStyle = state.subtitleStyle,
             audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
                 dialogueBoostEnabled = state.dialogueBoostEnabled,
+                dialogueBoostStrength = state.dialogueBoostStrength,
                 nightModeEnabled = state.nightModeEnabled,
+                nightModeStrength = state.nightModeStrength,
                 equalizerEnabled = equalizerEnabled,
                 equalizerSettings = _syncPlayPrefs.value.equalizerSettings
             )

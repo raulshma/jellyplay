@@ -10,6 +10,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
@@ -48,7 +49,7 @@ class MpvPlayerEngine(
         supportsAudioPassthrough = true,
         supportsSubtitleStyle = true, // Basic MPV subtitle properties
         supportsDialogueBoost = true,
-        supportsNightMode = false,
+        supportsNightMode = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -73,6 +74,7 @@ class MpvPlayerEngine(
     
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
+    private val nightMode = NightModeHelper()
 
     private var wasPlayingBeforeActivityPause = false
 
@@ -192,6 +194,7 @@ class MpvPlayerEngine(
         pendingStartPositionMs = 0L
         pendingSubtitles = emptyList()
         dialogueBoost.detach()
+        nightMode.detach()
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
@@ -244,7 +247,12 @@ class MpvPlayerEngine(
             val sid = audioSessionId
             if (sid != 0) {
                 dialogueBoost.attach(sid)
+                dialogueBoost.setStrength(config.audioEffects.dialogueBoostStrength)
                 dialogueBoost.setEnabled(config.audioEffects.dialogueBoostEnabled)
+
+                nightMode.attach(sid)
+                nightMode.setStrength(config.audioEffects.nightModeStrength)
+                nightMode.setEnabled(config.audioEffects.nightModeEnabled)
             }
         } catch (_: Exception) {}
     }
