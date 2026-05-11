@@ -14,9 +14,15 @@ fun EntryProviderScope<NavKey>.detailsSection(
     entry<Route.MediaDetail> { key ->
         MediaDetailScreen(
             itemId = key.itemId,
-            onPlayClick = { itemId, mediaSourceId, startPosition ->
+            onPlayClick = { itemId, mediaSourceId, startPosition, subtitleStreamIndex, audioStreamIndex ->
                 navigator.navigate(
-                    Route.VideoPlayer(itemId, mediaSourceId, startPosition)
+                    Route.VideoPlayer(
+                        itemId = itemId,
+                        mediaSourceId = mediaSourceId,
+                        startPositionTicks = startPosition,
+                        subtitleStreamIndex = subtitleStreamIndex,
+                        audioStreamIndex = audioStreamIndex,
+                    )
                 )
             },
             onAudioClick = { itemId ->

@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -49,9 +50,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -68,6 +73,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -85,6 +92,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -98,8 +106,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -110,7 +120,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 @Composable
 fun MediaDetailScreen(
     itemId: String,
-    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, subtitleStreamIndex: Int?, audioStreamIndex: Int?) -> Unit,
     onAudioClick: (itemId: String) -> Unit,
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
@@ -148,6 +158,8 @@ fun MediaDetailScreen(
             episodes = viewModel.episodes,
             fetchedSeasonIds = viewModel.fetchedSeasonIds,
             smartPlayTarget = viewModel.smartPlayTarget,
+            selectedSubtitleIndex = viewModel.selectedSubtitleIndex,
+            selectedAudioIndex = viewModel.selectedAudioIndex,
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
@@ -155,12 +167,22 @@ fun MediaDetailScreen(
             isLoading = isLoading,
             error = error,
             onRetry = { viewModel.loadItem(itemId) },
-            onPlayClick = { playItemId, sourceId, start -> onPlayClick(playItemId, sourceId, start) },
+            onPlayClick = { playItemId, sourceId, start ->
+                onPlayClick(
+                    playItemId,
+                    sourceId,
+                    start,
+                    viewModel.selectedSubtitleIndex,
+                    viewModel.selectedAudioIndex,
+                )
+            },
             onAudioClick = { onAudioClick(itemId) },
             onDownloadClick = { viewModel.startDownload() },
             onToggleFavorite = { viewModel.toggleFavorite() },
             onMarkPlayed = { viewModel.markPlayed() },
             onMarkUnplayed = { viewModel.markUnplayed() },
+            onSubtitleSelect = { viewModel.selectSubtitle(it) },
+            onAudioSelect = { viewModel.selectAudio(it) },
             onItemClick = onItemClick,
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
@@ -178,6 +200,8 @@ private fun DetailContent(
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
     smartPlayTarget: DetailViewModel.SmartPlayTarget?,
+    selectedSubtitleIndex: Int?,
+    selectedAudioIndex: Int?,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
@@ -191,6 +215,8 @@ private fun DetailContent(
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
+    onSubtitleSelect: (Int?) -> Unit,
+    onAudioSelect: (Int?) -> Unit,
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
@@ -420,6 +446,8 @@ private fun DetailContent(
                                 episodes = episodes,
                                 fetchedSeasonIds = fetchedSeasonIds,
                                 smartPlayTarget = smartPlayTarget,
+                                selectedSubtitleIndex = selectedSubtitleIndex,
+                                selectedAudioIndex = selectedAudioIndex,
                                 getImageUrl = getImageUrl,
                                 isAudio = isAudio,
                                 isDownloading = isDownloading,
@@ -430,6 +458,8 @@ private fun DetailContent(
                                 onToggleFavorite = onToggleFavorite,
                                 onMarkPlayed = onMarkPlayed,
                                 onMarkUnplayed = onMarkUnplayed,
+                                onSubtitleSelect = onSubtitleSelect,
+                                onAudioSelect = onAudioSelect,
                                 onItemClick = onItemClick,
                                 onPersonClick = onPersonClick,
                                 onNavigateToSeries = onNavigateToSeries,
@@ -580,6 +610,341 @@ private fun StaggeredDetailSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MediaInfoSection(
+    mediaStreams: List<MediaStream>,
+    selectedAudioIndex: Int?,
+    selectedSubtitleIndex: Int?,
+    onAudioSelect: (Int?) -> Unit,
+    onSubtitleSelect: (Int?) -> Unit,
+) {
+    val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
+    val audioStreams = mediaStreams.filter { it.type == StreamType.AUDIO }
+    val subtitleStreams = mediaStreams.filter { it.type == StreamType.SUBTITLE }
+
+    if (videoStream == null && audioStreams.isEmpty() && subtitleStreams.isEmpty()) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val chipBackgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+        var picker by remember { mutableStateOf<StreamPickerType?>(null) }
+
+        val defaultAudio = audioStreams.firstOrNull { it.isDefault } ?: audioStreams.firstOrNull()
+        val selectedAudio = audioStreams.firstOrNull { it.index == selectedAudioIndex } ?: defaultAudio
+        val defaultSubtitle = subtitleStreams.firstOrNull { it.isDefault }
+            ?: subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex }
+            ?: subtitleStreams.firstOrNull()
+        val selectedSubtitle = subtitleStreams.firstOrNull { it.index == selectedSubtitleIndex } ?: defaultSubtitle
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val qualityLabel = buildString {
+                val res = videoStream?.height?.let { h ->
+                    when {
+                        h >= 2160 -> "4K"
+                        h >= 1080 -> "HD"
+                        h >= 720 -> "HD"
+                        else -> "SD"
+                    }
+                } ?: "Auto"
+                append(res)
+                append(" ")
+                val range = videoStream?.videoDoViTitle
+                    ?: videoStream?.videoRangeType
+                    ?: videoStream?.videoRange
+                    ?: "SDR"
+                append(range.uppercase())
+            }
+
+            QuickInfoPill(
+                icon = Icons.Default.HighQuality,
+                text = qualityLabel,
+                modifier = Modifier.weight(1f),
+            )
+
+            val audioLabel = buildString {
+                append(
+                    selectedAudio
+                        ?.language?.uppercase()?.take(3)
+                        ?: selectedAudio?.displayTitle?.take(3)?.uppercase()
+                        ?: "AUTO"
+                )
+                selectedAudio?.channels?.let { channels ->
+                    append(" - ")
+                    append(
+                        when (channels) {
+                            1 -> "MONO"
+                            2 -> "STEREO"
+                            6 -> "5.1"
+                            8 -> "7.1"
+                            else -> "${channels}CH"
+                        }
+                    )
+                }
+            }
+
+            QuickInfoPill(
+                icon = Icons.Default.GraphicEq,
+                text = audioLabel,
+                showTrailingIndicator = true,
+                onClick = { if (audioStreams.isNotEmpty()) picker = StreamPickerType.AUDIO },
+                containerColor = chipBackgroundColor,
+                modifier = Modifier.weight(1f),
+            )
+
+            val subtitleLabel = selectedSubtitle
+                ?.displayTitle
+                ?.takeIf { it.isNotBlank() }
+                ?.let { if (it.length > 10) it.take(10) + "…" else it }
+                ?: selectedSubtitle?.language?.uppercase()?.take(3)
+                ?: "OFF"
+
+            QuickInfoPill(
+                icon = Icons.Default.ClosedCaption,
+                text = subtitleLabel,
+                showTrailingIndicator = subtitleStreams.isNotEmpty(),
+                onClick = { picker = StreamPickerType.SUBTITLE },
+                containerColor = chipBackgroundColor,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        if (picker != null) {
+            val activePicker = picker ?: return@Column
+            val options = when (activePicker) {
+                StreamPickerType.AUDIO -> {
+                    listOf(StreamPickerOption(index = null, label = "Default", isDefault = true)) +
+                        audioStreams.map { stream ->
+                            StreamPickerOption(
+                                index = stream.index,
+                                label = stream.displayTitle
+                                    ?: stream.title
+                                    ?: stream.language
+                                    ?: "Track ${stream.index}",
+                                isDefault = stream.isDefault,
+                            )
+                        }
+                }
+                StreamPickerType.SUBTITLE -> {
+                    listOf(StreamPickerOption(index = null, label = "Off", isDefault = true)) +
+                        subtitleStreams.map { stream ->
+                            StreamPickerOption(
+                                index = stream.index,
+                                label = stream.displayTitle
+                                    ?: stream.title
+                                    ?: stream.language
+                                    ?: "Track ${stream.index}",
+                                isDefault = stream.isDefault,
+                            )
+                        }
+                }
+            }
+
+            val selectedIndex = when (activePicker) {
+                StreamPickerType.AUDIO -> selectedAudioIndex
+                StreamPickerType.SUBTITLE -> selectedSubtitleIndex
+            }
+
+            ModalBottomSheet(
+                onDismissRequest = { picker = null },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = chipBackgroundColor,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = if (activePicker == StreamPickerType.AUDIO) "Select Audio" else "Select Subtitle",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                    )
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(options, key = { "${activePicker}_${it.index}_${it.label}" }) { option ->
+                            val isSelected = option.index == selectedIndex
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                                        else Color.White.copy(alpha = 0.08f)
+                                    )
+                                    .clickable {
+                                        if (picker == StreamPickerType.AUDIO) {
+                                            onAudioSelect(option.index)
+                                        } else {
+                                            onSubtitleSelect(option.index)
+                                        }
+                                        picker = null
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (option.isDefault && option.index != null) {
+                                    Text(
+                                        text = "DEFAULT",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White.copy(alpha = 0.65f),
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private enum class StreamPickerType {
+    AUDIO,
+    SUBTITLE,
+}
+
+private data class StreamPickerOption(
+    val index: Int?,
+    val label: String,
+    val isDefault: Boolean,
+)
+
+@Composable
+private fun QuickInfoPill(
+    icon: ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+    showTrailingIndicator: Boolean = false,
+    containerColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(containerColor)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .tvFocusable(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (showTrailingIndicator) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoBadge(
+    text: String,
+    highlight: Boolean = false,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (highlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                else Color.White.copy(alpha = 0.15f)
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (highlight) MaterialTheme.colorScheme.primary else Color.White,
+        )
+    }
+}
+
+@Composable
+private fun SubtitleChip(
+    label: String,
+    isSelected: Boolean,
+    isDefault: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+        else Color.White.copy(alpha = 0.15f),
+        animationSpec = tween(200),
+        label = "subtitleChipBg",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
+        animationSpec = tween(200),
+        label = "subtitleChipContent",
+    )
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .tvFocusable(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = contentColor,
+        )
+        if (isDefault && !isSelected) {
+            Text(
+                text = "(default)",
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.6f),
+            )
+        }
+    }
+}
+
 @Composable
 private fun DetailContentBody(
     item: MediaItem,
@@ -588,6 +953,8 @@ private fun DetailContentBody(
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
     smartPlayTarget: DetailViewModel.SmartPlayTarget?,
+    selectedSubtitleIndex: Int?,
+    selectedAudioIndex: Int?,
     getImageUrl: (String) -> String,
     isAudio: Boolean,
     isDownloading: Boolean,
@@ -598,6 +965,8 @@ private fun DetailContentBody(
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
+    onSubtitleSelect: (Int?) -> Unit,
+    onAudioSelect: (Int?) -> Unit,
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
@@ -650,6 +1019,32 @@ private fun DetailContentBody(
                         }
                     }
                 }
+
+                if (item.mediaType == MediaType.EPISODE) {
+                    val season = item.seasonNumber ?: item.parentId?.toIntOrNull()
+                    val episode = item.episodeNumber ?: item.indexNumber
+                    val episodeContext = buildString {
+                        if (season != null) append("S$season")
+                        if (episode != null) {
+                            if (isNotEmpty()) append(" · ")
+                            append("E$episode")
+                        }
+                        item.seriesName?.takeIf { it.isNotBlank() }?.let { series ->
+                            if (isNotEmpty()) append(" · ")
+                            append(series)
+                        }
+                    }
+                    if (episodeContext.isNotBlank()) {
+                        Text(
+                            text = episodeContext,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.88f),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
@@ -657,6 +1052,20 @@ private fun DetailContentBody(
                     overflow = TextOverflow.Ellipsis,
                     color = Color.White
                 )
+
+                item.originalTitle
+                    ?.takeIf { it.isNotBlank() && !it.equals(item.name, ignoreCase = true) }
+                    ?.let { originalTitle ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = originalTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.75f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
                 Spacer(Modifier.height(12.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -705,6 +1114,37 @@ private fun DetailContentBody(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = Color.White.copy(alpha = 0.7f),
                             )
+                        }
+                    }
+                }
+
+                item.runTimeTicks?.let { ticks ->
+                    Spacer(Modifier.height(14.dp))
+                    InfoBadge(
+                        text = "${ticks / 600_000_000}m",
+                        highlight = true,
+                    )
+                }
+
+                item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
+                    Spacer(Modifier.height(14.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(genres, key = { it }, contentType = { "genre" }) { genre ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color.White.copy(alpha = 0.18f))
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                                    .tvFocusable()
+                            ) {
+                                Text(
+                                    text = genre,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Color.White.copy(alpha = 0.95f),
+                                )
+                            }
                         }
                     }
                 }
@@ -910,32 +1350,22 @@ private fun DetailContentBody(
 
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 2) {
-            item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(genres, key = { it }, contentType = { "genre" }) { genre ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .tvFocusable()
-                        ) {
-                            Text(
-                                text = genre,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
+        StaggeredDetailSection(visible = showContent && !isAudio, delayIndex = 2) {
+            val source = detail.mediaSources.firstOrNull()
+            if (source != null) {
+                MediaInfoSection(
+                    mediaStreams = source.mediaStreams,
+                    selectedAudioIndex = selectedAudioIndex,
+                    selectedSubtitleIndex = selectedSubtitleIndex,
+                    onAudioSelect = onAudioSelect,
+                    onSubtitleSelect = onSubtitleSelect,
+                )
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 3) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 3) { }
+
+        StaggeredDetailSection(visible = showContent, delayIndex = 4) {
             item.overview?.let { overview ->
                 Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                     Text(
@@ -948,7 +1378,7 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 4) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 5) {
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides Color.White) {
@@ -973,7 +1403,7 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 5) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 6) {
             if (detail.people.isNotEmpty()) {
                 Column {
                     Text(
@@ -1002,7 +1432,7 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 6) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 7) {
             if (detail.relatedItems.isNotEmpty()) {
                 Column {
                     Text(

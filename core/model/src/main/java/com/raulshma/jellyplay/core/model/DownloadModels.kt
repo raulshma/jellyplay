@@ -38,6 +38,7 @@ data class UserPreferences(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val preferredSubtitleLanguage: String? = null,
     val preferredAudioLanguage: String? = null,
+    val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val dynamicTheming: Boolean = true,
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -90,6 +91,13 @@ data class UserPreferences(
     val syncPlaySpeedToSyncMinDelayMs: Long = 60,
     val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
     val syncPlaySpeedToSyncDurationMs: Long = 1000,
+)
+
+@Immutable
+@Serializable
+data class MediaStreamSelection(
+    val audioStreamIndex: Int? = null,
+    val subtitleStreamIndex: Int? = null,
 )
 
 @Immutable

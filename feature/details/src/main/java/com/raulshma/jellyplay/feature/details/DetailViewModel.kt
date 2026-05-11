@@ -64,6 +64,35 @@ class DetailViewModel @Inject constructor(
     var smartPlayTarget by mutableStateOf<SmartPlayTarget?>(null)
         private set
 
+    var selectedSubtitleIndex by mutableStateOf<Int?>(null)
+        private set
+    var selectedAudioIndex by mutableStateOf<Int?>(null)
+        private set
+
+    fun selectSubtitle(index: Int?) {
+        selectedSubtitleIndex = index
+        val itemId = _detail.value?.item?.id ?: return
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                subtitleStreamIndex = index,
+                audioStreamIndex = selectedAudioIndex,
+            )
+        }
+    }
+
+    fun selectAudio(index: Int?) {
+        selectedAudioIndex = index
+        val itemId = _detail.value?.item?.id ?: return
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = index,
+                subtitleStreamIndex = selectedSubtitleIndex,
+            )
+        }
+    }
+
     data class SmartPlayTarget(
         val episode: MediaItem,
         val label: String,
@@ -90,9 +119,34 @@ class DetailViewModel @Inject constructor(
             episodes = emptyMap()
             fetchedSeasonIds = emptySet()
             smartPlayTarget = null
+            selectedSubtitleIndex = null
+            selectedAudioIndex = null
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
+                    val streams = detail.mediaSources.firstOrNull()?.mediaStreams.orEmpty()
+                    val storedSelections = preferences.value.mediaStreamSelections
+                    val storedSelection = storedSelections[itemId]
+                    val hasStoredSelection = storedSelections.containsKey(itemId)
+
+                    selectedSubtitleIndex = if (hasStoredSelection) {
+                        storedSelection?.subtitleStreamIndex
+                    } else {
+                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.isDefault }?.index
+                    }
+                    selectedAudioIndex = if (hasStoredSelection) {
+                        storedSelection?.audioStreamIndex
+                    } else {
+                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.isDefault }?.index
+                    }
+
+                    viewModelScope.launch {
+                        preferencesStore.setMediaStreamSelection(
+                            itemId = itemId,
+                            audioStreamIndex = selectedAudioIndex,
+                            subtitleStreamIndex = selectedSubtitleIndex,
+                        )
+                    }
                     if (detail.item.mediaType == MediaType.SERIES) {
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {

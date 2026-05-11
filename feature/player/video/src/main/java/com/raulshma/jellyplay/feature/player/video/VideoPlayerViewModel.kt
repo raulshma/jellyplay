@@ -189,7 +189,18 @@ class VideoPlayerViewModel @Inject constructor(
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
     @Suppress("DEPRECATION")
-    fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+    private var pendingSubtitleStreamIndex: Int? = null
+    private var pendingAudioStreamIndex: Int? = null
+
+    fun initialize(
+        itemId: String,
+        mediaSourceId: String?,
+        startPositionTicks: Long,
+        subtitleStreamIndex: Int? = null,
+        audioStreamIndex: Int? = null,
+    ) {
+        pendingSubtitleStreamIndex = subtitleStreamIndex
+        pendingAudioStreamIndex = audioStreamIndex
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
         if (currentItemId == itemId) {
             val engine = playerSessionManager.engine
@@ -775,6 +786,36 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         _uiState.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
+
+        // Apply pending audio selection from detail screen
+        val pendingAudio = pendingAudioStreamIndex
+        if (pendingAudio != null) {
+            pendingAudioStreamIndex = null
+            val targetStream = streams.firstOrNull {
+                it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == pendingAudio
+            }
+            val matchByIndex = audioTracks.firstOrNull { it.index >= 0 && it.index == pendingAudio }
+            val matchByLabel = if (matchByIndex == null && targetStream != null) {
+                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
+                audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
+            } else null
+            (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it) }
+        }
+
+        // Apply pending subtitle selection from detail screen
+        val pending = pendingSubtitleStreamIndex
+        if (pending != null) {
+            pendingSubtitleStreamIndex = null
+            val streams = _uiState.value.mediaStreams
+            val targetStream = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == pending }
+            if (targetStream != null) {
+                val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
+                val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
+                if (match != null) {
+                    selectSubtitleTrack(match)
+                }
+            }
+        }
     }
 
     private fun mapSubtitleCodecToMime(codec: String?): String? {
@@ -809,6 +850,8 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager.activeCallbacks = null
         trickplayManager.clear()
         selectedSubtitleTrackId = null
+        pendingSubtitleStreamIndex = null
+        pendingAudioStreamIndex = null
         
         _uiState.update { it.copy(
             introTimestamps = null,

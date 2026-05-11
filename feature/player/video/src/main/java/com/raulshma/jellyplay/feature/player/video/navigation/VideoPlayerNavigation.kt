@@ -16,6 +16,8 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             itemId = key.itemId,
             mediaSourceId = key.mediaSourceId,
             startPositionTicks = key.startPositionTicks,
+            subtitleStreamIndex = key.subtitleStreamIndex,
+            audioStreamIndex = key.audioStreamIndex,
             onBack = { navigator.goBack() },
             onEnterPip = onEnterPip,
             onEnterMiniMode = onEnterMiniMode,

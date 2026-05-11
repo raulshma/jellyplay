@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -34,6 +35,7 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
+        val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
@@ -90,6 +92,30 @@ class UserPreferencesStore @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
+        val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
+        return try {
+            json.decodeFromString<Map<String, MediaStreamSelection>>(raw)
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private suspend fun writeMediaStreamSelections(
+        itemId: String,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
+        context.dataStore.edit { prefs ->
+            val current = readMediaStreamSelections(prefs).toMutableMap()
+            current[itemId] = MediaStreamSelection(
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+            prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
+        }
+    }
+
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         val subtitleStyle = try {
             prefs[Keys.SUBTITLE_STYLE]?.let { json.decodeFromString<SubtitleStyle>(it) }
@@ -109,6 +135,7 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { PlayerType.EXO_PLAYER },
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
+            mediaStreamSelections = readMediaStreamSelections(prefs),
             dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
@@ -196,6 +223,18 @@ class UserPreferencesStore @Inject constructor(
             if (language != null) it[Keys.PREFERRED_AUDIO_LANG] = language
             else it.remove(Keys.PREFERRED_AUDIO_LANG)
         }
+    }
+
+    suspend fun setMediaStreamSelection(
+        itemId: String,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
+        writeMediaStreamSelections(
+            itemId = itemId,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+        )
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
