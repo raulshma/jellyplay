@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -162,7 +163,7 @@ private fun MoodCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor,

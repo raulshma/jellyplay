@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
 import androidx.compose.animation.AnimatedContent
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -321,7 +322,7 @@ private fun MusicHeroHeader(
                 .height(height)
                 .then(
                     featuredItem?.let {
-                        Modifier.clickable { onClick(it.id) }
+                        Modifier.tvFocusable().clickable { onClick(it.id) }
                     } ?: Modifier
                 ),
         ) {
@@ -504,7 +505,7 @@ private fun TrackItem(
     Row(
         modifier = Modifier
             .width(280.dp)
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

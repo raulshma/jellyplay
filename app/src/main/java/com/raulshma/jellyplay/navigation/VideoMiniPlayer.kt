@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -97,7 +98,7 @@ fun VideoMiniPlayer(
                         .height(112.dp)
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                         .background(Color.Black)
-                        .clickable(onClick = onClick),
+                        .tvFocusable().clickable(onClick = onClick),
                 ) {
                     if (engine != null) {
                         AndroidView(
@@ -126,7 +127,7 @@ fun VideoMiniPlayer(
                         .fillMaxWidth()
                         .background(animatedColor)
                         .graphicsLayer { alpha = contentAlpha }
-                        .clickable(onClick = onClick)
+                        .tvFocusable().clickable(onClick = onClick)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

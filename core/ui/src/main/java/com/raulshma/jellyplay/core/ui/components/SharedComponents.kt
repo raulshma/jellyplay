@@ -150,7 +150,7 @@ fun PlayButtonWithProgress(
             .size(buttonSize)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(10.dp))
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -290,7 +290,7 @@ fun PosterCard(
                     scaleX = scale
                     scaleY = scale
                 }
-                .clickable(
+                .tvFocusable().clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
@@ -566,7 +566,7 @@ fun PressScaleBox(
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,

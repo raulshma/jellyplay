@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -130,7 +131,7 @@ fun PinLockScreen(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(CircleShape)
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (pin.isNotEmpty()) {
                                             pin = pin.dropLast(1)
                                             onErrorClear()
@@ -152,7 +153,7 @@ fun PinLockScreen(
                                     .size(72.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (pin.length < maxDigits) {
                                             pin += key
                                             onErrorClear()

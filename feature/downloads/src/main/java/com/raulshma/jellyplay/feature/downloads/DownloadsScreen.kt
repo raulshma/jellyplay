@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -191,7 +192,7 @@ private fun DownloadItemRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
+            .tvFocusable().clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
     ) {
         Row(
             modifier = Modifier

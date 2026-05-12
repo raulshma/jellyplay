@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.clickable
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,7 +66,7 @@ fun SubtitleDownloadSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onDownload(sub) }
+                                .tvFocusable().clickable { onDownload(sub) }
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,

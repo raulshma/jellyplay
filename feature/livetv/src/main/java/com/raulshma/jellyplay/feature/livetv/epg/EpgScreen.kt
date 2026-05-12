@@ -138,8 +138,7 @@ fun EpgScreen(
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.08f))
-                                        .clickable(onClick = onBack)
-                                        .tvFocusable(),
+                                        .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -249,8 +248,7 @@ private fun ProgramCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .clickable(onClick = onClick)
-            .tvFocusable()
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -306,8 +304,7 @@ private fun ProgramCard(
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
-                    .clickable(onClick = onRecordClick)
-                    .tvFocusable(),
+                    .tvFocusable().clickable(onClick = onRecordClick),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

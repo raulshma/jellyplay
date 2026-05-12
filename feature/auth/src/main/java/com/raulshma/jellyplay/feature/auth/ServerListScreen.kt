@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -159,7 +160,7 @@ private fun ServerItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier

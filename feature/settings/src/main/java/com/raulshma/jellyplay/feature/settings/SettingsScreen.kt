@@ -1385,7 +1385,7 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundColor = color))
                                     }
                                     .padding(vertical = 4.dp),
@@ -1669,7 +1669,7 @@ private fun SettingListItem(
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
             .clip(MaterialTheme.shapes.medium)
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -1759,7 +1759,7 @@ private fun SettingToggleItem(
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale; alpha = rowAlpha }
             .clip(MaterialTheme.shapes.medium)
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
             ) { onClick?.invoke() ?: onCheckedChange(!checked) }
@@ -1882,7 +1882,7 @@ private fun RadioPickerDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(MaterialTheme.shapes.small)
-                            .clickable { onSelect(index) }
+                            .tvFocusable().clickable { onSelect(index) }
                             .padding(vertical = 4.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1926,7 +1926,7 @@ private fun LanguagePickerDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(MaterialTheme.shapes.small)
-                            .clickable { onSelect(code) }
+                            .tvFocusable().clickable { onSelect(code) }
                             .padding(vertical = 4.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

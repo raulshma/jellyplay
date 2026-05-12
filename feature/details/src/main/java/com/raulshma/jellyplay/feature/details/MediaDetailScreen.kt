@@ -917,7 +917,7 @@ private fun MediaInfoSection(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (picker == StreamPickerType.AUDIO) {
                                             onAudioSelect(option.index)
                                         } else {
@@ -983,7 +983,7 @@ private fun QuickInfoPill(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(containerColor)
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .then(if (onClick != null) Modifier.tvFocusable().clickable { onClick() } else Modifier)
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .tvFocusable(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1058,7 +1058,7 @@ private fun SubtitleChip(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(bgColor)
-            .clickable { onClick() }
+            .tvFocusable().clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .tvFocusable(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1172,7 +1172,7 @@ private fun DetailActionButtons(
                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                 )
                 .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                .clickable(
+                .tvFocusable().clickable(
                     interactionSource = playInteractionSource,
                     indication = null,
                     enabled = canPlayPrimary,
@@ -1229,7 +1229,7 @@ private fun DetailActionButtons(
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .clickable(interactionSource = markInteractionSource, indication = null) {
+                        .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
                             if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                         }
                         .tvFocusable()
@@ -1248,7 +1248,7 @@ private fun DetailActionButtons(
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
+                        .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                         .tvFocusable()
                 ) {
                     Icon(
@@ -1267,7 +1267,7 @@ private fun DetailActionButtons(
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color.White.copy(alpha = 0.15f))
                             .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                            .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
                             .tvFocusable()
                     ) {
                         if (isDownloading || isDownloadActive) {
@@ -1303,7 +1303,7 @@ private fun DetailActionButtons(
                         else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                     )
                     .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .clickable(
+                    .tvFocusable().clickable(
                         interactionSource = playInteractionSource,
                         indication = null,
                         enabled = canPlayPrimary,
@@ -1344,7 +1344,7 @@ private fun DetailActionButtons(
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                    .clickable(interactionSource = markInteractionSource, indication = null) {
+                    .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
                         if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                     }
                     .tvFocusable()
@@ -1363,7 +1363,7 @@ private fun DetailActionButtons(
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                    .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
+                    .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                     .tvFocusable()
             ) {
                 Icon(
@@ -1391,7 +1391,7 @@ private fun DetailActionButtons(
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                        .clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                        .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
                         .tvFocusable()
                 ) {
                     if (isDownloading || dlActive) {
@@ -1469,7 +1469,7 @@ private fun DetailContentBody(
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onNavigateToSeries(item.seriesId!!) }
+                            .tvFocusable().clickable { onNavigateToSeries(item.seriesId!!) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1805,8 +1805,7 @@ private fun SeasonsSection(
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { selectedSeasonIndex = index }
-                        .tvFocusable(),
+                        .tvFocusable().clickable { selectedSeasonIndex = index },
                     color = surfaceColor,
                     contentColor = contentColor,
                 ) {
@@ -2000,12 +1999,11 @@ private fun EpisodeCard(
                 else Modifier
             )
             .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
             )
-            .tvFocusable()
     ) {
         Box(
             modifier = Modifier
@@ -2030,7 +2028,7 @@ private fun EpisodeCard(
                     .size(48.dp)
                     .graphicsLayer { scaleX = playScale; scaleY = playScale }
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .clickable(
+                    .tvFocusable().clickable(
                         interactionSource = playInteractionSource,
                         indication = null,
                         onClick = onPlayClick,
@@ -2106,12 +2104,11 @@ private fun PersonItem(
         modifier = Modifier
             .width(80.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .tvFocusable(),
+            ),
     ) {
         MediaImage(
             url = imageUrl,
