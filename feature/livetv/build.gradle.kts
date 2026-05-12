@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.raulshma.jellyplay.feature.livetv"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
