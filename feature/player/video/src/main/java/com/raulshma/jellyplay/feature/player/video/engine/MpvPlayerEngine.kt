@@ -314,13 +314,39 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleInternal(style: SubtitleStyle) {
         try {
             val m = mpvView?.mpv ?: return
-            val colorHex = String.format("#%06X", (0xFFFFFF and style.fontColor.value.toInt()))
-            val bgHex = String.format("#%06X", (0xFFFFFF and style.backgroundColor.value.toInt()))
-            val alphaHex = String.format("%02X", (style.backgroundOpacity * 255).toInt())
+            val colorHex = String.format("#%06X", (0xFFFFFF and style.fontColor.value))
+            val bgHex = String.format("#%06X", (0xFFFFFF and style.backgroundColor.value))
+            val alphaHex = String.format("%02X", (style.backgroundOpacity * 255).toInt().coerceIn(0, 255))
+            val edgeHex = String.format("#%06X", (0xFFFFFF and style.edgeColor.value))
             
             m.setPropertyString("sub-color", colorHex)
             m.setPropertyString("sub-back-color", "#${alphaHex}${bgHex.substring(1)}")
             m.setPropertyDouble("sub-scale", (style.fontSize / 16.0).coerceIn(0.5, 3.0))
+            
+            m.setPropertyString("sub-border-color", edgeHex)
+            m.setPropertyString("sub-shadow-color", edgeHex)
+            
+            when (style.edgeType) {
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> {
+                    m.setPropertyDouble("sub-border-size", 0.0)
+                    m.setPropertyDouble("sub-shadow-offset", 0.0)
+                }
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> {
+                    m.setPropertyDouble("sub-border-size", 2.0)
+                    m.setPropertyDouble("sub-shadow-offset", 0.0)
+                }
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
+                    m.setPropertyDouble("sub-border-size", 0.0)
+                    m.setPropertyDouble("sub-shadow-offset", 2.0)
+                }
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
+                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
+                    m.setPropertyDouble("sub-border-size", 1.0)
+                    m.setPropertyDouble("sub-shadow-offset", 1.5)
+                }
+            }
+            
+            m.setPropertyInt("sub-pos", (100 - (style.verticalPosition * 100)).toInt().coerceIn(0, 100))
         } catch (_: Exception) {}
     }
 
