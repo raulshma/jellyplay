@@ -296,9 +296,6 @@ fun HomeScreen(
                 }
             }
 
-            val showLandscapeHero = adaptiveInfo.isLandscape &&
-                    adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
                     error != null && sections.isEmpty() -> {
@@ -316,67 +313,15 @@ fun HomeScreen(
                                     color = Color.White.copy(alpha = 0.6f),
                                 )
                             }
-                        } else if (showLandscapeHero) {
-                            Row(modifier = Modifier.fillMaxSize()) {
-                                if (featuredItem != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .weight(0.55f)
-                                    ) {
-                                        AnimatedHeroHeader(
-                                            featuredItem = featuredItem,
-                                            getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                                            scrollOffsetProvider = { 0f },
-                                            height = headerHeight,
-                                            backgroundColor = backgroundColor,
-                                            onItemClick = {
-                                                saveHomeScrollPosition()
-                                                onItemClick(it)
-                                            },
-                                        )
-                                    }
-                                }
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .weight(0.45f)
-                                        .fillMaxHeight(),
-                                    contentPadding = PaddingValues(
-                                        top = 100.dp,
-                                        bottom = adaptiveInfo.bottomPadding(isTv),
-                                        end = adaptiveInfo.contentPadding(isTv),
-                                    ),
-                                ) {
-                                    items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
-                                        val section = sections[index]
-                                        if (section.type == HomeSectionType.CONTINUE_WATCHING ||
-                                            section.type == HomeSectionType.NEXT_UP
-                                        ) {
-                                            ContinueWatchingRow(
-                                                title = section.title,
-                                                items = section.items,
-                                                imageUrlBuilder = mediaImageUrlBuilder,
-                                                backdropUrlBuilder = mediaBackdropUrlBuilder,
-                                                onItemClick = mediaOnItemClick,
-                                            )
-                                        } else {
-                                            HomeMediaRow(
-                                                title = section.title,
-                                                items = section.items,
-                                                imageUrlBuilder = mediaImageUrlBuilder,
-                                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                                onItemClick = mediaOnItemClick,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         } else {
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
+                                contentPadding = PaddingValues(
+                                    bottom = adaptiveInfo.bottomPadding(isTv),
+                                    start = adaptiveInfo.contentPadding(isTv),
+                                    end = adaptiveInfo.contentPadding(isTv)
+                                ),
                             ) {
                                 if (featuredItem != null) {
                                     item {

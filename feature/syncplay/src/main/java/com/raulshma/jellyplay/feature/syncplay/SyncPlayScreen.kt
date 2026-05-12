@@ -81,6 +81,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -100,6 +104,11 @@ fun SyncPlayScreen(
     val showCreateDialog = viewModel.showCreateDialog
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+
     val snackbarHostState = remember { SnackbarHostState() }
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isLoading,
@@ -251,8 +260,8 @@ fun SyncPlayScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(contentPad),
+                            verticalArrangement = Arrangement.spacedBy(spacing),
                         ) {
                             itemsIndexed(groups, key = { _, it -> it.groupId }, contentType = { _, _ -> "syncPlayGroup" }) { index, group ->
                                 val visible = remember { mutableStateOf(false) }

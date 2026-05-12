@@ -47,6 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +69,11 @@ fun UserManagementScreen(
         hasError = false,
         networkStatus = networkStatus,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
 
     Scaffold(
         topBar = {
@@ -124,8 +133,8 @@ fun UserManagementScreen(
             else -> {
                 LazyColumn(
                     modifier = Modifier.padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(contentPad),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
                     itemsIndexed(serverUsers, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
                         val isCurrentUser = currentUser?.id == user.id
