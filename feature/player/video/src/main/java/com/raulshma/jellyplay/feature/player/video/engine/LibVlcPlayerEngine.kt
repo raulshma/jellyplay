@@ -86,9 +86,17 @@ class LibVlcPlayerEngine(
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
         pause()
+        try { mediaPlayer?.detachViews() } catch (_: Exception) {}
     }
 
     override fun onActivityResume() {
+        videoLayout?.let { layout ->
+            try {
+                mediaPlayer?.attachViews(layout, null, false, false)
+            } catch (e: Exception) {
+                Log.e(TAG, "attachViews failed on resume", e)
+            }
+        }
         if (wasPlayingBeforeActivityPause) {
             wasPlayingBeforeActivityPause = false
             play()
