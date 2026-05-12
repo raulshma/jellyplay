@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.raulshma.jellyplay.feature.library"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
