@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.clickable
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,7 +52,7 @@ internal fun TrackPickerSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
+                            .tvFocusable().clickable {
                                 onSelect(track)
                                 onDismiss()
                             }

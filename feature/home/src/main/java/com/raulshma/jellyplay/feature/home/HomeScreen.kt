@@ -583,12 +583,11 @@ private fun HeroHeader(
                 scaleY = pressScale
                 translationY = scrollOffsetProvider() * 0.5f
             }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
             )
-            .tvFocusable()
     ) {
         MediaImage(
             url = backdropUrl,
@@ -728,12 +727,11 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable(
+                        .tvFocusable().clickable(
                             interactionSource = playInteractionSource,
                             indication = null,
                             onClick = onClick,
                         )
-                        .tvFocusable()
                         .padding(horizontal = 24.dp)
                         .graphicsLayer { scaleX = playScale; scaleY = playScale },
                     contentAlignment = Alignment.Center,
@@ -759,12 +757,11 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color.White.copy(alpha = 0.15f))
-                        .clickable(
+                        .tvFocusable().clickable(
                             interactionSource = detailsInteractionSource,
                             indication = null,
                             onClick = onClick,
                         )
-                        .tvFocusable()
                         .padding(horizontal = 24.dp)
                         .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale },
                     contentAlignment = Alignment.Center,
@@ -862,12 +859,11 @@ private fun WideMediaCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer { scaleX = scale; scaleY = scale }
-                .clickable(
+                .tvFocusable().clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
-                )
-                .tvFocusable(),
+                ),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {

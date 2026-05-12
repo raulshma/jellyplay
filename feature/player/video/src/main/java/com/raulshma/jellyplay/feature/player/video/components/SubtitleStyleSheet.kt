@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -282,6 +283,6 @@ private fun ColorChip(
                     Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape)
                 }
             )
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
     )
 }

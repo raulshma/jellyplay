@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,7 +110,7 @@ internal fun EpisodePickerSheet(
                         Surface(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .clickable { onSeasonSelect(season.id) },
+                                .tvFocusable().clickable { onSeasonSelect(season.id) },
                             color = containerColor,
                             contentColor = contentColor,
                             tonalElevation = if (isSelected) 0.dp else 1.dp,
@@ -194,7 +195,7 @@ private fun EpisodeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .background(
                 if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                 else Color.Transparent

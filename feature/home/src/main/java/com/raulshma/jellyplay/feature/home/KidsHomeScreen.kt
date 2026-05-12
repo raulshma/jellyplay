@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -243,7 +244,7 @@ internal fun SurpriseMeCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = contentPadding, vertical = 12.dp)
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -348,7 +349,7 @@ private fun KidsPosterCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -391,7 +392,7 @@ private fun IconButton(
 ) {
     Box(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(8.dp),
         contentAlignment = Alignment.Center,
     ) {

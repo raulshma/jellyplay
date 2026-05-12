@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.activity.compose.BackHandler
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -43,7 +44,7 @@ fun AmbientScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(onClick = onTap),
+            .tvFocusable().clickable(onClick = onTap),
     ) {
         AmbientBackground(colors = colors)
 

@@ -319,8 +319,7 @@ internal fun PlayerControls(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.Black.copy(alpha = 0.85f))
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                            .clickable(onClick = onSkipSegment)
-                            .tvFocusable()
+                            .tvFocusable().clickable(onClick = onSkipSegment)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
                             Icon(
@@ -480,7 +479,7 @@ private fun SyncPlayHeaderIndicator(
     ) {
         Row(
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .tvFocusable().clickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),

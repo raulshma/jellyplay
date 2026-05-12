@@ -138,8 +138,7 @@ fun DvrScreen(
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.08f))
-                                        .clickable(onClick = onBack)
-                                        .tvFocusable(),
+                                        .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -265,8 +264,7 @@ private fun TimerCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .clickable { }
-            .tvFocusable()
+            .tvFocusable().clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -341,8 +339,7 @@ private fun TimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.08f))
-                .clickable { onCancel(timer.id) }
-            .tvFocusable(),
+                .tvFocusable().clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -365,8 +362,7 @@ private fun SeriesTimerCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .clickable { }
-            .tvFocusable()
+            .tvFocusable().clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -417,8 +413,7 @@ private fun SeriesTimerCard(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.08f))
-                .clickable { onCancel(timer.id) }
-            .tvFocusable(),
+                .tvFocusable().clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

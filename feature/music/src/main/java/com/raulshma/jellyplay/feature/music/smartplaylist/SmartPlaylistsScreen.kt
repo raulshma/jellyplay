@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.smartplaylist
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -158,7 +159,7 @@ private fun PlaylistCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = Color.White.copy(alpha = 0.1f),
         ),
