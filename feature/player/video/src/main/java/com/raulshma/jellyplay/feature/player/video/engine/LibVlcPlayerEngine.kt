@@ -391,9 +391,9 @@ class LibVlcPlayerEngine(
     }
 
     private fun Media.applySubtitleStyle(style: SubtitleStyle) {
-        val fontColor = colorToVlcHex(style.fontColor.value)
-        val backgroundColor = colorToVlcHex(style.backgroundColor.value)
-        val edgeColor = colorToVlcHex(style.edgeColor.value)
+        val fontColor = style.fontColor.value and 0x00FFFFFF
+        val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
+        val edgeColor = style.edgeColor.value and 0x00FFFFFF
 
         addOption(":freetype-rel-fontsize=${style.fontSize}")
         addOption(":freetype-color=$fontColor")
@@ -415,10 +415,10 @@ class LibVlcPlayerEngine(
             }
         }
 
-        addOption(":sub-margin-y=${(style.verticalPosition * 100).toInt().coerceIn(0, 100)}")
+        val screenHeight = context.resources.displayMetrics.heightPixels
+        val marginPixels = (style.verticalPosition * screenHeight).toInt()
+        addOption(":sub-margin=$marginPixels")
     }
-
-    private fun colorToVlcHex(color: Int): String = String.format("#%08X", color)
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {
         try {

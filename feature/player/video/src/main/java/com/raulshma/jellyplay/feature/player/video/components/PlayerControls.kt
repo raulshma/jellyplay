@@ -14,7 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -319,8 +319,7 @@ internal fun PlayerControls(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.Black.copy(alpha = 0.85f))
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                            .clickable(onClick = onSkipSegment)
-                            .tvFocusable()
+                            .tvFocusable().clickable(onClick = onSkipSegment)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
                             Icon(
@@ -480,7 +479,7 @@ private fun SyncPlayHeaderIndicator(
     ) {
         Row(
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .tvFocusable().clickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -559,37 +558,31 @@ private fun YouTubeStyleSeekBar(
                 .height(24.dp)
                 .pointerInput(duration) {
                     if (duration <= 0) return@pointerInput
-                    detectDragGestures(
-                        onDragStart = { offset ->
+                    awaitPointerEventScope {
+                        while (true) {
+                            val downEvent = awaitFirstDown()
+                            downEvent.consume()
                             onSeekStart()
-                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
                             dragFraction = fraction
                             onSeek(fraction)
                             isDragging = true
-                        },
-                        onDrag = { change, dragAmount ->
-                            val fraction = (dragFraction + (dragAmount.x / size.width)).coerceIn(0f, 1f)
-                            dragFraction = fraction
-                            onSeek(fraction)
-                            change.consume()
-                        },
-                        onDragEnd = {
+
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == downEvent.id }
+                                if (change != null) {
+                                    fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                    dragFraction = fraction
+                                    onSeek(fraction)
+                                    change.consume()
+                                }
+                            } while (change?.pressed == true)
+
                             isDragging = false
                             onSeekEnd()
-                        },
-                    )
-                    detectTapGestures(
-                        onPress = { offset ->
-                            onSeekStart()
-                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                            dragFraction = fraction
-                            onSeek(fraction)
-                            isDragging = true
-                            tryAwaitRelease()
-                            isDragging = false
-                            onSeekEnd()
-                        },
-                    )
+                        }
+                    }
                 },
             contentAlignment = Alignment.Center,
         ) {

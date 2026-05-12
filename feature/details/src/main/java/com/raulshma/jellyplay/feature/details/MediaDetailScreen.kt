@@ -72,6 +72,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -342,18 +343,19 @@ private fun DetailContent(
                 )
             }
 
+            val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.3f),
-                                backgroundColor.copy(alpha = 0.8f),
+                                if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
+                                backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                                backgroundColor.copy(alpha = 0.9f),
                                 backgroundColor,
                             ),
-                            startY = with(density) { (backdropHeight - 150.dp).toPx() },
+                            startY = if (isLandscapeExpanded) 0f else with(density) { (backdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
                         )
                     )
@@ -382,104 +384,227 @@ private fun DetailContent(
                         )
                     )
             ) {
-                Column(
-                    modifier = Modifier.padding(top = 0.dp)
-                ) {
-                    Box(
+                if (isExpanded && adaptiveInfo.isLandscape) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp)
+                            .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                            .offset(y = (-80).dp),
+                        horizontalArrangement = Arrangement.spacedBy(32.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-                                .offset(y = (-40).dp),
-                            verticalAlignment = Alignment.Bottom
+                        // Left column: poster + action buttons
+                        AnimatedVisibility(
+                            visible = contentVisible,
+                            enter = fadeIn(
+                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                            ) + slideInVertically(
+                                initialOffsetY = { it / 8 },
+                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                            ) + scaleIn(
+                                initialScale = 0.96f,
+                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                            ),
+                            exit = fadeOut(tween(160)) + scaleOut(
+                                targetScale = 0.98f,
+                                animationSpec = tween(160, easing = FastOutSlowInEasing),
+                            ),
                         ) {
-                            AnimatedVisibility(
-                                visible = contentVisible,
-                                enter = fadeIn(
-                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
-                                ) + slideInVertically(
-                                    initialOffsetY = { it / 8 },
-                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
-                                ) + scaleIn(
-                                    initialScale = 0.96f,
-                                    animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
-                                ),
-                                exit = fadeOut(tween(160)) + scaleOut(
-                                    targetScale = 0.98f,
-                                    animationSpec = tween(160, easing = FastOutSlowInEasing),
-                                ),
+                            Column(
+                                modifier = Modifier.width(220.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                val posterWidth = when {
-                                    isTv -> 160.dp
-                                    isExpanded -> 140.dp
-                                    else -> 120.dp
-                                }
                                 MediaImage(
                                     url = getImageUrl(itemId),
                                     contentDescription = null,
                                     blurHash = item?.blurHashes?.primary,
                                     modifier = Modifier
-                                        .width(posterWidth)
+                                        .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(12.dp))
                                         .graphicsLayer { alpha = contentAlpha },
                                     contentScale = ContentScale.Crop,
                                 )
+                                if (detail != null && item != null) {
+                                    DetailActionButtons(
+                                        item = item,
+                                        detail = detail,
+                                        seasons = seasons,
+                                        fetchedSeasonIds = fetchedSeasonIds,
+                                        smartPlayTarget = smartPlayTarget,
+                                        isAudio = isAudio,
+                                        isDownloading = isDownloading,
+                                        activeDownload = activeDownload,
+                                        onPlayClick = onPlayClick,
+                                        onAudioClick = onAudioClick,
+                                        onDownloadClick = { showDownloadDialog = true },
+                                        onToggleFavorite = onToggleFavorite,
+                                        onMarkPlayed = onMarkPlayed,
+                                        onMarkUnplayed = onMarkUnplayed,
+                                        vertical = true,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Right column: metadata content (no action buttons)
+                        if (detail != null && item != null) {
+                            AnimatedVisibility(
+                                visible = contentVisible,
+                                enter = fadeIn(tween(400, delayMillis = 100)) +
+                                        slideInVertically(
+                                            initialOffsetY = { it / 12 },
+                                            animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                                        ),
+                                exit = fadeOut(tween(180)) + slideOutVertically(
+                                    targetOffsetY = { -it / 24 },
+                                    animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                DetailContentBody(
+                                    item = item,
+                                    detail = detail,
+                                    seasons = seasons,
+                                    episodes = episodes,
+                                    fetchedSeasonIds = fetchedSeasonIds,
+                                    smartPlayTarget = smartPlayTarget,
+                                    selectedSubtitleIndex = selectedSubtitleIndex,
+                                    selectedAudioIndex = selectedAudioIndex,
+                                    getImageUrl = getImageUrl,
+                                    isAudio = isAudio,
+                                    isDownloading = isDownloading,
+                                    activeDownload = activeDownload,
+                                    onPlayClick = onPlayClick,
+                                    onAudioClick = onAudioClick,
+                                    onDownloadClick = { showDownloadDialog = true },
+                                    onToggleFavorite = onToggleFavorite,
+                                    onMarkPlayed = onMarkPlayed,
+                                    onMarkUnplayed = onMarkUnplayed,
+                                    onSubtitleSelect = onSubtitleSelect,
+                                    onAudioSelect = onAudioSelect,
+                                    onItemClick = onItemClick,
+                                    onPersonClick = onPersonClick,
+                                    onNavigateToSeries = onNavigateToSeries,
+                                    modifier = Modifier,
+                                    contentAlignment = Alignment.TopStart,
+                                    showActionButtons = false,
+                                    showMediaInfo = true,
+                                )
+                            }
+                        } else if (isLoading) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                SkeletonDetailBody()
+                            }
+                        } else if (error != null) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = onRetry) { Text("Retry") }
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    if (detail != null && item != null) {
-                        AnimatedVisibility(
-                            visible = contentVisible,
-                            enter = fadeIn(tween(400, delayMillis = 100)) +
-                                    slideInVertically(
-                                        initialOffsetY = { it / 12 },
-                                        animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
-                                    ),
-                            exit = fadeOut(tween(180)) + slideOutVertically(
-                                targetOffsetY = { -it / 24 },
-                                animationSpec = tween(180, easing = FastOutSlowInEasing),
-                            ),
+                } else {
+                    Column(
+                        modifier = Modifier.padding(top = 0.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp)
                         ) {
-                            DetailContentBody(
-                                item = item,
-                                detail = detail,
-                                seasons = seasons,
-                                episodes = episodes,
-                                fetchedSeasonIds = fetchedSeasonIds,
-                                smartPlayTarget = smartPlayTarget,
-                                selectedSubtitleIndex = selectedSubtitleIndex,
-                                selectedAudioIndex = selectedAudioIndex,
-                                getImageUrl = getImageUrl,
-                                isAudio = isAudio,
-                                isDownloading = isDownloading,
-                                activeDownload = activeDownload,
-                                onPlayClick = onPlayClick,
-                                onAudioClick = onAudioClick,
-                                onDownloadClick = { showDownloadDialog = true },
-                                onToggleFavorite = onToggleFavorite,
-                                onMarkPlayed = onMarkPlayed,
-                                onMarkUnplayed = onMarkUnplayed,
-                                onSubtitleSelect = onSubtitleSelect,
-                                onAudioSelect = onAudioSelect,
-                                onItemClick = onItemClick,
-                                onPersonClick = onPersonClick,
-                                onNavigateToSeries = onNavigateToSeries,
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                                    .offset(y = (-40).dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                AnimatedVisibility(
+                                    visible = contentVisible,
+                                    enter = fadeIn(
+                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                    ) + slideInVertically(
+                                        initialOffsetY = { it / 8 },
+                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                    ) + scaleIn(
+                                        initialScale = 0.96f,
+                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                    ),
+                                    exit = fadeOut(tween(160)) + scaleOut(
+                                        targetScale = 0.98f,
+                                        animationSpec = tween(160, easing = FastOutSlowInEasing),
+                                    ),
+                                ) {
+                                    val posterWidth = when {
+                                        isTv -> 160.dp
+                                        isExpanded -> 140.dp
+                                        else -> 120.dp
+                                    }
+                                    MediaImage(
+                                        url = getImageUrl(itemId),
+                                        contentDescription = null,
+                                        blurHash = item?.blurHashes?.primary,
+                                        modifier = Modifier
+                                            .width(posterWidth)
+                                            .aspectRatio(2f / 3f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .graphicsLayer { alpha = contentAlpha },
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                }
+                            }
                         }
-                    } else if (isLoading) {
-                        SkeletonDetailBody()
-                    } else if (error != null) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(error, color = MaterialTheme.colorScheme.error)
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = onRetry) { Text("Retry") }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        if (detail != null && item != null) {
+                            AnimatedVisibility(
+                                visible = contentVisible,
+                                enter = fadeIn(tween(400, delayMillis = 100)) +
+                                        slideInVertically(
+                                            initialOffsetY = { it / 12 },
+                                            animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                                        ),
+                                exit = fadeOut(tween(180)) + slideOutVertically(
+                                    targetOffsetY = { -it / 24 },
+                                    animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                ),
+                            ) {
+                                DetailContentBody(
+                                    item = item,
+                                    detail = detail,
+                                    seasons = seasons,
+                                    episodes = episodes,
+                                    fetchedSeasonIds = fetchedSeasonIds,
+                                    smartPlayTarget = smartPlayTarget,
+                                    selectedSubtitleIndex = selectedSubtitleIndex,
+                                    selectedAudioIndex = selectedAudioIndex,
+                                    getImageUrl = getImageUrl,
+                                    isAudio = isAudio,
+                                    isDownloading = isDownloading,
+                                    activeDownload = activeDownload,
+                                    onPlayClick = onPlayClick,
+                                    onAudioClick = onAudioClick,
+                                    onDownloadClick = { showDownloadDialog = true },
+                                    onToggleFavorite = onToggleFavorite,
+                                    onMarkPlayed = onMarkPlayed,
+                                    onMarkUnplayed = onMarkUnplayed,
+                                    onSubtitleSelect = onSubtitleSelect,
+                                    onAudioSelect = onAudioSelect,
+                                    onItemClick = onItemClick,
+                                    onPersonClick = onPersonClick,
+                                    onNavigateToSeries = onNavigateToSeries,
+                                )
+                            }
+                        } else if (isLoading) {
+                            SkeletonDetailBody()
+                        } else if (error != null) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = onRetry) { Text("Retry") }
+                            }
                         }
                     }
                 }
@@ -626,6 +751,7 @@ private fun MediaInfoSection(
     selectedSubtitleIndex: Int?,
     onAudioSelect: (Int?) -> Unit,
     onSubtitleSelect: (Int?) -> Unit,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
     val audioStreams = mediaStreams.filter { it.type == StreamType.AUDIO }
@@ -636,7 +762,7 @@ private fun MediaInfoSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = horizontalPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val chipBackgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
@@ -791,7 +917,7 @@ private fun MediaInfoSection(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (picker == StreamPickerType.AUDIO) {
                                             onAudioSelect(option.index)
                                         } else {
@@ -857,7 +983,7 @@ private fun QuickInfoPill(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(containerColor)
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .then(if (onClick != null) Modifier.tvFocusable().clickable { onClick() } else Modifier)
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .tvFocusable(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -932,7 +1058,7 @@ private fun SubtitleChip(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(bgColor)
-            .clickable { onClick() }
+            .tvFocusable().clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .tvFocusable(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -949,6 +1075,338 @@ private fun SubtitleChip(
                 style = MaterialTheme.typography.labelSmall,
                 color = contentColor.copy(alpha = 0.6f),
             )
+        }
+    }
+}
+
+@Composable
+private fun DetailActionButtons(
+    item: MediaItem,
+    detail: MediaDetail,
+    seasons: List<MediaItem>,
+    fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
+    isAudio: Boolean,
+    isDownloading: Boolean,
+    activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
+    onAudioClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMarkPlayed: () -> Unit,
+    onMarkUnplayed: () -> Unit,
+    modifier: Modifier = Modifier,
+    vertical: Boolean = false,
+) {
+    val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
+    val isSeries = item.mediaType == MediaType.SERIES
+    val target = if (isSeriesOrEpisode) smartPlayTarget else null
+    val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+    val isResolvingSeriesTarget = isSeries &&
+        target == null &&
+        (seasons.isEmpty() || fetchedSeasonIds.size < seasons.size)
+    val canPlayPrimary = isAudio || !isSeries || target != null
+    val progress = if (target != null) {
+        val t = target.startPositionTicks
+        val rt = target.episode.runTimeTicks
+        if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
+    } else if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+        (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
+    } else 0f
+
+    val playLabel = when {
+        target != null -> target.label
+        isResolvingSeriesTarget -> "Finding Episode"
+        isSeries -> "No Episodes"
+        hasProgress -> "Resume"
+        else -> "Play"
+    }
+
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "playButtonScale",
+    )
+    val markInteractionSource = remember { MutableInteractionSource() }
+    val isMarkPressed by markInteractionSource.collectIsPressedAsState()
+    val markScale by animateFloatAsState(
+        targetValue = if (isMarkPressed) 0.9f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "markButtonScale",
+    )
+    val favoriteInteractionSource = remember { MutableInteractionSource() }
+    val isFavoritePressed by favoriteInteractionSource.collectIsPressedAsState()
+    val favoriteScale by animateFloatAsState(
+        targetValue = if (isFavoritePressed) 0.9f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "favoriteButtonScale",
+    )
+    val downloadInteractionSource = remember { MutableInteractionSource() }
+    val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
+    val downloadScale by animateFloatAsState(
+        targetValue = if (isDownloadPressed) 0.9f else 1f,
+        animationSpec = spring(stiffness = 400f),
+        label = "downloadButtonScale",
+    )
+
+    val downloadStatus = activeDownload?.status
+    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
+            downloadStatus == DownloadStatus.DOWNLOADING ||
+            downloadStatus == DownloadStatus.PAUSED
+    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
+    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+    } else 0f
+
+    // Play button — full width in vertical mode, fixed width in horizontal
+    val playButton: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                )
+                .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                .tvFocusable().clickable(
+                    interactionSource = playInteractionSource,
+                    indication = null,
+                    enabled = canPlayPrimary,
+                ) {
+                    if (isAudio) {
+                        onAudioClick()
+                    } else if (target != null) {
+                        onPlayClick(target.episode.id, null, target.startPositionTicks)
+                    } else {
+                        val sourceId = detail.mediaSources.firstOrNull()?.id
+                        val startPos = item.playbackPositionTicks ?: 0L
+                        onPlayClick(item.id, sourceId, startPos)
+                    }
+                }
+                .tvFocusable(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (progress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .align(Alignment.CenterStart)
+                        .background(Color.White.copy(alpha = 0.15f))
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = Color.White)
+                Spacer(Modifier.size(6.dp))
+                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+        }
+    }
+
+    // Icon action buttons — watch, favorite, download
+    val iconsModifier = Modifier
+        .fillMaxWidth()
+
+    if (vertical) {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            playButton()
+            Row(
+                modifier = iconsModifier,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                IconButton(
+                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
+                        .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
+                            if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
+                        }
+                        .tvFocusable()
+                ) {
+                    Icon(
+                        if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
+                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
+                        .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
+                        .tvFocusable()
+                ) {
+                    Icon(
+                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+                if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                    IconButton(
+                        onClick = onDownloadClick,
+                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
+                            .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                            .tvFocusable()
+                    ) {
+                        if (isDownloading || isDownloadActive) {
+                            if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                CircularProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            }
+                        } else if (isDownloadCompleted) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
+        ) {
+            // Horizontal: play button fixed width, icon buttons fixed size
+            Box(
+                modifier = Modifier
+                    .height(56.dp)
+                    .width(200.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                    )
+                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                    .tvFocusable().clickable(
+                        interactionSource = playInteractionSource,
+                        indication = null,
+                        enabled = canPlayPrimary,
+                    ) {
+                        if (isAudio) {
+                            onAudioClick()
+                        } else if (target != null) {
+                            onPlayClick(target.episode.id, null, target.startPositionTicks)
+                        } else {
+                            val sourceId = detail.mediaSources.firstOrNull()?.id
+                            val startPos = item.playbackPositionTicks ?: 0L
+                            onPlayClick(item.id, sourceId, startPos)
+                        }
+                    }
+                    .tvFocusable(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress)
+                            .align(Alignment.CenterStart)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
+                    Spacer(Modifier.size(8.dp))
+                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                }
+            }
+
+            IconButton(
+                onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+                    .graphicsLayer { scaleX = markScale; scaleY = markScale }
+                    .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
+                        if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
+                    }
+                    .tvFocusable()
+            ) {
+                Icon(
+                    if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
+                    tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
+
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+                    .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
+                    .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
+                    .tvFocusable()
+            ) {
+                Icon(
+                    if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
+
+            if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                val dlStatus = activeDownload?.status
+                val dlActive = dlStatus == DownloadStatus.PENDING ||
+                        dlStatus == DownloadStatus.DOWNLOADING ||
+                        dlStatus == DownloadStatus.PAUSED
+                val dlCompleted = dlStatus == DownloadStatus.COMPLETED
+                val dlProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+                    activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+                } else 0f
+
+                IconButton(
+                    onClick = onDownloadClick,
+                    enabled = !isDownloading && !dlActive && !dlCompleted,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
+                        .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                        .tvFocusable()
+                ) {
+                    if (isDownloading || dlActive) {
+                        if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
+                            CircularProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    } else if (dlCompleted) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                    }
+                }
+            }
         }
     }
 }
@@ -978,9 +1436,21 @@ private fun DetailContentBody(
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    contentAlignment: Alignment = Alignment.TopCenter,
+    showActionButtons: Boolean = true,
+    showMediaInfo: Boolean = true,
 ) {
     val showContent = true
 
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+    val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
+
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = contentAlignment,
+    ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -999,14 +1469,14 @@ private fun DetailContentBody(
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onNavigateToSeries(item.seriesId!!) }
+                            .tvFocusable().clickable { onNavigateToSeries(item.seriesId!!) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = item.seriesName ?: "Series",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = Color.White.copy(alpha = 0.95f),
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1020,7 +1490,7 @@ private fun DetailContentBody(
                             Text(
                                 text = season,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                color = Color.White.copy(alpha = 0.65f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -1151,206 +1621,27 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
-                val isSeries = item.mediaType == MediaType.SERIES
-                val target = if (isSeriesOrEpisode) smartPlayTarget else null
-                val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
-                val isResolvingSeriesTarget = isSeries &&
-                    target == null &&
-                    (seasons.isEmpty() || fetchedSeasonIds.size < seasons.size)
-                val canPlayPrimary = isAudio || !isSeries || target != null
-                val progress = if (target != null) {
-                    val t = target.startPositionTicks
-                    val rt = target.episode.runTimeTicks
-                    if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
-                } else if (hasProgress && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                    (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
-                } else 0f
-
-                val playLabel = when {
-                    target != null -> target.label
-                    isResolvingSeriesTarget -> "Finding Episode"
-                    isSeries -> "No Episodes"
-                    hasProgress -> "Resume"
-                    else -> "Play"
-                }
-
-                val playInteractionSource = remember { MutableInteractionSource() }
-                val isPlayPressed by playInteractionSource.collectIsPressedAsState()
-                val playScale by animateFloatAsState(
-                    targetValue = if (isPlayPressed) 0.95f else 1f,
-                    animationSpec = spring(stiffness = 400f),
-                    label = "playButtonScale",
-                )
-                val markInteractionSource = remember { MutableInteractionSource() }
-                val isMarkPressed by markInteractionSource.collectIsPressedAsState()
-                val markScale by animateFloatAsState(
-                    targetValue = if (isMarkPressed) 0.9f else 1f,
-                    animationSpec = spring(stiffness = 400f),
-                    label = "markButtonScale",
-                )
-                val favoriteInteractionSource = remember { MutableInteractionSource() }
-                val isFavoritePressed by favoriteInteractionSource.collectIsPressedAsState()
-                val favoriteScale by animateFloatAsState(
-                    targetValue = if (isFavoritePressed) 0.9f else 1f,
-                    animationSpec = spring(stiffness = 400f),
-                    label = "favoriteButtonScale",
-                )
-                val downloadInteractionSource = remember { MutableInteractionSource() }
-                val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
-                val downloadScale by animateFloatAsState(
-                    targetValue = if (isDownloadPressed) 0.9f else 1f,
-                    animationSpec = spring(stiffness = 400f),
-                    label = "downloadButtonScale",
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (canPlayPrimary) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                            }
-                        )
-                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                        .clickable(
-                            interactionSource = playInteractionSource,
-                            indication = null,
-                            enabled = canPlayPrimary,
-                        ) {
-                            if (isAudio) {
-                                onAudioClick()
-                            } else if (target != null) {
-                                onPlayClick(target.episode.id, null, target.startPositionTicks)
-                            } else {
-                                val sourceId = detail.mediaSources.firstOrNull()?.id
-                                val startPos = item.playbackPositionTicks ?: 0L
-                                onPlayClick(item.id, sourceId, startPos)
-                            }
-                        }
-                        .tvFocusable(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (progress > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progress)
-                                .align(Alignment.CenterStart)
-                                .background(Color.White.copy(alpha = 0.15f))
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            playLabel,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .clickable(
-                            interactionSource = markInteractionSource,
-                            indication = null,
-                        ) { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() }
-                        .tvFocusable()
-                ) {
-                    Icon(
-                        if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                }
-
-                IconButton(
-                    onClick = onToggleFavorite,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .clickable(
-                            interactionSource = favoriteInteractionSource,
-                            indication = null,
-                        ) { onToggleFavorite() }
-                        .tvFocusable()
-                ) {
-                    Icon(
-                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
-                    )
-                }
-
-                if (!isAudio && detail.mediaSources.isNotEmpty()) {
-                    val downloadStatus = activeDownload?.status
-                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
-                            downloadStatus == DownloadStatus.DOWNLOADING ||
-                            downloadStatus == DownloadStatus.PAUSED
-                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-                    } else 0f
-
-                    IconButton(
-                        onClick = onDownloadClick,
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .clickable(
-                                interactionSource = downloadInteractionSource,
-                                indication = null,
-                            ) { onDownloadClick() }
-                            .tvFocusable()
-                    ) {
-                        if (isDownloading || isDownloadActive) {
-                            if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                CircularProgressIndicator(
-                                    progress = { downloadProgress },
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            }
-                        } else if (isDownloadCompleted) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
-                        }
-                    }
-                }
-            }
-
+        if (showActionButtons) StaggeredDetailSection(visible = showContent, delayIndex = 1) {
+            DetailActionButtons(
+                item = item,
+                detail = detail,
+                seasons = seasons,
+                fetchedSeasonIds = fetchedSeasonIds,
+                smartPlayTarget = smartPlayTarget,
+                isAudio = isAudio,
+                isDownloading = isDownloading,
+                activeDownload = activeDownload,
+                onPlayClick = onPlayClick,
+                onAudioClick = onAudioClick,
+                onDownloadClick = onDownloadClick,
+                onToggleFavorite = onToggleFavorite,
+                onMarkPlayed = onMarkPlayed,
+                onMarkUnplayed = onMarkUnplayed,
+                vertical = false,
+            )
         }
 
-        StaggeredDetailSection(visible = showContent && !isAudio, delayIndex = 2) {
+        if (showMediaInfo) StaggeredDetailSection(visible = showContent && !isAudio, delayIndex = 2) {
             val source = detail.mediaSources.firstOrNull()
             if (source != null) {
                 MediaInfoSection(
@@ -1462,6 +1753,7 @@ private fun DetailContentBody(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -1513,8 +1805,7 @@ private fun SeasonsSection(
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { selectedSeasonIndex = index }
-                        .tvFocusable(),
+                        .tvFocusable().clickable { selectedSeasonIndex = index },
                     color = surfaceColor,
                     contentColor = contentColor,
                 ) {
@@ -1708,12 +1999,11 @@ private fun EpisodeCard(
                 else Modifier
             )
             .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
             )
-            .tvFocusable()
     ) {
         Box(
             modifier = Modifier
@@ -1738,7 +2028,7 @@ private fun EpisodeCard(
                     .size(48.dp)
                     .graphicsLayer { scaleX = playScale; scaleY = playScale }
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .clickable(
+                    .tvFocusable().clickable(
                         interactionSource = playInteractionSource,
                         indication = null,
                         onClick = onPlayClick,
@@ -1814,12 +2104,11 @@ private fun PersonItem(
         modifier = Modifier
             .width(80.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .tvFocusable(),
+            ),
     ) {
         MediaImage(
             url = imageUrl,

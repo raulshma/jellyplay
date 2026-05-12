@@ -315,16 +315,40 @@ private fun MainContent(
                                     }
                                 }
                             }
-                            MainNavDisplay(
-                                navigationState = navigationState,
-                                navigator = navigator,
-                                onLogout = onLogout,
-                                homeMode = homeMode,
-                                onModeChange = onModeChange,
-                                enterPip = enterPip,
-                                enterVideoMiniMode = enterVideoMiniMode,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                MainNavDisplay(
+                                    navigationState = navigationState,
+                                    navigator = navigator,
+                                    onLogout = onLogout,
+                                    homeMode = homeMode,
+                                    onModeChange = onModeChange,
+                                    enterPip = enterPip,
+                                    enterVideoMiniMode = enterVideoMiniMode,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (showMiniPlayer && isExpanded) {
+                                    MiniPlayer(
+                                        isVisible = true,
+                                        title = audioTitle,
+                                        artist = audioArtist,
+                                        artworkUri = audioArtworkUrl,
+                                        isPlaying = isAudioPlaying,
+                                        onClick = {
+                                            val itemId = audioItemId ?: return@MiniPlayer
+                                            navigator.navigate(Route.AudioPlayer(itemId))
+                                        },
+                                        onStop = {
+                                            audioPlaybackManager.stopAndRelease()
+                                        },
+                                        onPlayPause = {
+                                            audioPlaybackManager.togglePlayPause()
+                                        },
+                                        onSkipNext = {
+                                            audioPlaybackManager.skipToNext()
+                                        },
+                                    )
+                                }
+                            }
                         }
 
                         if (isVideoMiniMode && !isPlayerScreen) {

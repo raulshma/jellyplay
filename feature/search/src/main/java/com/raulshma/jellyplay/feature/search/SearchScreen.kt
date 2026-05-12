@@ -274,7 +274,7 @@ fun SearchScreen(
                                         .size(32.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(Color.White.copy(alpha = 0.12f))
-                                        .clickable { viewModel.search("") },
+                                        .tvFocusable().clickable { viewModel.search("") },
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -290,7 +290,7 @@ fun SearchScreen(
                                         .size(32.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(Color.White.copy(alpha = 0.12f))
-                                        .clickable {
+                                        .tvFocusable().clickable {
                                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                                 putExtra(
                                                     RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -348,7 +348,7 @@ fun SearchScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.clearFilters() }
+                                .tvFocusable().clickable { viewModel.clearFilters() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
                             Text(
@@ -576,8 +576,7 @@ private fun GlassIconButton(
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .clickable(onClick = onClick)
-            .tvFocusable(),
+            .tvFocusable().clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -607,7 +606,7 @@ private fun GlassDismissTag(
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.12f))
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onDismiss,

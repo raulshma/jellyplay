@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -44,6 +45,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +88,11 @@ fun UserSelectionScreen(
             }
         },
     ) { padding ->
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val isTv = isTvDevice()
+        val contentPad = adaptiveInfo.contentPadding(isTv)
+        val spacing = adaptiveInfo.itemSpacing(isTv)
+
         when {
             isLoading -> {
                 Column(
@@ -134,8 +144,8 @@ fun UserSelectionScreen(
             else -> {
                 LazyColumn(
                     modifier = Modifier.padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(contentPad),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
                     itemsIndexed(users, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
                         val visible = remember { mutableStateOf(false) }
@@ -177,7 +187,7 @@ private fun UserCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier

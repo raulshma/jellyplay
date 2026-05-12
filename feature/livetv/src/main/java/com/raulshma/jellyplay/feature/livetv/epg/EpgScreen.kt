@@ -49,7 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +78,12 @@ fun EpgScreen(
         Color.Black,
         0.70f,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
@@ -117,7 +128,7 @@ fun EpgScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp),
+                                .padding(start = contentPad, end = contentPad),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -127,8 +138,7 @@ fun EpgScreen(
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.08f))
-                                        .clickable(onClick = onBack)
-                                        .tvFocusable(),
+                                        .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -164,8 +174,8 @@ fun EpgScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.5f),
                             modifier = Modifier.padding(
-                                start = 64.dp,
-                                end = 24.dp,
+                                start = contentPad,
+                                end = contentPad,
                                 top = 8.dp,
                                 bottom = 8.dp,
                             ),
@@ -202,12 +212,12 @@ fun EpgScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
+                            start = contentPad,
+                            end = contentPad,
                             top = 8.dp,
-                            bottom = 100.dp,
+                            bottom = bottomPad,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
                         items(
                             items = viewModel.programs,
@@ -238,8 +248,7 @@ private fun ProgramCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .clickable(onClick = onClick)
-            .tvFocusable()
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -295,8 +304,7 @@ private fun ProgramCard(
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
-                    .clickable(onClick = onRecordClick)
-                    .tvFocusable(),
+                    .tvFocusable().clickable(onClick = onRecordClick),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -122,7 +123,7 @@ fun NextEpisodeOverlay(
                             modifier = Modifier
                                 .size(48.dp)
                                 .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .clickable(onClick = onPlayNext),
+                                .tvFocusable().clickable(onClick = onPlayNext),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -140,7 +141,7 @@ fun NextEpisodeOverlay(
                                 .padding(8.dp)
                                 .size(28.dp)
                                 .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .clickable(onClick = {
+                                .tvFocusable().clickable(onClick = {
                                     dismissed = true
                                     onCancel()
                                 }),

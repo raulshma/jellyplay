@@ -36,10 +36,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,11 +131,20 @@ fun CollectionDetailScreen(
                         visible = contentVisible.value,
                         enter = fadeIn(tween(400, delayMillis = 200)),
                     ) {
+                        val adaptiveInfo = LocalAdaptiveInfo.current
+                        val isTv = isTvDevice()
+                        val contentPad = adaptiveInfo.contentPadding(isTv)
+                        val gridMin = adaptiveInfo.gridMinSize(isTv)
+                        val spacing = adaptiveInfo.itemSpacing(isTv)
+
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(120.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            columns = GridCells.Adaptive(gridMin),
+                            contentPadding = PaddingValues(
+                                horizontal = contentPad,
+                                vertical = 8.dp,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                            verticalArrangement = Arrangement.spacedBy(spacing),
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             itemsIndexed(items, key = { _, it -> it.id }, contentType = { _, _ -> "mediaItem" }) { index, item ->

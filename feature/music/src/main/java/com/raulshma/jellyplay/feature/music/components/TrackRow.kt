@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +35,7 @@ fun TrackRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

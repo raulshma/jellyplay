@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.raulshma.jellyplay.core.data"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
@@ -29,7 +29,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.kotlinx.serialization.json)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation(libs.paging.runtime)
     implementation(libs.work.runtime.ktx)
     implementation(libs.media3.session)

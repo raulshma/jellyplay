@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.raulshma.jellyplay.core.ui"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
@@ -41,5 +41,5 @@ dependencies {
     implementation("androidx.compose.animation:animation-android")
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.11.0")
 }

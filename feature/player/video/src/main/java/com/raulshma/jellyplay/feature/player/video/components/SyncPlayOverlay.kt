@@ -52,7 +52,7 @@ fun SyncPlayOverlay(
         ) {
             Row(
                 modifier = Modifier
-                    .clickable(onClick = onClick)
+                    .tvFocusable().clickable(onClick = onClick)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

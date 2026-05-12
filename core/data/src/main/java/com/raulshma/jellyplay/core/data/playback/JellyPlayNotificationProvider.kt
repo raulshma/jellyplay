@@ -140,6 +140,13 @@ class JellyPlayNotificationProvider(
         extras: android.os.Bundle,
     ): Boolean = false
 
+    override fun getNotificationChannelInfo(): MediaNotification.Provider.NotificationChannelInfo {
+        return MediaNotification.Provider.NotificationChannelInfo(
+            CHANNEL_ID,
+            "Now Playing",
+        )
+    }
+
     // ── Artwork loading ──────────────────────────────────────────────
 
     private fun loadArtworkAsync(
