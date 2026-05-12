@@ -9,6 +9,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
@@ -16,6 +19,7 @@ class TrickplayManager(
 
     private val thumbnailCache = LruCache<Int, Bitmap>(MAX_THUMBNAIL_CACHE_SIZE)
     private val spriteSheetCache = LruCache<Int, Bitmap>(MAX_SPRITE_SHEET_CACHE_SIZE)
+    private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
@@ -64,13 +68,18 @@ class TrickplayManager(
         sheetIndex: Int,
         trickplayInfo: TrickplayInfo,
     ): Bitmap? {
-        val data = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
-            ?: return null
-        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
-        if (bitmap != null) {
-            spriteSheetCache.put(sheetIndex, bitmap)
+        val mutex = sheetMutexes.getOrPut(sheetIndex) { Mutex() }
+        return mutex.withLock {
+            spriteSheetCache.get(sheetIndex)?.let { return@withLock it }
+
+            val data = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
+                ?: return@withLock null
+            val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+            if (bitmap != null) {
+                spriteSheetCache.put(sheetIndex, bitmap)
+            }
+            bitmap
         }
-        return bitmap
     }
 
     private fun preloadNeighbors(
@@ -106,6 +115,7 @@ class TrickplayManager(
 
         info = null
         itemId = null
+        sheetMutexes.clear()
     }
 
     companion object {
