@@ -98,6 +98,8 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
+import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
@@ -108,6 +110,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
+    onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit = { _, _, _ -> },
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
@@ -295,6 +298,14 @@ fun HomeScreen(
                     currentOnItemClick(item.id)
                 }
             }
+            val currentOnPlayClick by rememberUpdatedState(onPlayClick)
+            val mediaOnPlayClick = remember {
+                { item: MediaItem ->
+                    saveHomeScrollPosition()
+                    val startPos = item.playbackPositionTicks ?: 0L
+                    currentOnPlayClick(item.id, null, startPos)
+                }
+            }
 
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
@@ -370,6 +381,7 @@ fun HomeScreen(
                                             imageUrlBuilder = mediaImageUrlBuilder,
                                             backdropUrlBuilder = mediaBackdropUrlBuilder,
                                             onItemClick = mediaOnItemClick,
+                                            onPlayClick = mediaOnPlayClick,
                                             modifier = sectionModifier,
                                         )
                                     } else {
@@ -379,6 +391,7 @@ fun HomeScreen(
                                             imageUrlBuilder = mediaImageUrlBuilder,
                                             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                                             onItemClick = mediaOnItemClick,
+                                            onPlayClick = mediaOnPlayClick,
                                             modifier = sectionModifier,
                                         )
                                     }
@@ -774,6 +787,7 @@ private fun ContinueWatchingRow(
     imageUrlBuilder: (MediaItem) -> String,
     backdropUrlBuilder: (MediaItem) -> String,
     onItemClick: (MediaItem) -> Unit,
+    onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -809,6 +823,7 @@ private fun ContinueWatchingRow(
                     imageUrl = imageUrlBuilder(item),
                     backdropUrl = backdropUrlBuilder(item),
                     onClick = { onItemClick(item) },
+                    onPlayClick = onPlayClick?.let { { it(item) } },
                     cardWidth = cardWidth,
                 )
             }
@@ -822,8 +837,10 @@ private fun WideMediaCard(
     imageUrl: String,
     backdropUrl: String,
     onClick: () -> Unit,
+    onPlayClick: (() -> Unit)? = null,
     cardWidth: androidx.compose.ui.unit.Dp,
 ) {
+    val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -832,67 +849,100 @@ private fun WideMediaCard(
         label = "wideCardScale",
     )
 
-    Card(
-        modifier = Modifier
-            .width(cardWidth)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            )
-            .tvFocusable(),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Box {
-            MediaImage(
-                url = backdropUrl,
-                fallbackUrls = listOf(imageUrl).filter { it.isNotBlank() },
-                contentDescription = item.name,
-                blurHash = item.blurHashes.backdrop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f),
-                contentScale = ContentScale.Crop,
-            )
+    val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl })
+    val hasProgress = item.playbackPositionTicks != null && item.runTimeTicks != null && item.runTimeTicks!! > 0
+    val progressPercent = if (hasProgress) {
+        (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val playButtonSize = if (isTv) 44.dp else 36.dp
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+    Column(modifier = Modifier.width(cardWidth)) {
+        // ── Card (backdrop only, no text inside) ──
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                )
+                .tvFocusable(),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        ) {
+            Box {
+                MediaImage(
+                    url = backdropUrl,
+                    fallbackUrls = listOf(imageUrl).filter { it.isNotBlank() },
+                    contentDescription = item.name,
+                    blurHash = item.blurHashes.backdrop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                    contentScale = ContentScale.Crop,
+                )
+
+                // Subtle gradient at bottom for depth
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.4f),
+                                ),
+                            )
                         )
+                )
+
+                // Play button in bottom-right
+                if (onPlayClick != null) {
+                    PlayButtonWithProgress(
+                        progressPercent = progressPercent,
+                        dominantColor = dominantColor,
+                        onClick = onPlayClick,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 8.dp, bottom = 8.dp),
+                        buttonSize = playButtonSize,
                     )
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-            ) {
+                }
+            }
+        }
+
+        // ── Info below card ──
+        Column(
+            modifier = Modifier.padding(
+                start = 4.dp,
+                end = 4.dp,
+                top = 6.dp,
+            ),
+        ) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.9f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (item.seriesName != null) {
                 Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White,
+                    text = item.seriesName!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-
-            if (item.playbackPositionTicks != null && item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(
-                                (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!.toFloat()).coerceIn(0f, 1f)
-                            )
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
+            } else if (item.year != null) {
+                Text(
+                    text = item.year.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.55f),
+                )
             }
         }
     }
@@ -905,6 +955,7 @@ private fun HomeMediaRow(
     imageUrlBuilder: (MediaItem) -> String,
     fallbackImageUrlBuilder: (MediaItem) -> List<String>,
     onItemClick: (MediaItem) -> Unit,
+    onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -942,6 +993,7 @@ private fun HomeMediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = item.blurHashes.primary,
+                    onPlayClick = onPlayClick?.let { { it(item) } },
                 )
             }
         }

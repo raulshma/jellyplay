@@ -444,19 +444,6 @@ private fun DetailContent(
                                         onMarkUnplayed = onMarkUnplayed,
                                         vertical = true,
                                     )
-                                    if (!isAudio) {
-                                        val source = detail.mediaSources.firstOrNull()
-                                        if (source != null) {
-                                            MediaInfoSection(
-                                                mediaStreams = source.mediaStreams,
-                                                selectedAudioIndex = selectedAudioIndex,
-                                                selectedSubtitleIndex = selectedSubtitleIndex,
-                                                onAudioSelect = onAudioSelect,
-                                                onSubtitleSelect = onSubtitleSelect,
-                                                horizontalPadding = 0.dp,
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -503,7 +490,7 @@ private fun DetailContent(
                                     modifier = Modifier,
                                     contentAlignment = Alignment.TopStart,
                                     showActionButtons = false,
-                                    showMediaInfo = false,
+                                    showMediaInfo = true,
                                 )
                             }
                         } else if (isLoading) {
@@ -1489,7 +1476,7 @@ private fun DetailContentBody(
                         Text(
                             text = item.seriesName ?: "Series",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = Color.White.copy(alpha = 0.95f),
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1503,7 +1490,7 @@ private fun DetailContentBody(
                             Text(
                                 text = season,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                color = Color.White.copy(alpha = 0.65f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
