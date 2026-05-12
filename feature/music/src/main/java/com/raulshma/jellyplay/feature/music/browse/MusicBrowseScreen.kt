@@ -24,14 +24,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -48,6 +54,12 @@ fun MusicBrowseScreen(
     onPlaylistClick: (String) -> Unit,
     viewModel: MusicBrowseViewModel = hiltViewModel(),
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val gridMin = adaptiveInfo.gridMinSize(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+
     val tabs = listOf("Artists", "Albums", "Tracks", "Genres", "Playlists")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
@@ -80,11 +92,11 @@ fun MusicBrowseScreen(
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 when (page) {
-                    0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick)
-                    1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick)
-                    2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick)
-                    3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick)
-                    4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick)
+                    0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick, contentPad = contentPad)
+                    3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
                 }
             }
         }
@@ -95,11 +107,17 @@ fun MusicBrowseScreen(
 private fun ArtistsPage(
     viewModel: MusicBrowseViewModel,
     onItemClick: (String) -> Unit,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 150.dp,
+    spacing: Dp = 12.dp,
 ) {
     val artists = viewModel.artists.collectAsLazyPagingItems()
     PagedGrid(
         items = artists,
         itemKey = { it.id },
+        contentPad = contentPad,
+        gridMin = gridMin,
+        spacing = spacing,
     ) { artist ->
         ArtistCard(
             name = artist.name,
@@ -114,11 +132,17 @@ private fun ArtistsPage(
 private fun AlbumsPage(
     viewModel: MusicBrowseViewModel,
     onItemClick: (String) -> Unit,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 150.dp,
+    spacing: Dp = 12.dp,
 ) {
     val albums = viewModel.albums.collectAsLazyPagingItems()
     PagedGrid(
         items = albums,
         itemKey = { it.id },
+        contentPad = contentPad,
+        gridMin = gridMin,
+        spacing = spacing,
     ) { album ->
         AlbumCard(
             name = album.name,
@@ -135,6 +159,7 @@ private fun AlbumsPage(
 private fun TracksPage(
     viewModel: MusicBrowseViewModel,
     onItemClick: (String) -> Unit,
+    contentPad: Dp = 16.dp,
 ) {
     val tracks = viewModel.tracks.collectAsLazyPagingItems()
     Box(modifier = Modifier.fillMaxSize()) {
@@ -151,7 +176,7 @@ private fun TracksPage(
                     }
                 } else {
                     LazyColumn(
-                        contentPadding = PaddingValues(vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = contentPad, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -184,6 +209,9 @@ private fun TracksPage(
 private fun GenresPage(
     viewModel: MusicBrowseViewModel,
     onItemClick: (String) -> Unit,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 120.dp,
+    spacing: Dp = 8.dp,
 ) {
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     if (genres.isEmpty()) {
@@ -192,10 +220,10 @@ private fun GenresPage(
         }
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(120.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            columns = GridCells.Adaptive(gridMin),
+            contentPadding = PaddingValues(contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.fillMaxSize(),
         ) {
             items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
@@ -212,6 +240,9 @@ private fun GenresPage(
 private fun PlaylistsPage(
     viewModel: MusicBrowseViewModel,
     onItemClick: (String) -> Unit,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 160.dp,
+    spacing: Dp = 12.dp,
 ) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     if (playlists.isEmpty()) {
@@ -220,10 +251,10 @@ private fun PlaylistsPage(
         }
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(160.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            columns = GridCells.Adaptive(gridMin),
+            contentPadding = PaddingValues(contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.fillMaxSize(),
         ) {
             items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
@@ -244,6 +275,9 @@ private fun <T : Any> PagedGrid(
     items: androidx.paging.compose.LazyPagingItems<T>,
     itemKey: (T) -> Any,
     modifier: Modifier = Modifier,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 150.dp,
+    spacing: Dp = 12.dp,
     itemContent: @Composable (T) -> Unit,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -260,10 +294,10 @@ private fun <T : Any> PagedGrid(
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(150.dp),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        columns = GridCells.Adaptive(gridMin),
+                        contentPadding = PaddingValues(contentPad),
+                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(

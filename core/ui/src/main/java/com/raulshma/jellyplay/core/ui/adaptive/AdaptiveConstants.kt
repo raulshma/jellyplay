@@ -75,6 +75,14 @@ object AdaptiveBackdropHeight {
     val Tv: Dp = 380.dp
 }
 
+// ── Detail body max width (centered content on wide screens) ─────────────
+object AdaptiveDetailBodyMaxWidth {
+    val Compact: Dp = Dp.Infinity
+    val Medium: Dp = 680.dp
+    val Expanded: Dp = 840.dp
+    val Tv: Dp = Dp.Infinity
+}
+
 // ── Convenience helpers ──────────────────────────────────────────────────
 
 /**
@@ -144,4 +152,11 @@ fun AdaptiveInfo.settingsColumns(): Int = when (windowSizeClass) {
     WindowSizeClass.Expanded -> 2
     WindowSizeClass.Medium -> if (isLandscape) 2 else 1
     WindowSizeClass.Compact -> 1
+}
+
+fun AdaptiveInfo.detailBodyMaxWidth(isTv: Boolean = false): Dp = when {
+    isTv -> AdaptiveDetailBodyMaxWidth.Tv
+    windowSizeClass == WindowSizeClass.Expanded -> AdaptiveDetailBodyMaxWidth.Expanded
+    windowSizeClass == WindowSizeClass.Medium -> AdaptiveDetailBodyMaxWidth.Medium
+    else -> AdaptiveDetailBodyMaxWidth.Compact
 }

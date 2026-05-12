@@ -53,7 +53,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
@@ -78,6 +83,12 @@ fun ChannelsScreen(
         Color.Black,
         0.70f,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
@@ -122,7 +133,7 @@ fun ChannelsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 24.dp, end = 16.dp),
+                                .padding(start = contentPad, end = contentPad),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -168,7 +179,7 @@ fun ChannelsScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.5f),
                             modifier = Modifier.padding(
-                                horizontal = 24.dp,
+                                horizontal = contentPad,
                                 vertical = 8.dp,
                             ),
                         )
@@ -201,10 +212,6 @@ fun ChannelsScreen(
                         }
                     }
                 } else {
-                    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
-                    val contentPad = if (isTv) 48.dp else 16.dp
-                    val bottomPad = if (isTv) 80.dp else 100.dp
-
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -213,7 +220,7 @@ fun ChannelsScreen(
                             top = 8.dp,
                             bottom = bottomPad,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTv) 12.dp else 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
                         items(
                             items = viewModel.channels,

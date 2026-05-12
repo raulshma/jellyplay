@@ -44,7 +44,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 
@@ -60,6 +64,10 @@ fun PlaylistsScreen(
         hasError = false,
         networkStatus = networkStatus,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
 
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
@@ -83,7 +91,7 @@ fun PlaylistsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
+                        .padding(start = contentPad, end = contentPad, top = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onBack) {
@@ -114,6 +122,11 @@ fun PlaylistsScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = contentPad,
+                            end = contentPad,
+                            bottom = adaptiveInfo.bottomPadding(isTv),
+                        ),
                     ) {
                         items(viewModel.playlists.size, key = { viewModel.playlists[it].id }, contentType = { "playlist" }) { index ->
                             val playlist = viewModel.playlists[index]

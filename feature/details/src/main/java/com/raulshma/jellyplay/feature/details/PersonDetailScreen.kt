@@ -31,8 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,17 +81,23 @@ fun PersonDetailScreen(
                 )
             }
             else -> {
+                val adaptiveInfo = LocalAdaptiveInfo.current
+                val isTv = isTvDevice()
+                val contentPad = adaptiveInfo.contentPadding(isTv)
+                val gridMin = adaptiveInfo.gridMinSize(isTv)
+                val spacing = adaptiveInfo.itemSpacing(isTv)
+
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(120.dp),
+                    columns = GridCells.Adaptive(gridMin),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
+                        start = contentPad,
+                        end = contentPad,
                         top = padding.calculateTopPadding() + 16.dp,
-                        bottom = padding.calculateBottomPadding() + 16.dp,
+                        bottom = padding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
                     ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
                     itemsIndexed(items = viewModel.filmography, key = { _, it -> it.id }, contentType = { _, _ -> "mediaItem" }) { index, item ->
                         val visible = remember { mutableStateOf(false) }
