@@ -59,6 +59,14 @@
 -keepclassmembers class is.xyz.mpv.** { *; }
 -dontwarn is.xyz.mpv.**
 
+# LibVLC - JNI library, must keep all classes and methods
+-keep class org.videolan.libvlc.** { *; }
+-keep class org.videolan.medialibrary.** { *; }
+-keepclassmembers class org.videolan.libvlc.** { *; }
+-keepclassmembers class org.videolan.medialibrary.** { *; }
+-keep class org.videolan.** { *; }
+-dontwarn org.videolan.**
+
 # Media3 / ExoPlayer
 -keep class androidx.media3.session.** { *; }
 -keep class androidx.media3.exoplayer.** { *; }
