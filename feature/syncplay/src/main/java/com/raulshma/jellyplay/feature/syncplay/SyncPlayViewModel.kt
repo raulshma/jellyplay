@@ -21,7 +21,24 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
+data class ChatMessageEntry(
+    val userId: String,
+    val userName: String,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+) {
+    val formattedTime: String
+        get() = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(timestamp),
+            ZoneId.systemDefault()
+        ).format(DateTimeFormatter.ofPattern("HH:mm"))
+}
 
 data class PlayItemRequest(
     val itemId: String,
@@ -57,6 +74,9 @@ class SyncPlayViewModel @Inject constructor(
 
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
     val navigateToPlayer = _navigateToPlayer.asStateFlow()
+
+    private val _chatMessages = MutableStateFlow<List<ChatMessageEntry>>(emptyList())
+    val chatMessages = _chatMessages.asStateFlow()
 
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
@@ -123,6 +143,7 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = false
                     currentGroup = null
+                    _chatMessages.value = emptyList()
                     commandJob?.cancel()
                     lastHandledPlayingItemId = null
                     loadGroups()
@@ -197,6 +218,13 @@ class SyncPlayViewModel @Inject constructor(
                             loadCurrentGroup()
                         }
                     }
+                    is SyncPlayCommand.ChatMessage -> {
+                        _chatMessages.value = (_chatMessages.value + ChatMessageEntry(
+                            userId = command.userId,
+                            userName = command.userName,
+                            text = command.text,
+                        )).takeLast(200)
+                    }
                     is SyncPlayCommand.Notification -> {
                         _notifications.tryEmit(command.message)
                     }
@@ -249,6 +277,11 @@ class SyncPlayViewModel @Inject constructor(
 
     fun updateShowCreateDialog(show: Boolean) {
         showCreateDialog = show
+    }
+
+    fun sendChatMessage(text: String) {
+        if (text.isBlank()) return
+        syncPlayManager.sendChatMessage(text.trim())
     }
 
     fun refreshGroups() {
