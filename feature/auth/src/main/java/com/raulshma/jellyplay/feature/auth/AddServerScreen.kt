@@ -35,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -88,11 +91,15 @@ fun AddServerScreen(
             )
         },
     ) { padding ->
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val isTv = isTvDevice()
+        val contentPad = adaptiveInfo.contentPadding(isTv)
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
+                .padding(horizontal = contentPad, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             AnimatedVisibility(

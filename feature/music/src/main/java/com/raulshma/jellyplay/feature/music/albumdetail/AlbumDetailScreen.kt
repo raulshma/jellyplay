@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
@@ -101,6 +105,10 @@ private fun AlbumDetailContent(
 ) {
     val item = detail.item
 
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+
     Box(modifier = Modifier.fillMaxSize()) {
         MediaImage(
             url = getBackdropUrl(item.id),
@@ -149,7 +157,7 @@ private fun AlbumDetailContent(
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = contentPad)) {
                     Text(
                         text = item.name,
                         style = MaterialTheme.typography.headlineSmall,
@@ -163,7 +171,7 @@ private fun AlbumDetailContent(
                                 text = it,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable {
+                                modifier = Modifier.tvFocusable().clickable {
                                     // Navigate to artist if we have artist ID
                                 },
                             )
@@ -238,7 +246,7 @@ private fun TrackItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

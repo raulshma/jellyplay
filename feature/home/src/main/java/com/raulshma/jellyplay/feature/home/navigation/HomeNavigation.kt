@@ -17,6 +17,9 @@ fun EntryProviderScope<NavKey>.homeSection(
     entry<Route.Home> {
         HomeScreen(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onPlayClick = { itemId, mediaSourceId, startPosition ->
+                navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
+            },
             onSettingsClick = { navigator.navigate(Route.Settings) },
             onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
             onDownloadsClick = { navigator.navigate(Route.Downloads) },

@@ -143,6 +143,9 @@ fun AudioPlayerScreen(
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
+    val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
+    val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
+
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
@@ -201,55 +204,120 @@ fun AudioPlayerScreen(
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
                 )
 
-                Spacer(Modifier.weight(0.6f))
+                if (isExpanded) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 32.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AlbumArtwork(
+                                albumArtUrl = viewModel.albumArtUrl,
+                                albumArtBlurHash = viewModel.albumArtBlurHash,
+                                title = viewModel.title,
+                                scale = artworkScale.value,
+                                isExpanded = true,
+                            )
+                        }
 
-                AlbumArtwork(
-                    albumArtUrl = viewModel.albumArtUrl,
-                    albumArtBlurHash = viewModel.albumArtBlurHash,
-                    title = viewModel.title,
-                    scale = artworkScale.value,
-                )
+                        Spacer(Modifier.width(32.dp))
 
-                Spacer(Modifier.weight(0.5f))
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer { alpha = contentAlpha.value },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            TrackInfoSection(
+                                title = viewModel.title,
+                                artist = viewModel.artist,
+                            )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer { alpha = contentAlpha.value }
-                        .padding(horizontal = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    TrackInfoSection(
+                            Spacer(Modifier.height(28.dp))
+
+                            ProgressSlider(
+                                currentPosition = viewModel.currentPosition,
+                                duration = viewModel.duration,
+                                onSeek = { fraction ->
+                                    if (viewModel.duration > 0) {
+                                        viewModel.seekTo((fraction * viewModel.duration).toLong())
+                                    }
+                                },
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+
+                            TransportControls(
+                                isPlaying = viewModel.isPlaying,
+                                shuffleMode = viewModel.shuffleMode,
+                                repeatMode = viewModel.repeatMode,
+                                onTogglePlayPause = { viewModel.togglePlayPause() },
+                                onSkipPrevious = { viewModel.skipToPrevious() },
+                                onSkipNext = { viewModel.skipToNext() },
+                                onToggleShuffle = { viewModel.toggleShuffle() },
+                                onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(Modifier.weight(0.6f))
+
+                    AlbumArtwork(
+                        albumArtUrl = viewModel.albumArtUrl,
+                        albumArtBlurHash = viewModel.albumArtBlurHash,
                         title = viewModel.title,
-                        artist = viewModel.artist,
+                        scale = artworkScale.value,
+                        isExpanded = false,
                     )
 
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.weight(0.5f))
 
-                    ProgressSlider(
-                        currentPosition = viewModel.currentPosition,
-                        duration = viewModel.duration,
-                        onSeek = { fraction ->
-                            if (viewModel.duration > 0) {
-                                viewModel.seekTo((fraction * viewModel.duration).toLong())
-                            }
-                        },
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { alpha = contentAlpha.value }
+                            .padding(horizontal = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        TrackInfoSection(
+                            title = viewModel.title,
+                            artist = viewModel.artist,
+                        )
 
-                    Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(28.dp))
 
-                    TransportControls(
-                        isPlaying = viewModel.isPlaying,
-                        shuffleMode = viewModel.shuffleMode,
-                        repeatMode = viewModel.repeatMode,
-                        onTogglePlayPause = { viewModel.togglePlayPause() },
-                        onSkipPrevious = { viewModel.skipToPrevious() },
-                        onSkipNext = { viewModel.skipToNext() },
-                        onToggleShuffle = { viewModel.toggleShuffle() },
-                        onCycleRepeatMode = { viewModel.cycleRepeatMode() },
-                    )
+                        ProgressSlider(
+                            currentPosition = viewModel.currentPosition,
+                            duration = viewModel.duration,
+                            onSeek = { fraction ->
+                                if (viewModel.duration > 0) {
+                                    viewModel.seekTo((fraction * viewModel.duration).toLong())
+                                }
+                            },
+                        )
 
-                    Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(12.dp))
+
+                        TransportControls(
+                            isPlaying = viewModel.isPlaying,
+                            shuffleMode = viewModel.shuffleMode,
+                            repeatMode = viewModel.repeatMode,
+                            onTogglePlayPause = { viewModel.togglePlayPause() },
+                            onSkipPrevious = { viewModel.skipToPrevious() },
+                            onSkipNext = { viewModel.skipToNext() },
+                            onToggleShuffle = { viewModel.toggleShuffle() },
+                            onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+                    }
                 }
             }
         }
@@ -366,12 +434,11 @@ private fun AnimatedQueueItem(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onSelect,
             )
-            .tvFocusable()
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -745,10 +812,11 @@ private fun AlbumArtwork(
     albumArtBlurHash: String?,
     title: String,
     scale: Float,
+    isExpanded: Boolean,
 ) {
     Box(
         modifier = Modifier
-            .fillMaxWidth(0.75f)
+            .fillMaxWidth(if (isExpanded) 0.85f else 0.75f)
             .aspectRatio(1f)
             .scale(scale)
             .shadow(

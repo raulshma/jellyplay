@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -42,9 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @Composable
 fun PlaylistDetailScreen(
@@ -60,6 +65,10 @@ fun PlaylistDetailScreen(
         hasError = viewModel.error != null,
         networkStatus = networkStatus,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
 
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
@@ -83,7 +92,7 @@ fun PlaylistDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
+                        .padding(start = contentPad, end = contentPad, top = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onBack) {
@@ -126,6 +135,11 @@ fun PlaylistDetailScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = contentPad,
+                            end = contentPad,
+                            bottom = adaptiveInfo.bottomPadding(isTv),
+                        ),
                     ) {
                         items(viewModel.items.size, key = { viewModel.items[it].id }, contentType = { "playlistItem" }) { index ->
                             val item = viewModel.items[index]
@@ -149,7 +163,7 @@ private fun PlaylistTrackRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

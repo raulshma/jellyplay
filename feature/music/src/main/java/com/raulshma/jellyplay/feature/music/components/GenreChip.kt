@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.foundation.clickable
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -22,7 +23,7 @@ fun GenreChip(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .tvFocusable().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
         ),

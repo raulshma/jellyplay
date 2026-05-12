@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,7 @@ fun ArtistCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

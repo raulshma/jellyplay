@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,7 +91,7 @@ fun LibraryFilterSheet(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.12f))
-                        .clickable {
+                        .tvFocusable().clickable {
                             selectedMediaTypes = emptyList()
                             selectedGenres = emptyList()
                             selectedYears = emptyList()
@@ -250,7 +251,7 @@ private fun GlassFilterChip(
                 if (selected) Color.White
                 else Color.White.copy(alpha = 0.12f)
             )
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Row(

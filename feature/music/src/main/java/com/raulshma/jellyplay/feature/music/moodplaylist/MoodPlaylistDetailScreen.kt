@@ -34,7 +34,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.MoodPlaylist
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 
@@ -53,6 +57,10 @@ fun MoodPlaylistDetailScreen(
             viewModel.generatePlaylist(playlist)
         }
     }
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
 
     Scaffold(
         topBar = {
@@ -117,9 +125,9 @@ fun MoodPlaylistDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = padding.calculateTopPadding() + 8.dp,
-                        bottom = padding.calculateBottomPadding() + 88.dp,
-                        start = 16.dp,
-                        end = 16.dp,
+                        bottom = padding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
+                        start = contentPad,
+                        end = contentPad,
                     ),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -32,6 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -45,11 +49,15 @@ fun PinLockScreen(
     var pin by remember { mutableStateOf("") }
     val maxDigits = 4
 
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = contentPad),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -123,7 +131,7 @@ fun PinLockScreen(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(CircleShape)
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (pin.isNotEmpty()) {
                                             pin = pin.dropLast(1)
                                             onErrorClear()
@@ -145,7 +153,7 @@ fun PinLockScreen(
                                     .size(72.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable {
+                                    .tvFocusable().clickable {
                                         if (pin.length < maxDigits) {
                                             pin += key
                                             onErrorClear()

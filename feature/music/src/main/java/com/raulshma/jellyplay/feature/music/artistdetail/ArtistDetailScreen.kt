@@ -256,8 +256,7 @@ private fun AlbumCard(
     Column(
         modifier = Modifier
             .width(cardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(),
+            .tvFocusable().clickable(onClick = onClick),
     ) {
         Box(
             modifier = Modifier

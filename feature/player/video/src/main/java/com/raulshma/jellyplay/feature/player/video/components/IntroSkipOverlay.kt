@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -70,7 +71,7 @@ private fun SkipButtonOverlay(
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black.copy(alpha = 0.85f))
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                .clickable(onClick = onSkip)
+                .tvFocusable().clickable(onClick = onSkip)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Icon(

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -59,12 +60,18 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +85,12 @@ fun KidsHomeScreen(
     onItemClick: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
+
     var selectedGenre by remember { mutableStateOf<String?>(null) }
     var showSurprise by remember { mutableStateOf(false) }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
@@ -152,8 +165,8 @@ fun KidsHomeScreen(
                     if (genres.isNotEmpty()) {
                         item {
                             LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(horizontal = contentPad),
+                                horizontalArrangement = Arrangement.spacedBy(spacing),
                                 modifier = Modifier.padding(vertical = 8.dp),
                             ) {
                                 items(genres, key = { it }, contentType = { "genre" }) { genre ->
@@ -195,6 +208,7 @@ fun KidsHomeScreen(
                                     imageUrl = imageUrlBuilder(surpriseItem),
                                     fallbackUrls = fallbackImageUrlBuilder(surpriseItem),
                                     onClick = { onItemClick(surpriseItem.id) },
+                                    contentPadding = contentPad,
                                 )
                             }
                         }
@@ -207,6 +221,9 @@ fun KidsHomeScreen(
                             imageUrlBuilder = imageUrlBuilder,
                             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                             onItemClick = onItemClick,
+                            contentPadding = contentPad,
+                            spacing = spacing,
+                            cardWidth = cardWidth,
                         )
                     }
                 }
@@ -221,12 +238,13 @@ internal fun SurpriseMeCard(
     imageUrl: String,
     fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
+    contentPadding: Dp = 16.dp,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .clickable(onClick = onClick),
+            .padding(horizontal = contentPadding, vertical = 12.dp)
+            .tvFocusable().clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -278,6 +296,9 @@ private fun KidsSection(
     imageUrlBuilder: (MediaItem) -> String,
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
+    contentPadding: Dp = 16.dp,
+    spacing: Dp = 16.dp,
+    cardWidth: Dp = 160.dp,
 ) {
     Column(
         modifier = Modifier.padding(vertical = 12.dp),
@@ -286,11 +307,11 @@ private fun KidsSection(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = contentPadding, vertical = 8.dp),
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = contentPadding),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
         ) {
             items(items, key = { it.id }, contentType = { "mediaItem" }) { item ->
                 KidsPosterCard(
@@ -298,6 +319,7 @@ private fun KidsSection(
                     imageUrl = imageUrlBuilder(item),
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = { onItemClick(item.id) },
+                    cardWidth = cardWidth,
                 )
             }
         }
@@ -310,6 +332,7 @@ private fun KidsPosterCard(
     imageUrl: String,
     fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
+    cardWidth: Dp = 160.dp,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -321,12 +344,12 @@ private fun KidsPosterCard(
 
     Column(
         modifier = Modifier
-            .width(160.dp)
+            .width(cardWidth)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
+            .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -369,7 +392,7 @@ private fun IconButton(
 ) {
     Box(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .tvFocusable().clickable(onClick = onClick)
             .padding(8.dp),
         contentAlignment = Alignment.Center,
     ) {

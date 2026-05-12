@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -57,7 +58,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +80,9 @@ fun DownloadsScreen(
         hasError = false,
         networkStatus = networkStatus,
     )
+
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -98,7 +107,7 @@ fun DownloadsScreen(
                 "Storage used: ${viewModel.formatBytes(viewModel.totalStorageBytes)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = adaptiveInfo.contentPadding(isTv), end = adaptiveInfo.contentPadding(isTv), bottom = 8.dp),
             )
         }
 
@@ -115,8 +124,13 @@ fun DownloadsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(
+                    start = adaptiveInfo.contentPadding(isTv),
+                    end = adaptiveInfo.contentPadding(isTv),
+                    top = 8.dp,
+                    bottom = adaptiveInfo.bottomPadding(isTv),
+                ),
+                verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
             ) {
                 itemsIndexed(items = downloads, key = { _, it -> it.id }, contentType = { _, _ -> "downloadItem" }) { index, download ->
                     val visible = remember { mutableStateOf(false) }
@@ -178,7 +192,7 @@ private fun DownloadItemRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
+            .tvFocusable().clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
     ) {
         Row(
             modifier = Modifier

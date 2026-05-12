@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.raulshma.jellyplay"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.raulshma.jellyplay"
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 37
         versionCode = (project.findProperty("versionCode") as? String)?.toInt() ?: 1
         versionName = project.findProperty("versionName") as? String ?: "1.0"
 
