@@ -186,6 +186,30 @@ class SearchViewModel @Inject constructor(
     fun clearRequestResult() {
         _requestResult.value = null
     }
+
+    /**
+     * Pre-fetches Seerr detail data (details + ratings + recommendations) so the
+     * detail screen loads instantly.  Callers should show a loading animation on
+     * the card while this runs, then navigate when the returned job completes.
+     */
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getMovieDetails(tmdbId)
+                } else {
+                    seerrRepository.getTvDetails(tmdbId)
+                }
+                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                launch { seerrRepository.getRecommendations(tmdbId, type) }
+                launch { seerrRepository.getSimilar(tmdbId, type) }
+            } catch (_: Exception) {
+                // Detail screen will retry on failure
+            }
+            onDone()
+        }
+    }
 }
 
 data class RequestResult(

@@ -149,4 +149,28 @@ class SeerrDetailViewModel @Inject constructor(
         if (path == null) return null
         return "https://image.tmdb.org/t/p/original$path"
     }
+
+    /**
+     * Pre-fetches detail data for a related Seerr item so the destination detail
+     * screen loads instantly.  [onDone] is invoked on the main thread once the
+     * prefetch completes (success or failure).
+     */
+    fun prefetchRelatedDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getMovieDetails(tmdbId)
+                } else {
+                    seerrRepository.getTvDetails(tmdbId)
+                }
+                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                launch { seerrRepository.getRecommendations(tmdbId, type) }
+                launch { seerrRepository.getSimilar(tmdbId, type) }
+            } catch (_: Exception) {
+                // Detail screen will retry
+            }
+            onDone()
+        }
+    }
 }

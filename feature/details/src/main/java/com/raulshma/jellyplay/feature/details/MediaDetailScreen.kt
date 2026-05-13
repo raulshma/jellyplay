@@ -116,6 +116,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -165,6 +166,20 @@ fun MediaDetailScreen(
         val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
         var seerrRequestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
 
+        // Seerr card loading state for prefetch animation
+        val seerrLoadingState = rememberSeerrCardLoadingState()
+        val seerrPrefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
+            seerrLoadingState.startLoading(tmdbId)
+            viewModel.prefetchSeerrDetails(tmdbId, mediaType) {
+                seerrLoadingState.stopLoading(tmdbId)
+                onDone()
+            }
+        }
+
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides seerrPrefetchCallback,
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
+        ) {
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -226,6 +241,7 @@ fun MediaDetailScreen(
                 },
             )
         }
+        } // CompositionLocalProvider
     }
 }
 
@@ -1840,11 +1856,22 @@ private fun DetailContentBody(
                             val seerrItem = seerrRecommendations[index]
                             val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
                             val adaptiveInfo = LocalAdaptiveInfo.current
+                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
+                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
                                 onClick = {
-                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    if (loadingState != null && prefetch != null) {
+                                        loadingState.startLoading(seerrItem.id)
+                                        prefetch(seerrItem.id, seerrItem.mediaType) {
+                                            loadingState.stopLoading(seerrItem.id)
+                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    } else {
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    }
                                 },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
                                 modifier = Modifier.width(
@@ -1880,11 +1907,22 @@ private fun DetailContentBody(
                             val seerrItem = seerrSimilar[index]
                             val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
                             val adaptiveInfo = LocalAdaptiveInfo.current
+                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
+                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
                                 onClick = {
-                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    if (loadingState != null && prefetch != null) {
+                                        loadingState.startLoading(seerrItem.id)
+                                        prefetch(seerrItem.id, seerrItem.mediaType) {
+                                            loadingState.stopLoading(seerrItem.id)
+                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    } else {
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    }
                                 },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
                                 modifier = Modifier.width(
