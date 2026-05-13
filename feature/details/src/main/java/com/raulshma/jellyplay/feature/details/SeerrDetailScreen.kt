@@ -314,6 +314,15 @@ private fun SeerrDetailContent(
 
                             Spacer(Modifier.height(24.dp))
 
+                            MediaInfoCondensed(
+                                movieDetail = movieDetail,
+                                tvDetail = tvDetail,
+                                ratings = ratings,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(Modifier.height(24.dp))
+
                             SeerrActionButtons(
                                 movieDetail = movieDetail,
                                 tvDetail = tvDetail,
@@ -404,6 +413,15 @@ private fun SeerrDetailContent(
                                 }
                             }
                         }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        MediaInfoCondensed(
+                            movieDetail = movieDetail,
+                            tvDetail = tvDetail,
+                            ratings = ratings,
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Spacer(Modifier.height(24.dp))
 
@@ -535,6 +553,7 @@ private fun SeerrDetailBody(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = isTvDevice()
+    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
 
     Box(
@@ -547,10 +566,8 @@ private fun SeerrDetailBody(
                 .padding(bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(32.dp)
         ) {
-            // Ratings and Overview
+            // Overview Section
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                RatingsRow(ratings)
-
                 val overview = movieDetail?.overview ?: tvDetail?.overview ?: ""
                 if (overview.isNotBlank()) {
                     Text(
@@ -563,7 +580,7 @@ private fun SeerrDetailBody(
                         text = overview,
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White.copy(alpha = 0.85f),
-                        lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified // Default
+                        lineHeight = 24.sp
                     )
                 }
                 
@@ -596,25 +613,59 @@ private fun SeerrDetailBody(
                 WatchProvidersSection(usProviders, getPosterUrl)
             }
 
-            // Cast
-            val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
-            if (cast.isNotEmpty()) {
-                CastSection(cast, getPosterUrl)
-            }
+            if (isExpanded) {
+                // Two column layout for Cast/Videos and Media Details
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(32.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(32.dp)
+                    ) {
+                        // Cast
+                        val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
+                        if (cast.isNotEmpty()) {
+                            CastSection(cast, getPosterUrl)
+                        }
 
-            // Seasons (TV only)
-            if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
-                SeasonsSection(tvDetail.seasons, getPosterUrl)
-            }
+                        // Seasons (TV only)
+                        if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
+                            SeasonsSection(tvDetail.seasons, getPosterUrl)
+                        }
 
-            // Videos
-            val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
-            if (videos.isNotEmpty()) {
-                VideosSection(videos)
-            }
+                        // Videos
+                        val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
+                        if (videos.isNotEmpty()) {
+                            VideosSection(videos)
+                        }
+                    }
 
-            // Details Table
-            DetailsTable(movieDetail, tvDetail)
+                    Column(
+                        modifier = Modifier.width(300.dp),
+                        verticalArrangement = Arrangement.spacedBy(32.dp)
+                    ) {
+                        MediaInformationSection(movieDetail, tvDetail)
+                    }
+                }
+            } else {
+                // Stacked layout for compact screens
+                val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
+                if (cast.isNotEmpty()) {
+                    CastSection(cast, getPosterUrl)
+                }
+
+                if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
+                    SeasonsSection(tvDetail.seasons, getPosterUrl)
+                }
+
+                val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
+                if (videos.isNotEmpty()) {
+                    VideosSection(videos)
+                }
+
+                MediaInformationSection(movieDetail, tvDetail)
+            }
 
             // Recommendations
             if (recommendations.isNotEmpty()) {
@@ -1052,109 +1103,147 @@ private fun RatingsRow(ratings: SeerrRatings?) {
 }
 
 @Composable
-private fun DetailsTable(movie: SeerrMovieDetails?, tv: SeerrTvDetails?) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.US)
-
+private fun MediaInfoCondensed(
+    movieDetail: SeerrMovieDetails?,
+    tvDetail: SeerrTvDetails?,
+    ratings: SeerrRatings?,
+    modifier: Modifier = Modifier
+) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .padding(16.dp)
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        DetailRow("Status", movie?.status ?: tv?.status ?: "Unknown")
-        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
+        RatingsRow(ratings)
 
-        val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
-        DetailRow(
-            label = "Release Dates",
-            value = releaseDate ?: "Unknown",
-            icon = Icons.Default.Movie
-        )
-        
-        movie?.digitalReleaseDate?.let {
-            Spacer(Modifier.height(4.dp))
-            DetailRow(
-                label = "",
-                value = it,
-                icon = Icons.Default.Public
-            )
-        }
-
-        if (movie != null) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            DetailRow("Revenue", movie.revenue?.takeIf { it > 0 }?.let { currencyFormatter.format(it) } ?: "—")
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            DetailRow("Budget", movie.budget?.takeIf { it > 0 }?.let { currencyFormatter.format(it) } ?: "—")
-        }
-
-        val runtime = movie?.runtime ?: tv?.episodeRunTime?.firstOrNull()
-        if (runtime != null && runtime > 0) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            DetailRow("Runtime", "${runtime}m")
-        }
-
-        val language = movie?.originalLanguage ?: tv?.originalLanguage
-        if (language != null) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            DetailRow("Original Language", Locale(language).displayLanguage)
-        }
-
-        val productionCountries = movie?.productionCountries ?: emptyList()
-        if (productionCountries.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            val countryText = productionCountries.joinToString(", ") { country ->
-                val flag = getFlagEmoji(country.iso31661)
-                if (flag != null) "$flag ${country.name}" else country.name
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val releaseDate = movieDetail?.releaseDate ?: tvDetail?.firstAirDate
+            releaseDate?.take(4)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Medium
+                )
             }
-            DetailRow("Production Country", countryText)
-        }
 
-        val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
-        if (studios.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
-            DetailRow("Studios", studios.joinToString("\n"))
+            val runtime = movieDetail?.runtime ?: tvDetail?.episodeRunTime?.firstOrNull()
+            if (runtime != null && runtime > 0) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "${runtime}m",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            val genres = movieDetail?.genres ?: tvDetail?.genres ?: emptyList()
+            if (genres.isNotEmpty()) {
+                Text(
+                    text = genres.take(2).joinToString(", ") { it.name },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DetailRow(
+private fun MediaInformationSection(movie: SeerrMovieDetails?, tv: SeerrTvDetails?) {
+    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.US)
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Information",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.05f))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Icons.Default.Info)
+            
+            val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
+            MediaInfoRow("Release Date", releaseDate ?: "Unknown", Icons.Default.Event)
+            
+            if (movie != null) {
+                movie.revenue?.takeIf { it > 0 }?.let {
+                    MediaInfoRow("Revenue", currencyFormatter.format(it), Icons.Default.Payments)
+                }
+                movie.budget?.takeIf { it > 0 }?.let {
+                    MediaInfoRow("Budget", currencyFormatter.format(it), Icons.Default.AccountBalanceWallet)
+                }
+            }
+
+            val language = movie?.originalLanguage ?: tv?.originalLanguage
+            if (language != null) {
+                MediaInfoRow("Language", Locale(language).displayLanguage, Icons.Default.Language)
+            }
+
+            val productionCountries = movie?.productionCountries ?: emptyList()
+            if (productionCountries.isNotEmpty()) {
+                val countryText = productionCountries.joinToString(", ") { country ->
+                    val flag = getFlagEmoji(country.iso31661)
+                    if (flag != null) "$flag ${country.name}" else country.name
+                }
+                MediaInfoRow("Country", countryText, Icons.Default.Public)
+            }
+
+            val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
+            if (studios.isNotEmpty()) {
+                MediaInfoRow("Studios", studios.joinToString(", "), Icons.Default.Business)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaInfoRow(
     label: String,
     value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.width(140.dp)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = Color.White.copy(alpha = 0.4f)
         )
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.White.copy(alpha = 0.6f)
-                )
-                Spacer(Modifier.width(8.dp))
-            }
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.4f),
+                fontWeight = FontWeight.Medium
+            )
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.8f),
-                textAlign = TextAlign.End
+                color = Color.White.copy(alpha = 0.9f),
+                lineHeight = 20.sp
             )
         }
     }
