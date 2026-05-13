@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.QuickConnectInfo
+import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,14 @@ interface AuthRepository {
     suspend fun switchServer(serverId: String): Result<Unit>
 
     suspend fun login(serverAddress: String, username: String, password: String): Result<UserInfo>
+
+    suspend fun isQuickConnectEnabled(): Result<Boolean>
+
+    suspend fun initiateQuickConnect(): Result<QuickConnectInfo>
+
+    suspend fun pollQuickConnect(secret: String): Result<QuickConnectState>
+
+    suspend fun loginWithQuickConnect(serverAddress: String, secret: String): Result<UserInfo>
 
     suspend fun restoreSession(): Result<Unit>
 

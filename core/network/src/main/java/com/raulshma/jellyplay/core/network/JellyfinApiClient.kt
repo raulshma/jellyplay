@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.QuickConnectInfo
+import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.flow.Flow
@@ -46,6 +48,17 @@ interface JellyfinApiClient {
     suspend fun setUser(userInfo: UserInfo)
 
     suspend fun disconnect()
+
+    suspend fun isQuickConnectEnabled(): Result<Boolean>
+
+    suspend fun initiateQuickConnect(): Result<QuickConnectInfo>
+
+    suspend fun getQuickConnectState(secret: String): Result<QuickConnectState>
+
+    suspend fun authenticateWithQuickConnect(
+        serverInfo: ServerInfo,
+        secret: String,
+    ): Result<UserInfo>
 
     suspend fun getHomeSections(): Result<List<HomeSection>>
 
