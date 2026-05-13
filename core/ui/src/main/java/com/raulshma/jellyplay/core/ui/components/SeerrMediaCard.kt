@@ -68,7 +68,7 @@ fun SeerrMediaCard(
     Column(modifier = modifier) {
         Card(
             modifier = Modifier
-                .width(if (isTv) 180.dp else 140.dp)
+                .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
