@@ -275,7 +275,8 @@ data class SeerrImdbRating(
     val year: Int? = null,
     val rating: Float? = null,
     val url: String? = null,
-    val criticsScore: Int? = null,
+    val criticsScore: Float? = null,
+    val criticsScoreCount: Int? = null,
 )
 
 @Immutable
@@ -405,6 +406,56 @@ data class SeerrStatusResponse(
     val commitsBehind: Int = 0,
     val restartRequired: Boolean = false,
 )
+
+@Immutable
+@Serializable
+data class SeerrRadarrSettings(
+    val id: Int,
+    val name: String,
+    val hostname: String,
+    val port: Int,
+    val apiKey: String,
+    val useSsl: Boolean = false,
+    val baseUrl: String? = null,
+    val activeProfileId: Int? = null,
+    val activeDirectory: String? = null,
+    val is4k: Boolean = false,
+    val isDefault: Boolean = false,
+    val externalUrl: String? = null,
+) {
+    fun getFullUrl(): String {
+        if (!externalUrl.isNullOrBlank()) return externalUrl.trimEnd('/')
+        
+        val protocol = if (useSsl) "https" else "http"
+        val base = baseUrl?.trim('/')?.let { if (it.isNotEmpty()) "/$it" else "" } ?: ""
+        return "$protocol://$hostname:$port$base"
+    }
+}
+
+@Immutable
+@Serializable
+data class SeerrSonarrSettings(
+    val id: Int,
+    val name: String,
+    val hostname: String,
+    val port: Int,
+    val apiKey: String,
+    val useSsl: Boolean = false,
+    val baseUrl: String? = null,
+    val activeProfileId: Int? = null,
+    val activeDirectory: String? = null,
+    val is4k: Boolean = false,
+    val isDefault: Boolean = false,
+    val externalUrl: String? = null,
+) {
+    fun getFullUrl(): String {
+        if (!externalUrl.isNullOrBlank()) return externalUrl.trimEnd('/')
+        
+        val protocol = if (useSsl) "https" else "http"
+        val base = baseUrl?.trim('/')?.let { if (it.isNotEmpty()) "/$it" else "" } ?: ""
+        return "$protocol://$hostname:$port$base"
+    }
+}
 
 @Immutable
 @Serializable

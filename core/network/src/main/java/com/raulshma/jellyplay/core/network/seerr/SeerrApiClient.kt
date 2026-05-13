@@ -40,6 +40,12 @@ interface SeerrApiClient {
         tmdbId: Int,
     ): Result<SeerrRatings>
 
+    suspend fun getMovieRatingsCombined(
+        baseUrl: String,
+        apiKey: String,
+        tmdbId: Int,
+    ): Result<SeerrRatings>
+
     suspend fun getMovieRecommendations(
         baseUrl: String,
         apiKey: String,
@@ -76,4 +82,14 @@ interface SeerrApiClient {
         tvdbId: Int? = null,
         seasons: List<Int>? = null,
     ): Result<SeerrMediaRequest>
+
+    suspend fun getRadarrSettings(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrRadarrSettings>>
+
+    suspend fun getSonarrSettings(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrSonarrSettings>>
 }

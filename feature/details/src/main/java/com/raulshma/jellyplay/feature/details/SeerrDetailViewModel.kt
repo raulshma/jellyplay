@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -19,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val TAG = "SeerrDetailVM"
 
 @HiltViewModel
 class SeerrDetailViewModel @Inject constructor(
@@ -64,29 +67,33 @@ class SeerrDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            _ratings.value = null
             
             if (mediaType == "movie") {
                 seerrRepository.getMovieDetails(tmdbId).onSuccess {
                     _movieDetails.value = it
-                    _ratings.value = it.ratings
+                    updateRatings(it.ratings, it.voteAverage)
                 }.onFailure {
                     _error.value = it.message
                 }
             } else {
                 seerrRepository.getTvDetails(tmdbId).onSuccess {
                     _tvDetails.value = it
-                    _ratings.value = it.ratings
+                    updateRatings(it.ratings, it.voteAverage)
                 }.onFailure {
                     _error.value = it.message
                 }
             }
 
-            // Fetch ratings separately as well if not included
-            if (_ratings.value == null) {
-                seerrRepository.getRatings(tmdbId, mediaType).onSuccess {
-                    _ratings.value = it
+            // Fetch RT + IMDB ratings via Seerr server (/api/v1/movie/{id}/ratingscombined or /tv/{id}/ratings)
+            seerrRepository.getRatings(tmdbId, mediaType)
+                .onSuccess {
+                    Log.d(TAG, "Seerr ratings result: rt=${it.rt}, imdb=${it.imdb}")
+                    updateRatings(it, null)
                 }
-            }
+                .onFailure {
+                    Log.w(TAG, "Failed to fetch Seerr ratings: ${it.message}")
+                }
 
             // Load recommendations and similar
             val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
@@ -99,6 +106,17 @@ class SeerrDetailViewModel @Inject constructor(
 
             _isLoading.value = false
         }
+    }
+
+    private fun updateRatings(newRatings: SeerrRatings?, tmdbScore: Float?) {
+        val current = _ratings.value ?: SeerrRatings()
+        val merged = newRatings ?: current
+        
+        _ratings.value = merged.copy(
+            rt = merged.rt ?: current.rt,
+            imdb = merged.imdb ?: current.imdb,
+            tmdb = merged.tmdb ?: current.tmdb ?: tmdbScore?.let { com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating(rating = it) }
+        )
     }
 
     fun requestMedia(item: SeerrSearchItem, seasons: List<Int>? = null) {
