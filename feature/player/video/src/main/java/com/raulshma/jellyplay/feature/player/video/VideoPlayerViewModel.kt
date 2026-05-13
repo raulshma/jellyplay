@@ -16,6 +16,7 @@ import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -775,6 +776,10 @@ class VideoPlayerViewModel @Inject constructor(
 
     val isCastConnected: Boolean
         get() = castManager.isConnected
+
+    /** Reactive flow of cast session events — consumed by the UI to auto-trigger [castToDevice]. */
+    val castSessionEvents: kotlinx.coroutines.flow.SharedFlow<CastSessionEvent>
+        get() = castManager.sessionEvents
 
     val isInSyncPlaySession: Boolean
         get() = syncPlayController.isInSession
