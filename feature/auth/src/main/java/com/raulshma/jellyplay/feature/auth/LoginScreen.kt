@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun LoginScreen(
     serverAddress: String,
     onLoginSuccess: () -> Unit,
+    onQuickConnect: () -> Unit,
     onBack: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
@@ -199,6 +202,26 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(if (isLoggingIn) "Signing in..." else "Sign In")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AnimatedVisibility(
+                visible = contentVisible,
+                enter = fadeIn(tween(400, delayMillis = 300)) + slideInVertically(
+                    initialOffsetY = { it / 20 },
+                    animationSpec = tween(400, delayMillis = 300, easing = FastOutSlowInEasing),
+                ),
+            ) {
+                OutlinedButton(
+                    onClick = onQuickConnect,
+                    enabled = !isLoggingIn,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Quick Connect")
                 }
             }
         }

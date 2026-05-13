@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.QuickConnectInfo
+import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -130,6 +132,82 @@ class AuthRepositoryImpl @Inject constructor(
                     userId = user.id,
                     serverId = server.id,
                     name = user.name.ifBlank { username },
+                    accessToken = user.accessToken,
+                    primaryImageTag = user.primaryImageTag,
+                    maxParentalAgeRating = user.maxParentalAgeRating,
+                    enabledFolderIds = kotlinx.serialization.json.Json.encodeToString(
+                        user.enabledFolderIds
+                    ),
+                    lastConnected = System.currentTimeMillis(),
+                )
+                database.withTransaction {
+                    userDao.insertUser(userEntity)
+                    serverDao.updateServer(
+                        ServerEntity(
+                            id = server.id,
+                            name = server.name,
+                            address = server.address,
+                            userId = user.id,
+                            accessToken = user.accessToken,
+                            lastConnected = System.currentTimeMillis(),
+                        )
+                    )
+                }
+                preferencesStore.setActiveServer(server.id)
+                preferencesStore.setActiveUser(user.id)
+            }
+        }
+    }
+
+    override suspend fun isQuickConnectEnabled(): Result<Boolean> {
+        return apiClient.isQuickConnectEnabled()
+    }
+
+    override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> {
+        return apiClient.initiateQuickConnect()
+    }
+
+    override suspend fun pollQuickConnect(secret: String): Result<QuickConnectState> {
+        return apiClient.getQuickConnectState(secret)
+    }
+
+    override suspend fun loginWithQuickConnect(
+        serverAddress: String,
+        secret: String,
+    ): Result<UserInfo> {
+        val serverFromDb = serverDao.getAllServers().first()
+            .firstOrNull { server ->
+                val serverAddr = server.address.trim().trimEnd('/')
+                val normalizedAddress = serverAddress.trim().trimEnd('/').let {
+                    if (it.startsWith("http://") || it.startsWith("https://")) it
+                    else "https://$it"
+                }
+                serverAddr == normalizedAddress
+            }
+
+        val existingServerInfo = serverFromDb?.toServerInfo()
+
+        val serverInfo = existingServerInfo
+            ?: apiClient.currentServer.first()
+            ?: return Result.failure(Exception("Not connected to server"))
+
+        return apiClient.authenticateWithQuickConnect(serverInfo, secret).onSuccess { user ->
+            val server = apiClient.currentServer.first()
+            if (server != null) {
+                val existingServer = serverDao.getServerById(server.id)
+                if (existingServer == null) {
+                    serverDao.insertServer(
+                        ServerEntity(
+                            id = server.id,
+                            name = server.name,
+                            address = server.address,
+                        )
+                    )
+                }
+                val userEntity = UserEntity(
+                    userId = user.id,
+                    serverId = server.id,
+                    name = user.name,
                     accessToken = user.accessToken,
                     primaryImageTag = user.primaryImageTag,
                     maxParentalAgeRating = user.maxParentalAgeRating,

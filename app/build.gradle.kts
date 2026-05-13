@@ -50,6 +50,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "JellyPlay Dev")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -69,6 +73,7 @@ android {
     }
     buildFeatures {
         compose = true
+        resValues = true
     }
 
     packaging {

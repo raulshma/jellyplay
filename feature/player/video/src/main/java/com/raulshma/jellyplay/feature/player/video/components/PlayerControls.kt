@@ -95,7 +95,6 @@ internal fun PlayerControls(
     nightModeEnabled: Boolean,
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
-    isCasting: Boolean,
     isOcrRunning: Boolean,
     introTimestamps: IntroTimestamps? = null,
     creditTimestamps: CreditTimestamps? = null,
@@ -134,7 +133,6 @@ internal fun PlayerControls(
     onAudioDelayClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
-    onCastClick: () -> Unit,
     onOcrClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
@@ -456,7 +454,7 @@ internal fun PlayerControls(
                             )
                         }
 
-                        CastButton(isCasting = isCasting, onCast = onCastClick)
+                        CastButton()
                     }
                 }
             }
