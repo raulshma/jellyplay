@@ -4,8 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
+import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
-import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -32,7 +32,7 @@ abstract class NetworkModule {
     @Binds
     @Singleton
     abstract fun bindSeerrApiClient(
-        impl: SeerrApiClientImpl,
+        impl: ResilientSeerrApiClient,
     ): SeerrApiClient
 
     companion object {
