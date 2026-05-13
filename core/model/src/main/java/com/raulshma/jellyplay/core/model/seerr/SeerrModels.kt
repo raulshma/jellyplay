@@ -96,7 +96,9 @@ data class SeerrMovieDetails(
     val overview: String? = null,
     val popularity: Float? = null,
     val productionCompanies: List<SeerrProductionCompany> = emptyList(),
+    val productionCountries: List<SeerrProductionCountry> = emptyList(),
     val releaseDate: String? = null,
+    val digitalReleaseDate: String? = null,
     val revenue: Long? = null,
     val runtime: Int? = null,
     val spokenLanguages: List<SeerrSpokenLanguage> = emptyList(),
@@ -111,6 +113,7 @@ data class SeerrMovieDetails(
     val externalIds: SeerrExternalIds? = null,
     val mediaInfo: SeerrMediaInfo? = null,
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
+    val ratings: SeerrRatings? = null,
 )
 
 @Immutable
@@ -145,6 +148,52 @@ data class SeerrTvDetails(
     val externalIds: SeerrExternalIds? = null,
     val mediaInfo: SeerrMediaInfo? = null,
     val networks: List<SeerrProductionCompany> = emptyList(),
+    val ratings: SeerrRatings? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrProductionCountry(
+    val iso31661: String = "",
+    val name: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrRatings(
+    val imdb: SeerrImdbRating? = null,
+    val rt: SeerrRtRating? = null,
+    val tmdb: SeerrTmdbRating? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrTmdbRating(
+    val title: String? = null,
+    val year: Int? = null,
+    val rating: Float? = null,
+    val url: String? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrImdbRating(
+    val title: String? = null,
+    val year: Int? = null,
+    val rating: Float? = null,
+    val url: String? = null,
+    val criticsScore: Int? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrRtRating(
+    val title: String? = null,
+    val criticsRating: String? = null,
+    val criticsScore: Int? = null,
+    val audienceRating: String? = null,
+    val audienceScore: Int? = null,
+    val url: String? = null,
 )
 
 @Immutable

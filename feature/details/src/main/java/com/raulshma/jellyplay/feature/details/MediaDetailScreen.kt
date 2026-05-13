@@ -130,6 +130,7 @@ fun MediaDetailScreen(
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -206,6 +207,7 @@ fun MediaDetailScreen(
             isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
             getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
             onSeerrRequest = { seerrRequestItem = it },
+            onNavigate = onNavigate,
         )
 
         // Seerr request dialog
@@ -263,6 +265,7 @@ private fun DetailContent(
     isSeerrRecommendationsEnabled: Boolean = false,
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 ) {
     val item = detail?.item
     val scrollState = rememberScrollState()
@@ -537,6 +540,7 @@ private fun DetailContent(
                                     isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
                                 )
                             }
                         } else if (isLoading) {
@@ -647,6 +651,7 @@ private fun DetailContent(
                                     isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
                                 )
                             }
                         } else if (isLoading) {
@@ -1498,6 +1503,7 @@ private fun DetailContentBody(
     isSeerrRecommendationsEnabled: Boolean = false,
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 ) {
     val showContent = true
 
@@ -1837,7 +1843,9 @@ private fun DetailContentBody(
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
-                                onClick = { /* Seerr detail - future */ },
+                                onClick = {
+                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
                                 modifier = Modifier.width(
                                     if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
@@ -1875,7 +1883,9 @@ private fun DetailContentBody(
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
-                                onClick = { /* Seerr detail - future */ },
+                                onClick = {
+                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
                                 modifier = Modifier.width(
                                     if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp

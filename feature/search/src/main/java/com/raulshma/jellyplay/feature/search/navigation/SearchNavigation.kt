@@ -12,6 +12,7 @@ fun EntryProviderScope<NavKey>.searchSection(
     entry<Route.Search> {
         SearchScreen(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onNavigate = { route -> navigator.navigate(route) },
         )
     }
 }

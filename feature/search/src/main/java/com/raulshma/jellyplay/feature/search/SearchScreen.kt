@@ -77,6 +77,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -87,6 +88,7 @@ import java.util.Locale
 @Composable
 fun SearchScreen(
     onItemClick: (String) -> Unit,
+    onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
@@ -484,7 +486,9 @@ fun SearchScreen(
                                             SeerrMediaCard(
                                                 item = seerrItem,
                                                 imageUrl = posterUrl,
-                                                onClick = { /* Seerr detail - future */ },
+                                                onClick = {
+                                                    onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                                },
                                                 onRequestClick = { requestItem = seerrItem },
                                             )
                                         }

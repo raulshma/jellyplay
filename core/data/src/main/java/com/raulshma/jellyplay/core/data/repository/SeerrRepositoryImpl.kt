@@ -46,6 +46,16 @@ class SeerrRepositoryImpl @Inject constructor(
         return seerrApiClient.getTvDetails(serverUrl, apiKey, tmdbId)
     }
 
+    override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return if (mediaType == "movie") {
+            seerrApiClient.getMovieRatings(serverUrl, apiKey, tmdbId)
+        } else {
+            seerrApiClient.getTvRatings(serverUrl, apiKey, tmdbId)
+        }
+    }
+
     override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> {
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
