@@ -49,8 +49,9 @@ class SeerrRepositoryImpl @Inject constructor(
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> {
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
+
         return if (mediaType == "movie") {
-            seerrApiClient.getMovieRatings(serverUrl, apiKey, tmdbId)
+            seerrApiClient.getMovieRatingsCombined(serverUrl, apiKey, tmdbId)
         } else {
             seerrApiClient.getTvRatings(serverUrl, apiKey, tmdbId)
         }
@@ -80,6 +81,18 @@ class SeerrRepositoryImpl @Inject constructor(
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
         return seerrApiClient.requestMedia(serverUrl, apiKey, mediaType, tmdbId, seasons = seasons)
+    }
+
+    override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRadarrSettings(serverUrl, apiKey)
+    }
+
+    override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getSonarrSettings(serverUrl, apiKey)
     }
 
     override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected

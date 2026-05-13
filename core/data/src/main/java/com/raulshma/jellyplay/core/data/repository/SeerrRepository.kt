@@ -22,6 +22,10 @@ interface SeerrRepository {
 
     suspend fun requestMedia(tmdbId: Int, mediaType: String, seasons: List<Int>? = null): Result<SeerrMediaRequest>
 
+    suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>>
+
+    suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>>
+
     fun isConnected(): Flow<Boolean>
 
     fun isEnabled(): Flow<Boolean>

@@ -1067,7 +1067,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                 }
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = String.format(Locale.US, "%.1f", imdb.rating ?: 0f),
+                    text = String.format(Locale.US, "%.1f", imdb.criticsScore ?: imdb.rating ?: 0f),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

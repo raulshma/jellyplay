@@ -161,6 +161,20 @@ class SeerrApiClientImpl @Inject constructor(
         return parseAndMap(executeRequest(request))
     }
 
+    override suspend fun getMovieRatingsCombined(
+        baseUrl: String,
+        apiKey: String,
+        tmdbId: Int,
+    ): Result<SeerrRatings> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/movie/$tmdbId/ratingscombined"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
     override suspend fun getMovieRecommendations(
         baseUrl: String,
         apiKey: String,
@@ -242,6 +256,32 @@ class SeerrApiClientImpl @Inject constructor(
             .url(buildUrl(baseUrl, "/request"))
             .withApiKey(apiKey)
             .post(body)
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getRadarrSettings(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrRadarrSettings>> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/settings/radarr"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getSonarrSettings(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrSonarrSettings>> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/settings/sonarr"))
+            .withApiKey(apiKey)
+            .get()
             .build()
 
         return parseAndMap(executeRequest(request))
