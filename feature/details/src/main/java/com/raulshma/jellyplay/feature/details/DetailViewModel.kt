@@ -15,22 +15,33 @@ import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -38,6 +49,7 @@ class DetailViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val seerrRepository: SeerrRepository,
 ) : ViewModel() {
 
     val preferences = preferencesStore.preferences
@@ -45,6 +57,23 @@ class DetailViewModel @Inject constructor(
 
     private val _detail = mutableStateOf<MediaDetail?>(null)
     val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail
+
+    // ── Seerr Integration State ──
+    private val _seerrRecommendations = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _seerrRecommendations.asStateFlow()
+
+    private val _seerrSimilar = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar.asStateFlow()
+
+    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    private val _seerrRequestResult = MutableStateFlow<SeerrRequestResult?>(null)
+    val seerrRequestResult: StateFlow<SeerrRequestResult?> = _seerrRequestResult.asStateFlow()
+
     private val _isLoading = mutableStateOf(false)
     val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
     private val _error = mutableStateOf<String?>(null)
@@ -154,6 +183,9 @@ class DetailViewModel @Inject constructor(
                     } else {
                         smartPlayTarget = null
                     }
+
+                    // Load Seerr recommendations/similar if enabled
+                    loadSeerrData(detail)
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load details" }
             _isLoading.value = false
@@ -366,4 +398,86 @@ class DetailViewModel @Inject constructor(
             workRequest,
         )
     }
+
+    // ── Seerr Integration ──
+
+    private fun loadSeerrData(detail: MediaDetail) {
+        viewModelScope.launch {
+            // Reset
+            _seerrRecommendations.value = emptyList()
+            _seerrSimilar.value = emptyList()
+
+            val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
+            val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
+            if (!connected || !enabled) return@launch
+
+            val mediaType = detail.item.mediaType
+            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
+
+            // Resolve TMDB ID from external URLs
+            val tmdbId = resolveTmdbId(detail)
+            if (tmdbId == null) return@launch
+
+            // Fetch recommendations and similar in parallel
+            coroutineScope {
+                val recsDeferred = async {
+                    seerrRepository.getRecommendations(tmdbId, mediaType)
+                        .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                }
+                val similarDeferred = async {
+                    seerrRepository.getSimilar(tmdbId, mediaType)
+                        .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                }
+                _seerrRecommendations.value = recsDeferred.await().results.take(20)
+                _seerrSimilar.value = similarDeferred.await().results.take(20)
+            }
+        }
+    }
+
+    private fun resolveTmdbId(detail: MediaDetail): Int? {
+        // Try provider IDs first (most reliable)
+        val providerIds = detail.providerIds
+        providerIds["tmdb"]?.toIntOrNull()?.let { return it }
+        providerIds["tmdbid"]?.toIntOrNull()?.let { return it }
+
+        // Fallback: try to find TMDB ID from external URLs
+        for (url in detail.externalUrls) {
+            if (url.url.contains("themoviedb.org") || url.url.contains("themoviedb")) {
+                val regex = Regex("""/(\\d+)(?:$|/|\?)""")
+                val match = regex.find(url.url)
+                if (match != null) {
+                    return match.groupValues[1].toIntOrNull()
+                }
+            }
+        }
+        return null
+    }
+
+    fun getSeerrPosterUrl(posterPath: String?): String? =
+        posterPath?.let { buildPosterUrl(it) }
+
+    fun requestSeerrMedia(item: SeerrSearchItem, seasons: List<Int>? = null) {
+        viewModelScope.launch {
+            _seerrRequestResult.value = SeerrRequestResult(isLoading = true)
+            seerrRepository.requestMedia(
+                mediaType = item.mediaType,
+                tmdbId = item.id,
+                seasons = seasons,
+            ).onSuccess {
+                _seerrRequestResult.value = SeerrRequestResult(success = true)
+            }.onFailure {
+                _seerrRequestResult.value = SeerrRequestResult(error = it.message ?: "Request failed")
+            }
+        }
+    }
+
+    fun clearSeerrRequestResult() {
+        _seerrRequestResult.value = null
+    }
 }
+
+data class SeerrRequestResult(
+    val isLoading: Boolean = false,
+    val success: Boolean? = null,
+    val error: String? = null,
+)
