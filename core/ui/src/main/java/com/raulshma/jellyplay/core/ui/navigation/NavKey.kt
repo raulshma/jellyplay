@@ -22,6 +22,7 @@ sealed class Route : NavKey {
     @Serializable data object LiveTv : Route()
 
     @Serializable data class MediaDetail(val itemId: String) : Route()
+    @Serializable data class SeerrDetail(val tmdbId: Int, val mediaType: String) : Route()
     @Serializable data class PersonDetail(val personId: String) : Route()
 
     @Serializable data class VideoPlayer(

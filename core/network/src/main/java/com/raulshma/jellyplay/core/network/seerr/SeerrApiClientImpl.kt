@@ -133,6 +133,34 @@ class SeerrApiClientImpl @Inject constructor(
         return parseAndMap(executeRequest(request))
     }
 
+    override suspend fun getMovieRatings(
+        baseUrl: String,
+        apiKey: String,
+        tmdbId: Int,
+    ): Result<SeerrRatings> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/movie/$tmdbId/ratings"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getTvRatings(
+        baseUrl: String,
+        apiKey: String,
+        tmdbId: Int,
+    ): Result<SeerrRatings> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/tv/$tmdbId/ratings"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
     override suspend fun getMovieRecommendations(
         baseUrl: String,
         apiKey: String,

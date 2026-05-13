@@ -7,10 +7,20 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.details.CollectionDetailScreen
 import com.raulshma.jellyplay.feature.details.MediaDetailScreen
 import com.raulshma.jellyplay.feature.details.PersonDetailScreen
+import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
 
 fun EntryProviderScope<NavKey>.detailsSection(
     navigator: Navigator,
 ) {
+    entry<Route.SeerrDetail> { key ->
+        SeerrDetailScreen(
+            tmdbId = key.tmdbId,
+            mediaType = key.mediaType,
+            onNavigate = { route -> navigator.navigate(route) },
+            onBack = { navigator.goBack() }
+        )
+    }
+
     entry<Route.MediaDetail> { key ->
         MediaDetailScreen(
             itemId = key.itemId,
@@ -31,6 +41,7 @@ fun EntryProviderScope<NavKey>.detailsSection(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onNavigateToSeries = { seriesId -> navigator.navigate(Route.MediaDetail(seriesId)) },
+            onNavigate = { route -> navigator.navigate(route) },
             onBack = { navigator.goBack() },
         )
     }
