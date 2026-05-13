@@ -1833,11 +1833,15 @@ private fun DetailContentBody(
                         ) { index ->
                             val seerrItem = seerrRecommendations[index]
                             val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            val adaptiveInfo = LocalAdaptiveInfo.current
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
                                 onClick = { /* Seerr detail - future */ },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
+                                modifier = Modifier.width(
+                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                ),
                             )
                         }
                     }
@@ -1867,11 +1871,15 @@ private fun DetailContentBody(
                         ) { index ->
                             val seerrItem = seerrSimilar[index]
                             val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            val adaptiveInfo = LocalAdaptiveInfo.current
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = posterUrl,
                                 onClick = { /* Seerr detail - future */ },
                                 onRequestClick = { onSeerrRequest(seerrItem) },
+                                modifier = Modifier.width(
+                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                ),
                             )
                         }
                     }

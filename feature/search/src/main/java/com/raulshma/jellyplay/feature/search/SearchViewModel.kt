@@ -74,7 +74,7 @@ class SearchViewModel @Inject constructor(
     private val queryFlow = MutableStateFlow("")
 
     val pagedResults: Flow<PagingData<MediaItem>> = queryFlow
-        .debounce(300)
+        .debounce(400)
         .distinctUntilChanged()
         .flatMapLatest { currentQuery ->
             if (currentQuery.isBlank()) {
