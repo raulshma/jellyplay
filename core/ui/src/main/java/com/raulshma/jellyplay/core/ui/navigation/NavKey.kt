@@ -40,6 +40,7 @@ sealed class Route : NavKey {
 
     @Serializable data object ServerManagement : Route()
     @Serializable data object UserManagement : Route()
+    @Serializable data object SeerrSettings : Route()
 
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()

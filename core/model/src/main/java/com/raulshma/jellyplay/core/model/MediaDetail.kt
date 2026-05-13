@@ -15,6 +15,7 @@ data class MediaDetail(
     val relatedItems: List<MediaItem> = emptyList(),
     val mediaSources: List<MediaSource> = emptyList(),
     val externalUrls: List<ExternalUrl> = emptyList(),
+    val providerIds: Map<String, String> = emptyMap(),
     val studios: List<StudioInfo> = emptyList(),
     val tagItems: List<TagInfo> = emptyList(),
 )

@@ -111,8 +111,11 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -153,6 +156,14 @@ fun MediaDetailScreen(
     ) {
         val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
 
+        // Seerr integration state
+        val seerrRecommendations by viewModel.seerrRecommendations.collectAsStateWithLifecycle()
+        val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
+        val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
+        val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
+        val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
+        var seerrRequestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
+
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -189,7 +200,30 @@ fun MediaDetailScreen(
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
             onBack = onBack,
+            seerrRecommendations = seerrRecommendations,
+            seerrSimilar = seerrSimilar,
+            isSeerrConnected = isSeerrConnected,
+            isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+            getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
+            onSeerrRequest = { seerrRequestItem = it },
         )
+
+        // Seerr request dialog
+        seerrRequestItem?.let { item ->
+            SeerrRequestDialog(
+                item = item,
+                isRequesting = seerrRequestResult?.isLoading == true,
+                requestSuccess = seerrRequestResult?.success,
+                requestError = seerrRequestResult?.error,
+                onConfirm = { seasons ->
+                    viewModel.requestSeerrMedia(item, seasons)
+                },
+                onDismiss = {
+                    seerrRequestItem = null
+                    viewModel.clearSeerrRequestResult()
+                },
+            )
+        }
     }
 }
 
@@ -223,6 +257,12 @@ private fun DetailContent(
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
     onBack: () -> Unit,
+    seerrRecommendations: List<SeerrSearchItem> = emptyList(),
+    seerrSimilar: List<SeerrSearchItem> = emptyList(),
+    isSeerrConnected: Boolean = false,
+    isSeerrRecommendationsEnabled: Boolean = false,
+    getSeerrPosterUrl: (String?) -> String? = { null },
+    onSeerrRequest: (SeerrSearchItem) -> Unit = {},
 ) {
     val item = detail?.item
     val scrollState = rememberScrollState()
@@ -491,6 +531,12 @@ private fun DetailContent(
                                     contentAlignment = Alignment.TopStart,
                                     showActionButtons = false,
                                     showMediaInfo = true,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
                                 )
                             }
                         } else if (isLoading) {
@@ -595,6 +641,12 @@ private fun DetailContent(
                                     onItemClick = onItemClick,
                                     onPersonClick = onPersonClick,
                                     onNavigateToSeries = onNavigateToSeries,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
                                 )
                             }
                         } else if (isLoading) {
@@ -1440,6 +1492,12 @@ private fun DetailContentBody(
     contentAlignment: Alignment = Alignment.TopCenter,
     showActionButtons: Boolean = true,
     showMediaInfo: Boolean = true,
+    seerrRecommendations: List<SeerrSearchItem> = emptyList(),
+    seerrSimilar: List<SeerrSearchItem> = emptyList(),
+    isSeerrConnected: Boolean = false,
+    isSeerrRecommendationsEnabled: Boolean = false,
+    getSeerrPosterUrl: (String?) -> String? = { null },
+    onSeerrRequest: (SeerrSearchItem) -> Unit = {},
 ) {
     val showContent = true
 
@@ -1746,6 +1804,74 @@ private fun DetailContentBody(
                                 modifier = Modifier.width(
                                     if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                                 ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Seerr Recommendations Section ──
+        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+                Column {
+                    Text(
+                        text = "Seerr Recommendations",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = seerrRecommendations.size,
+                            key = { index -> "seerr_rec_${seerrRecommendations[index].id}" },
+                            contentType = { "seerrRecItem" },
+                        ) { index ->
+                            val seerrItem = seerrRecommendations[index]
+                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = posterUrl,
+                                onClick = { /* Seerr detail - future */ },
+                                onRequestClick = { onSeerrRequest(seerrItem) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Seerr Similar Section ──
+        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrSimilar.isNotEmpty()) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 9) {
+                Column {
+                    Text(
+                        text = "Seerr Similar",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = seerrSimilar.size,
+                            key = { index -> "seerr_sim_${seerrSimilar[index].id}" },
+                            contentType = { "seerrSimItem" },
+                        ) { index ->
+                            val seerrItem = seerrSimilar[index]
+                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = posterUrl,
+                                onClick = { /* Seerr detail - future */ },
+                                onRequestClick = { onSeerrRequest(seerrItem) },
                             )
                         }
                     }

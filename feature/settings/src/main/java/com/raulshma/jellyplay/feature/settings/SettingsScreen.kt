@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Gesture
@@ -136,6 +137,7 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onServerManagement: () -> Unit = {},
     onUserManagement: () -> Unit = {},
+    onSeerrSettings: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -261,12 +263,30 @@ fun SettingsScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 AnimatedSettingsEntrance(5, visibleItemCount) {
-                    SettingsSectionHeader(title = "Video Player")
+                    SettingsSectionHeader(title = "Integrations")
                 }
             }
 
             item {
                 AnimatedSettingsEntrance(6, visibleItemCount) {
+                    SettingListItem(
+                        icon = Icons.Default.Extension,
+                        title = "Seerr",
+                        subtitle = "Media request and discovery manager",
+                        onClick = onSeerrSettings,
+                    )
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                AnimatedSettingsEntrance(7, visibleItemCount) {
+                    SettingsSectionHeader(title = "Video Player")
+                }
+            }
+
+            item {
+                AnimatedSettingsEntrance(8, visibleItemCount) {
                     SettingListItem(
                         icon = Icons.Default.PlayCircle,
                         title = "Player Engine",
@@ -278,7 +298,7 @@ fun SettingsScreen(
             }
 
             item {
-                AnimatedSettingsEntrance(7, visibleItemCount) {
+                AnimatedSettingsEntrance(9, visibleItemCount) {
                     SettingListItem(
                         icon = Icons.Default.FastForward,
                         title = "Seek Duration",
@@ -290,7 +310,7 @@ fun SettingsScreen(
             }
 
             item {
-                AnimatedSettingsEntrance(8, visibleItemCount) {
+                AnimatedSettingsEntrance(10, visibleItemCount) {
                     SettingListItem(
                         icon = Icons.Default.ScreenLockLandscape,
                         title = "Orientation",
@@ -302,7 +322,7 @@ fun SettingsScreen(
             }
 
             item {
-                AnimatedSettingsEntrance(9, visibleItemCount) {
+                AnimatedSettingsEntrance(11, visibleItemCount) {
                     SettingListItem(
                         icon = Icons.Default.Timer,
                         title = "Controls Timeout",
@@ -314,7 +334,7 @@ fun SettingsScreen(
             }
 
             item {
-                AnimatedSettingsEntrance(10, visibleItemCount) {
+                AnimatedSettingsEntrance(12, visibleItemCount) {
                     SettingToggleItem(
                         icon = Icons.Default.Gesture,
                         title = "Gestures",
