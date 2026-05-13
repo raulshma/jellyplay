@@ -68,7 +68,11 @@ class SeerrDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
             _ratings.value = null
-            
+            _movieDetails.value = null
+            _tvDetails.value = null
+            _seerrRecommendations.value = emptyList()
+            _seerrSimilar.value = emptyList()
+
             if (mediaType == "movie") {
                 seerrRepository.getMovieDetails(tmdbId).onSuccess {
                     _movieDetails.value = it

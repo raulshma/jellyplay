@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
+import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
@@ -715,7 +716,9 @@ private fun SeerrHorizontalSection(
                     onClick = {
                         onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
                     },
-                    modifier = Modifier.width(150.dp)
+                    modifier = Modifier.width(
+                        LocalAdaptiveInfo.current.rowCardWidth(isTvDevice())
+                    )
                 )
             }
         }
@@ -1024,59 +1027,73 @@ private fun VideosSection(
 private fun RatingsRow(ratings: SeerrRatings?) {
     if (ratings == null) return
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // Rotten Tomatoes
-        ratings.rt?.let { rt ->
+    // Build a list of only valid (non-null) rating items
+    val ratingItems = mutableListOf<@Composable () -> Unit>()
+
+    // Rotten Tomatoes Critics
+    ratings.rt?.criticsScore?.let { score ->
+        ratingItems.add {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "🍅", modifier = Modifier.padding(end = 4.dp))
                 Text(
-                    text = "${rt.criticsScore}%",
+                    text = "$score%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Spacer(Modifier.width(8.dp))
+            }
+        }
+    }
+
+    // Rotten Tomatoes Audience
+    ratings.rt?.audienceScore?.let { score ->
+        ratingItems.add {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "🍿", modifier = Modifier.padding(end = 4.dp))
                 Text(
-                    text = "${rt.audienceScore}%",
+                    text = "$score%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
         }
+    }
 
-        // IMDb
-        ratings.imdb?.let { imdb ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFFF5C518), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
+    // IMDb
+    val imdbRating = ratings.imdb
+    if (imdbRating != null) {
+        val imdbScore = imdbRating.criticsScore ?: imdbRating.rating
+        if (imdbScore != null) {
+            ratingItems.add {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFF5C518), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "IMDb",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = Color.Black
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "IMDb",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = Color.Black
+                        text = String.format(Locale.US, "%.1f", imdbScore),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 }
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = String.format(Locale.US, "%.1f", imdb.criticsScore ?: imdb.rating ?: 0f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
             }
         }
+    }
 
-        // TMDb
-        ratings.tmdb?.let { tmdb ->
+    // TMDb
+    ratings.tmdb?.rating?.let { rating ->
+        ratingItems.add {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -1092,13 +1109,25 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                 }
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "${(tmdb.rating?.times(10))?.toInt()}%",
+                    text = "${(rating * 10).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
         }
+    }
+
+    if (ratingItems.isEmpty()) return
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+    ) {
+        ratingItems.forEach { it() }
     }
 }
 
@@ -1173,10 +1202,7 @@ private fun MediaInformationSection(movie: SeerrMovieDetails?, tv: SeerrTvDetail
 
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.05f))
-                .padding(16.dp),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Icons.Default.Info)
