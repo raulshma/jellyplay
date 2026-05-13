@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.auth.AddServerScreen
 import com.raulshma.jellyplay.feature.auth.LoginScreen
+import com.raulshma.jellyplay.feature.auth.QuickConnectScreen
 import com.raulshma.jellyplay.feature.auth.ServerListScreen
 import com.raulshma.jellyplay.feature.auth.UserSelectionScreen
 
@@ -38,6 +39,14 @@ fun EntryProviderScope<NavKey>.authSection(
     }
     entry<Route.Login> { key ->
         LoginScreen(
+            serverAddress = key.serverAddress,
+            onLoginSuccess = { onAuthenticated() },
+            onQuickConnect = { navigator.navigate(Route.QuickConnect(key.serverAddress)) },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.QuickConnect> { key ->
+        QuickConnectScreen(
             serverAddress = key.serverAddress,
             onLoginSuccess = { onAuthenticated() },
             onBack = { navigator.goBack() },

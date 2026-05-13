@@ -9,6 +9,7 @@ sealed class Route : NavKey {
     @Serializable data object ServerList : Route()
     @Serializable data object AddServer : Route()
     @Serializable data class Login(val serverAddress: String) : Route()
+    @Serializable data class QuickConnect(val serverAddress: String) : Route()
     @Serializable data class UserSelection(
         val serverId: String,
         val serverAddress: String,

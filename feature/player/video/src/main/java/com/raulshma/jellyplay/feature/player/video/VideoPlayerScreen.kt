@@ -63,6 +63,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
+import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -117,7 +118,6 @@ fun VideoPlayerScreen(
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
-    var isCasting by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     
 
@@ -597,7 +597,6 @@ fun VideoPlayerScreen(
             nightModeEnabled = uiState.nightModeEnabled,
             nightModeStrength = uiState.nightModeStrength,
             audioPassthrough = uiState.audioPassthrough,
-            isCasting = isCasting,
             isOcrRunning = uiState.isOcrRunning,
             introTimestamps = uiState.introTimestamps,
             creditTimestamps = uiState.creditTimestamps,
@@ -639,7 +638,6 @@ fun VideoPlayerScreen(
             onAudioDelayClick = { currentSheet = PlayerSheet.AudioDelay },
             onDecoderClick = { currentSheet = PlayerSheet.Decoder },
             onPassthroughClick = { viewModel.setAudioPassthrough(!uiState.audioPassthrough) },
-            onCastClick = { viewModel.castToDevice() },
             onOcrClick = {
                 val bitmap = viewModel.capturePlayerViewBitmap()
                 viewModel.captureOcrSubtitle(bitmap)
@@ -715,18 +713,13 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        while (true) {
-            try {
-                val castContext = com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                isCasting = castContext.sessionManager.currentCastSession?.isConnected == true
-            } catch (_: Exception) {
-                isCasting = false
+        viewModel.castSessionEvents.collect { event ->
+            when (event) {
+                is CastSessionEvent.Connected -> viewModel.castToDevice()
+                is CastSessionEvent.Disconnected -> { /* local playback continues */ }
             }
-            delay(2000)
         }
     }
-
-    
 
     LaunchedEffect(Unit) {
         viewModel.syncPlayNotifications.collect { message ->

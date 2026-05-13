@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
     implementation(libs.play.services.cast.framework)
+    implementation(libs.mediarouter)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

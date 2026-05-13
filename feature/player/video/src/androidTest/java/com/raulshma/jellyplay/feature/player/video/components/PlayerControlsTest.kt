@@ -42,7 +42,6 @@ class PlayerControlsTest {
         nightModeEnabled: Boolean = false,
         nightModeStrength: EffectStrength = EffectStrength.MODERATE,
         audioPassthrough: Boolean = false,
-        isCasting: Boolean = false,
         isOcrRunning: Boolean = false,
     ) {
         composeTestRule.setContent {
@@ -60,7 +59,6 @@ class PlayerControlsTest {
                     nightModeEnabled = nightModeEnabled,
                     nightModeStrength = nightModeStrength,
                     audioPassthrough = audioPassthrough,
-                    isCasting = isCasting,
                     isOcrRunning = isOcrRunning,
                     currentAspectRatio = currentAspectRatio,
                     detectedAspectRatio = detectedAspectRatio,
@@ -93,7 +91,6 @@ class PlayerControlsTest {
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onCastClick = {},
                     onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
@@ -314,7 +311,6 @@ class PlayerControlsTest {
                     dialogueBoostEnabled = false,
                     nightModeEnabled = false,
                     audioPassthrough = false,
-                    isCasting = false,
                     isOcrRunning = false,
                     currentAspectRatio = AspectRatio.AUTO,
                     detectedAspectRatio = null,
@@ -341,7 +337,6 @@ class PlayerControlsTest {
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onCastClick = {},
                     onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
@@ -367,7 +362,6 @@ class PlayerControlsTest {
                     dialogueBoostEnabled = false,
                     nightModeEnabled = false,
                     audioPassthrough = false,
-                    isCasting = false,
                     isOcrRunning = false,
                     currentAspectRatio = AspectRatio.AUTO,
                     detectedAspectRatio = null,
@@ -394,7 +388,6 @@ class PlayerControlsTest {
                     onAudioDelayClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onCastClick = {},
                     onOcrClick = {},
                     onSubtitleDownloadClick = {},
                 )
