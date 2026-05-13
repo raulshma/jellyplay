@@ -6,10 +6,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,19 +29,18 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -319,6 +320,15 @@ private fun SeerrDetailContent(
                                 onRequestClick = onRequestClick,
                                 modifier = Modifier.fillMaxWidth()
                             )
+
+                            Spacer(Modifier.height(24.dp))
+
+                            ExternalLinksRow(
+                                tmdbId = movieDetail?.id ?: tvDetail?.id ?: 0,
+                                imdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId,
+                                tvdbId = tvDetail?.externalIds?.tvdbId,
+                                mediaType = if (movieDetail != null) "movie" else "tv"
+                            )
                         }
 
                         // Right column: details
@@ -358,12 +368,32 @@ private fun SeerrDetailContent(
                             }
                             Spacer(Modifier.width(16.dp))
                             Column {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    
+                                    val contentRating = tvDetail?.contentRatings?.results?.find { it.iso31661 == "US" }?.rating
+                                    if (contentRating != null) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Surface(
+                                            color = Color.Transparent,
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = contentRating,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.White.copy(alpha = 0.8f),
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                                 val tagline = movieDetail?.tagline ?: tvDetail?.tagline
                                 tagline?.takeIf { it.isNotBlank() }?.let {
                                     Text(
@@ -536,6 +566,51 @@ private fun SeerrDetailBody(
                         lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified // Default
                     )
                 }
+                
+                val keywords = movieDetail?.keywords ?: tvDetail?.keywords ?: emptyList()
+                if (keywords.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        keywords.take(10).forEach { keyword ->
+                            SuggestionChip(
+                                onClick = { },
+                                label = { Text(keyword.name, fontSize = 12.sp) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = Color.White.copy(alpha = 0.1f),
+                                    labelColor = Color.White.copy(alpha = 0.7f)
+                                ),
+                                border = null
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Watch Providers
+            val watchProviders = movieDetail?.watchProviders ?: tvDetail?.watchProviders ?: emptyList()
+            val usProviders = watchProviders.find { it.iso31661 == "US" }
+            if (usProviders != null && (usProviders.flatrate.isNotEmpty() || usProviders.buy.isNotEmpty())) {
+                WatchProvidersSection(usProviders, getPosterUrl)
+            }
+
+            // Cast
+            val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
+            if (cast.isNotEmpty()) {
+                CastSection(cast, getPosterUrl)
+            }
+
+            // Seasons (TV only)
+            if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
+                SeasonsSection(tvDetail.seasons, getPosterUrl)
+            }
+
+            // Videos
+            val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
+            if (videos.isNotEmpty()) {
+                VideosSection(videos)
             }
 
             // Details Table
@@ -591,6 +666,304 @@ private fun SeerrHorizontalSection(
                     },
                     modifier = Modifier.width(150.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExternalLinksRow(
+    tmdbId: Int,
+    imdbId: String?,
+    tvdbId: Int?,
+    mediaType: String,
+) {
+    val uriHandler = LocalUriHandler.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // TMDB
+        SuggestionChip(
+            onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
+            label = { Text("TMDB", fontWeight = FontWeight.Bold) },
+            colors = SuggestionChipDefaults.suggestionChipColors(
+                containerColor = Color(0xFF01B4E4).copy(alpha = 0.2f),
+                labelColor = Color(0xFF01B4E4)
+            ),
+            border = null
+        )
+
+        if (imdbId != null) {
+            SuggestionChip(
+                onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
+                label = { Text("IMDb", fontWeight = FontWeight.Bold) },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = Color(0xFFF5C518).copy(alpha = 0.2f),
+                    labelColor = Color(0xFFF5C518)
+                ),
+                border = null
+            )
+        }
+
+        if (tvdbId != null) {
+            SuggestionChip(
+                onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
+                label = { Text("TVDB", fontWeight = FontWeight.Bold) },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = Color(0xFF32A852).copy(alpha = 0.2f),
+                    labelColor = Color(0xFF32A852)
+                ),
+                border = null
+            )
+        }
+    }
+}
+
+@Composable
+private fun WatchProvidersSection(
+    providers: SeerrWatchProviderRegion,
+    getLogoUrl: (String?) -> String?,
+) {
+    val allProviders = (providers.flatrate + providers.buy).distinctBy { it.providerId }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Watch Now",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            allProviders.forEach { provider ->
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    MediaImage(
+                        url = getLogoUrl(provider.logoPath) ?: "",
+                        contentDescription = provider.providerName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CastSection(
+    cast: List<Any>, // Can be SeerrCast or SeerrAggregateCast
+    getProfileUrl: (String?) -> String?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Cast",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(cast) { member ->
+                val name: String
+                val character: String
+                val profilePath: String?
+
+                if (member is SeerrAggregateCast) {
+                    name = member.name
+                    character = member.roles.firstOrNull()?.character ?: ""
+                    profilePath = member.profilePath
+                } else if (member is SeerrCast) {
+                    name = member.name
+                    character = member.character ?: ""
+                    profilePath = member.profilePath
+                } else return@items
+
+                Column(
+                    modifier = Modifier.width(100.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        MediaImage(
+                            url = getProfileUrl(profilePath) ?: "",
+                            contentDescription = name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = character,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonsSection(
+    seasons: List<SeerrSeason>,
+    getPosterUrl: (String?) -> String?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Seasons",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(seasons.sortedByDescending { it.seasonNumber }) { season ->
+                Column(modifier = Modifier.width(120.dp)) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f / 3f),
+                        shape = RoundedCornerShape(8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        MediaImage(
+                            url = getPosterUrl(season.posterPath) ?: "",
+                            contentDescription = season.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = season.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${season.episodeCount} Episodes",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideosSection(
+    videos: List<SeerrRelatedVideo>,
+) {
+    val uriHandler = LocalUriHandler.current
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Videos",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(videos) { video ->
+                val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
+                    "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
+                } else null
+
+                Card(
+                    modifier = Modifier
+                        .width(240.dp)
+                        .aspectRatio(16f / 9f)
+                        .clickable {
+                            if (video.site?.lowercase() == "youtube") {
+                                uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")
+                            }
+                        },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (thumbnailUrl != null) {
+                            MediaImage(
+                                url = thumbnailUrl,
+                                contentDescription = video.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.DarkGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                                        startY = 100f
+                                    )
+                                )
+                        )
+                        
+                        Text(
+                            text = video.name ?: "Video",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        
+                        Icon(
+                            Icons.Default.PlayCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.align(Alignment.Center).size(48.dp),
+                            tint = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -713,6 +1086,12 @@ private fun DetailsTable(movie: SeerrMovieDetails?, tv: SeerrTvDetails?) {
             DetailRow("Revenue", movie.revenue?.takeIf { it > 0 }?.let { currencyFormatter.format(it) } ?: "—")
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
             DetailRow("Budget", movie.budget?.takeIf { it > 0 }?.let { currencyFormatter.format(it) } ?: "—")
+        }
+
+        val runtime = movie?.runtime ?: tv?.episodeRunTime?.firstOrNull()
+        if (runtime != null && runtime > 0) {
+            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.1f))
+            DetailRow("Runtime", "${runtime}m")
         }
 
         val language = movie?.originalLanguage ?: tv?.originalLanguage
