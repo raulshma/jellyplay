@@ -114,6 +114,8 @@ data class SeerrMovieDetails(
     val mediaInfo: SeerrMediaInfo? = null,
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     val ratings: SeerrRatings? = null,
+    val keywords: List<SeerrKeyword> = emptyList(),
+    val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
 )
 
 @Immutable
@@ -145,10 +147,101 @@ data class SeerrTvDetails(
     val voteAverage: Float? = null,
     val voteCount: Int? = null,
     val credits: SeerrCredits? = null,
+    val aggregateCredits: SeerrAggregateCredits? = null,
     val externalIds: SeerrExternalIds? = null,
     val mediaInfo: SeerrMediaInfo? = null,
     val networks: List<SeerrProductionCompany> = emptyList(),
     val ratings: SeerrRatings? = null,
+    val keywords: List<SeerrKeyword> = emptyList(),
+    val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
+    val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
+    val contentRatings: SeerrContentRatingsResponse? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrContentRatingsResponse(
+    val results: List<SeerrContentRating> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrContentRating(
+    val iso31661: String = "",
+    val rating: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrKeyword(
+    val id: Int = 0,
+    val name: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrWatchProviderRegion(
+    val iso31661: String = "",
+    val link: String? = null,
+    val flatrate: List<SeerrWatchProvider> = emptyList(),
+    val buy: List<SeerrWatchProvider> = emptyList(),
+    val rent: List<SeerrWatchProvider> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrWatchProvider(
+    val displayPriority: Int = 0,
+    val logoPath: String? = null,
+    val providerId: Int = 0,
+    val providerName: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrAggregateCredits(
+    val cast: List<SeerrAggregateCast> = emptyList(),
+    val crew: List<SeerrAggregateCrew> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrAggregateCast(
+    val id: Int = 0,
+    val name: String = "",
+    val originalName: String? = null,
+    val profilePath: String? = null,
+    val roles: List<SeerrRole> = emptyList(),
+    val totalEpisodeCount: Int = 0,
+    val order: Int = 0,
+)
+
+@Immutable
+@Serializable
+data class SeerrAggregateCrew(
+    val id: Int = 0,
+    val name: String = "",
+    val originalName: String? = null,
+    val profilePath: String? = null,
+    val jobs: List<SeerrJob> = emptyList(),
+    val totalEpisodeCount: Int = 0,
+    val department: String? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrRole(
+    val creditId: String = "",
+    val character: String = "",
+    val episodeCount: Int = 0,
+)
+
+@Immutable
+@Serializable
+data class SeerrJob(
+    val creditId: String = "",
+    val job: String = "",
+    val episodeCount: Int = 0,
 )
 
 @Immutable
