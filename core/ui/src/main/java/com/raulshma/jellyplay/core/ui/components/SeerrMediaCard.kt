@@ -1,8 +1,16 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -12,7 +20,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -23,11 +30,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -45,16 +54,54 @@ fun SeerrMediaCard(
     item: SeerrSearchItem,
     imageUrl: String?,
     onClick: () -> Unit,
-    onRequestClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onRequestClick: (() -> Unit)? = null,
+    isLoading: Boolean = false,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Unique loading animation: pulsing scale + glow border + shimmer sweep
+    val pulseScale = remember { Animatable(1f) }
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            pulseScale.animateTo(
+                targetValue = 0.97f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+            )
+        } else {
+            pulseScale.snapTo(1f)
+        }
+    }
+
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
+        targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
         animationSpec = tween(150),
         label = "seerrCardScale",
+    )
+
+    // Shimmer sweep for loading state
+    val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = -500f,
+        targetValue = 1500f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "seerrShimmerOffset",
+    )
+
+    // Pulsing glow border alpha
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "seerrGlowAlpha",
     )
 
     val mediaStatus = item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
@@ -65,6 +112,9 @@ fun SeerrMediaCard(
             mediaStatus == SeerrMediaStatus.PROCESSING
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
+    val cardShape = RoundedCornerShape(12.dp)
+    val glowColor = MaterialTheme.colorScheme.primary
+
     Column(modifier = modifier) {
         Card(
             modifier = Modifier
@@ -73,14 +123,36 @@ fun SeerrMediaCard(
                     scaleX = scale
                     scaleY = scale
                 }
+                .then(
+                    if (isLoading) {
+                        Modifier.border(
+                            width = (1.5).dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    glowColor.copy(alpha = glowAlpha * 0.6f),
+                                    glowColor.copy(alpha = glowAlpha),
+                                    glowColor.copy(alpha = glowAlpha * 0.6f),
+                                ),
+                                start = Offset.Zero,
+                                end = Offset(1000f, 1500f),
+                            ),
+                            shape = cardShape,
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
                 .tvFocusable()
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
+                    enabled = !isLoading,
                 ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
+            shape = cardShape,
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isLoading) 12.dp else if (isTv) 12.dp else 4.dp
+            ),
         ) {
             Box {
                 if (imageUrl != null) {
@@ -108,71 +180,94 @@ fun SeerrMediaCard(
                     }
                 }
 
-                // Gradient overlay at bottom
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f),
-                                ),
-                            )
-                        )
-                )
-
-                // Availability status badge
-                val badgeColor = when {
-                    isAvailable -> Color(0xFF4CAF50)
-                    isPending -> Color(0xFFFFA726)
-                    hasRequest -> Color(0xFF42A5F5)
-                    else -> Color.Transparent
-                }
-
-                if (badgeColor != Color.Transparent) {
+                // Loading shimmer overlay on the poster
+                if (isLoading) {
+                    val shimmerBrush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.0f),
+                            Color.White.copy(alpha = 0.18f),
+                            Color.White.copy(alpha = 0.0f),
+                        ),
+                        start = Offset(shimmerOffset, 0f),
+                        end = Offset(shimmerOffset + 400f, 400f),
+                    )
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .background(
-                                badgeColor.copy(alpha = 0.9f),
-                                RoundedCornerShape(6.dp),
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = when {
-                                isAvailable -> "✓"
-                                isPending -> "⏳"
-                                hasRequest -> "→"
-                                else -> ""
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                        )
-                    }
+                            .matchParentSize()
+                            .clip(cardShape)
+                            .background(shimmerBrush)
+                    )
                 }
 
-                // Request action button (only when not available and not yet requested)
-                if (onRequestClick != null && !isAvailable && !hasRequest) {
-                    IconButton(
-                        onClick = onRequestClick,
+                // Gradient overlay at bottom (hide during loading)
+                if (!isLoading) {
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 4.dp, bottom = 4.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Black.copy(alpha = 0.6f))
-                            .tvFocusable(),
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Request",
-                            tint = Color.White,
-                            modifier = Modifier.padding(2.dp),
-                        )
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.5f),
+                                    ),
+                                )
+                            )
+                    )
+                }
+
+                // Availability status badge (hide during loading)
+                if (!isLoading) {
+                    val badgeColor = when {
+                        isAvailable -> Color(0xFF4CAF50)
+                        isPending -> Color(0xFFFFA726)
+                        hasRequest -> Color(0xFF42A5F5)
+                        else -> Color.Transparent
+                    }
+
+                    if (badgeColor != Color.Transparent) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .background(
+                                    badgeColor.copy(alpha = 0.9f),
+                                    RoundedCornerShape(6.dp),
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = when {
+                                    isAvailable -> "✓"
+                                    isPending -> "⏳"
+                                    hasRequest -> "→"
+                                    else -> ""
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
+                    }
+
+                    // Request action button (only when not available and not yet requested)
+                    if (onRequestClick != null && !isAvailable && !hasRequest) {
+                        IconButton(
+                            onClick = onRequestClick,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 4.dp, bottom = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .tvFocusable(),
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Request",
+                                tint = Color.White,
+                                modifier = Modifier.padding(2.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -187,13 +282,13 @@ fun SeerrMediaCard(
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White.copy(alpha = 0.9f),
+                color = Color.White.copy(alpha = if (isLoading) 0.5f else 0.9f),
             )
             if (item.year != null) {
                 Text(
                     text = item.year.toString(),
                     style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = Color.White.copy(alpha = if (isLoading) 0.3f else 0.55f),
                 )
             }
         }

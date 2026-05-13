@@ -76,6 +76,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -93,6 +94,7 @@ fun SearchScreen(
 ) {
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val seerrLoadingState = rememberSeerrCardLoadingState()
 
     val query = viewModel.query
     val filters by viewModel.filters.collectAsStateWithLifecycle()
@@ -486,8 +488,13 @@ fun SearchScreen(
                                             SeerrMediaCard(
                                                 item = seerrItem,
                                                 imageUrl = posterUrl,
+                                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
                                                 onClick = {
-                                                    onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                                    seerrLoadingState.startLoading(seerrItem.id)
+                                                    viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
+                                                        seerrLoadingState.stopLoading(seerrItem.id)
+                                                        onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                                    }
                                                 },
                                                 onRequestClick = { requestItem = seerrItem },
                                             )

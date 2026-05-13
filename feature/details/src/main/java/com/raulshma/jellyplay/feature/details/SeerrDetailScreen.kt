@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -86,6 +87,19 @@ fun SeerrDetailScreen(
         dynamicTheming = preferences.dynamicTheming,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
+        val seerrLoadingState = rememberSeerrCardLoadingState()
+        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
+            seerrLoadingState.startLoading(tmdbId)
+            viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
+                seerrLoadingState.stopLoading(tmdbId)
+                onDone()
+            }
+        }
+
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides prefetchCallback,
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
+        ) {
 
         Box(modifier = Modifier.fillMaxSize()) {
             when {
@@ -159,6 +173,7 @@ fun SeerrDetailScreen(
                 }
             }
         }
+        } // CompositionLocalProvider
     }
 }
 
@@ -698,6 +713,8 @@ private fun SeerrHorizontalSection(
     getPosterUrl: (String?) -> String?,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
 ) {
+    val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+    val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = title,
@@ -713,8 +730,17 @@ private fun SeerrHorizontalSection(
                 SeerrMediaCard(
                     item = item,
                     imageUrl = getPosterUrl(item.posterPath),
+                    isLoading = loadingState?.isLoading(item.id) == true,
                     onClick = {
-                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
+                        if (loadingState != null && prefetch != null) {
+                            loadingState.startLoading(item.id)
+                            prefetch(item.id, item.mediaType) {
+                                loadingState.stopLoading(item.id)
+                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
+                            }
+                        } else {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
+                        }
                     },
                     modifier = Modifier.width(
                         LocalAdaptiveInfo.current.rowCardWidth(isTvDevice())
