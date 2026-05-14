@@ -364,7 +364,7 @@ fun HomeScreen(
                                             itemInfo != null
                                         }
                                     }
-                                    var hasBeenVisible by remember { mutableStateOf(isSectionVisible) }
+                                    var hasBeenVisible by rememberSaveable { mutableStateOf(isSectionVisible) }
                                     if (isSectionVisible) hasBeenVisible = true
 
                                     val sectionModifier = Modifier
