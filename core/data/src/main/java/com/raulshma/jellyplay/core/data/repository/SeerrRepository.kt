@@ -56,5 +56,15 @@ interface SeerrRepository {
 
     fun isRecommendationsEnabled(): Flow<Boolean>
 
+    fun isDiscoverEnabled(): Flow<Boolean>
+
     fun getPreferences(): Flow<SeerrPreferences>
+
+    // ── Discover endpoints ──
+
+    suspend fun getTrending(page: Int = 1): Result<SeerrSearchResponse>
+
+    suspend fun getDiscoverMovies(page: Int = 1, primaryReleaseDateGte: String? = null): Result<SeerrSearchResponse>
+
+    suspend fun getDiscoverTv(page: Int = 1, firstAirDateGte: String? = null): Result<SeerrSearchResponse>
 }

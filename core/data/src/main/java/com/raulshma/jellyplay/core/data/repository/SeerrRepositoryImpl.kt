@@ -159,5 +159,27 @@ class SeerrRepositoryImpl @Inject constructor(
 
     override fun isRecommendationsEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.recommendationsEnabled }
 
+    override fun isDiscoverEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.discoverEnabled }
+
     override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
+
+    // ── Discover endpoints ──
+
+    override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTrending(serverUrl, apiKey, page)
+    }
+
+    override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverMovies(serverUrl, apiKey, page, primaryReleaseDateGte)
+    }
+
+    override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverTv(serverUrl, apiKey, page, firstAirDateGte)
+    }
 }

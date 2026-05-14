@@ -23,6 +23,9 @@ fun EntryProviderScope<NavKey>.homeSection(
             onSettingsClick = { navigator.navigate(Route.Settings) },
             onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
             onDownloadsClick = { navigator.navigate(Route.Downloads) },
+            onSeerrItemClick = { tmdbId, mediaType ->
+                navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
+            },
             homeMode = homeMode,
             onModeChange = onModeChange,
             musicContent = musicContent,

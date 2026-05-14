@@ -116,6 +116,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
+    onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit = {},
     musicContent: @Composable () -> Unit = {},
@@ -420,6 +421,23 @@ fun HomeScreen(
                                             modifier = sectionModifier,
                                         )
                                     }
+                                    }
+                                }
+
+                                // Seerr Discover Section
+                                if (viewModel.discoverEnabled && viewModel.discoverSections.isNotEmpty()) {
+                                    item(key = "seerr_discover") {
+                                        DiscoverContent(
+                                            discoverSections = viewModel.discoverSections,
+                                            onNavigateToDetail = { tmdbId, mediaType ->
+                                                saveHomeScrollPosition()
+                                                onSeerrItemClick(tmdbId, mediaType)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(backgroundColor)
+                                                .padding(top = 16.dp),
+                                        )
                                     }
                                 }
                             }

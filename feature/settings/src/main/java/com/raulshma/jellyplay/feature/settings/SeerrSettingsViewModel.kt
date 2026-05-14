@@ -103,6 +103,30 @@ class SeerrSettingsViewModel @Inject constructor(
         viewModelScope.launch { seerrPreferencesStore.setRecommendationsEnabled(enabled) }
     }
 
+    fun setDiscoverEnabled(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverEnabled(enabled) }
+    }
+
+    fun setDiscoverTrending(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverTrending(enabled) }
+    }
+
+    fun setDiscoverPopularMovies(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverPopularMovies(enabled) }
+    }
+
+    fun setDiscoverPopularTv(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverPopularTv(enabled) }
+    }
+
+    fun setDiscoverUpcomingMovies(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverUpcomingMovies(enabled) }
+    }
+
+    fun setDiscoverUpcomingTv(enabled: Boolean) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverUpcomingTv(enabled) }
+    }
+
     fun disconnect() {
         viewModelScope.launch {
             seerrPreferencesStore.disconnect()
