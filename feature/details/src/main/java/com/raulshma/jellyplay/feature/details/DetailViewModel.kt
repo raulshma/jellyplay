@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
@@ -85,6 +86,10 @@ class DetailViewModel @Inject constructor(
 
     private val _isLoadingSeerrServices = MutableStateFlow(false)
     val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+
+    // Seerr TV seasons for the request dialog (fetched on-demand per item)
+    private val _seerrTvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
+    val seerrTvSeasons: StateFlow<List<SeerrSeason>> = _seerrTvSeasons.asStateFlow()
 
     private val _isLoading = mutableStateOf(false)
     val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
@@ -494,27 +499,43 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fetches service details (Radarr/Sonarr) for the request dialog.
+     * Uses /service/ endpoints matching the Seerr web UI flow.
+     */
     fun loadSeerrServiceDetails(mediaType: String) {
         viewModelScope.launch {
             _isLoadingSeerrServices.value = true
             try {
                 if (mediaType == "movie") {
-                    seerrRepository.getRadarrSettings().onSuccess { servers ->
+                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
                         val details = servers.mapNotNull { server ->
-                            seerrRepository.getRadarrServiceDetail(server.id).getOrNull()
+                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
                         }
                         _radarrServers.value = details
                     }
                 } else {
-                    seerrRepository.getSonarrSettings().onSuccess { servers ->
+                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
                         val details = servers.mapNotNull { server ->
-                            seerrRepository.getSonarrServiceDetail(server.id).getOrNull()
+                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
                         }
                         _sonarrServers.value = details
                     }
                 }
             } finally {
                 _isLoadingSeerrServices.value = false
+            }
+        }
+    }
+
+    /**
+     * Fetches TV details on-demand from Seerr to get season data for the request dialog.
+     */
+    fun loadSeerrTvSeasons(tmdbId: Int) {
+        viewModelScope.launch {
+            _seerrTvSeasons.value = emptyList()
+            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                _seerrTvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
             }
         }
     }

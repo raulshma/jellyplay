@@ -112,7 +112,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
@@ -231,32 +230,21 @@ fun MediaDetailScreen(
 
         // Seerr request dialog
         seerrRequestItem?.let { item ->
-            // Fetch service details when dialog opens
+            // Fetch service details and TV seasons on-demand when dialog opens
             LaunchedEffect(item.id) {
                 viewModel.loadSeerrServiceDetails(item.mediaType)
+                if (item.mediaType.equals("tv", ignoreCase = true)) {
+                    viewModel.loadSeerrTvSeasons(item.id)
+                }
             }
 
-            val requestSeasons = viewModel.seasons
-                .asSequence()
-                .filter { (it.seasonNumber ?: 0) > 0 }
-                .map { season ->
-                    SeerrSeason(
-                        id = season.seasonNumber ?: 0,
-                        airDate = season.premiereDate,
-                        episodeCount = season.childCount ?: 0,
-                        name = season.seasonName ?: season.name,
-                        overview = season.overview,
-                        posterPath = null,
-                        seasonNumber = season.seasonNumber ?: 0,
-                    )
-                }
-                .toList()
+            val seerrTvSeasons by viewModel.seerrTvSeasons.collectAsStateWithLifecycle()
 
             SeerrRequestDialog(
                 item = item,
                 radarrServers = seerrRadarrServers,
                 sonarrServers = seerrSonarrServers,
-                seasons = if (item.mediaType.equals("tv", ignoreCase = true)) requestSeasons else emptyList(),
+                seasons = if (item.mediaType.equals("tv", ignoreCase = true)) seerrTvSeasons else emptyList(),
                 isLoadingServices = seerrIsLoadingServices,
                 isRequesting = seerrRequestResult?.isLoading == true,
                 requestSuccess = seerrRequestResult?.success,
