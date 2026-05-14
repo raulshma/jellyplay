@@ -90,26 +90,32 @@ fun SeerrMediaCard(
         label = "seerrCardBrightness",
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -500f,
-        targetValue = 1500f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "seerrShimmerOffset",
-    )
+    val shimmerAndGlow = if (isLoading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
+        val shimmerOffset by infiniteTransition.animateFloat(
+            initialValue = -500f,
+            targetValue = 1500f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "seerrShimmerOffset",
+        )
 
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "seerrGlowAlpha",
-    )
+        val glowAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "seerrGlowAlpha",
+        )
+        shimmerOffset to glowAlpha
+    } else {
+        remember { 0f to 0f }
+    }
+    val (shimmerOffset, glowAlpha) = shimmerAndGlow
 
     val mediaStatus = item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
         ?: SeerrMediaStatus.UNKNOWN

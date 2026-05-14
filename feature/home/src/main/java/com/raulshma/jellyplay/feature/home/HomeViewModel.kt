@@ -49,6 +49,8 @@ class HomeViewModel @Inject constructor(
     var dynamicTheming by mutableStateOf(true)
         private set
 
+    private var lastContinueWatchingIds: Set<String> = emptySet()
+
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
@@ -132,10 +134,14 @@ class HomeViewModel @Inject constructor(
                     val continueWatching = filteredSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
-                    preferencesStore.setContinueWatching(continueWatching)
-                    val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
-                    intent.setPackage(context.packageName)
-                    context.sendBroadcast(intent)
+                    val currentIds = continueWatching.map { it.id }.toSet()
+                    if (currentIds != lastContinueWatchingIds) {
+                        lastContinueWatchingIds = currentIds
+                        preferencesStore.setContinueWatching(continueWatching)
+                        val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
+                        intent.setPackage(context.packageName)
+                        context.sendBroadcast(intent)
+                    }
 
                     if (prefs.kidsModeEnabled) {
                         mediaRepository.getFavorites(limit = 20)

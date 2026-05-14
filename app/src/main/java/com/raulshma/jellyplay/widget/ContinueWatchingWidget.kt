@@ -39,7 +39,7 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         )
         val store = entryPoint.preferencesStore()
 
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             val items = store.continueWatching.first()
             appWidgetIds.forEach { appWidgetId ->
                 updateWidget(context, appWidgetManager, appWidgetId, items)

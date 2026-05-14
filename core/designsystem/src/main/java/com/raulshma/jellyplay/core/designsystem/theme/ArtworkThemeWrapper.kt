@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.designsystem.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 
 val LocalArtworkColors = staticCompositionLocalOf<ArtworkColors?> { null }
@@ -22,7 +23,9 @@ fun ArtworkThemeWrapper(
     }
 
     val colors = rememberArtworkColors(imageUrl)
-    val colorScheme = colors?.let { ArtworkColorExtractor.generateColorScheme(it, darkTheme) }
+    val colorScheme: androidx.compose.material3.ColorScheme? = remember(colors, darkTheme) {
+        colors?.let { ArtworkColorExtractor.generateColorScheme(it, darkTheme) }
+    }
 
     CompositionLocalProvider(LocalArtworkColors provides colors) {
         if (colorScheme != null) {

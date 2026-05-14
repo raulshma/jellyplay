@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,7 @@ class VideoMiniPlayerState @Inject constructor() {
     val engine: MediaEngine? get() = _engine
 
     private var job: Job? = null
+    private var miniScope: CoroutineScope? = null
 
     private val _itemId = MutableStateFlow<String?>(null)
     val itemId: StateFlow<String?> = _itemId.asStateFlow()
@@ -51,7 +54,9 @@ class VideoMiniPlayerState @Inject constructor() {
         _isPlaying.value = engine.isPlaying.value
         
         job?.cancel()
-        job = CoroutineScope(Dispatchers.Main).launch {
+        miniScope?.cancel()
+        miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+        job = miniScope!!.launch {
             engine.isPlaying.collect { _isPlaying.value = it }
         }
         _isMiniMode.value = true
@@ -77,6 +82,8 @@ class VideoMiniPlayerState @Inject constructor() {
         val engine = _engine
         job?.cancel()
         job = null
+        miniScope?.cancel()
+        miniScope = null
         engine?.release()
         _engine = null
         _itemId.value = null

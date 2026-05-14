@@ -482,7 +482,7 @@ class AudioPlaybackManager @Inject constructor(
                         )
                     }
                 }
-                delay(250)
+                delay(500)
             }
         }
     }

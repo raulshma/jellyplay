@@ -62,7 +62,7 @@ fun SubtitleStyleSheet(
     var offsetMs by remember { mutableLongStateOf(currentStyle.offsetMs) }
     var verticalPosition by remember { mutableFloatStateOf(currentStyle.verticalPosition) }
 
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {

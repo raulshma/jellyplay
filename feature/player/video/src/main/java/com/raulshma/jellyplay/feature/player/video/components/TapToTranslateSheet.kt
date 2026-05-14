@@ -29,7 +29,7 @@ internal fun TapToTranslateSheet(
 ) {
     val context = LocalContext.current
 
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
