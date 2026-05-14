@@ -378,4 +378,64 @@ class SeerrApiClientImpl @Inject constructor(
 
         return parseAndMap(executeRequest(request))
     }
+
+    // ── Discover endpoints ──
+
+    override suspend fun getTrending(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+    ): Result<SeerrSearchResponse> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/discover/trending?page=$page"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getDiscoverMovies(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+        primaryReleaseDateGte: String?,
+    ): Result<SeerrSearchResponse> {
+        val path = buildString {
+            append("/discover/movies?page=$page")
+            if (primaryReleaseDateGte != null) {
+                append("&primaryReleaseDateGte=")
+                append(java.net.URLEncoder.encode(primaryReleaseDateGte, "UTF-8"))
+            }
+        }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getDiscoverTv(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+        firstAirDateGte: String?,
+    ): Result<SeerrSearchResponse> {
+        val path = buildString {
+            append("/discover/tv?page=$page")
+            if (firstAirDateGte != null) {
+                append("&firstAirDateGte=")
+                append(java.net.URLEncoder.encode(firstAirDateGte, "UTF-8"))
+            }
+        }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, path))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
 }

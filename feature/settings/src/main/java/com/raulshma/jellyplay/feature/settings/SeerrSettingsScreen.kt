@@ -248,6 +248,68 @@ fun SeerrSettingsScreen(
                         featureEnabled = preferences.enabled,
                     )
                 }
+
+                item {
+                    FeatureToggle(
+                        icon = Icons.Default.Extension,
+                        title = "Advance Discover",
+                        subtitle = "Show Trending, Popular & Upcoming content on the home screen",
+                        checked = preferences.discoverEnabled,
+                        onCheckedChange = viewModel::setDiscoverEnabled,
+                        featureEnabled = preferences.enabled,
+                    )
+                }
+
+                if (preferences.discoverEnabled) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                            .padding(start = 32.dp),
+                        ) {
+                            FeatureToggle(
+                                icon = Icons.Default.Extension,
+                                title = "Trending",
+                                subtitle = "Trending movies and series",
+                                checked = preferences.discoverTrending,
+                                onCheckedChange = viewModel::setDiscoverTrending,
+                                featureEnabled = preferences.discoverEnabled,
+                            )
+                            FeatureToggle(
+                                icon = Icons.Default.Extension,
+                                title = "Popular Movies",
+                                subtitle = "Popular movies on TMDB",
+                                checked = preferences.discoverPopularMovies,
+                                onCheckedChange = viewModel::setDiscoverPopularMovies,
+                                featureEnabled = preferences.discoverEnabled,
+                            )
+                            FeatureToggle(
+                                icon = Icons.Default.Extension,
+                                title = "Popular Series",
+                                subtitle = "Popular TV series on TMDB",
+                                checked = preferences.discoverPopularTv,
+                                onCheckedChange = viewModel::setDiscoverPopularTv,
+                                featureEnabled = preferences.discoverEnabled,
+                            )
+                            FeatureToggle(
+                                icon = Icons.Default.Extension,
+                                title = "Upcoming Movies",
+                                subtitle = "Movies coming soon to theaters",
+                                checked = preferences.discoverUpcomingMovies,
+                                onCheckedChange = viewModel::setDiscoverUpcomingMovies,
+                                featureEnabled = preferences.discoverEnabled,
+                            )
+                            FeatureToggle(
+                                icon = Icons.Default.Extension,
+                                title = "Upcoming Series",
+                                subtitle = "TV series coming soon",
+                                checked = preferences.discoverUpcomingTv,
+                                onCheckedChange = viewModel::setDiscoverUpcomingTv,
+                                featureEnabled = preferences.discoverEnabled,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

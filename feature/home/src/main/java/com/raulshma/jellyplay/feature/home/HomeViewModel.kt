@@ -7,26 +7,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import java.time.LocalDate
+import java.time.ZoneOffset
 import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val downloadRepository: DownloadRepository,
+    private val preferencesStore: UserPreferencesStore,
+    private val seerrRepository: SeerrRepository,
+    private val seerrPreferencesStore: SeerrPreferencesStore,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -49,6 +62,13 @@ class HomeViewModel @Inject constructor(
     var dynamicTheming by mutableStateOf(true)
         private set
 
+    // Seerr Discover state
+    var discoverSections by mutableStateOf<Map<DiscoverSectionType, List<SeerrSearchItem>>>(emptyMap())
+        private set
+    var discoverEnabled by mutableStateOf(false)
+        private set
+    private var seerrPreferences by mutableStateOf(SeerrPreferences())
+
     private var lastContinueWatchingIds: Set<String> = emptySet()
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
@@ -69,6 +89,7 @@ class HomeViewModel @Inject constructor(
                     resetHomeScrollPosition()
                     sections = emptyList()
                     favorites = emptyList()
+                    discoverSections = emptyMap()
                     error = null
                     isLoading = true
                     fetchAndUpdateSections()
@@ -85,6 +106,18 @@ class HomeViewModel @Inject constructor(
                 kidsModeEnabled = prefs.kidsModeEnabled
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
+            }
+        }
+
+        // Listen for Seerr preference changes
+        viewModelScope.launch {
+            seerrPreferencesStore.preferences.collect { prefs ->
+                val wasEnabled = discoverEnabled
+                seerrPreferences = prefs
+                discoverEnabled = prefs.enabled && prefs.discoverEnabled
+                if (discoverEnabled && !wasEnabled) {
+                    fetchDiscoverSections(prefs)
+                }
             }
         }
         
@@ -108,6 +141,7 @@ class HomeViewModel @Inject constructor(
             resetHomeScrollPosition()
             sections = emptyList()
             favorites = emptyList()
+            discoverSections = emptyMap()
             error = null
             fetchAndUpdateSections()
             isLoading = false
@@ -162,8 +196,51 @@ class HomeViewModel @Inject constructor(
                         error = it.message ?: "${it::class.simpleName}"
                     }
                 }
+
+            // Fetch discover sections if enabled
+            if (discoverEnabled) {
+                fetchDiscoverSections(seerrPreferences)
+            }
         } finally {
             refreshMutex.unlock()
+        }
+    }
+
+    private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {
+        if (!prefs.enabled || !prefs.discoverEnabled) return
+
+        val today = LocalDate.now(ZoneOffset.systemDefault())
+            .atStartOfDay(ZoneOffset.systemDefault())
+            .toLocalDate()
+            .toString()
+
+        val deferredResults = mutableListOf<Pair<DiscoverSectionType, kotlinx.coroutines.Deferred<Result<SeerrSearchResponse>>>>()
+
+        if (prefs.discoverTrending) {
+            deferredResults.add(DiscoverSectionType.TRENDING to viewModelScope.async { seerrRepository.getTrending() })
+        }
+        if (prefs.discoverPopularMovies) {
+            deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies() })
+        }
+        if (prefs.discoverPopularTv) {
+            deferredResults.add(DiscoverSectionType.POPULAR_TV to viewModelScope.async { seerrRepository.getDiscoverTv() })
+        }
+        if (prefs.discoverUpcomingMovies) {
+            deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
+        }
+        if (prefs.discoverUpcomingTv) {
+            deferredResults.add(DiscoverSectionType.UPCOMING_TV to viewModelScope.async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
+        }
+
+        val newSections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
+        for ((type, deferred) in deferredResults) {
+            deferred.await().onSuccess { response ->
+                newSections[type] = response.results
+            }
+        }
+
+        if (newSections != discoverSections) {
+            discoverSections = newSections
         }
     }
 

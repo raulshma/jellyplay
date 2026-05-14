@@ -132,4 +132,26 @@ interface SeerrApiClient {
         apiKey: String,
         id: Int,
     ): Result<SeerrSonarrServiceDetail>
+
+    // ── Discover endpoints ──
+
+    suspend fun getTrending(
+        baseUrl: String,
+        apiKey: String,
+        page: Int = 1,
+    ): Result<SeerrSearchResponse>
+
+    suspend fun getDiscoverMovies(
+        baseUrl: String,
+        apiKey: String,
+        page: Int = 1,
+        primaryReleaseDateGte: String? = null,
+    ): Result<SeerrSearchResponse>
+
+    suspend fun getDiscoverTv(
+        baseUrl: String,
+        apiKey: String,
+        page: Int = 1,
+        firstAirDateGte: String? = null,
+    ): Result<SeerrSearchResponse>
 }
