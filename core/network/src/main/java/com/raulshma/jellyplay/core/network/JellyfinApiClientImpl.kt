@@ -499,12 +499,21 @@ class JellyfinApiClientImpl @Inject constructor(
                     ?.toTrickplayInfo(),
             )
         } ?: emptyList()
+        val externalUrls = item.externalUrls?.map { url ->
+            com.raulshma.jellyplay.core.model.ExternalUrl(
+                name = url.name ?: "",
+                url = url.url ?: "",
+            )
+        } ?: emptyList()
+        val providerIds = item.providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap()
         MediaDetail(
             item = item.toMediaItem(),
             people = people,
             relatedItems = relatedItems,
             chapters = chapters,
             mediaSources = mediaSources,
+            externalUrls = externalUrls,
+            providerIds = providerIds,
         )
     }
 

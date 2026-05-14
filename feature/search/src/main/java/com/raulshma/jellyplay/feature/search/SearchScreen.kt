@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +67,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
@@ -73,7 +75,11 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -84,8 +90,17 @@ import java.util.Locale
 @Composable
 fun SearchScreen(
     onItemClick: (String) -> Unit,
+    onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
+    var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
+    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
+    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+    val seerrLoadingState = rememberSeerrCardLoadingState()
+
     val query = viewModel.query
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
@@ -444,106 +459,187 @@ fun SearchScreen(
                         }
                     }
                     else -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(gridCellSize),
-                            contentPadding = gridPadding,
-                            horizontalArrangement = Arrangement.spacedBy(spacing),
-                            verticalArrangement = Arrangement.spacedBy(spacing),
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            items(
-                                count = pagedResults.itemCount,
-                                key = pagedResults.itemKey { it.id },
-                                contentType = { "mediaItem" },
-                            ) { index ->
-                                val item = pagedResults[index]
-                                if (item != null) {
-                                    AnimatedSearchItem(index = index) {
-                                        PosterCard(
-                                            item = item,
-                                            imageUrl = viewModel.getImageUrl(item.id),
-                                            onClick = { onItemClick(item.id) },
-                                            showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                            progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                            } else 0f,
-                                            blurHash = item.blurHashes.primary,
-                                        )
+                        // Collect Seerr state
+                        val seerrResults by viewModel.seerrResults.collectAsStateWithLifecycle()
+                        val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
+                        val isSeerrSearchEnabled by viewModel.isSeerrSearchEnabled.collectAsStateWithLifecycle()
+                        val showSeerr = isSeerrConnected && isSeerrSearchEnabled && seerrResults.isNotEmpty()
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Seerr results horizontal section (above library results)
+                            if (showSeerr) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = contentPad, end = contentPad, top = 12.dp),
+                                ) {
+                                    Text(
+                                        text = "Request via Seerr",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                                        contentPadding = PaddingValues(end = contentPad),
+                                    ) {
+                                        items(
+                                            count = seerrResults.size,
+                                            key = { index -> "seerr-${seerrResults[index].id}" },
+                                        ) { index ->
+                                            val seerrItem = seerrResults[index]
+                                            val posterUrl = viewModel.getSeerrPosterUrl(seerrItem.posterPath)
+                                            SeerrMediaCard(
+                                                item = seerrItem,
+                                                imageUrl = posterUrl,
+                                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
+                                                onClick = {
+                                                    seerrLoadingState.startLoading(seerrItem.id)
+                                                    viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
+                                                        seerrLoadingState.stopLoading(seerrItem.id)
+                                                        onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                                    }
+                                                },
+                                                onRequestClick = { requestItem = seerrItem },
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        // ── Append loading (gradient fade + progress bar) ──
-                        if (pagedResults.loadState.append is LoadState.Loading) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                backgroundColor,
-                                            ),
-                                        )
-                                    )
-                                    .padding(vertical = 20.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                androidx.compose.material3.LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.4f)
-                                        .clip(RoundedCornerShape(4.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = Color.White.copy(alpha = 0.1f),
-                                )
-                            }
-                        }
-
-                        // ── Append error ──
-                        if (pagedResults.loadState.append is LoadState.Error) {
-                            val appendError = pagedResults.loadState.append as LoadState.Error
-                            Text(
-                                text = appendError.error.localizedMessage ?: "Failed to load more",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(16.dp)
-                                    .fillMaxWidth(),
-                            )
-                        }
-
-                        // ── Refresh loading ──
-                        when (val refreshState = pagedResults.loadState.refresh) {
-                            is LoadState.Loading -> {
-                                Box(
+                            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(gridCellSize),
+                                    contentPadding = gridPadding,
+                                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                                    verticalArrangement = Arrangement.spacedBy(spacing),
                                     modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    androidx.compose.material3.LinearProgressIndicator(
+                                    items(
+                                        count = pagedResults.itemCount,
+                                        key = pagedResults.itemKey { it.id },
+                                        contentType = { "mediaItem" },
+                                    ) { index ->
+                                        val item = pagedResults[index]
+                                        if (item != null) {
+                                            AnimatedSearchItem(index = index) {
+                                                PosterCard(
+                                                    item = item,
+                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    onClick = { onItemClick(item.id) },
+                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                    } else 0f,
+                                                    blurHash = item.blurHashes.primary,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ── Append loading (gradient fade + progress bar) ──
+                                if (pagedResults.loadState.append is LoadState.Loading) {
+                                    Box(
                                         modifier = Modifier
-                                            .fillMaxWidth(0.4f)
-                                            .clip(RoundedCornerShape(4.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = Color.White.copy(alpha = 0.1f),
+                                            .align(Alignment.BottomCenter)
+                                            .fillMaxWidth()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colors = listOf(
+                                                        Color.Transparent,
+                                                        backgroundColor,
+                                                    ),
+                                                )
+                                            )
+                                            .padding(vertical = 20.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        androidx.compose.material3.LinearProgressIndicator(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.4f)
+                                                .clip(RoundedCornerShape(4.dp)),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = Color.White.copy(alpha = 0.1f),
+                                        )
+                                    }
+                                }
+
+                                // ── Append error ──
+                                if (pagedResults.loadState.append is LoadState.Error) {
+                                    val appendError = pagedResults.loadState.append as LoadState.Error
+                                    Text(
+                                        text = appendError.error.localizedMessage ?: "Failed to load more",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(16.dp)
+                                            .fillMaxWidth(),
                                     )
                                 }
-                            }
-                            is LoadState.Error -> {
-                                ErrorScreen(
-                                    message = refreshState.error.localizedMessage ?: "Search failed",
-                                    onRetry = { pagedResults.refresh() },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                            is LoadState.NotLoading -> Unit
-                        }
+
+                                // ── Refresh loading ──
+                                when (val refreshState = pagedResults.loadState.refresh) {
+                                    is LoadState.Loading -> {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            androidx.compose.material3.LinearProgressIndicator(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.4f)
+                                                    .clip(RoundedCornerShape(4.dp)),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = Color.White.copy(alpha = 0.1f),
+                                            )
+                                        }
+                                    }
+                                    is LoadState.Error -> {
+                                        ErrorScreen(
+                                            message = refreshState.error.localizedMessage ?: "Search failed",
+                                            onRetry = { pagedResults.refresh() },
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                    is LoadState.NotLoading -> Unit
+                                }
+                            } // close inner Box(weight)
+                        } // close Column(else branch content)
                     }
                 }
             }
         }
+    }
+
+    // Seerr request dialog
+    requestItem?.let { item ->
+        // Fetch service details and TV seasons on-demand when dialog opens
+        LaunchedEffect(item.id) {
+            viewModel.loadSeerrServiceDetails(item.mediaType)
+            if (item.mediaType.equals("tv", ignoreCase = true)) {
+                viewModel.loadTvSeasons(item.id)
+            }
+        }
+
+        SeerrRequestDialog(
+            item = item,
+            radarrServers = radarrServers,
+            sonarrServers = sonarrServers,
+            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+            isLoadingServices = isLoadingSeerrServices,
+            isRequesting = requestResult?.isLoading == true,
+            requestSuccess = requestResult?.success,
+            requestError = requestResult?.error,
+            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+            },
+            onDismiss = {
+                requestItem = null
+                viewModel.clearRequestResult()
+            },
+        )
     }
 
     if (showFilters) {
@@ -558,7 +654,6 @@ fun SearchScreen(
         )
     }
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
