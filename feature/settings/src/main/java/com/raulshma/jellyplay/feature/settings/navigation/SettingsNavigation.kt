@@ -34,7 +34,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.UserManagement> {
         UserManagementScreen(
             onBack = { navigator.goBack() },
-            onAddUser = { navigator.navigate(Route.AddServer) },
+            onAddUser = { navigator.navigate(Route.ServerList) },
         )
     }
 

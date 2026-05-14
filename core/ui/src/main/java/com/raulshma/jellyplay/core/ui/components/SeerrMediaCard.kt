@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,8 +14,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +51,6 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SeerrMediaCard(
     item: SeerrSearchItem,
@@ -60,7 +59,6 @@ fun SeerrMediaCard(
     modifier: Modifier = Modifier,
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -128,22 +126,9 @@ fun SeerrMediaCard(
     val cardShape = RoundedCornerShape(12.dp)
     val glowColor = MaterialTheme.colorScheme.primary
 
-    val sharedScope = LocalSharedTransitionScope.current
-    val animScope = LocalAnimatedVisibilityScope.current
-
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null && imageUrl != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = modifier) {
         Card(
@@ -249,6 +234,35 @@ fun SeerrMediaCard(
                                 )
                             )
                     )
+                }
+
+                if (!isLoading && item.voteAverage != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.voteAverage),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
+                    }
                 }
 
                 if (!isLoading) {

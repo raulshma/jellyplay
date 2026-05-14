@@ -3,8 +3,6 @@ package com.raulshma.jellyplay.feature.details
 import android.os.StatFs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -406,8 +404,6 @@ private fun DetailContent(
                 },
                 label = "detailBackdrop",
             ) { backdropId ->
-                val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
-                val animVisScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
                 val backdropModifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -415,17 +411,6 @@ private fun DetailContent(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .then(
-                        if (sharedScope != null && animVisScope != null) {
-                            @OptIn(ExperimentalSharedTransitionApi::class)
-                            with(sharedScope) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState("backdrop_$backdropId"),
-                                    animatedVisibilityScope = animVisScope,
-                                )
-                            }
-                        } else Modifier
-                    )
                 MediaImage(
                     url = getBackdropUrl(backdropId),
                     contentDescription = null,
@@ -515,20 +500,7 @@ private fun DetailContent(
                                         .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .graphicsLayer { alpha = contentAlpha }
-                                        .then(
-                                            com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
-                                                com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
-                                                    @OptIn(ExperimentalSharedTransitionApi::class)
-                                                    with(scope) {
-                                                        Modifier.sharedElement(
-                                                            rememberSharedContentState("poster_$itemId"),
-                                                            animatedVisibilityScope = avScope,
-                                                        )
-                                                    }
-                                                } ?: Modifier
-                                            } ?: Modifier
-                                        ),
+                                        .graphicsLayer { alpha = contentAlpha },
                                     contentScale = ContentScale.Crop,
                                 )
                                 if (detail != null && item != null) {
@@ -661,20 +633,7 @@ private fun DetailContent(
                                             .width(posterWidth)
                                             .aspectRatio(2f / 3f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .graphicsLayer { alpha = contentAlpha }
-                                            .then(
-                                                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
-                                                    com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
-                                                        @OptIn(ExperimentalSharedTransitionApi::class)
-                                                        with(scope) {
-                                                            Modifier.sharedElement(
-                                                                rememberSharedContentState("poster_$itemId"),
-                                                                animatedVisibilityScope = avScope,
-                                                            )
-                                                        }
-                                                    } ?: Modifier
-                                                } ?: Modifier
-                                            ),
+                                            .graphicsLayer { alpha = contentAlpha },
                                         contentScale = ContentScale.Crop,
                                     )
                                 }

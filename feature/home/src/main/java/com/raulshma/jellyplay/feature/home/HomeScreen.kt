@@ -565,7 +565,6 @@ private fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             onClick = { onItemClick(currentFeatured.id) },
-            sharedBackdropKey = "backdrop_${currentFeatured.id}",
         )
     }
 }
@@ -578,7 +577,6 @@ private fun HeroHeader(
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
-    sharedBackdropKey: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -602,21 +600,8 @@ private fun HeroHeader(
         label = "detailsButtonScale",
     )
 
-    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
-    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
-
     val backdropModifier = Modifier
         .fillMaxSize()
-        .then(
-            if (sharedScope != null && animScope != null && sharedBackdropKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedBackdropKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Box(
         modifier = Modifier
@@ -866,14 +851,12 @@ private fun ContinueWatchingRow(
                     onClick = { onItemClick(item) },
                     onPlayClick = onPlayClick?.let { { it(item) } },
                     cardWidth = cardWidth,
-                    sharedElementKey = "backdrop_${item.id}",
                 )
             }
         }
     }
 }
 
-@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
@@ -882,7 +865,6 @@ private fun WideMediaCard(
     onClick: () -> Unit,
     onPlayClick: (() -> Unit)? = null,
     cardWidth: androidx.compose.ui.unit.Dp,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -910,22 +892,9 @@ private fun WideMediaCard(
     } else 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
-    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
-    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
-
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(16f / 9f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = Modifier.width(cardWidth)) {
         Card(
@@ -976,6 +945,35 @@ private fun WideMediaCard(
                             )
                         )
                 )
+
+                if (item.communityRating != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.communityRating),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
 
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
@@ -1070,7 +1068,6 @@ private fun HomeMediaRow(
                     } else 0f,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = onPlayClick?.let { { it(item) } },
-                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }
