@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -51,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -248,7 +250,6 @@ private fun SeerrDetailContent(
     )
 
     Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
-        // Backdrop
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -323,7 +324,6 @@ private fun SeerrDetailContent(
                         horizontalArrangement = Arrangement.spacedBy(32.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        // Left column: poster + action buttons
                         Column(
                             modifier = Modifier.width(240.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -371,7 +371,6 @@ private fun SeerrDetailContent(
                             )
                         }
 
-                        // Right column: details
                         SeerrDetailBody(
                             movieDetail = movieDetail,
                             tvDetail = tvDetail,
@@ -384,7 +383,6 @@ private fun SeerrDetailContent(
                         )
                     }
                 } else {
-                    // Portrait/Compact Layout
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -699,7 +697,15 @@ private fun SeerrDetailBody(
             }
 
             // Recommendations
-            if (recommendations.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = recommendations.isNotEmpty(),
+                enter = fadeIn(tween(400, easing = FastOutSlowInEasing)) +
+                        slideInVertically(
+                            initialOffsetY = { it / 16 },
+                            animationSpec = tween(400, easing = FastOutSlowInEasing),
+                        ),
+                exit = fadeOut(tween(150)),
+            ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
                     items = recommendations,
@@ -709,7 +715,15 @@ private fun SeerrDetailBody(
             }
 
             // Similar
-            if (similar.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = similar.isNotEmpty(),
+                enter = fadeIn(tween(400, delayMillis = 60, easing = FastOutSlowInEasing)) +
+                        slideInVertically(
+                            initialOffsetY = { it / 16 },
+                            animationSpec = tween(400, delayMillis = 60, easing = FastOutSlowInEasing),
+                        ),
+                exit = fadeOut(tween(150)),
+            ) {
                 SeerrHorizontalSection(
                     title = "Similar",
                     items = similar,

@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -49,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SeerrMediaCard(
     item: SeerrSearchItem,
@@ -57,12 +60,12 @@ fun SeerrMediaCard(
     modifier: Modifier = Modifier,
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
+    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Unique loading animation: pulsing scale + glow border + shimmer sweep
     val pulseScale = remember { Animatable(1f) }
     LaunchedEffect(isLoading) {
         if (isLoading) {
@@ -81,7 +84,12 @@ fun SeerrMediaCard(
         label = "seerrCardScale",
     )
 
-    // Shimmer sweep for loading state
+    val brightnessOverlay by animateFloatAsState(
+        targetValue = if (isPressed && !isLoading) 0.08f else 0f,
+        animationSpec = tween(150),
+        label = "seerrCardBrightness",
+    )
+
     val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
     val shimmerOffset by infiniteTransition.animateFloat(
         initialValue = -500f,
@@ -93,7 +101,6 @@ fun SeerrMediaCard(
         label = "seerrShimmerOffset",
     )
 
-    // Pulsing glow border alpha
     val glowAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.8f,
@@ -114,6 +121,23 @@ fun SeerrMediaCard(
 
     val cardShape = RoundedCornerShape(12.dp)
     val glowColor = MaterialTheme.colorScheme.primary
+
+    val sharedScope = LocalSharedTransitionScope.current
+    val animScope = LocalAnimatedVisibilityScope.current
+
+    val imageModifier = Modifier
+        .fillMaxWidth()
+        .aspectRatio(2f / 3f)
+        .then(
+            if (sharedScope != null && animScope != null && sharedElementKey != null && imageUrl != null) {
+                with(sharedScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(sharedElementKey),
+                        animatedVisibilityScope = animScope,
+                    )
+                }
+            } else Modifier
+        )
 
     Column(modifier = modifier) {
         Card(
@@ -159,9 +183,7 @@ fun SeerrMediaCard(
                     MediaImage(
                         url = imageUrl,
                         contentDescription = item.displayName,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(2f / 3f),
+                        modifier = imageModifier,
                         contentScale = ContentScale.Crop,
                     )
                 } else {
@@ -180,7 +202,14 @@ fun SeerrMediaCard(
                     }
                 }
 
-                // Loading shimmer overlay on the poster
+                if (brightnessOverlay > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.White.copy(alpha = brightnessOverlay))
+                    )
+                }
+
                 if (isLoading) {
                     val shimmerBrush = Brush.linearGradient(
                         colors = listOf(
@@ -199,7 +228,6 @@ fun SeerrMediaCard(
                     )
                 }
 
-                // Gradient overlay at bottom (hide during loading)
                 if (!isLoading) {
                     Box(
                         modifier = Modifier
@@ -217,7 +245,6 @@ fun SeerrMediaCard(
                     )
                 }
 
-                // Availability status badge (hide during loading)
                 if (!isLoading) {
                     val badgeColor = when {
                         isAvailable -> Color(0xFF4CAF50)
@@ -250,7 +277,6 @@ fun SeerrMediaCard(
                         }
                     }
 
-                    // Request action button (only when not available and not yet requested)
                     if (onRequestClick != null && !isAvailable && !hasRequest) {
                         IconButton(
                             onClick = onRequestClick,
@@ -273,7 +299,6 @@ fun SeerrMediaCard(
             }
         }
 
-        // Info below card
         Column(
             modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = if (isTv) 8.dp else 6.dp),
         ) {

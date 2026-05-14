@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import android.os.StatFs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -404,17 +406,31 @@ private fun DetailContent(
                 },
                 label = "detailBackdrop",
             ) { backdropId ->
+                val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+                val animVisScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+                val backdropModifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .then(
+                        if (sharedScope != null && animVisScope != null) {
+                            @OptIn(ExperimentalSharedTransitionApi::class)
+                            with(sharedScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState("backdrop_$backdropId"),
+                                    animatedVisibilityScope = animVisScope,
+                                )
+                            }
+                        } else Modifier
+                    )
                 MediaImage(
                     url = getBackdropUrl(backdropId),
                     contentDescription = null,
                     blurHash = item?.blurHashes?.backdrop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
-                            scaleX = scale
-                            scaleY = scale
-                        },
+                    modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
                 )
             }
@@ -499,7 +515,20 @@ private fun DetailContent(
                                         .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .graphicsLayer { alpha = contentAlpha },
+                                        .graphicsLayer { alpha = contentAlpha }
+                                        .then(
+                                            com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
+                                                com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
+                                                    @OptIn(ExperimentalSharedTransitionApi::class)
+                                                    with(scope) {
+                                                        Modifier.sharedElement(
+                                                            rememberSharedContentState("poster_$itemId"),
+                                                            animatedVisibilityScope = avScope,
+                                                        )
+                                                    }
+                                                } ?: Modifier
+                                            } ?: Modifier
+                                        ),
                                     contentScale = ContentScale.Crop,
                                 )
                                 if (detail != null && item != null) {
@@ -632,7 +661,20 @@ private fun DetailContent(
                                             .width(posterWidth)
                                             .aspectRatio(2f / 3f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .graphicsLayer { alpha = contentAlpha },
+                                            .graphicsLayer { alpha = contentAlpha }
+                                            .then(
+                                                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
+                                                    com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
+                                                        @OptIn(ExperimentalSharedTransitionApi::class)
+                                                        with(scope) {
+                                                            Modifier.sharedElement(
+                                                                rememberSharedContentState("poster_$itemId"),
+                                                                animatedVisibilityScope = avScope,
+                                                            )
+                                                        }
+                                                    } ?: Modifier
+                                                } ?: Modifier
+                                            ),
                                         contentScale = ContentScale.Crop,
                                     )
                                 }
@@ -999,6 +1041,13 @@ private fun MediaInfoSection(
                     ) {
                         items(options, key = { "${activePicker}_${it.index}_${it.label}" }) { option ->
                             val isSelected = option.index == selectedIndex
+                            val optionInteractionSource = remember { MutableInteractionSource() }
+                            val isOptionPressed by optionInteractionSource.collectIsPressedAsState()
+                            val optionScale by animateFloatAsState(
+                                targetValue = if (isOptionPressed) 0.97f else 1f,
+                                animationSpec = spring(stiffness = 400f),
+                                label = "optionScale",
+                            )
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1007,7 +1056,14 @@ private fun MediaInfoSection(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .tvFocusable().clickable {
+                                    .graphicsLayer {
+                                        scaleX = optionScale
+                                        scaleY = optionScale
+                                    }
+                                    .tvFocusable().clickable(
+                                        interactionSource = optionInteractionSource,
+                                        indication = null,
+                                    ) {
                                         if (picker == StreamPickerType.AUDIO) {
                                             onAudioSelect(option.index)
                                         } else {
