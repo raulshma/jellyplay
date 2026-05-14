@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
@@ -94,6 +95,10 @@ fun SearchScreen(
 ) {
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
+    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
     val query = viewModel.query
@@ -610,13 +615,25 @@ fun SearchScreen(
 
     // Seerr request dialog
     requestItem?.let { item ->
+        // Fetch service details and TV seasons on-demand when dialog opens
+        LaunchedEffect(item.id) {
+            viewModel.loadSeerrServiceDetails(item.mediaType)
+            if (item.mediaType.equals("tv", ignoreCase = true)) {
+                viewModel.loadTvSeasons(item.id)
+            }
+        }
+
         SeerrRequestDialog(
             item = item,
+            radarrServers = radarrServers,
+            sonarrServers = sonarrServers,
+            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+            isLoadingServices = isLoadingSeerrServices,
             isRequesting = requestResult?.isLoading == true,
             requestSuccess = requestResult?.success,
             requestError = requestResult?.error,
-            onConfirm = { seasons ->
-                viewModel.requestSeerrMedia(item, seasons)
+            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
             },
             onDismiss = {
                 requestItem = null

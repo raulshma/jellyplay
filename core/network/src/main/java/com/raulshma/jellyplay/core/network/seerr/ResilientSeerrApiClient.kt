@@ -187,8 +187,12 @@ class ResilientSeerrApiClient @Inject constructor(
         mediaId: Int,
         tvdbId: Int?,
         seasons: List<Int>?,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
     ): Result<SeerrMediaRequest> =
-        withRetry { delegate.requestMedia(baseUrl, apiKey, mediaType, mediaId, tvdbId, seasons) }
+        withRetry { delegate.requestMedia(baseUrl, apiKey, mediaType, mediaId, tvdbId, seasons, serverId, profileId, rootFolder, tags) }
 
     override suspend fun getRadarrSettings(
         baseUrl: String,
@@ -201,4 +205,46 @@ class ResilientSeerrApiClient @Inject constructor(
         apiKey: String,
     ): Result<List<SeerrSonarrSettings>> =
         withRetry { delegate.getSonarrSettings(baseUrl, apiKey) }
+
+    override suspend fun getRadarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail> =
+        withRetry { delegate.getRadarrServiceDetail(baseUrl, apiKey, id) }
+
+    override suspend fun getSonarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail> =
+        withRetry { delegate.getSonarrServiceDetail(baseUrl, apiKey, id) }
+
+    // ── /service/ endpoint retries ──
+
+    override suspend fun getServiceRadarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>> =
+        withRetry { delegate.getServiceRadarrServers(baseUrl, apiKey) }
+
+    override suspend fun getServiceSonarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>> =
+        withRetry { delegate.getServiceSonarrServers(baseUrl, apiKey) }
+
+    override suspend fun getServiceRadarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail> =
+        withRetry { delegate.getServiceRadarrDetail(baseUrl, apiKey, id) }
+
+    override suspend fun getServiceSonarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail> =
+        withRetry { delegate.getServiceSonarrDetail(baseUrl, apiKey, id) }
 }

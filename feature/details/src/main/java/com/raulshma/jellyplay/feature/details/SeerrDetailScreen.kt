@@ -75,6 +75,10 @@ fun SeerrDetailScreen(
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
+    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+    val isLoadingServices by viewModel.isLoadingServices.collectAsStateWithLifecycle()
+
     LaunchedEffect(tmdbId, mediaType) {
         viewModel.loadDetails(tmdbId, mediaType)
     }
@@ -157,13 +161,24 @@ fun SeerrDetailScreen(
                 }
 
                 item?.let {
+                    // Fetch service details when dialog opens
+                    LaunchedEffect(Unit) {
+                        viewModel.loadServiceDetails(it.mediaType)
+                    }
+
+                    val tvSeasons = tvDetail?.seasons?.filter { season -> season.seasonNumber > 0 } ?: emptyList()
+
                     SeerrRequestDialog(
                         item = it,
+                        radarrServers = radarrServers,
+                        sonarrServers = sonarrServers,
+                        seasons = if (it.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+                        isLoadingServices = isLoadingServices,
                         isRequesting = requestResult?.isLoading == true,
                         requestSuccess = requestResult?.success,
                         requestError = requestResult?.error,
-                        onConfirm = { seasons ->
-                            viewModel.requestMedia(it, seasons)
+                        onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                            viewModel.requestMedia(it, seasons, serverId, profileId, rootFolder, tags)
                         },
                         onDismiss = {
                             showRequestDialog = false

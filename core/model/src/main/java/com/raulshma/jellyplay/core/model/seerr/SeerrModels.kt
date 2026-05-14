@@ -465,6 +465,111 @@ data class SeerrRequestPayload(
     val tvdbId: Int? = null,
     val seasons: List<Int>? = null,
     val is4k: Boolean = false,
+    val serverId: Int? = null,
+    val profileId: Int? = null,
+    val rootFolder: String? = null,
+    val tags: List<Int>? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceProfile(
+    val id: Int = 0,
+    val name: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceRootFolder(
+    val id: Int = 0,
+    val path: String = "",
+    val freeSpace: Long? = null,
+    val totalSpace: Long? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceTag(
+    val id: Int = 0,
+    val label: String = "",
+)
+
+@Immutable
+@Serializable
+data class SeerrRadarrServiceDetail(
+    val id: Int = 0,
+    val name: String = "",
+    val hostname: String = "",
+    val port: Int = 0,
+    val apiKey: String = "",
+    val useSsl: Boolean = false,
+    val baseUrl: String? = null,
+    val activeProfileId: Int? = null,
+    val activeDirectory: String? = null,
+    val is4k: Boolean = false,
+    val isDefault: Boolean = false,
+    val externalUrl: String? = null,
+    val profiles: List<SeerrServiceProfile> = emptyList(),
+    val rootFolders: List<SeerrServiceRootFolder> = emptyList(),
+    val tags: List<SeerrServiceTag> = emptyList(),
+    /** Nested server object from /service/ endpoint with default settings. */
+    val server: SeerrServiceServerDefaults? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrSonarrServiceDetail(
+    val id: Int = 0,
+    val name: String = "",
+    val hostname: String = "",
+    val port: Int = 0,
+    val apiKey: String = "",
+    val useSsl: Boolean = false,
+    val baseUrl: String? = null,
+    val activeProfileId: Int? = null,
+    val activeDirectory: String? = null,
+    val is4k: Boolean = false,
+    val isDefault: Boolean = false,
+    val externalUrl: String? = null,
+    val profiles: List<SeerrServiceProfile> = emptyList(),
+    val rootFolders: List<SeerrServiceRootFolder> = emptyList(),
+    val tags: List<SeerrServiceTag> = emptyList(),
+    /** Nested server object from /service/ endpoint with default settings. */
+    val server: SeerrServiceServerDefaults? = null,
+    val languageProfiles: List<SeerrServiceLanguageProfile> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceServer(
+    val id: Int = 0,
+    val name: String = "",
+    val isDefault: Boolean = false,
+    val is4k: Boolean = false,
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceServerDefaults(
+    val id: Int = 0,
+    val name: String = "",
+    val isDefault: Boolean = false,
+    val is4k: Boolean = false,
+    val activeProfileId: Int? = null,
+    val activeAnimeProfileId: Int? = null,
+    val activeDirectory: String? = null,
+    val activeAnimeDirectory: String? = null,
+    val activeTags: List<Int> = emptyList(),
+    val activeAnimeTags: List<Int> = emptyList(),
+    val activeLanguageProfileId: Int? = null,
+    val activeAnimeLanguageProfileId: Int? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrServiceLanguageProfile(
+    val id: Int = 0,
+    val name: String = "",
 )
 
 @Immutable

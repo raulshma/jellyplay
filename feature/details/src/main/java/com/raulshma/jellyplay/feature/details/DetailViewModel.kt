@@ -22,8 +22,10 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -73,6 +75,16 @@ class DetailViewModel @Inject constructor(
 
     private val _seerrRequestResult = MutableStateFlow<SeerrRequestResult?>(null)
     val seerrRequestResult: StateFlow<SeerrRequestResult?> = _seerrRequestResult.asStateFlow()
+
+    // Service details for request dialog
+    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+
+    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+
+    private val _isLoadingSeerrServices = MutableStateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
 
     private val _isLoading = mutableStateOf(false)
     val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
@@ -456,17 +468,53 @@ class DetailViewModel @Inject constructor(
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
 
-    fun requestSeerrMedia(item: SeerrSearchItem, seasons: List<Int>? = null) {
+    fun requestSeerrMedia(
+        item: SeerrSearchItem,
+        seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+    ) {
         viewModelScope.launch {
             _seerrRequestResult.value = SeerrRequestResult(isLoading = true)
             seerrRepository.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
                 seasons = seasons,
+                serverId = serverId,
+                profileId = profileId,
+                rootFolder = rootFolder,
+                tags = tags,
             ).onSuccess {
                 _seerrRequestResult.value = SeerrRequestResult(success = true)
             }.onFailure {
                 _seerrRequestResult.value = SeerrRequestResult(error = it.message ?: "Request failed")
+            }
+        }
+    }
+
+    fun loadSeerrServiceDetails(mediaType: String) {
+        viewModelScope.launch {
+            _isLoadingSeerrServices.value = true
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getRadarrSettings().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getRadarrServiceDetail(server.id).getOrNull()
+                        }
+                        _radarrServers.value = details
+                    }
+                } else {
+                    seerrRepository.getSonarrSettings().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getSonarrServiceDetail(server.id).getOrNull()
+                        }
+                        _sonarrServers.value = details
+                    }
+                }
+            } finally {
+                _isLoadingSeerrServices.value = false
             }
         }
     }
