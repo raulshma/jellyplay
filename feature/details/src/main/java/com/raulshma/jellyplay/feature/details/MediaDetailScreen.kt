@@ -112,6 +112,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
@@ -164,6 +165,9 @@ fun MediaDetailScreen(
         val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
         val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
         val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
+        val seerrRadarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+        val seerrSonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+        val seerrIsLoadingServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
         var seerrRequestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
 
         // Seerr card loading state for prefetch animation
@@ -227,13 +231,38 @@ fun MediaDetailScreen(
 
         // Seerr request dialog
         seerrRequestItem?.let { item ->
+            // Fetch service details when dialog opens
+            LaunchedEffect(item.id) {
+                viewModel.loadSeerrServiceDetails(item.mediaType)
+            }
+
+            val requestSeasons = viewModel.seasons
+                .asSequence()
+                .filter { (it.seasonNumber ?: 0) > 0 }
+                .map { season ->
+                    SeerrSeason(
+                        id = season.seasonNumber ?: 0,
+                        airDate = season.premiereDate,
+                        episodeCount = season.childCount ?: 0,
+                        name = season.seasonName ?: season.name,
+                        overview = season.overview,
+                        posterPath = null,
+                        seasonNumber = season.seasonNumber ?: 0,
+                    )
+                }
+                .toList()
+
             SeerrRequestDialog(
                 item = item,
+                radarrServers = seerrRadarrServers,
+                sonarrServers = seerrSonarrServers,
+                seasons = if (item.mediaType.equals("tv", ignoreCase = true)) requestSeasons else emptyList(),
+                isLoadingServices = seerrIsLoadingServices,
                 isRequesting = seerrRequestResult?.isLoading == true,
                 requestSuccess = seerrRequestResult?.success,
                 requestError = seerrRequestResult?.error,
-                onConfirm = { seasons ->
-                    viewModel.requestSeerrMedia(item, seasons)
+                onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                    viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
                 },
                 onDismiss = {
                     seerrRequestItem = null

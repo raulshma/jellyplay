@@ -20,11 +20,33 @@ interface SeerrRepository {
 
     suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse>
 
-    suspend fun requestMedia(tmdbId: Int, mediaType: String, seasons: List<Int>? = null): Result<SeerrMediaRequest>
+    suspend fun requestMedia(
+        tmdbId: Int,
+        mediaType: String,
+        seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+    ): Result<SeerrMediaRequest>
 
     suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>>
 
     suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>>
+
+    suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail>
+
+    suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail>
+
+    // ── /service/ endpoints (used by request modal) ──
+
+    suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>>
+
+    suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>>
+
+    suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail>
+
+    suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail>
 
     fun isConnected(): Flow<Boolean>
 

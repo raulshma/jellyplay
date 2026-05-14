@@ -81,6 +81,10 @@ interface SeerrApiClient {
         mediaId: Int,
         tvdbId: Int? = null,
         seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
     ): Result<SeerrMediaRequest>
 
     suspend fun getRadarrSettings(
@@ -92,4 +96,40 @@ interface SeerrApiClient {
         baseUrl: String,
         apiKey: String,
     ): Result<List<SeerrSonarrSettings>>
+
+    suspend fun getRadarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail>
+
+    suspend fun getSonarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail>
+
+    // ── /service/ endpoints (used by request modal, matching Seerr web UI) ──
+
+    suspend fun getServiceRadarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>>
+
+    suspend fun getServiceSonarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>>
+
+    suspend fun getServiceRadarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail>
+
+    suspend fun getServiceSonarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail>
 }

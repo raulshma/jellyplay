@@ -13,7 +13,11 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -168,13 +172,38 @@ class SearchViewModel @Inject constructor(
     private val _requestResult = MutableStateFlow<RequestResult?>(null)
     val requestResult: StateFlow<RequestResult?> = _requestResult.asStateFlow()
 
-    fun requestSeerrMedia(item: SeerrSearchItem, seasons: List<Int>? = null) {
+    // Service details for request dialog
+    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+
+    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+
+    private val _isLoadingSeerrServices = MutableStateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+
+    // TV details for season data (fetched on-demand)
+    private val _tvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
+    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.asStateFlow()
+
+    fun requestSeerrMedia(
+        item: SeerrSearchItem,
+        seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+    ) {
         viewModelScope.launch {
             _requestResult.value = RequestResult(isLoading = true)
             seerrRepository.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
                 seasons = seasons,
+                serverId = serverId,
+                profileId = profileId,
+                rootFolder = rootFolder,
+                tags = tags,
             ).onSuccess {
                 _requestResult.value = RequestResult(success = true)
             }.onFailure {
@@ -208,6 +237,47 @@ class SearchViewModel @Inject constructor(
                 // Detail screen will retry on failure
             }
             onDone()
+        }
+    }
+
+    /**
+     * Fetches service details (Radarr/Sonarr) for the request dialog.
+     * Uses /service/ endpoints matching the Seerr web UI flow.
+     */
+    fun loadSeerrServiceDetails(mediaType: String) {
+        viewModelScope.launch {
+            _isLoadingSeerrServices.value = true
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
+                        }
+                        _radarrServers.value = details
+                    }
+                } else {
+                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
+                        }
+                        _sonarrServers.value = details
+                    }
+                }
+            } finally {
+                _isLoadingSeerrServices.value = false
+            }
+        }
+    }
+
+    /**
+     * Fetches TV details on-demand to get season data for the request dialog.
+     */
+    fun loadTvSeasons(tmdbId: Int) {
+        viewModelScope.launch {
+            _tvSeasons.value = emptyList()
+            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                _tvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
+            }
         }
     }
 }

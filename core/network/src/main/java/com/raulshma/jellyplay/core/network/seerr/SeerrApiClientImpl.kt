@@ -242,12 +242,20 @@ class SeerrApiClientImpl @Inject constructor(
         mediaId: Int,
         tvdbId: Int?,
         seasons: List<Int>?,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
     ): Result<SeerrMediaRequest> {
         val payload = SeerrRequestPayload(
             mediaType = mediaType,
             mediaId = mediaId,
             tvdbId = tvdbId,
             seasons = seasons,
+            serverId = serverId,
+            profileId = profileId,
+            rootFolder = rootFolder,
+            tags = tags,
         )
         val body = json.encodeToString(payload)
             .toRequestBody("application/json".toMediaType())
@@ -280,6 +288,90 @@ class SeerrApiClientImpl @Inject constructor(
     ): Result<List<SeerrSonarrSettings>> {
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/settings/sonarr"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getRadarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/settings/radarr/$id"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getSonarrServiceDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/settings/sonarr/$id"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    // ── /service/ endpoints (used by request modal) ──
+
+    override suspend fun getServiceRadarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/service/radarr"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getServiceSonarrServers(
+        baseUrl: String,
+        apiKey: String,
+    ): Result<List<SeerrServiceServer>> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/service/sonarr"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getServiceRadarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrRadarrServiceDetail> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/service/radarr/$id"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
+    override suspend fun getServiceSonarrDetail(
+        baseUrl: String,
+        apiKey: String,
+        id: Int,
+    ): Result<SeerrSonarrServiceDetail> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/service/sonarr/$id"))
             .withApiKey(apiKey)
             .get()
             .build()

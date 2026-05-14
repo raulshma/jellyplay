@@ -77,10 +77,22 @@ class SeerrRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun requestMedia(tmdbId: Int, mediaType: String, seasons: List<Int>?): Result<SeerrMediaRequest> {
+    override suspend fun requestMedia(
+        tmdbId: Int,
+        mediaType: String,
+        seasons: List<Int>?,
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+    ): Result<SeerrMediaRequest> {
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.requestMedia(serverUrl, apiKey, mediaType, tmdbId, seasons = seasons)
+        return seerrApiClient.requestMedia(
+            serverUrl, apiKey, mediaType, tmdbId,
+            seasons = seasons, serverId = serverId, profileId = profileId,
+            rootFolder = rootFolder, tags = tags,
+        )
     }
 
     override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> {
@@ -93,6 +105,44 @@ class SeerrRepositoryImpl @Inject constructor(
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
         return seerrApiClient.getSonarrSettings(serverUrl, apiKey)
+    }
+
+    override suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getRadarrServiceDetail(serverUrl, apiKey, id)
+    }
+
+    override suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getSonarrServiceDetail(serverUrl, apiKey, id)
+    }
+
+    // ── /service/ endpoints ──
+
+    override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceRadarrServers(serverUrl, apiKey)
+    }
+
+    override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceSonarrServers(serverUrl, apiKey)
+    }
+
+    override suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceRadarrDetail(serverUrl, apiKey, id)
+    }
+
+    override suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getServiceSonarrDetail(serverUrl, apiKey, id)
     }
 
     override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected
