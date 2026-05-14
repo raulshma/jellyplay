@@ -33,7 +33,7 @@ internal fun ChapterPickerSheet(
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {

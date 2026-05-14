@@ -18,7 +18,15 @@ import java.lang.ref.SoftReference
 internal object BlurHashCache {
     private val cache = android.util.LruCache<String, SoftReference<Bitmap>>(200)
 
-    fun get(key: String): Bitmap? = cache.get(key)?.get()
+    fun get(key: String): Bitmap? {
+        val ref = cache.get(key) ?: return null
+        val bitmap = ref.get()
+        if (bitmap == null || bitmap.isRecycled) {
+            cache.remove(key)
+            return null
+        }
+        return bitmap
+    }
 
     fun put(key: String, bitmap: Bitmap) {
         cache.put(key, SoftReference(bitmap))

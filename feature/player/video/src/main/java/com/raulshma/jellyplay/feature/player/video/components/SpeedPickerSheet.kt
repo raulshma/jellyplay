@@ -27,7 +27,7 @@ internal fun SpeedPickerSheet(
     onSelect: (Float) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {

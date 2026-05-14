@@ -30,7 +30,7 @@ fun AudioDelaySheet(
 ) {
     var delayMs by remember { mutableLongStateOf(currentDelayMs) }
 
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {

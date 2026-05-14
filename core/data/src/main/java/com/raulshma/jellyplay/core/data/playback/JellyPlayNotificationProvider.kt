@@ -42,7 +42,7 @@ class JellyPlayNotificationProvider(
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val imageLoader = ImageLoader.Builder(appContext).build()
+    private val imageLoader by lazy { coil3.SingletonImageLoader.get(appContext) }
 
     private var cachedBitmap: Bitmap? = null
     private var cachedArtworkUri: String? = null

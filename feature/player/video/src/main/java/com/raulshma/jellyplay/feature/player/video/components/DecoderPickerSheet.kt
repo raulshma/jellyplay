@@ -25,7 +25,7 @@ fun DecoderPickerSheet(
     onSelect: (DecoderMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {

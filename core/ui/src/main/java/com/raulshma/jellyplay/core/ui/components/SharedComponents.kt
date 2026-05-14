@@ -84,18 +84,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // ─── Dominant color cache ────────────────────────────────────────────────────
-private val dominantColorCache = mutableMapOf<String, Color>()
+private val dominantColorCache = android.util.LruCache<String, Color>(100)
 
 @Composable
 fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)): Color {
     val context = LocalContext.current
-    val cached = imageUrl?.let { dominantColorCache[it] }
+    val cached = imageUrl?.let { dominantColorCache.get(it) }
     var color by remember { mutableStateOf(cached ?: fallback) }
-    val loader = remember { ImageLoader(context) }
+    val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) return@LaunchedEffect
-        dominantColorCache[imageUrl]?.let {
+        dominantColorCache.get(imageUrl)?.let {
             color = it
             return@LaunchedEffect
         }
@@ -116,7 +116,7 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)
                         ?: palette.mutedSwatch?.rgb
                     if (extracted != null) {
                         val c = Color(extracted)
-                        dominantColorCache[imageUrl] = c
+                        dominantColorCache.put(imageUrl, c)
                         color = c
                     }
                 }
@@ -519,13 +519,8 @@ fun StaggeredSection(
     index: Int,
     content: @Composable () -> Unit,
 ) {
-    var shouldShow by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        shouldShow = visible
-    }
-
     AnimatedVisibility(
-        visible = visible && shouldShow,
+        visible = visible,
         enter = fadeIn(
             animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
         ) + slideInVertically(

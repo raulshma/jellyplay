@@ -126,7 +126,7 @@ class DownloadWorker(
             var lastProgressUpdate = System.currentTimeMillis()
             var lastSpeedBytes = existingBytes
             var speedBytesPerSec = 0L
-            val progressUpdateIntervalMs = 500L
+            val progressUpdateIntervalMs = 2000L
 
             val body = response.body ?: run {
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)

@@ -37,7 +37,7 @@ fun AspectRatioSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
 
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {

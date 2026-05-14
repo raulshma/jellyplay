@@ -31,7 +31,7 @@ internal fun TrackPickerSheet(
     onSelect: (TrackOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
