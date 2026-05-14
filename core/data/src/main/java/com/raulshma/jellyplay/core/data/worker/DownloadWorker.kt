@@ -60,7 +60,11 @@ class DownloadWorker(
         }
 
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
-        setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
+        try {
+            setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
+        } catch (_: Exception) {
+            // Foreground service not available, continue without it
+        }
 
         val existingBytes = entity.downloadedBytes
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)

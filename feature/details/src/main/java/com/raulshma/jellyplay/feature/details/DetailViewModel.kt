@@ -369,23 +369,31 @@ class DetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             isDownloading = true
-            val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
-            val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
-            val mediaType = when (item.mediaType) {
-                MediaType.AUDIO, MediaType.MUSIC -> MediaType.AUDIO.name
-                else -> item.mediaType.name
-            }
+            try {
+                val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
+                if (streamUrl.isBlank()) {
+                    isDownloading = false
+                    return@launch
+                }
+                val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
+                val mediaType = when (item.mediaType) {
+                    MediaType.AUDIO, MediaType.MUSIC -> MediaType.AUDIO.name
+                    else -> item.mediaType.name
+                }
 
-            downloadRepository.startDownload(
-                mediaItemId = item.id,
-                name = item.name,
-                mediaType = mediaType,
-                mediaSourceId = source.id,
-                downloadUrl = streamUrl,
-                imageUrl = imageUrl,
-                imageBlurHash = item.blurHashes.primary,
-            ).onSuccess { downloadItem ->
-                enqueueDownloadWorker(downloadItem.id)
+                downloadRepository.startDownload(
+                    mediaItemId = item.id,
+                    name = item.name,
+                    mediaType = mediaType,
+                    mediaSourceId = source.id,
+                    downloadUrl = streamUrl,
+                    imageUrl = imageUrl,
+                    imageBlurHash = item.blurHashes.primary,
+                ).onSuccess { downloadItem ->
+                    enqueueDownloadWorker(downloadItem.id)
+                }
+            } catch (_: Exception) {
+                // Download initiation failed silently
             }
             isDownloading = false
         }

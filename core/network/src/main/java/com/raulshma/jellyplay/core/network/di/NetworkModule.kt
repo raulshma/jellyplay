@@ -15,6 +15,9 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
+import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.createJellyfin
+import org.jellyfin.sdk.model.ClientInfo
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -42,6 +45,19 @@ abstract class NetworkModule {
             @ApplicationContext context: Context,
         ): ConnectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        @Provides
+        @Singleton
+        fun provideJellyfin(
+            @ApplicationContext context: Context,
+        ): Jellyfin = createJellyfin {
+            this.context = context
+            clientInfo = ClientInfo(
+                name = "JellyPlay",
+                version = context.packageManager
+                    .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+            )
+        }
 
         @Provides
         @Singleton
