@@ -1,10 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -260,7 +257,6 @@ fun PlayButtonWithProgress(
 
 // ─── Redesigned PosterCard ───────────────────────────────────────────────────
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -272,7 +268,6 @@ fun PosterCard(
     progressPercent: Float = 0f,
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -293,25 +288,12 @@ fun PosterCard(
         label = "cardBrightness",
     )
 
-    val sharedScope = LocalSharedTransitionScope.current
-    val animScope = LocalAnimatedVisibilityScope.current
-
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = modifier) {
         Card(
@@ -381,6 +363,35 @@ fun PosterCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
+                    }
+                }
+
+                if (item.communityRating != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.communityRating),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
                     }
                 }
 
@@ -464,7 +475,6 @@ fun MediaRow(
                     } else 0f,
                     blurHash = blurHashBuilder(item),
                     onPlayClick = onPlayClick?.let { { it(item) } },
-                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }
