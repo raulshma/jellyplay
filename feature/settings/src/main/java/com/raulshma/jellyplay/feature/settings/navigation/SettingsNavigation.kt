@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -18,6 +19,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onLogout = onLogout,
             onServerManagement = { navigator.navigate(Route.ServerManagement) },
             onUserManagement = { navigator.navigate(Route.UserManagement) },
+            onSeerrSettings = { navigator.navigate(Route.SeerrSettings) },
         )
     }
 
@@ -33,6 +35,12 @@ fun EntryProviderScope<NavKey>.settingsSection(
         UserManagementScreen(
             onBack = { navigator.goBack() },
             onAddUser = { navigator.navigate(Route.AddServer) },
+        )
+    }
+
+    entry<Route.SeerrSettings> {
+        SeerrSettingsScreen(
+            onBack = { navigator.goBack() },
         )
     }
 }

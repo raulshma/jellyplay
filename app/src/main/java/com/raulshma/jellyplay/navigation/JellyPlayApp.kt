@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -8,7 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
@@ -445,6 +450,7 @@ private fun NavIcon(route: Route, label: String) {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
@@ -458,66 +464,116 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    NavDisplay(
-        backStack = currentBackStack,
-        onBack = { navigator.goBack() },
-        transitionSpec = {
-            fadeIn(
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
-            ) + slideInHorizontally(
-                initialOffsetX = { it / 10 },
-                animationSpec = tween(360, easing = FastOutSlowInEasing),
-            ) + scaleIn(
-                initialScale = 0.985f,
-                animationSpec = tween(360, easing = FastOutSlowInEasing),
-            ) togetherWith fadeOut(
-                animationSpec = tween(180),
-            ) + slideOutHorizontally(
-                targetOffsetX = { -it / 18 },
-                animationSpec = tween(220, easing = FastOutSlowInEasing),
-            ) + scaleOut(
-                targetScale = 1.015f,
-                animationSpec = tween(220, easing = FastOutSlowInEasing),
-            )
-        },
-        popTransitionSpec = {
-            fadeIn(
-                animationSpec = tween(260, easing = FastOutSlowInEasing),
-            ) + slideInHorizontally(
-                initialOffsetX = { -it / 12 },
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
-            ) + scaleIn(
-                initialScale = 1.015f,
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
-            ) togetherWith fadeOut(
-                animationSpec = tween(220),
-            ) + slideOutHorizontally(
-                targetOffsetX = { it / 10 },
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
-            ) + scaleOut(
-                targetScale = 0.985f,
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
-            )
-        },
-        predictivePopTransitionSpec = { _ ->
-            fadeIn(
-                animationSpec = tween(260, easing = FastOutSlowInEasing),
-            ) + slideInHorizontally(
-                initialOffsetX = { -it / 12 },
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
-            ) + scaleIn(
-                initialScale = 1.015f,
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
-            ) togetherWith fadeOut(
-                animationSpec = tween(220),
-            ) + slideOutHorizontally(
-                targetOffsetX = { it / 10 },
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
-            ) + scaleOut(
-                targetScale = 0.985f,
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
-            )
-        },
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
+            NavDisplay(
+                backStack = currentBackStack,
+                onBack = { navigator.goBack() },
+                transitionSpec = {
+                    val targetLast = targetState
+                    val initialLast = initialState
+                    val isModalRoute = targetLast is Route.Settings ||
+                            targetLast is Route.Downloads ||
+                            targetLast is Route.SyncPlay ||
+                            targetLast is Route.SeerrSettings
+                    val isModalPop = initialLast is Route.Settings ||
+                            initialLast is Route.Downloads ||
+                            initialLast is Route.SyncPlay ||
+                            initialLast is Route.SeerrSettings
+                    val isTabSwitch = targetLast is Route && initialLast is Route &&
+                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetLast as Route) &&
+                            ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialLast as Route)
+
+                    when {
+                        isModalRoute -> {
+                            fadeIn(tween(250)) +
+                                    slideInVertically(
+                                        initialOffsetY = { it / 4 },
+                                        animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                    ) togetherWith fadeOut(tween(180))
+                        }
+                        isModalPop -> {
+                            fadeIn(tween(200)) togetherWith fadeOut(tween(200)) +
+                                    slideOutVertically(
+                                        targetOffsetY = { it / 4 },
+                                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                    )
+                        }
+                        isTabSwitch -> {
+                            fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                        }
+                        else -> {
+                            fadeIn(
+                                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                            ) + slideInHorizontally(
+                                initialOffsetX = { it / 10 },
+                                animationSpec = tween(360, easing = FastOutSlowInEasing),
+                            ) + scaleIn(
+                                initialScale = 0.985f,
+                                animationSpec = tween(360, easing = FastOutSlowInEasing),
+                            ) togetherWith fadeOut(
+                                animationSpec = tween(180),
+                            ) + slideOutHorizontally(
+                                targetOffsetX = { -it / 18 },
+                                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                            ) + scaleOut(
+                                targetScale = 1.015f,
+                                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                            )
+                        }
+                    }
+                },
+                popTransitionSpec = {
+                    val initialLast = initialState
+                    val isModalPop = initialLast is Route.Settings ||
+                            initialLast is Route.Downloads ||
+                            initialLast is Route.SyncPlay ||
+                            initialLast is Route.SeerrSettings
+                    if (isModalPop) {
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(200)) +
+                                slideOutVertically(
+                                    targetOffsetY = { it / 4 },
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                )
+                    } else {
+                        fadeIn(
+                            animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        ) + slideInHorizontally(
+                            initialOffsetX = { -it / 12 },
+                            animationSpec = tween(300, easing = FastOutSlowInEasing),
+                        ) + scaleIn(
+                            initialScale = 1.015f,
+                            animationSpec = tween(300, easing = FastOutSlowInEasing),
+                        ) togetherWith fadeOut(
+                            animationSpec = tween(220),
+                        ) + slideOutHorizontally(
+                            targetOffsetX = { it / 10 },
+                            animationSpec = tween(280, easing = FastOutSlowInEasing),
+                        ) + scaleOut(
+                            targetScale = 0.985f,
+                            animationSpec = tween(280, easing = FastOutSlowInEasing),
+                        )
+                    }
+                },
+                predictivePopTransitionSpec = { _ ->
+                    fadeIn(
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    ) + slideInHorizontally(
+                        initialOffsetX = { -it / 12 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    ) + scaleIn(
+                        initialScale = 1.015f,
+                        animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    ) togetherWith fadeOut(
+                        animationSpec = tween(220),
+                    ) + slideOutHorizontally(
+                        targetOffsetX = { it / 10 },
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    ) + scaleOut(
+                        targetScale = 0.985f,
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    )
+                },
         entryProvider = entryProvider {
             homeSection(
                 navigator = navigator,
@@ -553,4 +609,6 @@ private fun MainNavDisplay(
         },
         modifier = modifier,
     )
+        }
+    }
 }

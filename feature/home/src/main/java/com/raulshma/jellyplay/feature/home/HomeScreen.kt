@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -355,6 +357,16 @@ fun HomeScreen(
                                 items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
+                                    val isSectionVisible by remember {
+                                        derivedStateOf {
+                                            val layoutInfo = listState.layoutInfo
+                                            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index + (if (featuredItem != null) 1 else 0) }
+                                            itemInfo != null
+                                        }
+                                    }
+                                    var hasBeenVisible by remember { mutableStateOf(isSectionVisible) }
+                                    if (isSectionVisible) hasBeenVisible = true
+
                                     val sectionModifier = Modifier
                                         .fillMaxWidth()
                                         .then(
@@ -372,6 +384,19 @@ fun HomeScreen(
                                         )
                                         .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
 
+                                    AnimatedVisibility(
+                                        visible = hasBeenVisible,
+                                        enter = fadeIn(
+                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                        ) + slideInVertically(
+                                            initialOffsetY = { it / 20 },
+                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                        ) + scaleIn(
+                                            initialScale = 0.97f,
+                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                        ),
+                                        exit = fadeOut(tween(100)),
+                                    ) {
                                     if (section.type == HomeSectionType.CONTINUE_WATCHING ||
                                         section.type == HomeSectionType.NEXT_UP
                                     ) {
@@ -394,6 +419,7 @@ fun HomeScreen(
                                             onPlayClick = mediaOnPlayClick,
                                             modifier = sectionModifier,
                                         )
+                                    }
                                     }
                                 }
                             }
@@ -531,7 +557,7 @@ private fun AnimatedHeroHeader(
             )
         },
         label = "heroRotation",
-    ) { currentFeatured ->
+        ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
             backdropUrl = getBackdropUrl(currentFeatured.id),
@@ -539,6 +565,7 @@ private fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             onClick = { onItemClick(currentFeatured.id) },
+            sharedBackdropKey = "backdrop_${currentFeatured.id}",
         )
     }
 }
@@ -551,6 +578,7 @@ private fun HeroHeader(
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
+    sharedBackdropKey: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -574,6 +602,22 @@ private fun HeroHeader(
         label = "detailsButtonScale",
     )
 
+    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    val backdropModifier = Modifier
+        .fillMaxSize()
+        .then(
+            if (sharedScope != null && animScope != null && sharedBackdropKey != null) {
+                with(sharedScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(sharedBackdropKey),
+                        animatedVisibilityScope = animScope,
+                    )
+                }
+            } else Modifier
+        )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -593,7 +637,7 @@ private fun HeroHeader(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
-            modifier = Modifier.fillMaxSize(),
+            modifier = backdropModifier,
             contentScale = ContentScale.Crop,
         )
 
@@ -822,12 +866,14 @@ private fun ContinueWatchingRow(
                     onClick = { onItemClick(item) },
                     onPlayClick = onPlayClick?.let { { it(item) } },
                     cardWidth = cardWidth,
+                    sharedElementKey = "backdrop_${item.id}",
                 )
             }
         }
     }
 }
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
@@ -836,14 +882,25 @@ private fun WideMediaCard(
     onClick: () -> Unit,
     onPlayClick: (() -> Unit)? = null,
     cardWidth: androidx.compose.ui.unit.Dp,
+    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(150),
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 400f),
         label = "wideCardScale",
+    )
+    val elevation by animateFloatAsState(
+        targetValue = if (isPressed) 12f else 4f,
+        animationSpec = tween(200),
+        label = "wideCardElevation",
+    )
+    val brightnessOverlay by animateFloatAsState(
+        targetValue = if (isPressed) 0.08f else 0f,
+        animationSpec = tween(150),
+        label = "wideCardBrightness",
     )
 
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl })
@@ -853,12 +910,32 @@ private fun WideMediaCard(
     } else 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    val imageModifier = Modifier
+        .fillMaxWidth()
+        .aspectRatio(16f / 9f)
+        .then(
+            if (sharedScope != null && animScope != null && sharedElementKey != null) {
+                with(sharedScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(sharedElementKey),
+                        animatedVisibilityScope = animScope,
+                    )
+                }
+            } else Modifier
+        )
+
     Column(modifier = Modifier.width(cardWidth)) {
-        // ── Card (backdrop only, no text inside) ──
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    shadowElevation = elevation.dp.toPx()
+                }
                 .tvFocusable().clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -873,13 +950,18 @@ private fun WideMediaCard(
                     fallbackUrls = listOf(imageUrl).filter { it.isNotBlank() },
                     contentDescription = item.name,
                     blurHash = item.blurHashes.backdrop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f),
+                    modifier = imageModifier,
                     contentScale = ContentScale.Crop,
                 )
 
-                // Subtle gradient at bottom for depth
+                if (brightnessOverlay > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.White.copy(alpha = brightnessOverlay))
+                    )
+                }
+
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -895,7 +977,6 @@ private fun WideMediaCard(
                         )
                 )
 
-                // Play button in bottom-right
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
                         progressPercent = progressPercent,
@@ -910,7 +991,6 @@ private fun WideMediaCard(
             }
         }
 
-        // ── Info below card ──
         Column(
             modifier = Modifier.padding(
                 start = 4.dp,
@@ -990,6 +1070,7 @@ private fun HomeMediaRow(
                     } else 0f,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = onPlayClick?.let { { it(item) } },
+                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }

@@ -30,4 +30,8 @@ dependencies {
     // SLF4J - required by Jellyfin SDK
     implementation(libs.slf4j.api)
     runtimeOnly(libs.slf4j.nop)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.okhttp)
+    testImplementation(libs.okhttp.mockwebserver)
 }

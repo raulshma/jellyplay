@@ -3,7 +3,10 @@ package com.raulshma.jellyplay.core.ui.components
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -257,6 +260,7 @@ fun PlayButtonWithProgress(
 
 // ─── Redesigned PosterCard ───────────────────────────────────────────────────
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -268,27 +272,55 @@ fun PosterCard(
     progressPercent: Float = 0f,
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
+    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(150),
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 400f),
         label = "cardScale",
     )
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 12.dp else if (isTv) 12.dp else 4.dp,
+        animationSpec = tween(200),
+        label = "cardElevation",
+    )
+    val brightnessOverlay by animateFloatAsState(
+        targetValue = if (isPressed) 0.08f else 0f,
+        animationSpec = tween(150),
+        label = "cardBrightness",
+    )
+
+    val sharedScope = LocalSharedTransitionScope.current
+    val animScope = LocalAnimatedVisibilityScope.current
 
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    val imageModifier = Modifier
+        .fillMaxWidth()
+        .aspectRatio(2f / 3f)
+        .then(
+            if (sharedScope != null && animScope != null && sharedElementKey != null) {
+                with(sharedScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(sharedElementKey),
+                        animatedVisibilityScope = animScope,
+                    )
+                }
+            } else Modifier
+        )
+
     Column(modifier = modifier) {
-        // ── Card (poster only, no text inside) ──
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    shadowElevation = elevation.toPx()
                 }
                 .tvFocusable().clickable(
                     interactionSource = interactionSource,
@@ -306,13 +338,18 @@ fun PosterCard(
                     fallbackUrls = fallbackUrls,
                     contentDescription = item.name,
                     blurHash = blurHash,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(2f / 3f),
+                    modifier = imageModifier,
                     contentScale = ContentScale.Crop,
                 )
 
-                // Subtle gradient at bottom for depth
+                if (brightnessOverlay > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.White.copy(alpha = brightnessOverlay))
+                    )
+                }
+
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -328,7 +365,6 @@ fun PosterCard(
                         )
                 )
 
-                // "Watched" badge in top-right
                 if (item.isPlayed) {
                     Box(
                         modifier = Modifier
@@ -348,7 +384,6 @@ fun PosterCard(
                     }
                 }
 
-                // Play button in bottom-right
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
                         progressPercent = if (showProgress) progressPercent else 0f,
@@ -363,7 +398,6 @@ fun PosterCard(
             }
         }
 
-        // ── Info below card ──
         Column(
             modifier = Modifier.padding(
                 start = 4.dp,
@@ -430,6 +464,7 @@ fun MediaRow(
                     } else 0f,
                     blurHash = blurHashBuilder(item),
                     onPlayClick = onPlayClick?.let { { it(item) } },
+                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }

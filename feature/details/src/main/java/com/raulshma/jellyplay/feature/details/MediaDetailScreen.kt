@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import android.os.StatFs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -111,8 +113,12 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -127,6 +133,7 @@ fun MediaDetailScreen(
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -153,6 +160,31 @@ fun MediaDetailScreen(
     ) {
         val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
 
+        // Seerr integration state
+        val seerrRecommendations by viewModel.seerrRecommendations.collectAsStateWithLifecycle()
+        val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
+        val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
+        val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
+        val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
+        val seerrRadarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+        val seerrSonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+        val seerrIsLoadingServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+        var seerrRequestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
+
+        // Seerr card loading state for prefetch animation
+        val seerrLoadingState = rememberSeerrCardLoadingState()
+        val seerrPrefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
+            seerrLoadingState.startLoading(tmdbId)
+            viewModel.prefetchSeerrDetails(tmdbId, mediaType) {
+                seerrLoadingState.stopLoading(tmdbId)
+                onDone()
+            }
+        }
+
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides seerrPrefetchCallback,
+            com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
+        ) {
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -189,7 +221,46 @@ fun MediaDetailScreen(
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
             onBack = onBack,
+            seerrRecommendations = seerrRecommendations,
+            seerrSimilar = seerrSimilar,
+            isSeerrConnected = isSeerrConnected,
+            isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+            getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
+            onSeerrRequest = { seerrRequestItem = it },
+            onNavigate = onNavigate,
         )
+
+        // Seerr request dialog
+        seerrRequestItem?.let { item ->
+            // Fetch service details and TV seasons on-demand when dialog opens
+            LaunchedEffect(item.id) {
+                viewModel.loadSeerrServiceDetails(item.mediaType)
+                if (item.mediaType.equals("tv", ignoreCase = true)) {
+                    viewModel.loadSeerrTvSeasons(item.id)
+                }
+            }
+
+            val seerrTvSeasons by viewModel.seerrTvSeasons.collectAsStateWithLifecycle()
+
+            SeerrRequestDialog(
+                item = item,
+                radarrServers = seerrRadarrServers,
+                sonarrServers = seerrSonarrServers,
+                seasons = if (item.mediaType.equals("tv", ignoreCase = true)) seerrTvSeasons else emptyList(),
+                isLoadingServices = seerrIsLoadingServices,
+                isRequesting = seerrRequestResult?.isLoading == true,
+                requestSuccess = seerrRequestResult?.success,
+                requestError = seerrRequestResult?.error,
+                onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                    viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+                },
+                onDismiss = {
+                    seerrRequestItem = null
+                    viewModel.clearSeerrRequestResult()
+                },
+            )
+        }
+        } // CompositionLocalProvider
     }
 }
 
@@ -223,6 +294,13 @@ private fun DetailContent(
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
     onBack: () -> Unit,
+    seerrRecommendations: List<SeerrSearchItem> = emptyList(),
+    seerrSimilar: List<SeerrSearchItem> = emptyList(),
+    isSeerrConnected: Boolean = false,
+    isSeerrRecommendationsEnabled: Boolean = false,
+    getSeerrPosterUrl: (String?) -> String? = { null },
+    onSeerrRequest: (SeerrSearchItem) -> Unit = {},
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 ) {
     val item = detail?.item
     val scrollState = rememberScrollState()
@@ -328,17 +406,31 @@ private fun DetailContent(
                 },
                 label = "detailBackdrop",
             ) { backdropId ->
+                val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+                val animVisScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+                val backdropModifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .then(
+                        if (sharedScope != null && animVisScope != null) {
+                            @OptIn(ExperimentalSharedTransitionApi::class)
+                            with(sharedScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState("backdrop_$backdropId"),
+                                    animatedVisibilityScope = animVisScope,
+                                )
+                            }
+                        } else Modifier
+                    )
                 MediaImage(
                     url = getBackdropUrl(backdropId),
                     contentDescription = null,
                     blurHash = item?.blurHashes?.backdrop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
-                            scaleX = scale
-                            scaleY = scale
-                        },
+                    modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
                 )
             }
@@ -423,7 +515,20 @@ private fun DetailContent(
                                         .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .graphicsLayer { alpha = contentAlpha },
+                                        .graphicsLayer { alpha = contentAlpha }
+                                        .then(
+                                            com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
+                                                com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
+                                                    @OptIn(ExperimentalSharedTransitionApi::class)
+                                                    with(scope) {
+                                                        Modifier.sharedElement(
+                                                            rememberSharedContentState("poster_$itemId"),
+                                                            animatedVisibilityScope = avScope,
+                                                        )
+                                                    }
+                                                } ?: Modifier
+                                            } ?: Modifier
+                                        ),
                                     contentScale = ContentScale.Crop,
                                 )
                                 if (detail != null && item != null) {
@@ -491,6 +596,13 @@ private fun DetailContent(
                                     contentAlignment = Alignment.TopStart,
                                     showActionButtons = false,
                                     showMediaInfo = true,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
                                 )
                             }
                         } else if (isLoading) {
@@ -549,7 +661,20 @@ private fun DetailContent(
                                             .width(posterWidth)
                                             .aspectRatio(2f / 3f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .graphicsLayer { alpha = contentAlpha },
+                                            .graphicsLayer { alpha = contentAlpha }
+                                            .then(
+                                                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current?.let { scope ->
+                                                    com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current?.let { avScope ->
+                                                        @OptIn(ExperimentalSharedTransitionApi::class)
+                                                        with(scope) {
+                                                            Modifier.sharedElement(
+                                                                rememberSharedContentState("poster_$itemId"),
+                                                                animatedVisibilityScope = avScope,
+                                                            )
+                                                        }
+                                                    } ?: Modifier
+                                                } ?: Modifier
+                                            ),
                                         contentScale = ContentScale.Crop,
                                     )
                                 }
@@ -595,6 +720,13 @@ private fun DetailContent(
                                     onItemClick = onItemClick,
                                     onPersonClick = onPersonClick,
                                     onNavigateToSeries = onNavigateToSeries,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
                                 )
                             }
                         } else if (isLoading) {
@@ -909,6 +1041,13 @@ private fun MediaInfoSection(
                     ) {
                         items(options, key = { "${activePicker}_${it.index}_${it.label}" }) { option ->
                             val isSelected = option.index == selectedIndex
+                            val optionInteractionSource = remember { MutableInteractionSource() }
+                            val isOptionPressed by optionInteractionSource.collectIsPressedAsState()
+                            val optionScale by animateFloatAsState(
+                                targetValue = if (isOptionPressed) 0.97f else 1f,
+                                animationSpec = spring(stiffness = 400f),
+                                label = "optionScale",
+                            )
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -917,7 +1056,14 @@ private fun MediaInfoSection(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .tvFocusable().clickable {
+                                    .graphicsLayer {
+                                        scaleX = optionScale
+                                        scaleY = optionScale
+                                    }
+                                    .tvFocusable().clickable(
+                                        interactionSource = optionInteractionSource,
+                                        indication = null,
+                                    ) {
                                         if (picker == StreamPickerType.AUDIO) {
                                             onAudioSelect(option.index)
                                         } else {
@@ -1440,6 +1586,13 @@ private fun DetailContentBody(
     contentAlignment: Alignment = Alignment.TopCenter,
     showActionButtons: Boolean = true,
     showMediaInfo: Boolean = true,
+    seerrRecommendations: List<SeerrSearchItem> = emptyList(),
+    seerrSimilar: List<SeerrSearchItem> = emptyList(),
+    isSeerrConnected: Boolean = false,
+    isSeerrRecommendationsEnabled: Boolean = false,
+    getSeerrPosterUrl: (String?) -> String? = { null },
+    onSeerrRequest: (SeerrSearchItem) -> Unit = {},
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 ) {
     val showContent = true
 
@@ -1743,6 +1896,108 @@ private fun DetailContentBody(
                                 item = related,
                                 imageUrl = getImageUrl(related.id),
                                 onClick = { onItemClick(related.id) },
+                                modifier = Modifier.width(
+                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Seerr Recommendations Section ──
+        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+                Column {
+                    Text(
+                        text = "Seerr Recommendations",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = seerrRecommendations.size,
+                            key = { index -> "seerr_rec_${seerrRecommendations[index].id}" },
+                            contentType = { "seerrRecItem" },
+                        ) { index ->
+                            val seerrItem = seerrRecommendations[index]
+                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            val adaptiveInfo = LocalAdaptiveInfo.current
+                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = posterUrl,
+                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
+                                onClick = {
+                                    if (loadingState != null && prefetch != null) {
+                                        loadingState.startLoading(seerrItem.id)
+                                        prefetch(seerrItem.id, seerrItem.mediaType) {
+                                            loadingState.stopLoading(seerrItem.id)
+                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    } else {
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    }
+                                },
+                                onRequestClick = { onSeerrRequest(seerrItem) },
+                                modifier = Modifier.width(
+                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Seerr Similar Section ──
+        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrSimilar.isNotEmpty()) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 9) {
+                Column {
+                    Text(
+                        text = "Seerr Similar",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = seerrSimilar.size,
+                            key = { index -> "seerr_sim_${seerrSimilar[index].id}" },
+                            contentType = { "seerrSimItem" },
+                        ) { index ->
+                            val seerrItem = seerrSimilar[index]
+                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
+                            val adaptiveInfo = LocalAdaptiveInfo.current
+                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = posterUrl,
+                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
+                                onClick = {
+                                    if (loadingState != null && prefetch != null) {
+                                        loadingState.startLoading(seerrItem.id)
+                                        prefetch(seerrItem.id, seerrItem.mediaType) {
+                                            loadingState.stopLoading(seerrItem.id)
+                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    } else {
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                    }
+                                },
+                                onRequestClick = { onSeerrRequest(seerrItem) },
                                 modifier = Modifier.width(
                                     if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                                 ),
