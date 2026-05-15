@@ -228,6 +228,7 @@ private fun SeerrDetailContent(
         adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> AdaptiveBackdropHeight.Expanded
         else -> AdaptiveBackdropHeight.Portrait
     }
+    val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
     val scrollOffset by remember { derivedStateOf { scrollState.value.toFloat() } }
     val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
@@ -289,7 +290,7 @@ private fun SeerrDetailContent(
                                 backgroundColor.copy(alpha = 0.9f),
                                 backgroundColor,
                             ),
-                            startY = if (isLandscapeExpanded) 0f else with(density) { (backdropHeight - 200.dp).toPx() },
+                            startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
                         )
                     )
@@ -301,7 +302,7 @@ private fun SeerrDetailContent(
                 .fillMaxSize()
                 .verticalScroll(scrollState),
         ) {
-            Spacer(modifier = Modifier.height(backdropHeight - 150.dp))
+            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
 
             Box(
                 modifier = Modifier

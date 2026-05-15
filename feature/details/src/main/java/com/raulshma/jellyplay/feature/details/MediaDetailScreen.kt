@@ -320,6 +320,7 @@ private fun DetailContent(
         adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Expanded
         else -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight.Portrait
     }
+    val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
     val scrollOffset by remember {
         derivedStateOf { scrollState.value.toFloat() }
@@ -435,7 +436,7 @@ private fun DetailContent(
                                 backgroundColor.copy(alpha = 0.9f),
                                 backgroundColor,
                             ),
-                            startY = if (isLandscapeExpanded) 0f else with(density) { (backdropHeight - 200.dp).toPx() },
+                            startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
                         )
                     )
@@ -447,7 +448,7 @@ private fun DetailContent(
                 .fillMaxSize()
                 .verticalScroll(scrollState),
         ) {
-            Spacer(modifier = Modifier.height(backdropHeight - 150.dp))
+            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
 
             Box(
                 modifier = Modifier
