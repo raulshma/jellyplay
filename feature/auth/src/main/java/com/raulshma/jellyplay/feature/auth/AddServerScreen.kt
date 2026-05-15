@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -57,6 +56,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,9 +105,9 @@ fun AddServerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400)) + slideInVertically(
+                    enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, easing = FastOutSlowInEasing),
+                        animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
                     ),
                 ) {
                     Column(
@@ -138,9 +140,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 100)) + slideInVertically(
+                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                        animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = FancyTransitionEasing),
                     ),
                 ) {
                     DiscoverySection(
@@ -160,7 +162,7 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 150)),
+                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = AlphaEasing)),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -189,9 +191,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(400, delayMillis = 200)) + slideInVertically(
+                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(400, delayMillis = 200, easing = FastOutSlowInEasing),
+                        animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = FancyTransitionEasing),
                     ),
                 ) {
                     ManualEntrySection(

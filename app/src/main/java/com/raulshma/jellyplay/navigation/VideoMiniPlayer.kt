@@ -6,6 +6,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -66,22 +69,22 @@ fun VideoMiniPlayer(
         enter = slideInVertically(
             initialOffsetY = { it },
             animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(300)),
+        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(200),
-        ) + fadeOut(tween(150)),
+            animationSpec = tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing),
+        ) + fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
         val animatedColor by animateColorAsState(
             targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-            animationSpec = tween(400),
+            animationSpec = tween(AnimationTokens.StandardDuration),
             label = "videoMiniPlayerColor",
         )
         val contentAlpha by animateFloatAsState(
             targetValue = 1f,
-            animationSpec = tween(400),
+            animationSpec = tween(AnimationTokens.StandardDuration),
             label = "videoMiniContentAlpha",
         )
 

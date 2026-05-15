@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -41,8 +44,8 @@ fun SyncPlayOverlay(
 ) {
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         Surface(

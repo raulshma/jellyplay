@@ -69,10 +69,10 @@ object AdaptiveHeroHeight {
 
 // ── Detail backdrop height ───────────────────────────────────────────────
 object AdaptiveBackdropHeight {
-    val Portrait: Dp = 450.dp
-    val LandscapeExpanded: Dp = 320.dp
-    val Expanded: Dp = 400.dp
-    val Tv: Dp = 380.dp
+    val Portrait: Dp = 540.dp
+    val LandscapeExpanded: Dp = 384.dp
+    val Expanded: Dp = 480.dp
+    val Tv: Dp = 456.dp
 }
 
 // ── Detail body max width (centered content on wide screens) ─────────────

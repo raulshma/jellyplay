@@ -160,6 +160,7 @@ fun JellyPlayTheme(
         colorScheme = colorScheme,
         typography = typography,
         shapes = shapes,
+        motionScheme = CustomMotionScheme,
         content = content,
     )
 }

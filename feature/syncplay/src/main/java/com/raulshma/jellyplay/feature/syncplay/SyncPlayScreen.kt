@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.syncplay
 import androidx.compose.animation.AnimatedContent
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -180,8 +182,8 @@ fun SyncPlayScreen(
         floatingActionButton = {
             AnimatedVisibility(
                 visible = !isInGroup,
-                enter = fadeIn(tween(200)) + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut(tween(150)) + slideOutVertically(targetOffsetY = { it }),
+                enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideOutVertically(targetOffsetY = { it }),
             ) {
                 FloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
@@ -214,8 +216,8 @@ fun SyncPlayScreen(
                     AnimatedContent(
                         targetState = currentGroup,
                         transitionSpec = {
-                            (fadeIn(tween(300)) + slideInHorizontally(initialOffsetX = { it }))
-                                .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(targetOffsetX = { -it }))
+                            (fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + slideInHorizontally(initialOffsetX = { it }))
+                                .togetherWith(fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutHorizontally(targetOffsetX = { -it }))
                         },
                         label = "activeGroup",
                     ) { group ->
@@ -270,10 +272,10 @@ fun SyncPlayScreen(
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(300, delayMillis = index * 80)
+                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = AlphaEasing)
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 10 },
-                                        animationSpec = tween(300, delayMillis = index * 80, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = FancyTransitionEasing),
                                     ),
                                 ) {
                                     SyncPlayGroupCard(
@@ -603,8 +605,8 @@ private fun ActiveGroupView(
 
         AnimatedVisibility(
             visible = showChat,
-            enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-            exit = shrinkVertically(tween(150)) + fadeOut(tween(150)),
+            enter = expandVertically(tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing)) + fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+            exit = shrinkVertically(tween(AnimationTokens.QuickDuration, easing = FancyTransitionEasing)) + fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
         ) {
             Column(
                 modifier = Modifier
