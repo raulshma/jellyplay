@@ -6,6 +6,9 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -187,8 +190,8 @@ fun OfflinePlayerScreen(
 
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(

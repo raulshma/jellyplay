@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
@@ -225,6 +228,7 @@ private fun SeerrDetailContent(
         adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> AdaptiveBackdropHeight.Expanded
         else -> AdaptiveBackdropHeight.Portrait
     }
+    val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
     val scrollOffset by remember { derivedStateOf { scrollState.value.toFloat() } }
     val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
@@ -236,7 +240,7 @@ private fun SeerrDetailContent(
     val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600),
+        animationSpec = tween(600, easing = FancyTransitionEasing),
         label = "backgroundColor",
     )
 
@@ -245,7 +249,7 @@ private fun SeerrDetailContent(
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
         label = "appBarColor",
     )
 
@@ -286,7 +290,7 @@ private fun SeerrDetailContent(
                                 backgroundColor.copy(alpha = 0.9f),
                                 backgroundColor,
                             ),
-                            startY = if (isLandscapeExpanded) 0f else with(density) { (backdropHeight - 200.dp).toPx() },
+                            startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
                         )
                     )
@@ -298,7 +302,7 @@ private fun SeerrDetailContent(
                 .fillMaxSize()
                 .verticalScroll(scrollState),
         ) {
-            Spacer(modifier = Modifier.height(backdropHeight - 150.dp))
+            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
 
             Box(
                 modifier = Modifier
@@ -489,8 +493,8 @@ private fun SeerrDetailContent(
             title = {
                 AnimatedVisibility(
                     visible = scrollFraction > 0.7f,
-                    enter = fadeIn() + slideInVertically { it / 2 },
-                    exit = fadeOut() + slideOutVertically { it / 2 }
+                    enter = fadeIn(tween(300, easing = AlphaEasing)) + slideInVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 },
+                    exit = fadeOut(tween(300, easing = AlphaEasing)) + slideOutVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 }
                 ) {
                     Text(
                         text = title,
@@ -699,12 +703,12 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(400, easing = FastOutSlowInEasing)) +
+                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, easing = FastOutSlowInEasing),
+                            animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(150)),
+                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
@@ -717,12 +721,12 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(400, delayMillis = 60, easing = FastOutSlowInEasing)) +
+                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, delayMillis = 60, easing = FastOutSlowInEasing),
+                            animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(150)),
+                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Similar",

@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,6 +14,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,17 +54,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -115,7 +114,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -230,24 +228,8 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
-        val savedScrollPosition = remember { viewModel.getHomeScrollPosition() }
         val listState = rememberSaveable(saver = LazyListState.Saver) {
-            LazyListState(
-                firstVisibleItemIndex = savedScrollPosition.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = savedScrollPosition.firstVisibleItemScrollOffset,
-            )
-        }
-        val saveHomeScrollPosition = {
-            viewModel.saveHomeScrollPosition(
-                firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
-            )
-        }
-
-        DisposableEffect(listState) {
-            onDispose {
-                saveHomeScrollPosition()
-            }
+            LazyListState()
         }
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -273,7 +255,7 @@ fun HomeScreen(
             val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
             val backgroundColor by animateColorAsState(
                 targetValue = targetBackgroundColor,
-                animationSpec = tween(600),
+                animationSpec = tween(600, easing = FancyTransitionEasing),
                 label = "backgroundColor",
             )
 
@@ -286,19 +268,9 @@ fun HomeScreen(
                             listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
                 }
             }
-            val heroScrollOffsetProvider = remember(listState, headerHeightPx) {
-                {
-                    if (listState.firstVisibleItemIndex == 0) {
-                        listState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        headerHeightPx
-                    }
-                }
-            }
-
             val appBarColor by animateFloatAsState(
                 targetValue = if (appBarCollapsed) 1f else 0f,
-                animationSpec = tween(300),
+                animationSpec = tween(300, easing = AlphaEasing),
                 label = "appBarColor",
             )
 
@@ -318,14 +290,12 @@ fun HomeScreen(
             }
             val mediaOnItemClick = remember {
                 { item: MediaItem ->
-                    saveHomeScrollPosition()
                     currentOnItemClick(item.id)
                 }
             }
             val currentOnPlayClick by rememberUpdatedState(onPlayClick)
             val mediaOnPlayClick = remember {
                 { item: MediaItem ->
-                    saveHomeScrollPosition()
                     val startPos = item.playbackPositionTicks ?: 0L
                     currentOnPlayClick(item.id, null, startPos)
                 }
@@ -402,11 +372,9 @@ fun HomeScreen(
                                         AnimatedHeroHeader(
                                             featuredItem = featuredItem,
                                             getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                                            scrollOffsetProvider = heroScrollOffsetProvider,
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
                                             onItemClick = {
-                                                saveHomeScrollPosition()
                                                 onItemClick(it)
                                             },
                                         )
@@ -448,15 +416,15 @@ fun HomeScreen(
                                     AnimatedVisibility(
                                         visible = hasBeenVisible,
                                         enter = fadeIn(
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(350, easing = AlphaEasing),
                                         ) + slideInVertically(
-                                            initialOffsetY = { it / 20 },
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            initialOffsetY = { it / 16 },
+                                            animationSpec = tween(400, easing = FancyTransitionEasing),
                                         ) + scaleIn(
                                             initialScale = 0.97f,
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(400, easing = PointToPointEasing),
                                         ),
-                                        exit = fadeOut(tween(100)),
+                                        exit = fadeOut(tween(100, easing = AlphaEasing)),
                                     ) {
                                     if (section.type == HomeSectionType.CONTINUE_WATCHING ||
                                         section.type == HomeSectionType.NEXT_UP
@@ -564,98 +532,147 @@ fun HomeScreen(
                     }
                 }
 
+                val scrimAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.85f else 0f,
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    label = "scrimAlpha",
+                )
+                val borderAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.12f else 0f,
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    label = "borderAlpha",
+                )
+                val iconContainerAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.15f else 0f,
+                    animationSpec = tween(300, easing = AlphaEasing),
+                    label = "iconContainerAlpha",
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(animatedContainerColor)
-                ) {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                "JellyPlay",
-                                color = Color.White.copy(alpha = appBarColor),
-                                fontWeight = FontWeight.Bold,
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    backgroundColor.copy(alpha = scrimAlpha * 0.95f),
+                                    backgroundColor.copy(alpha = scrimAlpha),
+                                ),
                             )
-                        },
-                        navigationIcon = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 12.dp),
-                            ) {
-                                ModeSwitch(
-                                    currentMode = viewModel.homeMode,
-                                    onModeChange = onModeChange,
-                                )
-                                HeaderStatusIndicator(
-                                    status = headerStatus,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-                        },
-                        actions = {
-                            IconButton(
-                                onClick = {
-                                    showSurprise = !showSurprise
-                                    if (!showSurprise) autoRotateEnabled = true
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = "Surprise Me",
-                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White,
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    saveHomeScrollPosition()
-                                    onSyncPlayClick()
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.Group,
-                                    contentDescription = "SyncPlay",
-                                    tint = Color.White,
-                                )
-                            }
-                            BadgedBox(
-                                badge = {
-                                    if (activeDownloadCount > 0) {
-                                        Badge { Text(activeDownloadCount.toString()) }
-                                    }
-                                }
-                            ) {
+                        )
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(40.dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) {
+                            ModeSwitch(
+                                currentMode = viewModel.homeMode,
+                                onModeChange = onModeChange,
+                            )
+                            HeaderStatusIndicator(
+                                status = headerStatus,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .padding(horizontal = 4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
                                     onClick = {
-                                        saveHomeScrollPosition()
-                                        onDownloadsClick()
+                                        showSurprise = !showSurprise
+                                        if (!showSurprise) autoRotateEnabled = true
                                     },
-                                    modifier = Modifier.tvFocusable(),
+                                    modifier = Modifier.tvFocusable().size(40.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = "Downloads",
-                                        tint = Color.White,
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = "Surprise Me",
+                                        tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        onSyncPlayClick()
+                                    },
+                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Group,
+                                        contentDescription = "SyncPlay",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                BadgedBox(
+                                    badge = {
+                                        if (activeDownloadCount > 0) {
+                                            Badge {
+                                                Text(activeDownloadCount.toString())
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            onDownloadsClick()
+                                        },
+                                        modifier = Modifier.tvFocusable().size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Download,
+                                            contentDescription = "Downloads",
+                                            tint = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        onSettingsClick()
+                                    },
+                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                             }
-                            IconButton(
-                                onClick = {
-                                    saveHomeScrollPosition()
-                                    onSettingsClick()
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = Color.White,
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = borderAlpha),
+                                        Color.White.copy(alpha = borderAlpha * 1.5f),
+                                        Color.White.copy(alpha = borderAlpha),
+                                        Color.Transparent,
+                                    ),
                                 )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                        modifier = Modifier.statusBarsPadding(),
+                            )
                     )
                 }
             }
@@ -695,7 +712,6 @@ fun HomeScreen(
 private fun AnimatedHeroHeader(
     featuredItem: MediaItem,
     getBackdropUrl: (String) -> String,
-    scrollOffsetProvider: () -> Float,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onItemClick: (String) -> Unit,
@@ -704,29 +720,28 @@ private fun AnimatedHeroHeader(
         targetState = featuredItem,
         transitionSpec = {
             fadeIn(
-                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                animationSpec = tween(520, easing = AlphaEasing),
             ) + scaleIn(
-                initialScale = 1.035f,
-                animationSpec = tween(700, easing = FastOutSlowInEasing),
+                initialScale = 1.02f,
+                animationSpec = tween(700, easing = FancyTransitionEasing),
             ) + slideInHorizontally(
-                initialOffsetX = { it / 24 },
-                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                initialOffsetX = { it / 20 },
+                animationSpec = tween(600, easing = FancyTransitionEasing),
             ) togetherWith fadeOut(
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = AlphaEasing),
             ) + scaleOut(
                 targetScale = 0.985f,
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = PointToPointEasing),
             ) + slideOutHorizontally(
                 targetOffsetX = { -it / 36 },
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = FancyTransitionEasing),
             )
         },
         label = "heroRotation",
-        ) { currentFeatured ->
+    ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
             backdropUrl = getBackdropUrl(currentFeatured.id),
-            scrollOffsetProvider = scrollOffsetProvider,
             height = height,
             backgroundColor = backgroundColor,
             onClick = { onItemClick(currentFeatured.id) },
@@ -738,7 +753,6 @@ private fun AnimatedHeroHeader(
 private fun HeroHeader(
     item: MediaItem,
     backdropUrl: String,
-    scrollOffsetProvider: () -> Float,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
@@ -747,21 +761,21 @@ private fun HeroHeader(
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = FastInvokeEasing),
         label = "heroPress",
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "playButtonScale",
     )
     val detailsInteractionSource = remember { MutableInteractionSource() }
     val isDetailsPressed by detailsInteractionSource.collectIsPressedAsState()
     val detailsScale by animateFloatAsState(
         targetValue = if (isDetailsPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "detailsButtonScale",
     )
 
@@ -775,7 +789,6 @@ private fun HeroHeader(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                translationY = scrollOffsetProvider() * 0.5f
             }
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
@@ -1036,17 +1049,17 @@ private fun WideMediaCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "wideCardScale",
     )
     val elevation by animateFloatAsState(
         targetValue = if (isPressed) 12f else 4f,
-        animationSpec = tween(200),
+        animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "wideCardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = AlphaEasing),
         label = "wideCardBrightness",
     )
 

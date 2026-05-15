@@ -49,6 +49,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,9 +110,9 @@ fun QuickConnectScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(400)) + slideInVertically(
+                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
                 ),
             ) {
                 when (val state = quickConnectState) {

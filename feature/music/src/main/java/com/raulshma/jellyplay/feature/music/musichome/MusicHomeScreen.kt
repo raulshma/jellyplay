@@ -6,6 +6,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -51,13 +54,10 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -96,7 +96,6 @@ import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MusicHomeScreen(
     homeMode: HomeMode,
@@ -142,7 +141,7 @@ fun MusicHomeScreen(
 
     val appBarAlpha by animateFloatAsState(
         targetValue = if (scrollFraction > 0.8f) 1f else 0f,
-        animationSpec = tween(300), label = "appBarAlpha",
+        animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing), label = "appBarAlpha",
     )
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -213,76 +212,127 @@ fun MusicHomeScreen(
             }
         }
 
+        val scrimAlpha by animateFloatAsState(
+            targetValue = if (scrollFraction > 0.8f) 0.85f else 0f,
+            animationSpec = tween(AnimationTokens.MediumDuration, easing = FancyTransitionEasing),
+            label = "scrimAlpha",
+        )
+        val borderAlpha by animateFloatAsState(
+            targetValue = if (scrollFraction > 0.8f) 0.12f else 0f,
+            animationSpec = tween(AnimationTokens.MediumDuration, easing = FancyTransitionEasing),
+            label = "borderAlpha",
+        )
+        val iconContainerAlpha by animateFloatAsState(
+            targetValue = if (scrollFraction > 0.8f) 0.15f else 0f,
+            animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing),
+            label = "iconContainerAlpha",
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = appBarAlpha))
-        ) {
-            TopAppBar(
-                title = {
-                    Text(
-                        "JellyPlay",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = appBarAlpha),
-                        fontWeight = FontWeight.Bold,
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background.copy(alpha = scrimAlpha * 0.95f),
+                            MaterialTheme.colorScheme.background.copy(alpha = scrimAlpha),
+                        ),
                     )
-                },
-                navigationIcon = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 12.dp),
-                    ) {
-                        ModeSwitch(
-                            currentMode = viewModel.homeMode,
-                            onModeChange = onModeChange,
-                        )
-                        HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* surprise me */ }) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = "Surprise Me",
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    IconButton(onClick = onSyncPlayClick) {
-                        Icon(
-                            Icons.Default.Group,
-                            contentDescription = "SyncPlay",
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    BadgedBox(
-                        badge = {
-                            if (activeDownloadCount > 0) {
-                                Badge {
-                                    Text(activeDownloadCount.toString())
+                )
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(64.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    ModeSwitch(
+                        currentMode = viewModel.homeMode,
+                        onModeChange = onModeChange,
+                    )
+                    HeaderStatusIndicator(
+                        status = headerStatus,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = iconContainerAlpha))
+                        .padding(horizontal = 4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { /* surprise me */ }, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "Surprise Me",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        IconButton(onClick = onSyncPlayClick, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Default.Group,
+                                contentDescription = "SyncPlay",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        BadgedBox(
+                            badge = {
+                                if (activeDownloadCount > 0) {
+                                    Badge {
+                                        Text(activeDownloadCount.toString())
+                                    }
                                 }
                             }
+                        ) {
+                            IconButton(onClick = onDownloadsClick, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Downloads",
+                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
-                    ) {
-                        IconButton(onClick = onDownloadsClick) {
+                        IconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
                             Icon(
-                                Icons.Default.Download,
-                                contentDescription = "Downloads",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha),
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 1.5f),
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha),
+                                Color.Transparent,
+                            ),
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                modifier = Modifier.statusBarsPadding(),
+                    )
             )
         }
     }
@@ -308,7 +358,7 @@ private fun MusicHeroHeader(
     AnimatedContent(
         targetState = featuredItem?.id,
         transitionSpec = {
-            (fadeIn(tween(500)) togetherWith fadeOut(tween(300)))
+            (fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) togetherWith fadeOut(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)))
         },
         label = "heroRotation",
         modifier = Modifier

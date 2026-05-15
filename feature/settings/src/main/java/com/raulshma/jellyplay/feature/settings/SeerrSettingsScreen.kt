@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -189,8 +193,8 @@ fun SeerrSettingsScreen(
             item {
                 AnimatedVisibility(
                     visible = connectionStatus is ConnectionStatus.Connected || connectionStatus is ConnectionStatus.Error,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
+                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + expandVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
+                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
                 ) {
                     when (connectionStatus) {
                         is ConnectionStatus.Connected -> ConnectionStatusCard(

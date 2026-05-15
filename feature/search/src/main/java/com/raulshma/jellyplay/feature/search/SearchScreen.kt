@@ -11,6 +11,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -188,8 +191,8 @@ fun SearchScreen(
                 // ── Title + action row ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(500)) + slideInVertically(
-                        tween(500),
+                    enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
+                        tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
                         initialOffsetY = { -40 },
                     ),
                 ) {
@@ -245,8 +248,8 @@ fun SearchScreen(
                 // ── Search field (glass style) ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(
-                        tween(500, delayMillis = 100),
+                    enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                        tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = FancyTransitionEasing),
                         initialOffsetY = { 40 },
                     ),
                 ) {
@@ -333,8 +336,8 @@ fun SearchScreen(
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
-                    enter = fadeIn(tween(250)) + expandVertically(),
-                    exit = fadeOut(tween(200)) + shrinkVertically(),
+                    enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + expandVertically(),
+                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(),
                 ) {
                     FlowRow(
                         modifier = Modifier
@@ -379,7 +382,7 @@ fun SearchScreen(
                 // ── Result count ──
                 AnimatedVisibility(
                     visible = headerVisible && pagedResults.itemCount > 0,
-                    enter = fadeIn(tween(400, delayMillis = 200)),
+                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
                 ) {
                     Text(
                         text = "${pagedResults.itemCount} results",
