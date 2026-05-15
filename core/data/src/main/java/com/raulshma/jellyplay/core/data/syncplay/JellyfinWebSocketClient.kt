@@ -71,7 +71,9 @@ class JellyfinWebSocketClient @Inject constructor(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "WebSocket message: $text")
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(TAG, "WebSocket message: ${text.take(200)}")
+                }
                 handleMessage(text)
             }
 
@@ -157,7 +159,9 @@ class JellyfinWebSocketClient @Inject constructor(
             put("MessageType", messageType)
             put("Data", data)
         }
-        Log.d(TAG, "Sending WS message: $msg")
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(TAG, "Sending WS message: ${msg.toString().take(200)}")
+        }
         webSocket?.send(msg.toString())
     }
 

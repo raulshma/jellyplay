@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,8 +14,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,15 +43,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import java.time.LocalDate
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SeerrMediaCard(
     item: SeerrSearchItem,
@@ -60,7 +62,6 @@ fun SeerrMediaCard(
     modifier: Modifier = Modifier,
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -90,26 +91,46 @@ fun SeerrMediaCard(
         label = "seerrCardBrightness",
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -500f,
-        targetValue = 1500f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "seerrShimmerOffset",
-    )
+    val shimmerAndGlow = if (isLoading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
+        val shimmerOffset by infiniteTransition.animateFloat(
+            initialValue = -500f,
+            targetValue = 1500f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "seerrShimmerOffset",
+        )
 
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "seerrGlowAlpha",
-    )
+        val glowAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "seerrGlowAlpha",
+        )
+        shimmerOffset to glowAlpha
+    } else {
+        remember { 0f to 0f }
+    }
+    val (shimmerOffset, glowAlpha) = shimmerAndGlow
+
+    val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
+        val dateStr = item.releaseDate ?: item.firstAirDate
+        if (dateStr.isNullOrBlank()) false
+        else {
+            try {
+                val now = LocalDate.now()
+                val releaseDate = LocalDate.parse(dateStr)
+                releaseDate.isAfter(now)
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
 
     val mediaStatus = item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
         ?: SeerrMediaStatus.UNKNOWN
@@ -122,22 +143,9 @@ fun SeerrMediaCard(
     val cardShape = RoundedCornerShape(12.dp)
     val glowColor = MaterialTheme.colorScheme.primary
 
-    val sharedScope = LocalSharedTransitionScope.current
-    val animScope = LocalAnimatedVisibilityScope.current
-
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null && imageUrl != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = modifier) {
         Card(
@@ -243,6 +251,77 @@ fun SeerrMediaCard(
                                 )
                             )
                     )
+                }
+
+                if (!isLoading && item.voteAverage != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.voteAverage),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+
+                if (!isLoading) {
+                    val mediaLabel = when {
+                        isUpcoming -> "UPCOMING"
+                        item.mediaType.equals("tv", ignoreCase = true) -> "SERIES"
+                        item.mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
+                        else -> item.mediaType.uppercase()
+                    }
+
+                    val labelColor = if (isUpcoming) {
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f)
+                    } else {
+                        Color.Black.copy(alpha = 0.6f)
+                    }
+
+                    val textColor = if (isUpcoming) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        Color.White.copy(alpha = 0.9f)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                            .background(
+                                labelColor,
+                                RoundedCornerShape(4.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = mediaLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.sp,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = textColor,
+                        )
+                    }
                 }
 
                 if (!isLoading) {

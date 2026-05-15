@@ -1,10 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,18 +81,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // ─── Dominant color cache ────────────────────────────────────────────────────
-private val dominantColorCache = mutableMapOf<String, Color>()
+private val dominantColorCache = android.util.LruCache<String, Color>(100)
 
 @Composable
 fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)): Color {
     val context = LocalContext.current
-    val cached = imageUrl?.let { dominantColorCache[it] }
+    val cached = imageUrl?.let { dominantColorCache.get(it) }
     var color by remember { mutableStateOf(cached ?: fallback) }
-    val loader = remember { ImageLoader(context) }
+    val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) return@LaunchedEffect
-        dominantColorCache[imageUrl]?.let {
+        dominantColorCache.get(imageUrl)?.let {
             color = it
             return@LaunchedEffect
         }
@@ -116,7 +113,7 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)
                         ?: palette.mutedSwatch?.rgb
                     if (extracted != null) {
                         val c = Color(extracted)
-                        dominantColorCache[imageUrl] = c
+                        dominantColorCache.put(imageUrl, c)
                         color = c
                     }
                 }
@@ -260,7 +257,6 @@ fun PlayButtonWithProgress(
 
 // ─── Redesigned PosterCard ───────────────────────────────────────────────────
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -272,7 +268,6 @@ fun PosterCard(
     progressPercent: Float = 0f,
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -293,25 +288,12 @@ fun PosterCard(
         label = "cardBrightness",
     )
 
-    val sharedScope = LocalSharedTransitionScope.current
-    val animScope = LocalAnimatedVisibilityScope.current
-
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = modifier) {
         Card(
@@ -381,6 +363,35 @@ fun PosterCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
+                    }
+                }
+
+                if (item.communityRating != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.communityRating),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
                     }
                 }
 
@@ -464,7 +475,6 @@ fun MediaRow(
                     } else 0f,
                     blurHash = blurHashBuilder(item),
                     onPlayClick = onPlayClick?.let { { it(item) } },
-                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }
@@ -519,13 +529,8 @@ fun StaggeredSection(
     index: Int,
     content: @Composable () -> Unit,
 ) {
-    var shouldShow by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        shouldShow = visible
-    }
-
     AnimatedVisibility(
-        visible = visible && shouldShow,
+        visible = visible,
         enter = fadeIn(
             animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
         ) + slideInVertically(

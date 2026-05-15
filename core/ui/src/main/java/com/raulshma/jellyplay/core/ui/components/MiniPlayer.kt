@@ -84,11 +84,7 @@ fun MiniPlayer(
             animationSpec = tween(400),
             label = "miniPlayerColor",
         )
-        val contentAlpha by animateFloatAsState(
-            targetValue = 1f,
-            animationSpec = tween(400),
-            label = "miniPlayerContentAlpha",
-        )
+        val contentAlpha = 1f
 
         Surface(
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),

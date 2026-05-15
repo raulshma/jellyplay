@@ -8,6 +8,7 @@ import android.view.Window
 
 object FrameRateMatcher {
 
+    @Volatile
     private var originalModeId: Int? = null
 
     fun matchFrameRate(activity: Activity, frameRate: Float?) {

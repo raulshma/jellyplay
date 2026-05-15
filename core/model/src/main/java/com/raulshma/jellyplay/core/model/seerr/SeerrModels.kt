@@ -580,7 +580,23 @@ data class SeerrPreferences(
     val enabled: Boolean = false,
     val searchEnabled: Boolean = false,
     val recommendationsEnabled: Boolean = false,
+    val discoverEnabled: Boolean = false,
+    val discoverTrending: Boolean = true,
+    val discoverPopularMovies: Boolean = true,
+    val discoverPopularTv: Boolean = true,
+    val discoverUpcomingMovies: Boolean = true,
+    val discoverUpcomingTv: Boolean = true,
 )
+
+@Immutable
+@Serializable
+enum class DiscoverSectionType {
+    TRENDING,
+    POPULAR_MOVIES,
+    POPULAR_TV,
+    UPCOMING_MOVIES,
+    UPCOMING_TV,
+}
 
 @Immutable
 @Serializable

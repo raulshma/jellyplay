@@ -57,7 +57,7 @@ internal fun EpisodePickerSheet(
     getImageUrl: (String) -> String,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {

@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,17 +108,19 @@ class SearchViewModel @Inject constructor(
     }
 
     fun updateFilters(newFilters: SearchFilters) {
-        _filters.value = newFilters
+        _filters.update { newFilters }
         if (query.isNotBlank()) {
             queryFlow.value = query
         }
     }
 
     fun toggleMediaType(mediaType: MediaType) {
-        val current = _filters.value.mediaTypes
-        _filters.value = _filters.value.copy(
-            mediaTypes = if (mediaType in current) current - mediaType else current + mediaType,
-        )
+        _filters.update { current ->
+            val types = current.mediaTypes
+            current.copy(
+                mediaTypes = if (mediaType in types) types - mediaType else types + mediaType,
+            )
+        }
         if (query.isNotBlank()) {
             queryFlow.value = query
         }
@@ -128,7 +131,7 @@ class SearchViewModel @Inject constructor(
     }
 
     fun clearFilters() {
-        _filters.value = SearchFilters()
+        _filters.update { SearchFilters() }
         if (query.isNotBlank()) {
             queryFlow.value = query
         }

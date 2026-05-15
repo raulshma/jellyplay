@@ -14,7 +14,10 @@ data class ServerEntity(
     val lastConnected: Long = System.currentTimeMillis(),
 )
 
-@Entity(tableName = "users")
+@Entity(
+    tableName = "users",
+    indices = [androidx.room.Index(value = ["serverId"])]
+)
 data class UserEntity(
     @PrimaryKey val userId: String,
     val serverId: String,

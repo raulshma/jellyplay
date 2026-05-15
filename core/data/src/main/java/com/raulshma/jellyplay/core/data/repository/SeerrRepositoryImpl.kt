@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,10 +17,15 @@ class SeerrRepositoryImpl @Inject constructor(
     private val seerrPreferencesStore: SeerrPreferencesStore,
 ) : SeerrRepository {
 
+    private val cachedCredentials = AtomicReference<Pair<String, String>?>(null)
+
     private suspend fun getCredentials(): Pair<String, String>? {
+        cachedCredentials.get()?.let { return it }
         val prefs = seerrPreferencesStore.preferences.first()
         if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) return null
-        return Pair(prefs.serverUrl, prefs.apiKey)
+        val creds = Pair(prefs.serverUrl, prefs.apiKey)
+        cachedCredentials.set(creds)
+        return creds
     }
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> {
@@ -153,5 +159,27 @@ class SeerrRepositoryImpl @Inject constructor(
 
     override fun isRecommendationsEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.recommendationsEnabled }
 
+    override fun isDiscoverEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.discoverEnabled }
+
     override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
+
+    // ── Discover endpoints ──
+
+    override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTrending(serverUrl, apiKey, page)
+    }
+
+    override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverMovies(serverUrl, apiKey, page, primaryReleaseDateGte)
+    }
+
+    override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> {
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getDiscoverTv(serverUrl, apiKey, page, firstAirDateGte)
+    }
 }
