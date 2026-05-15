@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -65,8 +64,13 @@ fun DiscoverContent(
         )
     }
 
+    val allItems = remember(discoverSections) {
+        sectionOrder.flatMap { discoverSections[it] ?: emptyList() }
+            .distinctBy { it.id }
+    }
+
     AnimatedVisibility(
-        visible = discoverSections.isNotEmpty(),
+        visible = allItems.isNotEmpty(),
         enter = fadeIn(tween(350, easing = FastOutSlowInEasing)) +
                 slideInVertically(
                     initialOffsetY = { it / 20 },
@@ -85,128 +89,80 @@ fun DiscoverContent(
                 modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
             )
 
-            for (sectionType in sectionOrder) {
-                val items = discoverSections[sectionType]
-                if (items != null && items.isNotEmpty()) {
-                    DiscoverSubSection(
-                        sectionType = sectionType,
-                        items = items,
-                        onItemClick = onNavigateToDetail,
-                        onRequestClick = onSeerrRequest,
-                    )
-                }
-            }
+            DiscoverGrid(
+                items = allItems,
+                onItemClick = onNavigateToDetail,
+                onRequestClick = onSeerrRequest,
+            )
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DiscoverSubSection(
-    sectionType: DiscoverSectionType,
+fun DiscoverGrid(
     items: List<SeerrSearchItem>,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onRequestClick: (SeerrSearchItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val title = when (sectionType) {
-        DiscoverSectionType.TRENDING -> "Trending"
-        DiscoverSectionType.POPULAR_MOVIES -> "Popular\nMovies"
-        DiscoverSectionType.POPULAR_TV -> "Popular\nSeries"
-        DiscoverSectionType.UPCOMING_MOVIES -> "Upcoming\nMovies"
-        DiscoverSectionType.UPCOMING_TV -> "Upcoming\nSeries"
-    }
-
     val isTv = isTvDevice()
     val adaptiveInfo = LocalAdaptiveInfo.current
     
-    // Increased column counts to keep cards compact on all screens
     val gridCols = when {
-        isTv -> 10
-        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> 8
-        adaptiveInfo.windowSizeClass == WindowSizeClass.Medium -> 6
+        isTv -> 8
+        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> 6
+        adaptiveInfo.windowSizeClass == WindowSizeClass.Medium -> 5
         else -> 4
     }
 
-    Row(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Vertical subsection title on the left
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center,
+        val spacing = 8.dp
+        val availableWidth = maxWidth
+        val baseColWidth = (availableWidth - (spacing * (gridCols - 1))) / gridCols
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = androidx.compose.ui.unit.TextUnit(
-                        1.2f,
-                        androidx.compose.ui.unit.TextUnitType.Sp
-                    ),
-                ),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .rotate(-90f),
-            )
-        }
+            items.forEach { item ->
+                val imageUrl = buildPosterUrl(item.posterPath)
+                val fraction = ratingToSizeFraction(item.voteAverage)
+                val itemWidth = baseColWidth * fraction
+                
+                val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+                val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
 
-        // Mosaic layout using FlowRow
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 4.dp, end = 16.dp)
-        ) {
-            val spacing = 8.dp
-            val availableWidth = maxWidth
-            val baseColWidth = (availableWidth - (spacing * (gridCols - 1))) / gridCols
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                verticalArrangement = Arrangement.spacedBy(spacing),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items.forEach { item ->
-                    val imageUrl = buildPosterUrl(item.posterPath)
-                    val fraction = ratingToSizeFraction(item.voteAverage)
-                    
-                    val itemWidth = baseColWidth * fraction
-                    
-                    val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
-                    val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
-
-                    SeerrMediaCard(
-                        item = item,
-                        imageUrl = imageUrl,
-                        isLoading = loadingState?.isLoading(item.id) == true,
-                        onClick = {
-                            val mediaType = when {
-                                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
-                                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
-                                else -> item.mediaType
-                            }
-                            if (loadingState != null && prefetch != null) {
-                                loadingState.startLoading(item.id)
-                                prefetch(item.id, mediaType) {
-                                    loadingState.stopLoading(item.id)
-                                    onItemClick(item.id, mediaType)
-                                }
-                            } else {
+                SeerrMediaCard(
+                    item = item,
+                    imageUrl = imageUrl,
+                    isLoading = loadingState?.isLoading(item.id) == true,
+                    onClick = {
+                        val mediaType = when {
+                            item.mediaType.equals("movie", ignoreCase = true) -> "movie"
+                            item.mediaType.equals("tv", ignoreCase = true) -> "tv"
+                            else -> item.mediaType
+                        }
+                        if (loadingState != null && prefetch != null) {
+                            loadingState.startLoading(item.id)
+                            prefetch(item.id, mediaType) {
+                                loadingState.stopLoading(item.id)
                                 onItemClick(item.id, mediaType)
                             }
-                        },
-                        onRequestClick = { onRequestClick(item) },
-                        modifier = Modifier.width(itemWidth),
-                    )
-                }
+                        } else {
+                            onItemClick(item.id, mediaType)
+                        }
+                    },
+                    onRequestClick = { onRequestClick(item) },
+                    modifier = Modifier.width(itemWidth),
+                )
             }
         }
     }
 }
+

@@ -43,13 +43,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import java.time.LocalDate
 
 @Composable
 fun SeerrMediaCard(
@@ -114,6 +117,20 @@ fun SeerrMediaCard(
         remember { 0f to 0f }
     }
     val (shimmerOffset, glowAlpha) = shimmerAndGlow
+
+    val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
+        val dateStr = item.releaseDate ?: item.firstAirDate
+        if (dateStr.isNullOrBlank()) false
+        else {
+            try {
+                val now = LocalDate.now()
+                val releaseDate = LocalDate.parse(dateStr)
+                releaseDate.isAfter(now)
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
 
     val mediaStatus = item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
         ?: SeerrMediaStatus.UNKNOWN
@@ -262,6 +279,48 @@ fun SeerrMediaCard(
                                 color = Color.White,
                             )
                         }
+                    }
+                }
+
+                if (!isLoading) {
+                    val mediaLabel = when {
+                        isUpcoming -> "UPCOMING"
+                        item.mediaType.equals("tv", ignoreCase = true) -> "SERIES"
+                        item.mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
+                        else -> item.mediaType.uppercase()
+                    }
+
+                    val labelColor = if (isUpcoming) {
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f)
+                    } else {
+                        Color.Black.copy(alpha = 0.6f)
+                    }
+
+                    val textColor = if (isUpcoming) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        Color.White.copy(alpha = 0.9f)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                            .background(
+                                labelColor,
+                                RoundedCornerShape(4.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = mediaLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.sp,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = textColor,
+                        )
                     }
                 }
 
