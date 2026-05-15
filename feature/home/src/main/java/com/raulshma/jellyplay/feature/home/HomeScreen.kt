@@ -107,6 +107,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -330,17 +331,58 @@ fun HomeScreen(
                 }
             }
 
+            val discoverSectionOrder = remember {
+                listOf(
+                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
+                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
+                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
+                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
+                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
+                )
+            }
+
+            val allDiscoverItems = remember(viewModel.discoverSections) {
+                discoverSectionOrder.flatMap {
+                    viewModel.discoverSections[it] ?: emptyList()
+                }.distinctBy { it.id }
+            }
+
+            val discoverRows = remember(allDiscoverItems, adaptiveInfo.windowSizeClass) {
+                val result = mutableListOf<List<SeerrSearchItem>>()
+                var i = 0
+                val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+                    listOf(3, 2, 3)
+                } else {
+                    listOf(5, 4, 6, 5)
+                }
+                var patternIdx = 0
+                while (i < allDiscoverItems.size) {
+                    val targetSize = pattern[patternIdx % pattern.size]
+                    val rowSize = targetSize.coerceAtMost(allDiscoverItems.size - i)
+                    result.add(allDiscoverItems.subList(i, i + rowSize))
+                    i += rowSize
+                    patternIdx++
+                }
+                result
+            }
+
             Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
                 when {
                     error != null && sections.isEmpty() -> {
+                        val contentPad = adaptiveInfo.contentPadding(isTv)
                         ErrorScreen(
                             message = error!!,
                             onRetry = { viewModel.refresh() },
+                            modifier = Modifier.padding(horizontal = contentPad)
                         )
                     }
                     else -> {
                         if (sections.isEmpty()) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            val contentPad = adaptiveInfo.contentPadding(isTv)
+                            Box(
+                                Modifier.fillMaxSize().padding(horizontal = contentPad),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
                                     if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
                                     style = MaterialTheme.typography.bodyLarge,
@@ -353,8 +395,6 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(
                                     bottom = adaptiveInfo.bottomPadding(isTv),
-                                    start = adaptiveInfo.contentPadding(isTv),
-                                    end = adaptiveInfo.contentPadding(isTv)
                                 ),
                             ) {
                                 if (featuredItem != null) {
@@ -445,7 +485,10 @@ fun HomeScreen(
                                 }
 
                                 // Seerr Discover Section
-                                if (viewModel.discoverEnabled && viewModel.discoverSections.isNotEmpty()) {
+                                if (viewModel.discoverEnabled && allDiscoverItems.isNotEmpty()) {
+                                    val contentPad = adaptiveInfo.contentPadding(isTv)
+                                    val spacing = 8.dp
+
                                     item(key = "seerr_discover_header") {
                                         Text(
                                             text = "Discover",
@@ -456,39 +499,62 @@ fun HomeScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(backgroundColor)
-                                                .padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+                                                .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
                                         )
                                     }
 
-                                    val sectionOrder = listOf(
-                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
-                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
-                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
-                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
-                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
-                                    )
+                                    items(
+                                        items = discoverRows,
+                                        key = { row -> "seerr_row_${row.firstOrNull()?.id ?: 0}" }
+                                    ) { rowItems ->
+                                        val rowIndex = discoverRows.indexOf(rowItems)
+                                        val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)
+                                        val targetSize = pattern[rowIndex % pattern.size]
 
-                                    val allDiscoverItems = sectionOrder.flatMap { 
-                                        viewModel.discoverSections[it] ?: emptyList() 
-                                    }.distinctBy { it.id }
-
-                                    if (allDiscoverItems.isNotEmpty()) {
-                                        item(key = "seerr_discover_grid") {
-                                            androidx.compose.runtime.CompositionLocalProvider(
-                                                LocalSeerrCardLoadingState provides seerrCardLoadingState,
-                                                LocalSeerrPrefetch provides seerrPrefetch,
+                                        androidx.compose.runtime.CompositionLocalProvider(
+                                            LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                                            LocalSeerrPrefetch provides seerrPrefetch,
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(backgroundColor)
+                                                    .padding(horizontal = contentPad, vertical = spacing / 2),
+                                                horizontalArrangement = Arrangement.spacedBy(spacing)
                                             ) {
-                                                DiscoverGrid(
-                                                    items = allDiscoverItems,
-                                                    onItemClick = { tmdbId, mediaType ->
-                                                        saveHomeScrollPosition()
-                                                        onSeerrItemClick(tmdbId, mediaType)
-                                                    },
-                                                    onRequestClick = { item -> seerrRequestItem = item },
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(backgroundColor),
-                                                )
+                                                rowItems.forEach { item ->
+                                                    val imageUrl = buildPosterUrl(item.posterPath)
+                                                    SeerrMediaCard(
+                                                        item = item,
+                                                        imageUrl = imageUrl,
+                                                        isLoading = seerrCardLoadingState.isLoading(item.id),
+                                                        onClick = {
+                                                            val mediaType = when {
+                                                                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
+                                                                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
+                                                                else -> item.mediaType
+                                                            }
+                                                            if (seerrCardLoadingState != null && seerrPrefetch != null) {
+                                                                seerrCardLoadingState.startLoading(item.id)
+                                                                seerrPrefetch(item.id, mediaType) {
+                                                                    seerrCardLoadingState.stopLoading(item.id)
+                                                                    onSeerrItemClick(item.id, mediaType)
+                                                                }
+                                                            } else {
+                                                                onSeerrItemClick(item.id, mediaType)
+                                                            }
+                                                        },
+                                                        onRequestClick = { seerrRequestItem = item },
+                                                        modifier = Modifier.weight(1f),
+                                                    )
+                                                }
+                                                
+                                                // Fill remaining space if last row is incomplete
+                                                if (rowItems.size < targetSize) {
+                                                    repeat(targetSize - rowItems.size) {
+                                                        Spacer(Modifier.weight(1f))
+                                                    }
+                                                }
                                             }
                                         }
                                     }
