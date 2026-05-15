@@ -98,6 +98,10 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
@@ -106,6 +110,8 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,6 +145,20 @@ fun HomeScreen(
         hasError = error != null,
         networkStatus = networkStatus,
     )
+
+    // Seerr request state
+    var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
+    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
+    val seerrCardLoadingState = rememberSeerrCardLoadingState()
+    val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
+        { tmdbId, mediaType, onDone ->
+            viewModel.prefetchSeerrDetails(tmdbId, mediaType, onDone)
+        }
+    }
 
     var showSurprise by remember { mutableStateOf(false) }
     val allItems = remember(sections) { sections.flatMap { it.items } }
@@ -426,18 +446,51 @@ fun HomeScreen(
 
                                 // Seerr Discover Section
                                 if (viewModel.discoverEnabled && viewModel.discoverSections.isNotEmpty()) {
-                                    item(key = "seerr_discover") {
-                                        DiscoverContent(
-                                            discoverSections = viewModel.discoverSections,
-                                            onNavigateToDetail = { tmdbId, mediaType ->
-                                                saveHomeScrollPosition()
-                                                onSeerrItemClick(tmdbId, mediaType)
-                                            },
+                                    item(key = "seerr_discover_header") {
+                                        Text(
+                                            text = "Discover",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(backgroundColor)
-                                                .padding(top = 16.dp),
+                                                .padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
                                         )
+                                    }
+
+                                    val sectionOrder = listOf(
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
+                                    )
+
+                                    sectionOrder.forEach { sectionType ->
+                                        val items = viewModel.discoverSections[sectionType]
+                                        if (items != null && items.isNotEmpty()) {
+                                            item(key = "seerr_${sectionType.name}") {
+                                                androidx.compose.runtime.CompositionLocalProvider(
+                                                    LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                                                    LocalSeerrPrefetch provides seerrPrefetch,
+                                                ) {
+                                                    DiscoverSubSection(
+                                                        sectionType = sectionType,
+                                                        items = items,
+                                                        onItemClick = { tmdbId, mediaType ->
+                                                            saveHomeScrollPosition()
+                                                            onSeerrItemClick(tmdbId, mediaType)
+                                                        },
+                                                        onRequestClick = { item -> seerrRequestItem = item },
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .background(backgroundColor),
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -541,6 +594,34 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // Seerr request dialog for discover cards
+    seerrRequestItem?.let { item ->
+        LaunchedEffect(item.id) {
+            viewModel.loadSeerrServiceDetails(item.mediaType)
+            if (item.mediaType.equals("tv", ignoreCase = true)) {
+                viewModel.loadTvSeasons(item.id)
+            }
+        }
+
+        SeerrRequestDialog(
+            item = item,
+            radarrServers = radarrServers,
+            sonarrServers = sonarrServers,
+            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+            isLoadingServices = isLoadingSeerrServices,
+            isRequesting = requestResult?.isLoading == true,
+            requestSuccess = requestResult?.success,
+            requestError = requestResult?.error,
+            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+            },
+            onDismiss = {
+                seerrRequestItem = null
+                viewModel.clearRequestResult()
+            },
+        )
     }
 }
 
