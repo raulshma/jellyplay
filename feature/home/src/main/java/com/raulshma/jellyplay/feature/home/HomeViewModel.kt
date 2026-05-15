@@ -19,6 +19,12 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -280,9 +286,115 @@ class HomeViewModel @Inject constructor(
     fun resetHomeScrollPosition() {
         homeScrollPosition = HomeScrollPosition()
     }
+
+    // ── Seerr request support ──
+
+    private val _requestResult = MutableStateFlow<DiscoverRequestResult?>(null)
+    val requestResult: StateFlow<DiscoverRequestResult?> = _requestResult.asStateFlow()
+
+    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+
+    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+
+    private val _isLoadingSeerrServices = MutableStateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+
+    private val _tvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
+    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.asStateFlow()
+
+    fun requestSeerrMedia(
+        item: SeerrSearchItem,
+        seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+    ) {
+        viewModelScope.launch {
+            _requestResult.value = DiscoverRequestResult(isLoading = true)
+            seerrRepository.requestMedia(
+                mediaType = item.mediaType,
+                tmdbId = item.id,
+                seasons = seasons,
+                serverId = serverId,
+                profileId = profileId,
+                rootFolder = rootFolder,
+                tags = tags,
+            ).onSuccess {
+                _requestResult.value = DiscoverRequestResult(success = true)
+            }.onFailure {
+                _requestResult.value = DiscoverRequestResult(error = it.message ?: "Request failed")
+            }
+        }
+    }
+
+    fun clearRequestResult() {
+        _requestResult.value = null
+    }
+
+    fun loadSeerrServiceDetails(mediaType: String) {
+        viewModelScope.launch {
+            _isLoadingSeerrServices.value = true
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
+                        }
+                        _radarrServers.value = details
+                    }
+                } else {
+                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
+                        }
+                        _sonarrServers.value = details
+                    }
+                }
+            } finally {
+                _isLoadingSeerrServices.value = false
+            }
+        }
+    }
+
+    fun loadTvSeasons(tmdbId: Int) {
+        viewModelScope.launch {
+            _tvSeasons.value = emptyList()
+            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                _tvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
+            }
+        }
+    }
+
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getMovieDetails(tmdbId)
+                } else {
+                    seerrRepository.getTvDetails(tmdbId)
+                }
+                val type = if (mediaType == "movie") com.raulshma.jellyplay.core.model.MediaType.MOVIE else com.raulshma.jellyplay.core.model.MediaType.SERIES
+                launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                launch { seerrRepository.getRecommendations(tmdbId, type) }
+                launch { seerrRepository.getSimilar(tmdbId, type) }
+            } catch (_: Exception) {
+                // Detail screen will retry on failure
+            }
+            onDone()
+        }
+    }
 }
 
 data class HomeScrollPosition(
     val firstVisibleItemIndex: Int = 0,
     val firstVisibleItemScrollOffset: Int = 0,
+)
+
+data class DiscoverRequestResult(
+    val isLoading: Boolean = false,
+    val success: Boolean? = null,
+    val error: String? = null,
 )
