@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -47,8 +46,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -72,7 +74,7 @@ fun SeerrMediaCard(
         if (isLoading) {
             pulseScale.animateTo(
                 targetValue = 0.97f,
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                animationSpec = tween(300, easing = FancyTransitionEasing),
             )
         } else {
             pulseScale.snapTo(1f)
@@ -81,13 +83,13 @@ fun SeerrMediaCard(
 
     val scale by animateFloatAsState(
         targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
-        animationSpec = tween(150),
+        animationSpec = lessSpringySpec(),
         label = "seerrCardScale",
     )
 
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed && !isLoading) 0.08f else 0f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = AlphaEasing),
         label = "seerrCardBrightness",
     )
 
@@ -107,7 +109,7 @@ fun SeerrMediaCard(
             initialValue = 0.3f,
             targetValue = 0.8f,
             animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = FastOutSlowInEasing),
+                animation = tween(800, easing = FancyTransitionEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "seerrGlowAlpha",

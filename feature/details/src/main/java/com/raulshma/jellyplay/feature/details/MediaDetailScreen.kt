@@ -4,8 +4,11 @@ import android.os.StatFs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -334,7 +337,7 @@ private fun DetailContent(
     val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600),
+        animationSpec = tween(600, easing = FancyTransitionEasing),
         label = "backgroundColor",
     )
 
@@ -344,12 +347,12 @@ private fun DetailContent(
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 500, easing = AlphaEasing),
         label = "contentAlpha",
     )
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = tween(durationMillis = 300, easing = FancyTransitionEasing),
         label = "appBarColor",
     )
 
@@ -367,7 +370,7 @@ private fun DetailContent(
 
     val animatedTitleAlpha by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
         label = "titleAlpha",
     )
 
@@ -391,15 +394,15 @@ private fun DetailContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
                     fadeIn(
-                        animationSpec = tween(460, easing = FastOutSlowInEasing),
+                        animationSpec = tween(460, easing = AlphaEasing),
                     ) + scaleIn(
                         initialScale = 1.035f,
-                        animationSpec = tween(620, easing = FastOutSlowInEasing),
+                        animationSpec = tween(620, easing = FancyTransitionEasing),
                     ) togetherWith fadeOut(
-                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        animationSpec = tween(260, easing = AlphaEasing),
                     ) + scaleOut(
                         targetScale = 0.99f,
-                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        animationSpec = tween(260, easing = FancyTransitionEasing),
                     )
                 },
                 label = "detailBackdrop",
@@ -474,17 +477,17 @@ private fun DetailContent(
                         AnimatedVisibility(
                             visible = contentVisible,
                             enter = fadeIn(
-                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                animationSpec = tween(420, delayMillis = 80, easing = AlphaEasing),
                             ) + slideInVertically(
                                 initialOffsetY = { it / 8 },
-                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                animationSpec = tween(420, delayMillis = 80, easing = FancyTransitionEasing),
                             ) + scaleIn(
                                 initialScale = 0.96f,
-                                animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                animationSpec = tween(420, delayMillis = 80, easing = PointToPointEasing),
                             ),
-                            exit = fadeOut(tween(160)) + scaleOut(
+                            exit = fadeOut(tween(160, easing = AlphaEasing)) + scaleOut(
                                 targetScale = 0.98f,
-                                animationSpec = tween(160, easing = FastOutSlowInEasing),
+                                animationSpec = tween(160, easing = PointToPointEasing),
                             ),
                         ) {
                             Column(
@@ -529,14 +532,14 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(tween(400, delayMillis = 100)) +
+                                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) +
                                         slideInVertically(
                                             initialOffsetY = { it / 12 },
-                                            animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
                                         ),
-                                exit = fadeOut(tween(180)) + slideOutVertically(
+                                exit = fadeOut(tween(180, easing = AlphaEasing)) + slideOutVertically(
                                     targetOffsetY = { -it / 24 },
-                                    animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                    animationSpec = tween(180, easing = FancyTransitionEasing),
                                 ),
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -607,17 +610,17 @@ private fun DetailContent(
                                 AnimatedVisibility(
                                     visible = contentVisible,
                                     enter = fadeIn(
-                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(420, delayMillis = 80, easing = AlphaEasing),
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 8 },
-                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(420, delayMillis = 80, easing = FancyTransitionEasing),
                                     ) + scaleIn(
                                         initialScale = 0.96f,
-                                        animationSpec = tween(420, delayMillis = 80, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(420, delayMillis = 80, easing = PointToPointEasing),
                                     ),
-                                    exit = fadeOut(tween(160)) + scaleOut(
+                                    exit = fadeOut(tween(160, easing = AlphaEasing)) + scaleOut(
                                         targetScale = 0.98f,
-                                        animationSpec = tween(160, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(160, easing = PointToPointEasing),
                                     ),
                                 ) {
                                     val posterWidth = when {
@@ -645,14 +648,14 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(tween(400, delayMillis = 100)) +
+                                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) +
                                         slideInVertically(
                                             initialOffsetY = { it / 12 },
-                                            animationSpec = tween(400, delayMillis = 100, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
                                         ),
-                                exit = fadeOut(tween(180)) + slideOutVertically(
+                                exit = fadeOut(tween(180, easing = AlphaEasing)) + slideOutVertically(
                                     targetOffsetY = { -it / 24 },
-                                    animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                    animationSpec = tween(180, easing = FancyTransitionEasing),
                                 ),
                             ) {
                                 DetailContentBody(
@@ -814,20 +817,20 @@ private fun StaggeredDetailSection(
     AnimatedVisibility(
         visible = visible && shouldShow,
         enter = fadeIn(
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = AlphaEasing),
         ) + slideInVertically(
             initialOffsetY = { it / 14 },
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FancyTransitionEasing),
         ) + scaleIn(
             initialScale = 0.985f,
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FastOutSlowInEasing),
+            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = PointToPointEasing),
         ),
-        exit = fadeOut(tween(160)) + slideOutVertically(
+        exit = fadeOut(tween(160, easing = AlphaEasing)) + slideOutVertically(
             targetOffsetY = { -it / 24 },
-            animationSpec = tween(180, easing = FastOutSlowInEasing),
+            animationSpec = tween(180, easing = FancyTransitionEasing),
         ) + scaleOut(
             targetScale = 0.99f,
-            animationSpec = tween(180, easing = FastOutSlowInEasing),
+            animationSpec = tween(180, easing = PointToPointEasing),
         ),
     ) {
         content()
@@ -1004,7 +1007,7 @@ private fun MediaInfoSection(
                             val isOptionPressed by optionInteractionSource.collectIsPressedAsState()
                             val optionScale by animateFloatAsState(
                                 targetValue = if (isOptionPressed) 0.97f else 1f,
-                                animationSpec = spring(stiffness = 400f),
+                                animationSpec = tween(150, easing = PointToPointEasing),
                                 label = "optionScale",
                             )
                             Row(
@@ -1151,12 +1154,12 @@ private fun SubtitleChip(
     val bgColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary
         else Color.White.copy(alpha = 0.15f),
-        animationSpec = tween(200),
+        animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "subtitleChipBg",
     )
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
-        animationSpec = tween(200),
+        animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "subtitleChipContent",
     )
     Row(
@@ -1231,28 +1234,28 @@ private fun DetailActionButtons(
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "playButtonScale",
     )
     val markInteractionSource = remember { MutableInteractionSource() }
     val isMarkPressed by markInteractionSource.collectIsPressedAsState()
     val markScale by animateFloatAsState(
         targetValue = if (isMarkPressed) 0.9f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "markButtonScale",
     )
     val favoriteInteractionSource = remember { MutableInteractionSource() }
     val isFavoritePressed by favoriteInteractionSource.collectIsPressedAsState()
     val favoriteScale by animateFloatAsState(
         targetValue = if (isFavoritePressed) 0.9f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "favoriteButtonScale",
     )
     val downloadInteractionSource = remember { MutableInteractionSource() }
     val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
     val downloadScale by animateFloatAsState(
         targetValue = if (isDownloadPressed) 0.9f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "downloadButtonScale",
     )
 
@@ -2008,12 +2011,12 @@ private fun SeasonsSection(
                 val targetContentColor = if (isSelected) Color.Black else Color.White
                 val surfaceColor by animateColorAsState(
                     targetValue = targetColor,
-                    animationSpec = tween(250),
+                    animationSpec = tween(250, easing = FancyTransitionEasing),
                     label = "seasonColor",
                 )
                 val contentColor by animateColorAsState(
                     targetValue = targetContentColor,
-                    animationSpec = tween(250),
+                    animationSpec = tween(250, easing = FancyTransitionEasing),
                     label = "seasonContentColor",
                 )
                 Surface(
@@ -2045,15 +2048,15 @@ private fun SeasonsSection(
             transitionSpec = {
                 val direction = if (targetState.first >= initialState.first) 1 else -1
                 fadeIn(
-                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    animationSpec = tween(300, easing = AlphaEasing),
                 ) + slideInHorizontally(
                     initialOffsetX = { direction * it / 10 },
-                    animationSpec = tween(320, easing = FastOutSlowInEasing),
+                    animationSpec = tween(320, easing = FancyTransitionEasing),
                 ) togetherWith fadeOut(
-                    animationSpec = tween(170, easing = FastOutSlowInEasing),
+                    animationSpec = tween(170, easing = AlphaEasing),
                 ) + slideOutHorizontally(
                     targetOffsetX = { -direction * it / 12 },
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = tween(220, easing = FancyTransitionEasing),
                 )
             },
             label = "seasonEpisodes",
@@ -2112,7 +2115,7 @@ private fun EpisodeCardSkeleton() {
         initialValue = 0.08f,
         targetValue = 0.20f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
+            animation = tween(900, easing = AlphaEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "shimmerAlpha",
@@ -2189,7 +2192,7 @@ private fun EpisodeCard(
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.96f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "episodeCardScale",
     )
     val playInteractionSource = remember { MutableInteractionSource() }

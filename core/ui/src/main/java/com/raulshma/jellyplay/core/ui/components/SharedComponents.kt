@@ -2,13 +2,13 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
@@ -70,10 +70,15 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Size as CoilSize
 import androidx.palette.graphics.Palette
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -138,7 +143,7 @@ fun PlayButtonWithProgress(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "playBtnScale",
     )
 
@@ -274,17 +279,17 @@ fun PosterCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 400f),
+        animationSpec = lessSpringySpec(),
         label = "cardScale",
     )
     val elevation by animateDpAsState(
         targetValue = if (isPressed) 12.dp else if (isTv) 12.dp else 4.dp,
-        animationSpec = tween(200),
+        animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "cardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = AlphaEasing),
         label = "cardBrightness",
     )
 
@@ -532,14 +537,14 @@ fun StaggeredSection(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
+            animationSpec = tween(340, delayMillis = index * 70, easing = AlphaEasing),
         ) + slideInVertically(
             initialOffsetY = { it / 14 },
-            animationSpec = tween(340, delayMillis = index * 55, easing = FastOutSlowInEasing),
+            animationSpec = tween(400, delayMillis = index * 70, easing = FancyTransitionEasing),
         ),
-        exit = fadeOut(tween(160)) + slideOutVertically(
+        exit = fadeOut(tween(160, easing = AlphaEasing)) + slideOutVertically(
             targetOffsetY = { -it / 24 },
-            animationSpec = tween(180, easing = FastOutSlowInEasing),
+            animationSpec = tween(180, easing = FancyTransitionEasing),
         ),
     ) {
         content()
@@ -554,12 +559,15 @@ fun AnimatedEntrance(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(350, delayMillis = delayMillis)) +
+        enter = fadeIn(tween(350, delayMillis = delayMillis, easing = AlphaEasing)) +
                 slideInVertically(
                     initialOffsetY = { it / 10 },
-                    animationSpec = tween(350, delayMillis = delayMillis, easing = FastOutSlowInEasing),
+                    animationSpec = tween(400, delayMillis = delayMillis, easing = FancyTransitionEasing),
                 ),
-        exit = fadeOut(tween(200)) + slideOutVertically(targetOffsetY = { it / 10 }, animationSpec = tween(200)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)) + slideOutVertically(
+            targetOffsetY = { it / 10 },
+            animationSpec = tween(200, easing = FancyTransitionEasing)
+        ),
         content = content,
     )
 }
@@ -572,15 +580,15 @@ fun AnimatedScaleEntrance(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(300, delayMillis = delayMillis)) +
-                androidx.compose.animation.scaleIn(
+        enter = fadeIn(tween(300, delayMillis = delayMillis, easing = AlphaEasing)) +
+                scaleIn(
                     initialScale = 0.92f,
-                    animationSpec = tween(300, delayMillis = delayMillis, easing = FastOutSlowInEasing),
+                    animationSpec = tween(400, delayMillis = delayMillis, easing = PointToPointEasing),
                 ),
-        exit = fadeOut(tween(150)) +
-                androidx.compose.animation.scaleOut(
+        exit = fadeOut(tween(150, easing = AlphaEasing)) +
+                scaleOut(
                     targetScale = 0.92f,
-                    animationSpec = tween(150),
+                    animationSpec = tween(150, easing = PointToPointEasing),
                 ),
         content = content,
     )
@@ -597,7 +605,7 @@ fun PressScaleBox(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = tween(120),
+        animationSpec = tween(120, easing = FastInvokeEasing),
         label = "pressScale",
     )
     Box(
@@ -638,12 +646,12 @@ fun AnimatedMediaItem(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
+            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = AlphaEasing),
         ) + slideInVertically(
             initialOffsetY = { it / 10 },
-            animationSpec = tween(320, delayMillis = index * delayPerItem, easing = FastOutSlowInEasing),
+            animationSpec = tween(400, delayMillis = index * delayPerItem, easing = FancyTransitionEasing),
         ),
-        exit = fadeOut(tween(140)),
+        exit = fadeOut(tween(140, easing = AlphaEasing)),
     ) {
         content()
     }

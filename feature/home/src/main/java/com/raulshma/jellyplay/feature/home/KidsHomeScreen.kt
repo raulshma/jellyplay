@@ -5,14 +5,15 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.FastOutSlowInEasing
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -198,9 +199,9 @@ fun KidsHomeScreen(
                         item {
                             AnimatedVisibility(
                                 visible = true,
-                                enter = fadeIn(tween(400)) + slideInVertically(
+                                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
                                     initialOffsetY = { it / 8 },
-                                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                                    animationSpec = tween(400, easing = FancyTransitionEasing),
                                 ),
                             ) {
                                 SurpriseMeCard(
@@ -338,7 +339,7 @@ private fun KidsPosterCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = FastInvokeEasing),
         label = "cardScale",
     )
 
