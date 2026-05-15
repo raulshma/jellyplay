@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 
@@ -114,7 +115,7 @@ fun SmartPlaylistDetailScreen(
                     )
                 }
             }
-            else -> {
+            else -> AnimatedEntrance(visible = true) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(

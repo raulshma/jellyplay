@@ -78,6 +78,10 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
@@ -148,8 +152,8 @@ internal fun PlayerControls(
     Box(modifier = modifier) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn() + slideInVertically { -it },
-            exit = fadeOut() + slideOutVertically { -it },
+            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
+            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Box(
@@ -211,8 +215,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.85f),
-            exit = fadeOut(tween(300)) + scaleOut(targetScale = 0.85f),
+            enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
+            exit = fadeOut(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
@@ -268,8 +272,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
+            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { it },
+            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { it },
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Column(
@@ -304,8 +308,8 @@ internal fun PlayerControls(
 
                 AnimatedVisibility(
                     visible = skipSegmentText != null,
-                    enter = fadeIn() + scaleIn(initialScale = 0.8f),
-                    exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                    enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
+                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),

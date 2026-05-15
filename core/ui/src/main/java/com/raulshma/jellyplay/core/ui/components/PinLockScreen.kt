@@ -3,10 +3,13 @@ package com.raulshma.jellyplay.core.ui.components
 import androidx.compose.animation.animateColorAsState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,11 +34,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -121,17 +129,32 @@ fun PinLockScreen(
         keys.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, androidx.compose.ui.Alignment.CenterHorizontally),
             ) {
                 row.forEach { key ->
                     when (key) {
                         "" -> Spacer(modifier = Modifier.size(72.dp))
                         "backspace" -> {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(
+                                targetValue = if (isPressed) AnimationTokens.ButtonPressScale else 1f,
+                                animationSpec = lessSpringySpec(),
+                                label = "backspaceScale",
+                            )
+
                             Box(
                                 modifier = Modifier
                                     .size(72.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
                                     .clip(CircleShape)
-                                    .tvFocusable().clickable {
+                                    .tvFocusable().clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null,
+                                    ) {
                                         if (pin.isNotEmpty()) {
                                             pin = pin.dropLast(1)
                                             onErrorClear()
@@ -148,36 +171,71 @@ fun PinLockScreen(
                             }
                         }
                         else -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .tvFocusable().clickable {
-                                        if (pin.length < maxDigits) {
-                                            pin += key
-                                            onErrorClear()
-                                            if (pin.length == maxDigits) {
-                                                onPinEntered(pin)
-                                                pin = ""
-                                            }
+                            PinKeyButton(
+                                key = key,
+                                isPressed = false,
+                                onClick = {
+                                    if (pin.length < maxDigits) {
+                                        pin += key
+                                        onErrorClear()
+                                        if (pin.length == maxDigits) {
+                                            onPinEntered(pin)
+                                            pin = ""
                                         }
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = key,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
+                                    }
+                                },
+                            )
                         }
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun PinKeyButton(
+    key: String,
+    isPressed: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) AnimationTokens.ButtonPressScale else 1f,
+        animationSpec = lessSpringySpec(),
+        label = "pinKeyScale_$key",
+    )
+    val surfaceColor by animateColorAsState(
+        targetValue = if (pressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = tween(AnimationTokens.FastDuration, easing = AlphaEasing),
+        label = "pinKeyColor_$key",
+    )
+
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(surfaceColor)
+            .tvFocusable().clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = key,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
     }
 }

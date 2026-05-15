@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @Composable
@@ -81,14 +82,16 @@ fun AlbumDetailScreen(
             )
         }
         viewModel.detail != null -> {
-            AlbumDetailContent(
-                detail = viewModel.detail!!,
-                getImageUrl = { viewModel.getImageUrl(it) },
-                getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                onTrackClick = onTrackClick,
-                onArtistClick = onArtistClick,
-                onBack = onBack,
-            )
+            AnimatedEntrance(visible = true) {
+                AlbumDetailContent(
+                    detail = viewModel.detail!!,
+                    getImageUrl = { viewModel.getImageUrl(it) },
+                    getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                    onTrackClick = onTrackClick,
+                    onArtistClick = onArtistClick,
+                    onBack = onBack,
+                )
+            }
         }
     }
 }

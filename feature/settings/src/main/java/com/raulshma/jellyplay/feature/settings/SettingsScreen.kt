@@ -129,6 +129,9 @@ import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1051,8 +1054,8 @@ fun SettingsScreen(
                     )
                     AnimatedVisibility(
                         visible = pinError != null,
-                        enter = expandVertically(),
-                        exit = shrinkVertically(),
+                        enter = expandVertically(animationSpec = tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing)),
+                        exit = shrinkVertically(animationSpec = tween(AnimationTokens.QuickDuration, easing = FancyTransitionEasing)),
                     ) {
                         pinError?.let { error ->
                             Text(
@@ -1676,7 +1679,7 @@ private fun SettingListItem(
     )
     val alpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(100),
+        animationSpec = tween(AnimationTokens.InstantDuration),
         label = "settingItemAlpha",
     )
 
@@ -1765,12 +1768,12 @@ private fun SettingToggleItem(
     )
     val rowAlpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(100),
+        animationSpec = tween(AnimationTokens.InstantDuration),
         label = "toggleItemAlpha",
     )
     val iconColor by animateColorAsState(
         targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(200),
+        animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing),
         label = "toggleIconColor",
     )
 

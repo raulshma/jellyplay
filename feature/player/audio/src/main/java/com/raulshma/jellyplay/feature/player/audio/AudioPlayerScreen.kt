@@ -6,6 +6,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -127,7 +129,7 @@ fun AudioPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        contentAlpha.animateTo(1f, tween(600, delayMillis = 200))
+        contentAlpha.animateTo(1f, tween(AnimationTokens.ExtendedDuration, delayMillis = 200, easing = AlphaEasing))
     }
 
     BackHandler {
@@ -425,7 +427,7 @@ private fun AnimatedQueueItem(
     )
     val alpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(100),
+        animationSpec = tween(AnimationTokens.InstantDuration),
         label = "queueItemAlpha",
     )
     val isCurrentItem = index == currentIndex

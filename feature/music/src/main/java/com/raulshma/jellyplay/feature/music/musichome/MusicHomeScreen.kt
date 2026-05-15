@@ -6,6 +6,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -142,7 +145,7 @@ fun MusicHomeScreen(
 
     val appBarAlpha by animateFloatAsState(
         targetValue = if (scrollFraction > 0.8f) 1f else 0f,
-        animationSpec = tween(300), label = "appBarAlpha",
+        animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing), label = "appBarAlpha",
     )
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -308,7 +311,7 @@ private fun MusicHeroHeader(
     AnimatedContent(
         targetState = featuredItem?.id,
         transitionSpec = {
-            (fadeIn(tween(500)) togetherWith fadeOut(tween(300)))
+            (fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) togetherWith fadeOut(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)))
         },
         label = "heroRotation",
         modifier = Modifier
