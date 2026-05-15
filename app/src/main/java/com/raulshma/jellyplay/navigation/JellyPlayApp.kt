@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +52,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
@@ -122,9 +125,13 @@ private fun AuthContent(
     )
     val navigator = Navigator(navigationState)
 
+    val saveableStateHolder = rememberSaveableStateHolder()
+    val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
+
     NavDisplay(
         backStack = navigationState.backStacks.values.first(),
         onBack = { navigator.goBack() },
+        entryDecorators = listOf(entryDecorator),
         entryProvider = entryProvider {
             authSection(navigator, onAuthenticated)
         },
@@ -463,9 +470,13 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
+    val saveableStateHolder = rememberSaveableStateHolder()
+    val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
+
     NavDisplay(
                 backStack = currentBackStack,
                 onBack = { navigator.goBack() },
+                entryDecorators = listOf(entryDecorator),
                 transitionSpec = {
                     val targetLast = targetState
                     val initialLast = initialState
