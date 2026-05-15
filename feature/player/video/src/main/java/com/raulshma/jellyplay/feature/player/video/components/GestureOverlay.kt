@@ -7,6 +7,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -174,8 +177,8 @@ private fun SeekCircleOverlay(
 
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(tween(150)) + scaleIn(initialScale = 0.7f, animationSpec = tween(150)),
-        exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.8f, animationSpec = tween(200)),
+        enter = fadeIn(tween(AnimationTokens.FastDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.7f, animationSpec = tween(AnimationTokens.FastDuration, easing = PointToPointEasing)),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
         modifier = modifier,
     ) {
         Box(
@@ -242,8 +245,8 @@ private fun EdgeBarOverlay(
 ) {
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(tween(100)),
-        exit = fadeOut(tween(200)),
+        enter = fadeIn(tween(AnimationTokens.InstantDuration)),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         Column(

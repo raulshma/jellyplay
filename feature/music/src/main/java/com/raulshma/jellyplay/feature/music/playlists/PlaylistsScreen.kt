@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.feature.music.playlists
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -83,8 +86,8 @@ fun PlaylistsScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = headerVisible,
-                enter = fadeIn(tween(500)) + slideInVertically(
-                    tween(500),
+                enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
+                    tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
                     initialOffsetY = { -40 },
                 ),
             ) {

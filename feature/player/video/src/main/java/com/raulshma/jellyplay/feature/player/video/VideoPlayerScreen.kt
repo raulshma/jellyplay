@@ -91,6 +91,9 @@ import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.findActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -495,8 +498,8 @@ fun VideoPlayerScreen(
         // Trickplay overlay for seek gestures
         AnimatedVisibility(
             visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.Center),
         ) {
             TrickplayOverlay(
@@ -662,8 +665,8 @@ fun VideoPlayerScreen(
 
         AnimatedVisibility(
             visible = uiState.trickplayEnabled && showControls && isSeeking,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
             TrickplayOverlay(
@@ -763,8 +766,8 @@ private fun BoxScope.AutoAspectRatioBadge(
 
     AnimatedVisibility(
         visible = showBadge,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
         modifier = Modifier
             .align(Alignment.TopCenter)
             .padding(top = 60.dp),

@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
@@ -701,12 +702,12 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(400, easing = AlphaEasing)) +
+                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, easing = FancyTransitionEasing),
+                            animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(150)),
+                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
@@ -719,12 +720,12 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(400, delayMillis = 60, easing = AlphaEasing)) +
+                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, delayMillis = 60, easing = FancyTransitionEasing),
+                            animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(150)),
+                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Similar",

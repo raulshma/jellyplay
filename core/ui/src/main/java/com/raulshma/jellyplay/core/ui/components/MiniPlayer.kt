@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @Composable
@@ -71,17 +73,17 @@ fun MiniPlayer(
         enter = slideInVertically(
             initialOffsetY = { it },
             animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(300)),
+        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(200),
-        ) + fadeOut(tween(150)),
+            animationSpec = tween(AnimationTokens.DefaultDuration),
+        ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
         val animatedColor by animateColorAsState(
             targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-            animationSpec = tween(400),
+            animationSpec = tween(AnimationTokens.StandardDuration),
             label = "miniPlayerColor",
         )
         val contentAlpha = 1f

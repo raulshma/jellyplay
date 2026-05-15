@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -105,9 +107,9 @@ fun CollectionDetailScreen(
                     collectionDetail?.let { detail ->
                         AnimatedVisibility(
                             visible = backdropVisible.value,
-                            enter = fadeIn(tween(600)) + slideInVertically(
+                            enter = fadeIn(tween(AnimationTokens.ExtendedDuration, easing = AlphaEasing)) + slideInVertically(
                                 initialOffsetY = { -it / 6 },
-                                animationSpec = tween(600, easing = FastOutSlowInEasing),
+                                animationSpec = tween(AnimationTokens.ExtendedDuration, easing = FancyTransitionEasing),
                             ),
                         ) {
                             Box(
@@ -129,7 +131,7 @@ fun CollectionDetailScreen(
 
                     AnimatedVisibility(
                         visible = contentVisible.value,
-                        enter = fadeIn(tween(400, delayMillis = 200)),
+                        enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
                     ) {
                         val adaptiveInfo = LocalAdaptiveInfo.current
                         val isTv = isTvDevice()
@@ -153,10 +155,10 @@ fun CollectionDetailScreen(
                                 AnimatedVisibility(
                                     visible = itemVisible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(300, delayMillis = (index % 12) * 40)
+                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 40, easing = AlphaEasing)
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 8 },
-                                        animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = FastOutSlowInEasing),
+                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 40, easing = FancyTransitionEasing),
                                     ),
                                 ) {
                                     PosterCard(

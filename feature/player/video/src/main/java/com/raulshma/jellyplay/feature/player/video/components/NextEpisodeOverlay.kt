@@ -2,6 +2,10 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -87,8 +91,8 @@ fun NextEpisodeOverlay(
 
     AnimatedVisibility(
         visible = show,
-        enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-        exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing), initialOffsetY = { it }),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing), targetOffsetY = { it }),
         modifier = modifier,
     ) {
         Surface(

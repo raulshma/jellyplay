@@ -73,6 +73,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -162,8 +166,8 @@ fun LibraryScreen(
                     // ── Title + action row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(500)) + slideInVertically(
-                            tween(500),
+                        enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
+                            tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -235,8 +239,8 @@ fun LibraryScreen(
                     // ── Folder chips (glass pill style, like season badges) ──
                     AnimatedVisibility(
                         visible = headerVisible && folders.size > 1,
-                        enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(
-                            tween(500, delayMillis = 100),
+                        enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                            tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = FancyTransitionEasing),
                             initialOffsetY = { 40 },
                         ),
                     ) {
@@ -265,8 +269,8 @@ fun LibraryScreen(
                     // ── Active filters bar (dismissible glass tags) ──
                     AnimatedVisibility(
                         visible = hasActiveFilters,
-                        enter = fadeIn(tween(250)) + expandVertically(),
-                        exit = fadeOut(tween(200)) + shrinkVertically(),
+                        enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + expandVertically(),
+                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(),
                     ) {
                         FlowRow(
                             modifier = Modifier
@@ -532,7 +536,7 @@ private fun GlassPill(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .tvFocusable().clickable(onClick = onClick)
-            .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow)),
+            .animateContentSizeNoClip(spring(stiffness = Spring.StiffnessMediumLow)),
         color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
         contentColor = if (selected) Color.Black else Color.White,
     ) {

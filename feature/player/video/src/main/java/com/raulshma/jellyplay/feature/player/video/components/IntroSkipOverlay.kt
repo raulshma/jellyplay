@@ -2,6 +2,10 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import androidx.compose.animation.core.tween
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -61,8 +65,8 @@ private fun SkipButtonOverlay(
 ) {
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn() + scaleIn(initialScale = 0.8f),
-        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
         modifier = modifier,
     ) {
         Row(
