@@ -289,16 +289,6 @@ fun HomeScreen(
                             listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
                 }
             }
-            val heroScrollOffsetProvider = remember(listState, headerHeightPx) {
-                {
-                    if (listState.firstVisibleItemIndex == 0) {
-                        listState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        headerHeightPx
-                    }
-                }
-            }
-
             val appBarColor by animateFloatAsState(
                 targetValue = if (appBarCollapsed) 1f else 0f,
                 animationSpec = tween(300, easing = AlphaEasing),
@@ -405,7 +395,6 @@ fun HomeScreen(
                                         AnimatedHeroHeader(
                                             featuredItem = featuredItem,
                                             getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                                            scrollOffsetProvider = heroScrollOffsetProvider,
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
                                             onItemClick = {
@@ -698,7 +687,6 @@ fun HomeScreen(
 private fun AnimatedHeroHeader(
     featuredItem: MediaItem,
     getBackdropUrl: (String) -> String,
-    scrollOffsetProvider: () -> Float,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onItemClick: (String) -> Unit,
@@ -729,7 +717,6 @@ private fun AnimatedHeroHeader(
         HeroHeader(
             item = currentFeatured,
             backdropUrl = getBackdropUrl(currentFeatured.id),
-            scrollOffsetProvider = scrollOffsetProvider,
             height = height,
             backgroundColor = backgroundColor,
             onClick = { onItemClick(currentFeatured.id) },
@@ -741,7 +728,6 @@ private fun AnimatedHeroHeader(
 private fun HeroHeader(
     item: MediaItem,
     backdropUrl: String,
-    scrollOffsetProvider: () -> Float,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
@@ -778,7 +764,6 @@ private fun HeroHeader(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                translationY = scrollOffsetProvider() * 0.5f
             }
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
