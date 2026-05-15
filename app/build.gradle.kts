@@ -139,6 +139,7 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.smooth.corner.rect)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,7 +65,7 @@ fun SyncPlayChatOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.45f)
                 .fillMaxHeight(0.55f)
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.6f), ShapeCache.smooth12)
                 .padding(12.dp),
         ) {
             ChatContent(
@@ -162,7 +163,7 @@ private fun ChatContent(
                     },
                 ),
                 modifier = Modifier.weight(1f).tvFocusable(),
-                shape = RoundedCornerShape(20.dp),
+                shape = ShapeCache.smooth20,
             )
             TextButton(
                 onClick = {

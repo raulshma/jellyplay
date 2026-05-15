@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import kotlinx.coroutines.launch
 
 @Composable
@@ -266,7 +267,7 @@ fun MusicHomeScreen(
 
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(ShapeCache.smooth20)
                         .background(MaterialTheme.colorScheme.onBackground.copy(alpha = iconContainerAlpha))
                         .padding(horizontal = 4.dp),
                 ) {
@@ -566,7 +567,7 @@ private fun TrackItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(48.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant, ShapeCache.smooth4),
         )
         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
             Text(

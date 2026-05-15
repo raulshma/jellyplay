@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 fun Context.isTv(): Boolean =
     packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
@@ -72,7 +73,7 @@ fun Modifier.tvFocusable(
                 Modifier.border(
                     width = 3.dp,
                     color = borderColor,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = ShapeCache.smooth8,
                 )
             } else Modifier
         )

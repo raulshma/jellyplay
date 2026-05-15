@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,7 +74,7 @@ fun ShimmerLoadingGrid(
 private fun ShimmerCard(brush: Brush) {
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(ShapeCache.smooth12)
             .background(Color.White.copy(alpha = 0.05f)),
     ) {
         Box(
@@ -87,7 +88,7 @@ private fun ShimmerCard(brush: Brush) {
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .height(12.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(brush),
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -95,7 +96,7 @@ private fun ShimmerCard(brush: Brush) {
                 modifier = Modifier
                     .fillMaxWidth(0.5f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(brush),
             )
         }

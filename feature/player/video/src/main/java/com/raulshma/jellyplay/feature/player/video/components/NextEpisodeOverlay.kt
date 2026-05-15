@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -97,7 +98,7 @@ fun NextEpisodeOverlay(
     ) {
         Surface(
             modifier = Modifier.width(280.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = ShapeCache.smooth16,
             color = Color.Black.copy(alpha = 0.85f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
         ) {
@@ -199,7 +200,7 @@ fun NextEpisodeOverlay(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp)),
+                                .clip(ShapeCache.smooth4),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = Color.White.copy(alpha = 0.1f),
                         )

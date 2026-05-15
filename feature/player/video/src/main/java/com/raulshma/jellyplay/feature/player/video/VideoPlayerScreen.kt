@@ -62,6 +62,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -578,7 +579,7 @@ fun VideoPlayerScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                shape = RoundedCornerShape(12.dp),
+                shape = ShapeCache.smooth12,
                 containerColor = Color.White.copy(alpha = 0.15f),
                 contentColor = Color.White,
             )
@@ -773,7 +774,7 @@ private fun BoxScope.AutoAspectRatioBadge(
             .padding(top = 60.dp),
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = ShapeCache.smooth16,
             color = Color.White.copy(alpha = 0.15f),
         ) {
             Text(

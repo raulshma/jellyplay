@@ -43,14 +43,29 @@ val md_theme_dark_error = Color(0xFFF2B8B5)
 val md_theme_dark_onError = Color(0xFF601410)
 val md_theme_dark_errorContainer = Color(0xFF8C1D18)
 val md_theme_dark_onErrorContainer = Color(0xFFF9DEDC)
-val md_theme_dark_background = Color(0xFF1C1B1F)
+val md_theme_dark_background = Color(0xFF141218)
 val md_theme_dark_onBackground = Color(0xFFE6E1E5)
-val md_theme_dark_surface = Color(0xFF1C1B1F)
+val md_theme_dark_surface = Color(0xFF141218)
 val md_theme_dark_onSurface = Color(0xFFE6E1E5)
 val md_theme_dark_surfaceVariant = Color(0xFF49454F)
 val md_theme_dark_onSurfaceVariant = Color(0xFFCAC4D0)
 val md_theme_dark_outline = Color(0xFF938F99)
 val md_theme_dark_outlineVariant = Color(0xFF49454F)
+
+// ─── Expressive Surface Container Colors ────────────────────────────────────
+// Richer tonal surface layers for MD3 Expressive depth and hierarchy.
+
+val md_theme_light_surfaceContainerLowest = Color(0xFFFFFFFF)
+val md_theme_light_surfaceContainerLow = Color(0xFFF7F2FA)
+val md_theme_light_surfaceContainer = Color(0xFFF3EDF7)
+val md_theme_light_surfaceContainerHigh = Color(0xFFECE6F0)
+val md_theme_light_surfaceContainerHighest = Color(0xFFE6E0E9)
+
+val md_theme_dark_surfaceContainerLowest = Color(0xFF0F0D13)
+val md_theme_dark_surfaceContainerLow = Color(0xFF1D1B20)
+val md_theme_dark_surfaceContainer = Color(0xFF211F26)
+val md_theme_dark_surfaceContainerHigh = Color(0xFF2B2930)
+val md_theme_dark_surfaceContainerHighest = Color(0xFF36343B)
 
 // Kids mode warm friendly palette
 val kids_theme_light_primary = Color(0xFFF57C00)
