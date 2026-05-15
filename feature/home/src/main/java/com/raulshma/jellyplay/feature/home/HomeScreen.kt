@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,6 +14,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -273,7 +276,7 @@ fun HomeScreen(
             val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
             val backgroundColor by animateColorAsState(
                 targetValue = targetBackgroundColor,
-                animationSpec = tween(600),
+                animationSpec = tween(600, easing = FancyTransitionEasing),
                 label = "backgroundColor",
             )
 
@@ -298,7 +301,7 @@ fun HomeScreen(
 
             val appBarColor by animateFloatAsState(
                 targetValue = if (appBarCollapsed) 1f else 0f,
-                animationSpec = tween(300),
+                animationSpec = tween(300, easing = AlphaEasing),
                 label = "appBarColor",
             )
 
@@ -448,15 +451,15 @@ fun HomeScreen(
                                     AnimatedVisibility(
                                         visible = hasBeenVisible,
                                         enter = fadeIn(
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(350, easing = AlphaEasing),
                                         ) + slideInVertically(
-                                            initialOffsetY = { it / 20 },
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            initialOffsetY = { it / 16 },
+                                            animationSpec = tween(400, easing = FancyTransitionEasing),
                                         ) + scaleIn(
                                             initialScale = 0.97f,
-                                            animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                            animationSpec = tween(400, easing = PointToPointEasing),
                                         ),
-                                        exit = fadeOut(tween(100)),
+                                        exit = fadeOut(tween(100, easing = AlphaEasing)),
                                     ) {
                                     if (section.type == HomeSectionType.CONTINUE_WATCHING ||
                                         section.type == HomeSectionType.NEXT_UP
@@ -704,25 +707,25 @@ private fun AnimatedHeroHeader(
         targetState = featuredItem,
         transitionSpec = {
             fadeIn(
-                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                animationSpec = tween(520, easing = AlphaEasing),
             ) + scaleIn(
-                initialScale = 1.035f,
-                animationSpec = tween(700, easing = FastOutSlowInEasing),
+                initialScale = 1.02f,
+                animationSpec = tween(700, easing = FancyTransitionEasing),
             ) + slideInHorizontally(
-                initialOffsetX = { it / 24 },
-                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                initialOffsetX = { it / 20 },
+                animationSpec = tween(600, easing = FancyTransitionEasing),
             ) togetherWith fadeOut(
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = AlphaEasing),
             ) + scaleOut(
                 targetScale = 0.985f,
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = PointToPointEasing),
             ) + slideOutHorizontally(
                 targetOffsetX = { -it / 36 },
-                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                animationSpec = tween(320, easing = FancyTransitionEasing),
             )
         },
         label = "heroRotation",
-        ) { currentFeatured ->
+    ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
             backdropUrl = getBackdropUrl(currentFeatured.id),
@@ -747,21 +750,21 @@ private fun HeroHeader(
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = FastInvokeEasing),
         label = "heroPress",
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "playButtonScale",
     )
     val detailsInteractionSource = remember { MutableInteractionSource() }
     val isDetailsPressed by detailsInteractionSource.collectIsPressedAsState()
     val detailsScale by animateFloatAsState(
         targetValue = if (isDetailsPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "detailsButtonScale",
     )
 
@@ -1036,17 +1039,17 @@ private fun WideMediaCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 400f),
+        animationSpec = tween(150, easing = PointToPointEasing),
         label = "wideCardScale",
     )
     val elevation by animateFloatAsState(
         targetValue = if (isPressed) 12f else 4f,
-        animationSpec = tween(200),
+        animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "wideCardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150),
+        animationSpec = tween(150, easing = AlphaEasing),
         label = "wideCardBrightness",
     )
 

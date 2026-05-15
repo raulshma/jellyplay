@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
@@ -236,7 +238,7 @@ private fun SeerrDetailContent(
     val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600),
+        animationSpec = tween(600, easing = FancyTransitionEasing),
         label = "backgroundColor",
     )
 
@@ -245,7 +247,7 @@ private fun SeerrDetailContent(
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
         label = "appBarColor",
     )
 
@@ -489,8 +491,8 @@ private fun SeerrDetailContent(
             title = {
                 AnimatedVisibility(
                     visible = scrollFraction > 0.7f,
-                    enter = fadeIn() + slideInVertically { it / 2 },
-                    exit = fadeOut() + slideOutVertically { it / 2 }
+                    enter = fadeIn(tween(300, easing = AlphaEasing)) + slideInVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 },
+                    exit = fadeOut(tween(300, easing = AlphaEasing)) + slideOutVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 }
                 ) {
                     Text(
                         text = title,
@@ -699,10 +701,10 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(400, easing = FastOutSlowInEasing)) +
+                enter = fadeIn(tween(400, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, easing = FastOutSlowInEasing),
+                            animationSpec = tween(400, easing = FancyTransitionEasing),
                         ),
                 exit = fadeOut(tween(150)),
             ) {
@@ -717,10 +719,10 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(400, delayMillis = 60, easing = FastOutSlowInEasing)) +
+                enter = fadeIn(tween(400, delayMillis = 60, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(400, delayMillis = 60, easing = FastOutSlowInEasing),
+                            animationSpec = tween(400, delayMillis = 60, easing = FancyTransitionEasing),
                         ),
                 exit = fadeOut(tween(150)),
             ) {
