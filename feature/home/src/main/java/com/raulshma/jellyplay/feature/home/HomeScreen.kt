@@ -468,27 +468,27 @@ fun HomeScreen(
                                         com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
                                     )
 
-                                    sectionOrder.forEach { sectionType ->
-                                        val items = viewModel.discoverSections[sectionType]
-                                        if (items != null && items.isNotEmpty()) {
-                                            item(key = "seerr_${sectionType.name}") {
-                                                androidx.compose.runtime.CompositionLocalProvider(
-                                                    LocalSeerrCardLoadingState provides seerrCardLoadingState,
-                                                    LocalSeerrPrefetch provides seerrPrefetch,
-                                                ) {
-                                                    DiscoverSubSection(
-                                                        sectionType = sectionType,
-                                                        items = items,
-                                                        onItemClick = { tmdbId, mediaType ->
-                                                            saveHomeScrollPosition()
-                                                            onSeerrItemClick(tmdbId, mediaType)
-                                                        },
-                                                        onRequestClick = { item -> seerrRequestItem = item },
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .background(backgroundColor),
-                                                    )
-                                                }
+                                    val allDiscoverItems = sectionOrder.flatMap { 
+                                        viewModel.discoverSections[it] ?: emptyList() 
+                                    }.distinctBy { it.id }
+
+                                    if (allDiscoverItems.isNotEmpty()) {
+                                        item(key = "seerr_discover_grid") {
+                                            androidx.compose.runtime.CompositionLocalProvider(
+                                                LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                                                LocalSeerrPrefetch provides seerrPrefetch,
+                                            ) {
+                                                DiscoverGrid(
+                                                    items = allDiscoverItems,
+                                                    onItemClick = { tmdbId, mediaType ->
+                                                        saveHomeScrollPosition()
+                                                        onSeerrItemClick(tmdbId, mediaType)
+                                                    },
+                                                    onRequestClick = { item -> seerrRequestItem = item },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(backgroundColor),
+                                                )
                                             }
                                         }
                                     }
