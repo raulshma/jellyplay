@@ -16,6 +16,7 @@ import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -309,6 +310,7 @@ private fun MainContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
                         Row(modifier = Modifier.fillMaxSize()) {
@@ -410,7 +412,7 @@ private fun TvMainLayout(
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (!isPlayerScreen) {
             NavigationRail(
                 containerColor = animatedNavBarColor,
