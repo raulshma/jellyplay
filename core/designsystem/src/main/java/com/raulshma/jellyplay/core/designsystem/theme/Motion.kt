@@ -6,56 +6,46 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MotionScheme
 
+/**
+ * Expressive motion scheme for Material Design 3 Expressive.
+ *
+ * Uses bouncier springs for spatial animations (position, size, shape)
+ * and snappier tweens for effects (alpha, color) to create fluid,
+ * lively motion throughout the app.
+ */
 @Suppress("UNCHECKED_CAST")
-internal val CustomMotionScheme: MotionScheme = object : MotionScheme {
-    private val SpringDefaultSpatialDamping = 0.8f
-    private val SpringDefaultSpatialStiffness = 380.0f
-    private val SpringDefaultEffectsDamping = 1.0f
-    private val SpringDefaultEffectsStiffness = 1600.0f
-    private val SpringFastSpatialDamping = 0.6f
-    private val SpringFastSpatialStiffness = 800.0f
-    private val SpringFastEffectsDamping = 1.0f
-    private val SpringFastEffectsStiffness = 3800.0f
-    private val SpringSlowSpatialDamping = 0.8f
-    private val SpringSlowSpatialStiffness = 200.0f
-    private val SpringSlowEffectsDamping = 1.0f
-    private val SpringSlowEffectsStiffness = 800.0f
+internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
+    // Spatial specs — bouncier for expressive feel
+    private val defaultSpatialSpec = spring<Any>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
 
-    private val defaultSpatialSpec =
-        tween<Any>(
-            durationMillis = 400,
-            easing = FancyTransitionEasing
-        )
+    private val fastSpatialSpec = spring<Any>(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessHigh
+    )
 
-    private val fastSpatialSpec =
-        spring<Any>(
-            dampingRatio = SpringFastSpatialDamping,
-            stiffness = SpringFastSpatialStiffness
-        )
+    private val slowSpatialSpec = spring<Any>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = 800f
+    )
 
-    private val slowSpatialSpec =
-        spring<Any>(
-            dampingRatio = SpringSlowSpatialDamping,
-            stiffness = SpringSlowSpatialStiffness
-        )
+    // Effects specs — snappy tweens with expressive easing
+    private val defaultEffectsSpec = tween<Any>(
+        durationMillis = 350,
+        easing = FancyTransitionEasing
+    )
 
-    private val defaultEffectsSpec =
-        spring<Any>(
-            dampingRatio = SpringDefaultEffectsDamping,
-            stiffness = SpringDefaultEffectsStiffness
-        )
+    private val fastEffectsSpec = tween<Any>(
+        durationMillis = 250,
+        easing = FastInvokeEasing
+    )
 
-    private val fastEffectsSpec =
-        tween<Any>(
-            durationMillis = 300,
-            easing = FancyTransitionEasing
-        )
-
-    private val slowEffectsSpec =
-        tween<Any>(
-            durationMillis = 500,
-            easing = FancyTransitionEasing
-        )
+    private val slowEffectsSpec = tween<Any>(
+        durationMillis = 500,
+        easing = FancyTransitionEasing
+    )
 
     override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> =
         defaultSpatialSpec as FiniteAnimationSpec<T>
