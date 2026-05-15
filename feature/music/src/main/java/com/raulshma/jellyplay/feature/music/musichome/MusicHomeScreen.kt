@@ -133,6 +133,9 @@ fun MusicHomeScreen(
     }
     val headerHeight = 320.dp
     val density = LocalDensity.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = isTvDevice()
+    val contentPad = adaptiveInfo.contentPadding(isTv)
     val headerHeightPx = with(density) { headerHeight.toPx() }
     val scrollFraction by remember {
         derivedStateOf {
@@ -251,7 +254,7 @@ fun MusicHomeScreen(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = contentPad),
                 ) {
                     ModeSwitch(
                         currentMode = viewModel.homeMode,

@@ -82,6 +82,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -275,6 +276,8 @@ fun HomeScreen(
                 label = "appBarColor",
             )
 
+            val contentPad = adaptiveInfo.contentPadding(isTv)
+
             val animatedContainerColor = lerp(
                 Color.Transparent,
                 backgroundColor.copy(alpha = 0.95f),
@@ -375,6 +378,7 @@ fun HomeScreen(
                                             getBackdropUrl = { viewModel.getBackdropUrl(it) },
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
+                                            contentPadding = contentPad,
                                             onItemClick = {
                                                 onItemClick(it)
                                             },
@@ -565,13 +569,13 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .height(40.dp)
+                            .height(64.dp)
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 8.dp),
+                            modifier = Modifier.padding(start = contentPad),
                         ) {
                             ModeSwitch(
                                 currentMode = viewModel.homeMode,
@@ -715,6 +719,7 @@ private fun AnimatedHeroHeader(
     getBackdropUrl: (String) -> String,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
+    contentPadding: Dp = 16.dp,
     onItemClick: (String) -> Unit,
 ) {
     AnimatedContent(
@@ -745,6 +750,7 @@ private fun AnimatedHeroHeader(
             backdropUrl = getBackdropUrl(currentFeatured.id),
             height = height,
             backgroundColor = backgroundColor,
+            contentPadding = contentPadding,
             onClick = { onItemClick(currentFeatured.id) },
         )
     }
@@ -756,6 +762,7 @@ private fun HeroHeader(
     backdropUrl: String,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
+    contentPadding: Dp = 16.dp,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -826,7 +833,7 @@ private fun HeroHeader(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = contentPadding)
                 .padding(bottom = 32.dp)
         ) {
             Text(
