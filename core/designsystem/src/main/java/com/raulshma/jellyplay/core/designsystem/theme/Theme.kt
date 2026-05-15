@@ -120,7 +120,13 @@ private val KidsDarkColorScheme = darkColorScheme(
     outlineVariant = kids_theme_dark_outlineVariant,
 )
 
-private val DefaultShapes = Shapes()
+private val DefaultShapes = Shapes(
+    extraSmall = ShapeCache.smooth12,
+    small = ShapeCache.smooth14,
+    medium = ShapeCache.smooth20,
+    large = ShapeCache.smooth28,
+    extraLarge = ShapeCache.smooth36,
+)
 
 private val KidsShapes = Shapes(
     extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -160,7 +166,7 @@ fun JellyPlayTheme(
         colorScheme = colorScheme,
         typography = typography,
         shapes = shapes,
-        motionScheme = CustomMotionScheme,
+        motionScheme = ExpressiveMotionScheme,
         content = content,
     )
 }
