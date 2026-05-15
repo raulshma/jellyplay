@@ -7,10 +7,6 @@
 
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M16,16h480v480h-480z" />
-
-    <path
-        android:fillColor="#FFFFFF"
         android:pathData="M256,256m-160,0a160,160 0 1,0 320,0a160,160 0 1,0 -320,0" />
 
     <group android:rotation="-15" android:pivotX="130" android:pivotY="300">
