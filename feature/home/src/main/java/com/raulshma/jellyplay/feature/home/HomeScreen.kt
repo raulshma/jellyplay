@@ -59,9 +59,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -229,25 +228,8 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
-        val listState = remember { LazyListState() }
-        val saveHomeScrollPosition = {
-            viewModel.saveHomeScrollPosition(
-                firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
-            )
-        }
-
-        LaunchedEffect(Unit) {
-            val saved = viewModel.getHomeScrollPosition()
-            if (saved.firstVisibleItemIndex > 0 || saved.firstVisibleItemScrollOffset > 0) {
-                listState.scrollToItem(saved.firstVisibleItemIndex, saved.firstVisibleItemScrollOffset)
-            }
-        }
-
-        DisposableEffect(listState) {
-            onDispose {
-                saveHomeScrollPosition()
-            }
+        val listState = rememberSaveable(saver = LazyListState.Saver) {
+            LazyListState()
         }
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -308,14 +290,12 @@ fun HomeScreen(
             }
             val mediaOnItemClick = remember {
                 { item: MediaItem ->
-                    saveHomeScrollPosition()
                     currentOnItemClick(item.id)
                 }
             }
             val currentOnPlayClick by rememberUpdatedState(onPlayClick)
             val mediaOnPlayClick = remember {
                 { item: MediaItem ->
-                    saveHomeScrollPosition()
                     val startPos = item.playbackPositionTicks ?: 0L
                     currentOnPlayClick(item.id, null, startPos)
                 }
@@ -395,7 +375,6 @@ fun HomeScreen(
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
                                             onItemClick = {
-                                                saveHomeScrollPosition()
                                                 onItemClick(it)
                                             },
                                         )
@@ -585,7 +564,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .height(64.dp)
+                            .height(40.dp)
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -608,7 +587,6 @@ fun HomeScreen(
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = iconContainerAlpha))
                                 .padding(horizontal = 4.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -628,7 +606,6 @@ fun HomeScreen(
                                 }
                                 IconButton(
                                     onClick = {
-                                        saveHomeScrollPosition()
                                         onSyncPlayClick()
                                     },
                                     modifier = Modifier.tvFocusable().size(40.dp),
@@ -651,7 +628,6 @@ fun HomeScreen(
                                 ) {
                                     IconButton(
                                         onClick = {
-                                            saveHomeScrollPosition()
                                             onDownloadsClick()
                                         },
                                         modifier = Modifier.tvFocusable().size(40.dp),
@@ -666,7 +642,6 @@ fun HomeScreen(
                                 }
                                 IconButton(
                                     onClick = {
-                                        saveHomeScrollPosition()
                                         onSettingsClick()
                                     },
                                     modifier = Modifier.tvFocusable().size(40.dp),
