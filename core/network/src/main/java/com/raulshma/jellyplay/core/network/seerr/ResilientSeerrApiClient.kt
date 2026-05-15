@@ -247,4 +247,29 @@ class ResilientSeerrApiClient @Inject constructor(
         id: Int,
     ): Result<SeerrSonarrServiceDetail> =
         withRetry { delegate.getServiceSonarrDetail(baseUrl, apiKey, id) }
+
+    // ── Discover endpoints ──
+
+    override suspend fun getTrending(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+    ): Result<SeerrSearchResponse> =
+        withRetry { delegate.getTrending(baseUrl, apiKey, page) }
+
+    override suspend fun getDiscoverMovies(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+        primaryReleaseDateGte: String?,
+    ): Result<SeerrSearchResponse> =
+        withRetry { delegate.getDiscoverMovies(baseUrl, apiKey, page, primaryReleaseDateGte) }
+
+    override suspend fun getDiscoverTv(
+        baseUrl: String,
+        apiKey: String,
+        page: Int,
+        firstAirDateGte: String?,
+    ): Result<SeerrSearchResponse> =
+        withRetry { delegate.getDiscoverTv(baseUrl, apiKey, page, firstAirDateGte) }
 }

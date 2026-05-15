@@ -115,6 +115,10 @@ class UserPreferencesStore @Inject constructor(
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,
             )
+            if (current.size > 100) {
+                val excess = current.size - 100
+                current.keys.take(excess).forEach { current.remove(it) }
+            }
             prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
         }
     }

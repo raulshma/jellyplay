@@ -48,16 +48,8 @@ import javax.inject.Singleton
 @Singleton
 class JellyfinApiClientImpl @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val jellyfin: Jellyfin,
 ) : JellyfinApiClient {
-
-    private val jellyfin: Jellyfin = createJellyfin {
-        context = this@JellyfinApiClientImpl.context
-        clientInfo = ClientInfo(
-            name = "JellyPlay",
-            version = this@JellyfinApiClientImpl.context.packageManager
-                .getPackageInfo(this@JellyfinApiClientImpl.context.packageName, 0).versionName ?: "1.0"
-        )
-    }
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     override val currentServer: Flow<ServerInfo?> = _currentServer.asStateFlow()

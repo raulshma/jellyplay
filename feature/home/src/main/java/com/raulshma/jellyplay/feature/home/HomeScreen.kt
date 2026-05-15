@@ -98,6 +98,10 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
+import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
@@ -106,6 +110,8 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +122,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
+    onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit = {},
     musicContent: @Composable () -> Unit = {},
@@ -138,6 +145,20 @@ fun HomeScreen(
         hasError = error != null,
         networkStatus = networkStatus,
     )
+
+    // Seerr request state
+    var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
+    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
+    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
+    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
+    val seerrCardLoadingState = rememberSeerrCardLoadingState()
+    val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
+        { tmdbId, mediaType, onDone ->
+            viewModel.prefetchSeerrDetails(tmdbId, mediaType, onDone)
+        }
+    }
 
     var showSurprise by remember { mutableStateOf(false) }
     val allItems = remember(sections) { sections.flatMap { it.items } }
@@ -364,7 +385,7 @@ fun HomeScreen(
                                             itemInfo != null
                                         }
                                     }
-                                    var hasBeenVisible by remember { mutableStateOf(isSectionVisible) }
+                                    var hasBeenVisible by rememberSaveable { mutableStateOf(isSectionVisible) }
                                     if (isSectionVisible) hasBeenVisible = true
 
                                     val sectionModifier = Modifier
@@ -420,6 +441,56 @@ fun HomeScreen(
                                             modifier = sectionModifier,
                                         )
                                     }
+                                    }
+                                }
+
+                                // Seerr Discover Section
+                                if (viewModel.discoverEnabled && viewModel.discoverSections.isNotEmpty()) {
+                                    item(key = "seerr_discover_header") {
+                                        Text(
+                                            text = "Discover",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(backgroundColor)
+                                                .padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+                                        )
+                                    }
+
+                                    val sectionOrder = listOf(
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
+                                        com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
+                                    )
+
+                                    val allDiscoverItems = sectionOrder.flatMap { 
+                                        viewModel.discoverSections[it] ?: emptyList() 
+                                    }.distinctBy { it.id }
+
+                                    if (allDiscoverItems.isNotEmpty()) {
+                                        item(key = "seerr_discover_grid") {
+                                            androidx.compose.runtime.CompositionLocalProvider(
+                                                LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                                                LocalSeerrPrefetch provides seerrPrefetch,
+                                            ) {
+                                                DiscoverGrid(
+                                                    items = allDiscoverItems,
+                                                    onItemClick = { tmdbId, mediaType ->
+                                                        saveHomeScrollPosition()
+                                                        onSeerrItemClick(tmdbId, mediaType)
+                                                    },
+                                                    onRequestClick = { item -> seerrRequestItem = item },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(backgroundColor),
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -524,6 +595,34 @@ fun HomeScreen(
             }
         }
     }
+
+    // Seerr request dialog for discover cards
+    seerrRequestItem?.let { item ->
+        LaunchedEffect(item.id) {
+            viewModel.loadSeerrServiceDetails(item.mediaType)
+            if (item.mediaType.equals("tv", ignoreCase = true)) {
+                viewModel.loadTvSeasons(item.id)
+            }
+        }
+
+        SeerrRequestDialog(
+            item = item,
+            radarrServers = radarrServers,
+            sonarrServers = sonarrServers,
+            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+            isLoadingServices = isLoadingSeerrServices,
+            isRequesting = requestResult?.isLoading == true,
+            requestSuccess = requestResult?.success,
+            requestError = requestResult?.error,
+            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+            },
+            onDismiss = {
+                seerrRequestItem = null
+                viewModel.clearRequestResult()
+            },
+        )
+    }
 }
 
 @Composable
@@ -565,7 +664,6 @@ private fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             onClick = { onItemClick(currentFeatured.id) },
-            sharedBackdropKey = "backdrop_${currentFeatured.id}",
         )
     }
 }
@@ -578,7 +676,6 @@ private fun HeroHeader(
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
-    sharedBackdropKey: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -602,21 +699,8 @@ private fun HeroHeader(
         label = "detailsButtonScale",
     )
 
-    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
-    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
-
     val backdropModifier = Modifier
         .fillMaxSize()
-        .then(
-            if (sharedScope != null && animScope != null && sharedBackdropKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedBackdropKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Box(
         modifier = Modifier
@@ -866,14 +950,12 @@ private fun ContinueWatchingRow(
                     onClick = { onItemClick(item) },
                     onPlayClick = onPlayClick?.let { { it(item) } },
                     cardWidth = cardWidth,
-                    sharedElementKey = "backdrop_${item.id}",
                 )
             }
         }
     }
 }
 
-@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WideMediaCard(
     item: MediaItem,
@@ -882,7 +964,6 @@ private fun WideMediaCard(
     onClick: () -> Unit,
     onPlayClick: (() -> Unit)? = null,
     cardWidth: androidx.compose.ui.unit.Dp,
-    sharedElementKey: String? = null,
 ) {
     val isTv = isTvDevice()
     val interactionSource = remember { MutableInteractionSource() }
@@ -910,22 +991,9 @@ private fun WideMediaCard(
     } else 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
-    val sharedScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
-    val animScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
-
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(16f / 9f)
-        .then(
-            if (sharedScope != null && animScope != null && sharedElementKey != null) {
-                with(sharedScope) {
-                    Modifier.sharedElement(
-                        rememberSharedContentState(sharedElementKey),
-                        animatedVisibilityScope = animScope,
-                    )
-                }
-            } else Modifier
-        )
 
     Column(modifier = Modifier.width(cardWidth)) {
         Card(
@@ -976,6 +1044,35 @@ private fun WideMediaCard(
                             )
                         )
                 )
+
+                if (item.communityRating != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "★",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFC107),
+                            )
+                            Text(
+                                text = "%.1f".format(item.communityRating),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
 
                 if (onPlayClick != null) {
                     PlayButtonWithProgress(
@@ -1070,7 +1167,6 @@ private fun HomeMediaRow(
                     } else 0f,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = onPlayClick?.let { { it(item) } },
-                    sharedElementKey = "poster_${item.id}",
                 )
             }
         }

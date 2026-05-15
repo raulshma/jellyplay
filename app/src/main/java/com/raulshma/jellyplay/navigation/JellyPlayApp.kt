@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.navigation
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -62,7 +60,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
-import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
@@ -321,16 +318,17 @@ private fun MainContent(
                                 }
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                MainNavDisplay(
-                                    navigationState = navigationState,
-                                    navigator = navigator,
-                                    onLogout = onLogout,
-                                    homeMode = homeMode,
-                                    onModeChange = onModeChange,
-                                    enterPip = enterPip,
-                                    enterVideoMiniMode = enterVideoMiniMode,
-                                    modifier = Modifier.weight(1f),
-                                )
+                                Box(modifier = Modifier.weight(1f)) {
+                                    MainNavDisplay(
+                                        navigationState = navigationState,
+                                        navigator = navigator,
+                                        onLogout = onLogout,
+                                        homeMode = homeMode,
+                                        onModeChange = onModeChange,
+                                        enterPip = enterPip,
+                                        enterVideoMiniMode = enterVideoMiniMode,
+                                    )
+                                }
                                 if (showMiniPlayer && isExpanded) {
                                     MiniPlayer(
                                         isVisible = true,
@@ -450,7 +448,6 @@ private fun NavIcon(route: Route, label: String) {
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainNavDisplay(
     navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
@@ -464,9 +461,7 @@ private fun MainNavDisplay(
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
-    SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
-            NavDisplay(
+    NavDisplay(
                 backStack = currentBackStack,
                 onBack = { navigator.goBack() },
                 transitionSpec = {
@@ -609,6 +604,4 @@ private fun MainNavDisplay(
         },
         modifier = modifier,
     )
-        }
-    }
 }

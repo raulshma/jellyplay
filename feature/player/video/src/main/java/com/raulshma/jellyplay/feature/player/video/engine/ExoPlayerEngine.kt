@@ -438,7 +438,7 @@ class ExoPlayerEngine(
 
         val ticker = engineScope.launch {
             while (isActive) {
-                delay(250)
+                delay(500)
                 trySend(p.currentPosition)
             }
         }

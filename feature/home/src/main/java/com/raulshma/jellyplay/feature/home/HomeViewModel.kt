@@ -7,26 +7,45 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import java.time.LocalDate
+import java.time.ZoneOffset
 import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val downloadRepository: DownloadRepository,
+    private val preferencesStore: UserPreferencesStore,
+    private val seerrRepository: SeerrRepository,
+    private val seerrPreferencesStore: SeerrPreferencesStore,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -49,6 +68,15 @@ class HomeViewModel @Inject constructor(
     var dynamicTheming by mutableStateOf(true)
         private set
 
+    // Seerr Discover state
+    var discoverSections by mutableStateOf<Map<DiscoverSectionType, List<SeerrSearchItem>>>(emptyMap())
+        private set
+    var discoverEnabled by mutableStateOf(false)
+        private set
+    private var seerrPreferences by mutableStateOf(SeerrPreferences())
+
+    private var lastContinueWatchingIds: Set<String> = emptySet()
+
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
@@ -67,6 +95,7 @@ class HomeViewModel @Inject constructor(
                     resetHomeScrollPosition()
                     sections = emptyList()
                     favorites = emptyList()
+                    discoverSections = emptyMap()
                     error = null
                     isLoading = true
                     fetchAndUpdateSections()
@@ -83,6 +112,18 @@ class HomeViewModel @Inject constructor(
                 kidsModeEnabled = prefs.kidsModeEnabled
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
+            }
+        }
+
+        // Listen for Seerr preference changes
+        viewModelScope.launch {
+            seerrPreferencesStore.preferences.collect { prefs ->
+                val wasEnabled = discoverEnabled
+                seerrPreferences = prefs
+                discoverEnabled = prefs.enabled && prefs.discoverEnabled
+                if (discoverEnabled && !wasEnabled) {
+                    fetchDiscoverSections(prefs)
+                }
             }
         }
         
@@ -106,6 +147,7 @@ class HomeViewModel @Inject constructor(
             resetHomeScrollPosition()
             sections = emptyList()
             favorites = emptyList()
+            discoverSections = emptyMap()
             error = null
             fetchAndUpdateSections()
             isLoading = false
@@ -132,10 +174,14 @@ class HomeViewModel @Inject constructor(
                     val continueWatching = filteredSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
-                    preferencesStore.setContinueWatching(continueWatching)
-                    val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
-                    intent.setPackage(context.packageName)
-                    context.sendBroadcast(intent)
+                    val currentIds = continueWatching.map { it.id }.toSet()
+                    if (currentIds != lastContinueWatchingIds) {
+                        lastContinueWatchingIds = currentIds
+                        preferencesStore.setContinueWatching(continueWatching)
+                        val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
+                        intent.setPackage(context.packageName)
+                        context.sendBroadcast(intent)
+                    }
 
                     if (prefs.kidsModeEnabled) {
                         mediaRepository.getFavorites(limit = 20)
@@ -156,8 +202,51 @@ class HomeViewModel @Inject constructor(
                         error = it.message ?: "${it::class.simpleName}"
                     }
                 }
+
+            // Fetch discover sections if enabled
+            if (discoverEnabled) {
+                fetchDiscoverSections(seerrPreferences)
+            }
         } finally {
             refreshMutex.unlock()
+        }
+    }
+
+    private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {
+        if (!prefs.enabled || !prefs.discoverEnabled) return
+
+        val today = LocalDate.now(ZoneOffset.systemDefault())
+            .atStartOfDay(ZoneOffset.systemDefault())
+            .toLocalDate()
+            .toString()
+
+        val deferredResults = mutableListOf<Pair<DiscoverSectionType, kotlinx.coroutines.Deferred<Result<SeerrSearchResponse>>>>()
+
+        if (prefs.discoverTrending) {
+            deferredResults.add(DiscoverSectionType.TRENDING to viewModelScope.async { seerrRepository.getTrending() })
+        }
+        if (prefs.discoverPopularMovies) {
+            deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies() })
+        }
+        if (prefs.discoverPopularTv) {
+            deferredResults.add(DiscoverSectionType.POPULAR_TV to viewModelScope.async { seerrRepository.getDiscoverTv() })
+        }
+        if (prefs.discoverUpcomingMovies) {
+            deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
+        }
+        if (prefs.discoverUpcomingTv) {
+            deferredResults.add(DiscoverSectionType.UPCOMING_TV to viewModelScope.async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
+        }
+
+        val newSections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
+        for ((type, deferred) in deferredResults) {
+            deferred.await().onSuccess { response ->
+                newSections[type] = response.results
+            }
+        }
+
+        if (newSections != discoverSections) {
+            discoverSections = newSections
         }
     }
 
@@ -197,9 +286,115 @@ class HomeViewModel @Inject constructor(
     fun resetHomeScrollPosition() {
         homeScrollPosition = HomeScrollPosition()
     }
+
+    // ── Seerr request support ──
+
+    private val _requestResult = MutableStateFlow<DiscoverRequestResult?>(null)
+    val requestResult: StateFlow<DiscoverRequestResult?> = _requestResult.asStateFlow()
+
+    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+
+    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+
+    private val _isLoadingSeerrServices = MutableStateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+
+    private val _tvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
+    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.asStateFlow()
+
+    fun requestSeerrMedia(
+        item: SeerrSearchItem,
+        seasons: List<Int>? = null,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+    ) {
+        viewModelScope.launch {
+            _requestResult.value = DiscoverRequestResult(isLoading = true)
+            seerrRepository.requestMedia(
+                mediaType = item.mediaType,
+                tmdbId = item.id,
+                seasons = seasons,
+                serverId = serverId,
+                profileId = profileId,
+                rootFolder = rootFolder,
+                tags = tags,
+            ).onSuccess {
+                _requestResult.value = DiscoverRequestResult(success = true)
+            }.onFailure {
+                _requestResult.value = DiscoverRequestResult(error = it.message ?: "Request failed")
+            }
+        }
+    }
+
+    fun clearRequestResult() {
+        _requestResult.value = null
+    }
+
+    fun loadSeerrServiceDetails(mediaType: String) {
+        viewModelScope.launch {
+            _isLoadingSeerrServices.value = true
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
+                        }
+                        _radarrServers.value = details
+                    }
+                } else {
+                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
+                        val details = servers.mapNotNull { server ->
+                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
+                        }
+                        _sonarrServers.value = details
+                    }
+                }
+            } finally {
+                _isLoadingSeerrServices.value = false
+            }
+        }
+    }
+
+    fun loadTvSeasons(tmdbId: Int) {
+        viewModelScope.launch {
+            _tvSeasons.value = emptyList()
+            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                _tvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
+            }
+        }
+    }
+
+    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getMovieDetails(tmdbId)
+                } else {
+                    seerrRepository.getTvDetails(tmdbId)
+                }
+                val type = if (mediaType == "movie") com.raulshma.jellyplay.core.model.MediaType.MOVIE else com.raulshma.jellyplay.core.model.MediaType.SERIES
+                launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                launch { seerrRepository.getRecommendations(tmdbId, type) }
+                launch { seerrRepository.getSimilar(tmdbId, type) }
+            } catch (_: Exception) {
+                // Detail screen will retry on failure
+            }
+            onDone()
+        }
+    }
 }
 
 data class HomeScrollPosition(
     val firstVisibleItemIndex: Int = 0,
     val firstVisibleItemScrollOffset: Int = 0,
+)
+
+data class DiscoverRequestResult(
+    val isLoading: Boolean = false,
+    val success: Boolean? = null,
+    val error: String? = null,
 )

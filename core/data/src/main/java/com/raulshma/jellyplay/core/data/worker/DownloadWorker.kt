@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
@@ -59,7 +60,11 @@ class DownloadWorker(
         }
 
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
-        setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
+        try {
+            setForeground(createForegroundInfo(notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L))
+        } catch (_: Exception) {
+            // Foreground service not available, continue without it
+        }
 
         val existingBytes = entity.downloadedBytes
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
@@ -126,7 +131,7 @@ class DownloadWorker(
             var lastProgressUpdate = System.currentTimeMillis()
             var lastSpeedBytes = existingBytes
             var speedBytesPerSec = 0L
-            val progressUpdateIntervalMs = 500L
+            val progressUpdateIntervalMs = 2000L
 
             val body = response.body ?: run {
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
@@ -220,7 +225,11 @@ class DownloadWorker(
         val notification = buildNotification(
             notificationId, name, progress, downloadedBytes, totalBytes, speedBytesPerSec,
         )
-        return ForegroundInfo(notificationId, notification)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(notificationId, notification)
+        }
     }
 
     private fun updateNotification(

@@ -31,7 +31,7 @@ fun SubtitleDownloadSheet(
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {

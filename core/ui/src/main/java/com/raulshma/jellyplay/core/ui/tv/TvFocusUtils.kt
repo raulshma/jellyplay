@@ -41,18 +41,17 @@ fun Modifier.tvFocusable(
     val isFocused by source.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "tv_scale")
 
-    val infiniteTransition = rememberInfiniteTransition(label = "focus_transition")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "focus_alpha"
-    )
-
     val animatedBorderColor = if (isFocused) {
+        val infiniteTransition = rememberInfiniteTransition(label = "focus_transition")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.5f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "focus_alpha"
+        )
         Color.White.copy(alpha = alpha)
     } else {
         Color.Transparent

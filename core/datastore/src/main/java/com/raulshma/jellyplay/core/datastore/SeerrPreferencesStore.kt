@@ -26,6 +26,12 @@ class SeerrPreferencesStore @Inject constructor(
         val ENABLED = booleanPreferencesKey("seerr_enabled")
         val SEARCH_ENABLED = booleanPreferencesKey("seerr_search_enabled")
         val RECOMMENDATIONS_ENABLED = booleanPreferencesKey("seerr_recommendations_enabled")
+        val DISCOVER_ENABLED = booleanPreferencesKey("seerr_discover_enabled")
+        val DISCOVER_TRENDING = booleanPreferencesKey("seerr_discover_trending")
+        val DISCOVER_POPULAR_MOVIES = booleanPreferencesKey("seerr_discover_popular_movies")
+        val DISCOVER_POPULAR_TV = booleanPreferencesKey("seerr_discover_popular_tv")
+        val DISCOVER_UPCOMING_MOVIES = booleanPreferencesKey("seerr_discover_upcoming_movies")
+        val DISCOVER_UPCOMING_TV = booleanPreferencesKey("seerr_discover_upcoming_tv")
     }
 
     val preferences: Flow<SeerrPreferences> = context.seerrDataStore.data.map { prefs ->
@@ -35,6 +41,12 @@ class SeerrPreferencesStore @Inject constructor(
             enabled = prefs[Keys.ENABLED] ?: false,
             searchEnabled = prefs[Keys.SEARCH_ENABLED] ?: false,
             recommendationsEnabled = prefs[Keys.RECOMMENDATIONS_ENABLED] ?: false,
+            discoverEnabled = prefs[Keys.DISCOVER_ENABLED] ?: false,
+            discoverTrending = prefs[Keys.DISCOVER_TRENDING] ?: true,
+            discoverPopularMovies = prefs[Keys.DISCOVER_POPULAR_MOVIES] ?: true,
+            discoverPopularTv = prefs[Keys.DISCOVER_POPULAR_TV] ?: true,
+            discoverUpcomingMovies = prefs[Keys.DISCOVER_UPCOMING_MOVIES] ?: true,
+            discoverUpcomingTv = prefs[Keys.DISCOVER_UPCOMING_TV] ?: true,
         )
     }
 
@@ -60,6 +72,30 @@ class SeerrPreferencesStore @Inject constructor(
         context.seerrDataStore.edit { it[Keys.RECOMMENDATIONS_ENABLED] = enabled }
     }
 
+    suspend fun setDiscoverEnabled(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_ENABLED] = enabled }
+    }
+
+    suspend fun setDiscoverTrending(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_TRENDING] = enabled }
+    }
+
+    suspend fun setDiscoverPopularMovies(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_POPULAR_MOVIES] = enabled }
+    }
+
+    suspend fun setDiscoverPopularTv(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_POPULAR_TV] = enabled }
+    }
+
+    suspend fun setDiscoverUpcomingMovies(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_UPCOMING_MOVIES] = enabled }
+    }
+
+    suspend fun setDiscoverUpcomingTv(enabled: Boolean) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_UPCOMING_TV] = enabled }
+    }
+
     suspend fun disconnect() {
         context.seerrDataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
@@ -67,6 +103,12 @@ class SeerrPreferencesStore @Inject constructor(
             prefs[Keys.ENABLED] = false
             prefs[Keys.SEARCH_ENABLED] = false
             prefs[Keys.RECOMMENDATIONS_ENABLED] = false
+            prefs[Keys.DISCOVER_ENABLED] = false
+            prefs[Keys.DISCOVER_TRENDING] = true
+            prefs[Keys.DISCOVER_POPULAR_MOVIES] = true
+            prefs[Keys.DISCOVER_POPULAR_TV] = true
+            prefs[Keys.DISCOVER_UPCOMING_MOVIES] = true
+            prefs[Keys.DISCOVER_UPCOMING_TV] = true
         }
     }
 }

@@ -23,7 +23,7 @@ class TimeSyncManager @Inject constructor(
     private val offsetMs = AtomicLong(0)
     private val lastPingMs = AtomicLong(0)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var isSyncing = false
+    private val isSyncing = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val measurements = ArrayDeque<Measurement>(maxCapacity + 1)
     private val _pingUpdated = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -40,15 +40,14 @@ class TimeSyncManager @Inject constructor(
     }
 
     fun start() {
-        if (isSyncing) return
-        isSyncing = true
+        if (!isSyncing.compareAndSet(false, true)) return
         scope.launch {
             repeat(3) {
                 sync()
                 delay(1000)
             }
             _pingUpdated.tryEmit(Unit)
-            while (isSyncing) {
+            while (isSyncing.get()) {
                 delay(60_000)
                 sync()
                 _pingUpdated.tryEmit(Unit)
@@ -57,7 +56,7 @@ class TimeSyncManager @Inject constructor(
     }
 
     fun stop() {
-        isSyncing = false
+        isSyncing.set(false)
         synchronized(measurements) {
             measurements.clear()
         }
