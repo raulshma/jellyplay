@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -72,9 +73,9 @@ private fun SkipButtonOverlay(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(ShapeCache.smooth12)
                 .background(Color.Black.copy(alpha = 0.85f))
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
                 .tvFocusable().clickable(onClick = onSkip)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {

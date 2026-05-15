@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -89,7 +90,7 @@ fun VideoMiniPlayer(
         )
 
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = ShapeCache.smooth12,
             color = animatedColor,
             shadowElevation = 12.dp,
             tonalElevation = 4.dp,

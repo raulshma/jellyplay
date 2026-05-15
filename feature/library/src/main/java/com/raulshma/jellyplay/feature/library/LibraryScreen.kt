@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -313,7 +314,7 @@ fun LibraryScreen(
                             // Clear all link
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(ShapeCache.smooth8)
                                     .tvFocusable().clickable { viewModel.clearFilters() }
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                             ) {
@@ -449,7 +450,7 @@ fun LibraryScreen(
                             androidx.compose.material3.LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth(0.4f)
-                                    .clip(RoundedCornerShape(4.dp)),
+                                    .clip(ShapeCache.smooth4),
                                 color = MaterialTheme.colorScheme.primary,
                                 trackColor = Color.White.copy(alpha = 0.1f),
                             )
@@ -534,7 +535,7 @@ private fun GlassPill(
 ) {
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .tvFocusable().clickable(onClick = onClick)
             .animateContentSizeNoClip(spring(stiffness = Spring.StiffnessMediumLow)),
         color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
@@ -562,7 +563,7 @@ private fun GlassDismissTag(
 ) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(ShapeCache.smooth12)
             .background(Color.White.copy(alpha = 0.12f))
             .tvFocusable().clickable(onClick = onDismiss)
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),

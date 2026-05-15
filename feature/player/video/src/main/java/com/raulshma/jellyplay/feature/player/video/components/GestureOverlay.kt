@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -263,14 +264,14 @@ private fun EdgeBarOverlay(
                 modifier = Modifier
                     .width(4.dp)
                     .height(160.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(Color.White.copy(alpha = 0.2f)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(value)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(ShapeCache.smooth4)
                         .background(Color.White.copy(alpha = 0.8f))
                         .align(Alignment.BottomCenter),
                 )

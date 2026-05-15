@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -206,7 +207,7 @@ private fun DownloadItemRow(
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(ShapeCache.smooth8),
                 contentAlignment = Alignment.Center,
             ) {
             val imageUrl = item.imageUrl

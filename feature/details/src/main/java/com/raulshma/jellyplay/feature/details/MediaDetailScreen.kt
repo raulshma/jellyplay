@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -503,7 +504,7 @@ private fun DetailContent(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(ShapeCache.smooth12)
                                         .graphicsLayer { alpha = contentAlpha },
                                     contentScale = ContentScale.Crop,
                                 )
@@ -636,7 +637,7 @@ private fun DetailContent(
                                         modifier = Modifier
                                             .width(posterWidth)
                                             .aspectRatio(2f / 3f)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(ShapeCache.smooth8)
                                             .graphicsLayer { alpha = contentAlpha },
                                         contentScale = ContentScale.Crop,
                                     )
@@ -1014,7 +1015,7 @@ private fun MediaInfoSection(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(ShapeCache.smooth12)
                                     .background(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else Color.White.copy(alpha = 0.08f)
@@ -1090,7 +1091,7 @@ private fun QuickInfoPill(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(ShapeCache.smooth14)
             .background(containerColor)
             .then(if (onClick != null) Modifier.tvFocusable().clickable { onClick() } else Modifier)
             .padding(horizontal = 12.dp, vertical = 10.dp)
@@ -1130,7 +1131,7 @@ private fun InfoBadge(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(ShapeCache.smooth4)
             .background(
                 if (highlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                 else Color.White.copy(alpha = 0.15f)
@@ -1165,7 +1166,7 @@ private fun SubtitleChip(
     )
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(bgColor)
             .tvFocusable().clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1275,7 +1276,7 @@ private fun DetailActionButtons(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(ShapeCache.smooth14)
                 .background(
                     if (canPlayPrimary) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
@@ -1335,7 +1336,7 @@ private fun DetailActionButtons(
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ShapeCache.smooth12)
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = markScale; scaleY = markScale }
                         .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
@@ -1354,7 +1355,7 @@ private fun DetailActionButtons(
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ShapeCache.smooth12)
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                         .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
@@ -1373,7 +1374,7 @@ private fun DetailActionButtons(
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(ShapeCache.smooth12)
                             .background(Color.White.copy(alpha = 0.15f))
                             .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                             .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
@@ -1406,7 +1407,7 @@ private fun DetailActionButtons(
                 modifier = Modifier
                     .height(56.dp)
                     .width(200.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ShapeCache.smooth16)
                     .background(
                         if (canPlayPrimary) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
@@ -1450,7 +1451,7 @@ private fun DetailActionButtons(
                 onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ShapeCache.smooth16)
                     .background(Color.White.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = markScale; scaleY = markScale }
                     .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
@@ -1469,7 +1470,7 @@ private fun DetailActionButtons(
                 onClick = onToggleFavorite,
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ShapeCache.smooth16)
                     .background(Color.White.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                     .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
@@ -1497,7 +1498,7 @@ private fun DetailActionButtons(
                     enabled = !isDownloading && !dlActive && !dlCompleted,
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(ShapeCache.smooth16)
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                         .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
@@ -1584,7 +1585,7 @@ private fun DetailContentBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(ShapeCache.smooth8)
                             .tvFocusable().clickable { onNavigateToSeries(item.seriesId!!) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1683,7 +1684,7 @@ private fun DetailContentBody(
                     item.officialRating?.let {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(ShapeCache.smooth4)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
@@ -1720,7 +1721,7 @@ private fun DetailContentBody(
                         items(genres, key = { it }, contentType = { "genre" }) { genre ->
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(ShapeCache.smooth16)
                                     .background(Color.White.copy(alpha = 0.18f))
                                     .padding(horizontal = 14.dp, vertical = 7.dp)
                                     .tvFocusable()
@@ -2022,7 +2023,7 @@ private fun SeasonsSection(
                 )
                 Surface(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(ShapeCache.smooth16)
                         .tvFocusable().clickable { selectedSeasonIndex = index },
                     color = surfaceColor,
                     contentColor = contentColor,
@@ -2127,7 +2128,7 @@ private fun EpisodeCardSkeleton() {
     Column(
         modifier = Modifier
             .width(280.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(Color.White.copy(alpha = 0.05f))
     ) {
         Box(
@@ -2142,7 +2143,7 @@ private fun EpisodeCardSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth(0.75f)
                     .height(16.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(shimmerColor)
             )
             Spacer(Modifier.height(8.dp))
@@ -2150,7 +2151,7 @@ private fun EpisodeCardSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth(0.35f)
                     .height(12.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(shimmerColor)
             )
             Spacer(Modifier.height(12.dp))
@@ -2158,7 +2159,7 @@ private fun EpisodeCardSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(shimmerColor)
             )
             Spacer(Modifier.height(6.dp))
@@ -2166,7 +2167,7 @@ private fun EpisodeCardSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth(0.9f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(shimmerColor)
             )
             Spacer(Modifier.height(6.dp))
@@ -2174,7 +2175,7 @@ private fun EpisodeCardSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth(0.6f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(shimmerColor)
             )
         }
@@ -2207,7 +2208,7 @@ private fun EpisodeCard(
     Column(
         modifier = Modifier
             .width(280.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(
                 if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                 else Color.White.copy(alpha = 0.05f)
@@ -2360,10 +2361,10 @@ private fun PersonItem(
 fun SkeletonDetailBody() {
     Column(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
         Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(ShapeCache.smooth8).background(Color.White.copy(alpha = 0.1f)))
         Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(ShapeCache.smooth4).background(Color.White.copy(alpha = 0.1f)))
         Spacer(modifier = Modifier.height(24.dp))
-        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(ShapeCache.smooth8).background(Color.White.copy(alpha = 0.1f)))
     }
 }

@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -252,7 +253,7 @@ private fun ChannelCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(Color.White.copy(alpha = 0.05f))
             .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -262,7 +263,7 @@ private fun ChannelCard(
         Box(
             modifier = Modifier
                 .size(64.dp, 48.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(ShapeCache.smooth8)
                 .background(Color.White.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center,
         ) {

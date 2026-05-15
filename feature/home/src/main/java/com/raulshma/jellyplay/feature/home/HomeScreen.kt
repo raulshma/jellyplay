@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -586,7 +587,7 @@ fun HomeScreen(
 
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(ShapeCache.smooth20)
                                 .padding(horizontal = 4.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -860,7 +861,7 @@ private fun HeroHeader(
                 item.officialRating?.let {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(ShapeCache.smooth4)
                             .background(Color.White.copy(alpha = 0.2f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -897,7 +898,7 @@ private fun HeroHeader(
                     items(item.genres, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(ShapeCache.smooth16)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                         ) {
@@ -932,7 +933,7 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(ShapeCache.smooth24)
                         .background(MaterialTheme.colorScheme.primary)
                         .tvFocusable().clickable(
                             interactionSource = playInteractionSource,
@@ -962,7 +963,7 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(ShapeCache.smooth24)
                         .background(Color.White.copy(alpha = 0.15f))
                         .tvFocusable().clickable(
                             interactionSource = detailsInteractionSource,
@@ -1088,7 +1089,7 @@ private fun WideMediaCard(
                     indication = null,
                     onClick = onClick,
                 ),
-            shape = RoundedCornerShape(12.dp),
+            shape = ShapeCache.smooth12,
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
             Box {
@@ -1131,7 +1132,7 @@ private fun WideMediaCard(
                             .padding(6.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(6.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {

@@ -80,6 +80,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -318,9 +319,9 @@ internal fun PlayerControls(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(ShapeCache.smooth12)
                                 .background(Color.Black.copy(alpha = 0.85f))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
                             .tvFocusable().clickable(onClick = onSkipSegment)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
@@ -475,7 +476,7 @@ private fun SyncPlayHeaderIndicator(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         color = Color.White.copy(alpha = 0.15f),
         modifier = Modifier.tvFocusable(),
     ) {
@@ -740,7 +741,7 @@ private fun PlayerOverflowMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         containerColor = Color(0xE6222222),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(

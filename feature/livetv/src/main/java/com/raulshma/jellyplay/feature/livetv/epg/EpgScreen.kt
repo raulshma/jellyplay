@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -249,7 +250,7 @@ private fun ProgramCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(Color.White.copy(alpha = 0.05f))
             .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -287,7 +288,7 @@ private fun ProgramCard(
                 Spacer(Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(ShapeCache.smooth4)
                         .background(Color.White.copy(alpha = 0.15f))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {

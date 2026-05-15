@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
 fun MoodPlaylistsScreen(
@@ -167,12 +168,12 @@ private fun MoodCard(
             .fillMaxWidth()
             .aspectRatio(1f)
             .tvFocusable().clickable(onClick = onClick)
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(ShapeCache.smooth16),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor,
             contentColor = contentColor,
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
     ) {
         Column(
             modifier = Modifier

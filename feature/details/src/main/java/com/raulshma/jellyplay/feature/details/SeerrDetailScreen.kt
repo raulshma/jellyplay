@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -336,7 +337,7 @@ private fun SeerrDetailContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(2f / 3f),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = ShapeCache.smooth12,
                                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                             ) {
                                 MediaImage(
@@ -398,7 +399,7 @@ private fun SeerrDetailContent(
                                 modifier = Modifier
                                     .width(120.dp)
                                     .aspectRatio(2f / 3f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = ShapeCache.smooth8,
                                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                             ) {
                                 MediaImage(
@@ -425,7 +426,7 @@ private fun SeerrDetailContent(
                                         Surface(
                                             color = Color.Transparent,
                                             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-                                            shape = RoundedCornerShape(4.dp)
+                                            shape = ShapeCache.smooth4
                                         ) {
                                             Text(
                                                 text = contentRating,
@@ -542,7 +543,7 @@ private fun SeerrActionButtons(
             Button(
                 onClick = onRequestClick,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
+                shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -557,7 +558,7 @@ private fun SeerrActionButtons(
             Button(
                 onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
+                shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White.copy(alpha = 0.1f),
                     contentColor = Color.White
@@ -857,7 +858,7 @@ private fun WatchProvidersSection(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(ShapeCache.smooth8)
                 ) {
                     MediaImage(
                         url = getLogoUrl(provider.logoPath) ?: "",
@@ -965,7 +966,7 @@ private fun SeasonsSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(2f / 3f),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = ShapeCache.smooth8,
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         MediaImage(
@@ -1026,7 +1027,7 @@ private fun VideosSection(
                                 uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")
                             }
                         },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = ShapeCache.smooth8
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (thumbnailUrl != null) {
@@ -1128,7 +1129,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFF5C518), RoundedCornerShape(4.dp))
+                            .background(Color(0xFFF5C518), ShapeCache.smooth4)
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -1156,7 +1157,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFF90CEA1), RoundedCornerShape(4.dp))
+                        .background(Color(0xFF90CEA1), ShapeCache.smooth4)
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -1222,7 +1223,7 @@ private fun MediaInfoCondensed(
             if (runtime != null && runtime > 0) {
                 Surface(
                     color = Color.White.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp)
+                    shape = ShapeCache.smooth4
                 ) {
                     Text(
                         text = "${runtime}m",

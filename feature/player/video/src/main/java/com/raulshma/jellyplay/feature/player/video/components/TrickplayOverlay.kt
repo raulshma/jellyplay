@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FastForward
@@ -52,13 +53,13 @@ fun TrickplayOverlay(
     Surface(
         modifier = modifier
             .width(220.dp)
-            .shadow(16.dp, shape = RoundedCornerShape(16.dp))
+            .shadow(16.dp, shape = ShapeCache.smooth16)
             .border(
                 width = 0.5.dp,
                 color = Color.White.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(16.dp),
+                shape = ShapeCache.smooth16,
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         color = Color.Black.copy(alpha = 0.55f),
     ) {
         Column(
@@ -169,7 +170,7 @@ fun TrickplayOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp)),
+                            .clip(ShapeCache.smooth4),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = Color.White.copy(alpha = 0.15f),
                     )
