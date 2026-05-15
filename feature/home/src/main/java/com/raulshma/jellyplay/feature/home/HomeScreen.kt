@@ -54,13 +54,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
@@ -118,7 +115,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -233,18 +229,19 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
-        val savedScrollPosition = remember { viewModel.getHomeScrollPosition() }
-        val listState = rememberSaveable(saver = LazyListState.Saver) {
-            LazyListState(
-                firstVisibleItemIndex = savedScrollPosition.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = savedScrollPosition.firstVisibleItemScrollOffset,
-            )
-        }
+        val listState = remember { LazyListState() }
         val saveHomeScrollPosition = {
             viewModel.saveHomeScrollPosition(
                 firstVisibleItemIndex = listState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
             )
+        }
+
+        LaunchedEffect(Unit) {
+            val saved = viewModel.getHomeScrollPosition()
+            if (saved.firstVisibleItemIndex > 0 || saved.firstVisibleItemScrollOffset > 0) {
+                listState.scrollToItem(saved.firstVisibleItemIndex, saved.firstVisibleItemScrollOffset)
+            }
         }
 
         DisposableEffect(listState) {
@@ -556,98 +553,151 @@ fun HomeScreen(
                     }
                 }
 
+                val scrimAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.85f else 0f,
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    label = "scrimAlpha",
+                )
+                val borderAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.12f else 0f,
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
+                    label = "borderAlpha",
+                )
+                val iconContainerAlpha by animateFloatAsState(
+                    targetValue = if (appBarCollapsed) 0.15f else 0f,
+                    animationSpec = tween(300, easing = AlphaEasing),
+                    label = "iconContainerAlpha",
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(animatedContainerColor)
-                ) {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                "JellyPlay",
-                                color = Color.White.copy(alpha = appBarColor),
-                                fontWeight = FontWeight.Bold,
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    backgroundColor.copy(alpha = scrimAlpha * 0.95f),
+                                    backgroundColor.copy(alpha = scrimAlpha),
+                                ),
                             )
-                        },
-                        navigationIcon = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 12.dp),
-                            ) {
-                                ModeSwitch(
-                                    currentMode = viewModel.homeMode,
-                                    onModeChange = onModeChange,
-                                )
-                                HeaderStatusIndicator(
-                                    status = headerStatus,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-                        },
-                        actions = {
-                            IconButton(
-                                onClick = {
-                                    showSurprise = !showSurprise
-                                    if (!showSurprise) autoRotateEnabled = true
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = "Surprise Me",
-                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White,
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    saveHomeScrollPosition()
-                                    onSyncPlayClick()
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.Group,
-                                    contentDescription = "SyncPlay",
-                                    tint = Color.White,
-                                )
-                            }
-                            BadgedBox(
-                                badge = {
-                                    if (activeDownloadCount > 0) {
-                                        Badge { Text(activeDownloadCount.toString()) }
-                                    }
+                        )
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(64.dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) {
+                            ModeSwitch(
+                                currentMode = viewModel.homeMode,
+                                onModeChange = onModeChange,
+                            )
+                            HeaderStatusIndicator(
+                                status = headerStatus,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.White.copy(alpha = iconContainerAlpha))
+                                .padding(horizontal = 4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        showSurprise = !showSurprise
+                                        if (!showSurprise) autoRotateEnabled = true
+                                    },
+                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = "Surprise Me",
+                                        tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
                                 }
-                            ) {
                                 IconButton(
                                     onClick = {
                                         saveHomeScrollPosition()
-                                        onDownloadsClick()
+                                        onSyncPlayClick()
                                     },
-                                    modifier = Modifier.tvFocusable(),
+                                    modifier = Modifier.tvFocusable().size(40.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = "Downloads",
-                                        tint = Color.White,
+                                        Icons.Default.Group,
+                                        contentDescription = "SyncPlay",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                BadgedBox(
+                                    badge = {
+                                        if (activeDownloadCount > 0) {
+                                            Badge {
+                                                Text(activeDownloadCount.toString())
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            saveHomeScrollPosition()
+                                            onDownloadsClick()
+                                        },
+                                        modifier = Modifier.tvFocusable().size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Download,
+                                            contentDescription = "Downloads",
+                                            tint = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        saveHomeScrollPosition()
+                                        onSettingsClick()
+                                    },
+                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                             }
-                            IconButton(
-                                onClick = {
-                                    saveHomeScrollPosition()
-                                    onSettingsClick()
-                                },
-                                modifier = Modifier.tvFocusable(),
-                            ) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = Color.White,
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = borderAlpha),
+                                        Color.White.copy(alpha = borderAlpha * 1.5f),
+                                        Color.White.copy(alpha = borderAlpha),
+                                        Color.Transparent,
+                                    ),
                                 )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                        modifier = Modifier.statusBarsPadding(),
+                            )
                     )
                 }
             }
