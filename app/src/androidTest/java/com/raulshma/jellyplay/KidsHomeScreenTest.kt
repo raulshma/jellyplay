@@ -22,6 +22,7 @@ class KidsHomeScreenTest {
     fun kidsHomeScreen_showsSections() {
         val sections = listOf(
             HomeSection(
+                id = "continue_watching",
                 title = "Continue Watching",
                 type = HomeSectionType.CONTINUE_WATCHING,
                 items = listOf(
@@ -30,6 +31,7 @@ class KidsHomeScreenTest {
                 ),
             ),
             HomeSection(
+                id = "next_up",
                 title = "Next Up",
                 type = HomeSectionType.NEXT_UP,
                 items = listOf(
@@ -83,6 +85,7 @@ class KidsHomeScreenTest {
     fun kidsHomeScreen_showsSurpriseMe() {
         val sections = listOf(
             HomeSection(
+                id = "latest",
                 title = "Latest",
                 type = HomeSectionType.LATEST_MEDIA,
                 items = listOf(
@@ -112,6 +115,7 @@ class KidsHomeScreenTest {
     fun kidsHomeScreen_showsGenreChips() {
         val sections = listOf(
             HomeSection(
+                id = "latest",
                 title = "Latest",
                 type = HomeSectionType.LATEST_MEDIA,
                 items = listOf(

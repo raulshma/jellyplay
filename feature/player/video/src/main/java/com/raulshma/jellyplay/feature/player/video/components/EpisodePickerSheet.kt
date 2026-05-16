@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,9 +32,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +73,6 @@ internal fun EpisodePickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
         ) {
-            // Header with drag handle feel
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -92,9 +97,18 @@ internal fun EpisodePickerSheet(
             Spacer(Modifier.height(16.dp))
 
             if (seasons.isNotEmpty()) {
+                val isTv = LocalTvMode.current
+                val seasonFocusRequester = remember { FocusRequester() }
+                LaunchedEffect(isTv) {
+                    if (isTv) seasonFocusRequester.requestFocus()
+                }
+
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .tvFocusRestorer()
+                        .tvFocusExitHandler(),
                 ) {
                     items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                         val isSelected = season.id == currentSeasonId
@@ -111,7 +125,8 @@ internal fun EpisodePickerSheet(
                         Surface(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth20)
-                                .tvFocusable().clickable { onSeasonSelect(season.id) },
+                                .then(if (season.id == seasons.firstOrNull()?.id) Modifier.focusRequester(seasonFocusRequester) else Modifier)
+                                .clickable { onSeasonSelect(season.id) },
                             color = containerColor,
                             contentColor = contentColor,
                             tonalElevation = if (isSelected) 0.dp else 1.dp,
@@ -196,7 +211,7 @@ private fun EpisodeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .background(
                 if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                 else Color.Transparent
@@ -204,7 +219,6 @@ private fun EpisodeRow(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Left accent bar for current episode
         if (isCurrent) {
             Box(
                 modifier = Modifier
@@ -231,7 +245,6 @@ private fun EpisodeRow(
                 modifier = Modifier.fillMaxWidth(),
                 contentScale = ContentScale.Crop,
             )
-            // Darken overlay for current episode
             if (isCurrent) {
                 Box(
                     modifier = Modifier
@@ -239,7 +252,6 @@ private fun EpisodeRow(
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                 )
             }
-            // Play icon overlay (only when not currently playing)
             if (!isCurrent) {
                 Box(
                     modifier = Modifier
@@ -256,7 +268,6 @@ private fun EpisodeRow(
                     )
                 }
             }
-            // Progress bar
             if (progress > 0f) {
                 Box(
                     modifier = Modifier
@@ -267,7 +278,6 @@ private fun EpisodeRow(
                         .background(MaterialTheme.colorScheme.primary),
                 )
             }
-            // Watched badge
             if (episode.isPlayed && progress <= 0f) {
                 Box(
                     modifier = Modifier
@@ -333,7 +343,6 @@ private fun EpisodeRow(
                 }
             }
 
-            // Episode overview
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Spacer(Modifier.height(4.dp))
                 Text(

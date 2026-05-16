@@ -61,7 +61,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @Composable
 fun SmartPlaylistsScreen(
@@ -123,7 +123,7 @@ fun SmartPlaylistsScreen(
             Spacer(Modifier.height(8.dp))
 
             val adaptiveInfo = LocalAdaptiveInfo.current
-            val isTv = isTvDevice()
+            val isTv = LocalTvMode.current
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(

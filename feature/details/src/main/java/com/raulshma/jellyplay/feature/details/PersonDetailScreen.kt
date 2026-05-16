@@ -38,7 +38,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +82,7 @@ fun PersonDetailScreen(
             }
             else -> {
                 val adaptiveInfo = LocalAdaptiveInfo.current
-                val isTv = isTvDevice()
+                val isTv = LocalTvMode.current
                 val contentPad = adaptiveInfo.contentPadding(isTv)
                 val gridMin = adaptiveInfo.gridMinSize(isTv)
                 val spacing = adaptiveInfo.itemSpacing(isTv)

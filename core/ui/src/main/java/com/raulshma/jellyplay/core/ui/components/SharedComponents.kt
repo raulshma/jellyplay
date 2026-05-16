@@ -83,8 +83,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -142,12 +145,19 @@ fun PlayButtonWithProgress(
     modifier: Modifier = Modifier,
     buttonSize: Dp = 36.dp,
 ) {
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
         animationSpec = tween(150, easing = PointToPointEasing),
         label = "playBtnScale",
+    )
+    val scale by animateFloatAsState(
+        targetValue = baseScale * tvFocusState.scale,
+        animationSpec = tween(150, easing = PointToPointEasing),
+        label = "playBtnCombinedScale",
     )
 
     val trackColor = Color.White.copy(alpha = 0.25f)
@@ -156,9 +166,11 @@ fun PlayButtonWithProgress(
     Box(
         modifier = modifier
             .size(buttonSize)
+            .then(tvFocusState.focusModifier)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth10)
             .clip(ShapeCache.smooth10)
-            .tvFocusable().clickable(
+            .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -277,16 +289,27 @@ fun PosterCard(
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
 ) {
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = lessSpringySpec(),
         label = "cardScale",
     )
+    val scale by animateFloatAsState(
+        targetValue = baseScale * tvFocusState.scale,
+        animationSpec = lessSpringySpec(),
+        label = "cardCombinedScale",
+    )
     val elevation by animateDpAsState(
-        targetValue = if (isPressed) 12.dp else if (isTv) 12.dp else 4.dp,
+        targetValue = when {
+            isPressed -> 12.dp
+            tvFocusState.isFocused -> 16.dp
+            isTv -> 12.dp
+            else -> 4.dp
+        },
         animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "cardElevation",
     )
@@ -307,20 +330,20 @@ fun PosterCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(tvFocusState.focusModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.toPx()
                 }
-                .tvFocusable().clickable(
+                .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
+                .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
-                )
-                .then(if (isTv) Modifier.tvFocusable() else Modifier)
-                .then(if (isTv) Modifier.shadow(12.dp, ShapeCache.smooth12) else Modifier),
+                ),
             shape = ShapeCache.smooth12,
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
                 MediaImage(
@@ -454,7 +477,7 @@ fun MediaRow(
     onPlayClick: ((MediaItem) -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
@@ -469,6 +492,7 @@ fun MediaRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(
@@ -621,7 +645,7 @@ fun PressScaleBox(
                 scaleX = scale
                 scaleY = scale
             }
-            .tvFocusable().clickable(
+            .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,

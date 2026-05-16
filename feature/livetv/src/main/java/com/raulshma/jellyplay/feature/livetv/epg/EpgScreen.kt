@@ -57,7 +57,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
@@ -84,7 +84,7 @@ fun EpgScreen(
     )
 
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)

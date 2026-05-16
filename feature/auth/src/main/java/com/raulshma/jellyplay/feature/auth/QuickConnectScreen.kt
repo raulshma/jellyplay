@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
@@ -97,7 +97,7 @@ fun QuickConnectScreen(
         },
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
-        val isTv = isTvDevice()
+        val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
 
         Column(

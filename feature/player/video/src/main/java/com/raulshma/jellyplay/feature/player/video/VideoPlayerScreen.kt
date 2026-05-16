@@ -49,6 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.NativeKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +71,7 @@ import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
@@ -374,11 +378,59 @@ fun VideoPlayerScreen(
         derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
+    val isTv = LocalTvMode.current
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .then(
+                if (isTv && currentSheet == PlayerSheet.None) {
+                    Modifier.onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
+                                if (!showControls) {
+                                    showControls = true
+                                } else {
+                                    doTogglePlayPause()
+                                }
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                doSeekForward()
+                                showControls = true
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                doSeekBack()
+                                showControls = true
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                doTogglePlayPause()
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                                doSeekForward()
+                                showControls = true
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_MEDIA_REWIND -> {
+                                doSeekBack()
+                                showControls = true
+                                true
+                            }
+                            NativeKeyEvent.KEYCODE_SPACE -> {
+                                doTogglePlayPause()
+                                showControls = true
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                } else Modifier
+            )
             .pointerInput(uiState.gesturesEnabled, uiState.seekDurationMs) {
                 if (!uiState.gesturesEnabled) return@pointerInput
                 detectTapGestures(
@@ -1025,7 +1077,7 @@ private fun OcrResultSheet(
                                 android.content.ClipData.newPlainText("OCR Subtitle", ocrText)
                             )
                         },
-                        modifier = Modifier.weight(1f).tvFocusable(),
+                        modifier = Modifier.weight(1f),
                     ) { Text("Copy") }
                     FilledTonalButton(
                         onClick = {
@@ -1035,7 +1087,7 @@ private fun OcrResultSheet(
                             }
                             context.startActivity(Intent.createChooser(intent, "Share"))
                         },
-                        modifier = Modifier.weight(1f).tvFocusable(),
+                        modifier = Modifier.weight(1f),
                     ) { Text("Share") }
                 }
             }

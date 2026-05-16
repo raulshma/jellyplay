@@ -88,7 +88,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -109,7 +109,7 @@ fun SyncPlayScreen(
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
