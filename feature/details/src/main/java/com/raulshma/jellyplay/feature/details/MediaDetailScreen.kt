@@ -78,8 +78,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+
+
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -125,7 +125,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 
 @Composable
 fun MediaDetailScreen(
@@ -312,7 +314,7 @@ private fun DetailContent(
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+    val isTv = LocalTvMode.current
 
     val density = LocalDensity.current
     val backdropHeight = when {
@@ -982,24 +984,10 @@ private fun MediaInfoSection(
                 StreamPickerType.SUBTITLE -> selectedSubtitleIndex
             }
 
-            ModalBottomSheet(
+            TvSafeSheet(
                 onDismissRequest = { picker = null },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = chipBackgroundColor,
+                title = if (activePicker == StreamPickerType.AUDIO) "Select Audio" else "Select Subtitle",
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        text = if (activePicker == StreamPickerType.AUDIO) "Select Audio" else "Select Subtitle",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                    )
-
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -1063,7 +1051,6 @@ private fun MediaInfoSection(
                             }
                         }
                     }
-                }
             }
         }
     }
@@ -1093,9 +1080,14 @@ private fun QuickInfoPill(
         modifier = modifier
             .clip(ShapeCache.smooth14)
             .background(containerColor)
-            .then(if (onClick != null) Modifier.tvFocusable().clickable { onClick() } else Modifier)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .tvFocusable(),
+            .then(
+                if (onClick != null) {
+                    Modifier.tvFocusable().clickable { onClick() }
+                } else if (LocalTvMode.current) {
+                    Modifier.tvFocusable()
+                } else Modifier
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1169,8 +1161,7 @@ private fun SubtitleChip(
             .clip(ShapeCache.smooth16)
             .background(bgColor)
             .tvFocusable().clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .tvFocusable(),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1296,8 +1287,7 @@ private fun DetailActionButtons(
                         val startPos = item.playbackPositionTicks ?: 0L
                         onPlayClick(item.id, sourceId, startPos)
                     }
-                }
-                .tvFocusable(),
+                },
             contentAlignment = Alignment.Center,
         ) {
             if (progress > 0f) {
@@ -1342,7 +1332,6 @@ private fun DetailActionButtons(
                         .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
                             if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                         }
-                        .tvFocusable()
                 ) {
                     Icon(
                         if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
@@ -1359,7 +1348,6 @@ private fun DetailActionButtons(
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                         .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-                        .tvFocusable()
                 ) {
                     Icon(
                         if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -1378,7 +1366,6 @@ private fun DetailActionButtons(
                             .background(Color.White.copy(alpha = 0.15f))
                             .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                             .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
-                            .tvFocusable()
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
@@ -1427,8 +1414,7 @@ private fun DetailActionButtons(
                             val startPos = item.playbackPositionTicks ?: 0L
                             onPlayClick(item.id, sourceId, startPos)
                         }
-                    }
-                    .tvFocusable(),
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 if (progress > 0f) {
@@ -1457,7 +1443,6 @@ private fun DetailActionButtons(
                     .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
                         if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                     }
-                    .tvFocusable()
             ) {
                 Icon(
                     if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
@@ -1474,7 +1459,6 @@ private fun DetailActionButtons(
                     .background(Color.White.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                     .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-                    .tvFocusable()
             ) {
                 Icon(
                     if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -1502,7 +1486,6 @@ private fun DetailActionButtons(
                         .background(Color.White.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                         .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
-                        .tvFocusable()
                 ) {
                     if (isDownloading || dlActive) {
                         if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
@@ -1561,7 +1544,7 @@ private fun DetailContentBody(
     val showContent = true
 
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+    val isTv = LocalTvMode.current
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
 
     Box(

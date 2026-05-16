@@ -37,7 +37,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -55,7 +55,7 @@ fun MusicBrowseScreen(
     viewModel: MusicBrowseViewModel = hiltViewModel(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val gridMin = adaptiveInfo.gridMinSize(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)

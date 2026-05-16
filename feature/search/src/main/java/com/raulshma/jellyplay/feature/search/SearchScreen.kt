@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -148,7 +149,7 @@ fun SearchScreen(
     var headerVisible by remember { mutableStateOf(true) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = com.raulshma.jellyplay.core.ui.tv.isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)

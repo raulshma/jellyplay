@@ -73,6 +73,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -110,8 +112,10 @@ import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
@@ -235,7 +239,7 @@ fun HomeScreen(
         }
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
-        val isTv = isTvDevice()
+        val isTv = LocalTvMode.current
 
         val headerHeight = when {
             isTv -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.Tv
@@ -380,6 +384,9 @@ fun HomeScreen(
                                             backgroundColor = backgroundColor,
                                             contentPadding = contentPad,
                                             onItemClick = {
+                                                onItemClick(it)
+                                            },
+                                            onDetailsClick = {
                                                 onItemClick(it)
                                             },
                                         )
@@ -600,7 +607,7 @@ fun HomeScreen(
                                         showSurprise = !showSurprise
                                         if (!showSurprise) autoRotateEnabled = true
                                     },
-                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                    modifier = Modifier.size(40.dp),
                                 ) {
                                     Icon(
                                         Icons.Default.AutoAwesome,
@@ -613,7 +620,7 @@ fun HomeScreen(
                                     onClick = {
                                         onSyncPlayClick()
                                     },
-                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                    modifier = Modifier.size(40.dp),
                                 ) {
                                     Icon(
                                         Icons.Default.Group,
@@ -635,7 +642,7 @@ fun HomeScreen(
                                         onClick = {
                                             onDownloadsClick()
                                         },
-                                        modifier = Modifier.tvFocusable().size(40.dp),
+                                        modifier = Modifier.size(40.dp),
                                     ) {
                                         Icon(
                                             Icons.Default.Download,
@@ -649,7 +656,7 @@ fun HomeScreen(
                                     onClick = {
                                         onSettingsClick()
                                     },
-                                    modifier = Modifier.tvFocusable().size(40.dp),
+                                    modifier = Modifier.size(40.dp),
                                 ) {
                                     Icon(
                                         Icons.Default.Settings,
@@ -721,6 +728,7 @@ private fun AnimatedHeroHeader(
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
     onItemClick: (String) -> Unit,
+    onDetailsClick: ((String) -> Unit)? = null,
 ) {
     AnimatedContent(
         targetState = featuredItem,
@@ -752,6 +760,7 @@ private fun AnimatedHeroHeader(
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
             onClick = { onItemClick(currentFeatured.id) },
+            onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
         )
     }
 }
@@ -764,7 +773,9 @@ private fun HeroHeader(
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
     onClick: () -> Unit,
+    onDetailsClick: (() -> Unit)? = null,
 ) {
+    val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -787,6 +798,13 @@ private fun HeroHeader(
         label = "detailsButtonScale",
     )
 
+    val heroPlayFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            heroPlayFocusRequester.requestFocus()
+        }
+    }
+
     val backdropModifier = Modifier
         .fillMaxSize()
 
@@ -798,10 +816,16 @@ private fun HeroHeader(
                 scaleX = pressScale
                 scaleY = pressScale
             }
-            .tvFocusable().clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
+            // On TV, the hero container should NOT be focusable — only the
+            // Play and Details buttons inside should receive D-pad focus.
+            .then(
+                if (!isTv) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else Modifier
             )
     ) {
         MediaImage(
@@ -942,7 +966,8 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(ShapeCache.smooth24)
                         .background(MaterialTheme.colorScheme.primary)
-                        .tvFocusable().clickable(
+                        .focusRequester(heroPlayFocusRequester)
+                        .clickable(
                             interactionSource = playInteractionSource,
                             indication = null,
                             onClick = onClick,
@@ -972,10 +997,10 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(ShapeCache.smooth24)
                         .background(Color.White.copy(alpha = 0.15f))
-                        .tvFocusable().clickable(
+                        .clickable(
                             interactionSource = detailsInteractionSource,
                             indication = null,
-                            onClick = onClick,
+                            onClick = onDetailsClick ?: onClick,
                         )
                         .padding(horizontal = 24.dp)
                         .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale },
@@ -1003,7 +1028,7 @@ private fun ContinueWatchingRow(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val cardWidth = when {
         isTv -> 400.dp
         adaptiveInfo.windowSizeClass != WindowSizeClass.Compact -> 320.dp
@@ -1023,6 +1048,9 @@ private fun ContinueWatchingRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(
                 count = items.size,
@@ -1052,7 +1080,7 @@ private fun WideMediaCard(
     onPlayClick: (() -> Unit)? = null,
     cardWidth: androidx.compose.ui.unit.Dp,
 ) {
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1091,7 +1119,7 @@ private fun WideMediaCard(
                     scaleY = scale
                     shadowElevation = elevation.dp.toPx()
                 }
-                .tvFocusable().clickable(
+                .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
@@ -1219,7 +1247,7 @@ private fun HomeMediaRow(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
@@ -1235,6 +1263,9 @@ private fun HomeMediaRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(
                 count = items.size,

@@ -91,7 +91,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -134,7 +134,7 @@ fun MusicHomeScreen(
     val headerHeight = 320.dp
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val headerHeightPx = with(density) { headerHeight.toPx() }
     val scrollFraction by remember {
@@ -164,7 +164,7 @@ fun MusicHomeScreen(
                     }
                 } else {
                     val adaptiveInfo = LocalAdaptiveInfo.current
-                    val isTv = isTvDevice()
+                    val isTv = LocalTvMode.current
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),

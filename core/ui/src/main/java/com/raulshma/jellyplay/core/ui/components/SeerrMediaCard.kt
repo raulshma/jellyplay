@@ -53,7 +53,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import java.time.LocalDate
 
@@ -66,7 +66,7 @@ fun SeerrMediaCard(
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
 ) {
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 

@@ -45,7 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.GenreChip
@@ -142,7 +142,7 @@ fun GenresScreen(
                     }
                     else -> {
                         val adaptiveInfo = LocalAdaptiveInfo.current
-                        val isTv = isTvDevice()
+                        val isTv = LocalTvMode.current
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(adaptiveInfo.gridMinSize(isTv)),
                             contentPadding = PaddingValues(

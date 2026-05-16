@@ -14,6 +14,8 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,22 +25,34 @@ fun PlayerModalBottomSheet(
     sheetState: SheetState = rememberModalBottomSheetState(),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        modifier = modifier,
-        sheetState = sheetState,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-    ) {
-        val view = LocalView.current
-        LaunchedEffect(view) {
-            val window = (view.parent as? DialogWindowProvider)?.window
-            window?.let {
-                val controller = WindowCompat.getInsetsController(it, it.decorView)
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            }
+    val isTv = LocalTvMode.current
+
+    if (isTv) {
+        // On TV, use TvSafeSheet which renders a full-screen Dialog
+        TvSafeSheet(
+            onDismissRequest = onDismissRequest,
+        ) {
+            // TvSafeSheet doesn't provide ColumnScope, so we wrap
+            content()
         }
-        content()
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismissRequest,
+            modifier = modifier,
+            sheetState = sheetState,
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        ) {
+            val view = LocalView.current
+            LaunchedEffect(view) {
+                val window = (view.parent as? DialogWindowProvider)?.window
+                window?.let {
+                    val controller = WindowCompat.getInsetsController(it, it.decorView)
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+            content()
+        }
     }
 }

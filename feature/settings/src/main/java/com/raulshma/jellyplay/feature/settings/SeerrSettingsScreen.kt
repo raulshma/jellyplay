@@ -67,7 +67,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 
@@ -104,8 +104,8 @@ fun SeerrSettingsScreen(
                 .padding(padding)
                 .imePadding(),
             contentPadding = PaddingValues(
-                start = if (isTvDevice()) 80.dp else 16.dp,
-                end = if (isTvDevice()) 80.dp else 16.dp,
+                start = if (LocalTvMode.current) 80.dp else 16.dp,
+                end = if (LocalTvMode.current) 80.dp else 16.dp,
                 bottom = 80.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(4.dp),

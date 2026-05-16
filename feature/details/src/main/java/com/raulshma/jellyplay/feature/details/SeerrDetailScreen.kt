@@ -58,7 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import java.text.NumberFormat
 import java.util.*
@@ -215,7 +215,7 @@ private fun SeerrDetailContent(
     val scrollState = rememberScrollState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val density = LocalDensity.current
     val artworkColors = LocalArtworkColors.current
 
@@ -586,7 +586,7 @@ private fun SeerrDetailBody(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
 
@@ -777,7 +777,7 @@ private fun SeerrHorizontalSection(
                         }
                     },
                     modifier = Modifier.width(
-                        LocalAdaptiveInfo.current.rowCardWidth(isTvDevice())
+                        LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                     )
                 )
             }
@@ -1022,7 +1022,7 @@ private fun VideosSection(
                     modifier = Modifier
                         .width(240.dp)
                         .aspectRatio(16f / 9f)
-                        .clickable {
+                        .tvFocusable().clickable {
                             if (video.site?.lowercase() == "youtube") {
                                 uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")
                             }
