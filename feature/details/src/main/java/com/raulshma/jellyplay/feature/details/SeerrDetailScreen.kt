@@ -60,6 +60,17 @@ import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import java.text.NumberFormat
 import java.util.*
 
@@ -254,7 +265,19 @@ private fun SeerrDetailContent(
         label = "appBarColor",
     )
 
-    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+    val contentFocusRequester = rememberInitialFocus()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor)
+            .onKeyEvent { keyEvent ->
+                if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                    onBack()
+                    true
+                } else false
+            },
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -507,12 +530,34 @@ private fun SeerrDetailContent(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
+                if (isTv) {
+                    val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                    Box(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .then(backFocusState.focusModifier)
+                            .tvFocusIndicator(backFocusState, CircleShape)
+                            .focusable()
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -758,7 +803,10 @@ private fun SeerrHorizontalSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(items) { item ->
                 SeerrMediaCard(
@@ -886,7 +934,10 @@ private fun CastSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(cast) { member ->
                 val name: String
@@ -958,7 +1009,10 @@ private fun SeasonsSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(seasons.sortedByDescending { it.seasonNumber }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
@@ -1011,7 +1065,10 @@ private fun VideosSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(videos) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {

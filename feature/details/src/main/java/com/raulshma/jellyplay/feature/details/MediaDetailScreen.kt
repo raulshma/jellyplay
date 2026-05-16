@@ -127,7 +127,21 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 
 @Composable
 fun MediaDetailScreen(
@@ -384,7 +398,19 @@ private fun DetailContent(
         itemId
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+    val contentFocusRequester = rememberInitialFocus()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor)
+            .onKeyEvent { keyEvent ->
+                if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                    onBack()
+                    true
+                } else false
+            },
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -725,20 +751,44 @@ private fun DetailContent(
                     )
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                    if (isTv) {
+                        val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                        Box(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                )
+                                .then(backFocusState.focusModifier)
+                                .tvFocusIndicator(backFocusState, CircleShape)
+                                .focusable()
+                                .clickable(onClick = onBack),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = animatedIconColor,
+                                modifier = Modifier.padding(8.dp),
                             )
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = animatedIconColor,
-                        )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                )
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = animatedIconColor,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -1263,6 +1313,8 @@ private fun DetailActionButtons(
 
     // Play button — full width in vertical mode, fixed width in horizontal
     val playButton: @Composable () -> Unit = {
+        val isTv = LocalTvMode.current
+        val playTvFocusState = rememberTvFocusState(focusedScale = 1.05f)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1272,8 +1324,14 @@ private fun DetailActionButtons(
                     if (canPlayPrimary) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                 )
+                .then(
+                    if (isTv) playTvFocusState.focusModifier else Modifier
+                )
+                .then(
+                    if (isTv) Modifier.tvFocusIndicator(playTvFocusState, ShapeCache.smooth14) else Modifier
+                )
                 .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                .tvFocusable().clickable(
+                .clickable(
                     interactionSource = playInteractionSource,
                     indication = null,
                     enabled = canPlayPrimary,
@@ -1321,6 +1379,11 @@ private fun DetailActionButtons(
                 modifier = iconsModifier,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val isTv = LocalTvMode.current
+                val markTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val favoriteTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val downloadTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+
                 IconButton(
                     onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
                     modifier = Modifier
@@ -1328,8 +1391,14 @@ private fun DetailActionButtons(
                         .height(48.dp)
                         .clip(ShapeCache.smooth12)
                         .background(Color.White.copy(alpha = 0.15f))
+                        .then(
+                            if (isTv) markTvFocusState.focusModifier else Modifier
+                        )
+                        .then(
+                            if (isTv) Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12) else Modifier
+                        )
                         .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .tvFocusable().clickable(interactionSource = markInteractionSource, indication = null) {
+                        .clickable(interactionSource = markInteractionSource, indication = null) {
                             if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                         }
                 ) {
@@ -1346,8 +1415,14 @@ private fun DetailActionButtons(
                         .height(48.dp)
                         .clip(ShapeCache.smooth12)
                         .background(Color.White.copy(alpha = 0.15f))
+                        .then(
+                            if (isTv) favoriteTvFocusState.focusModifier else Modifier
+                        )
+                        .then(
+                            if (isTv) Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12) else Modifier
+                        )
                         .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .tvFocusable().clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
+                        .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
                         if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -1364,8 +1439,14 @@ private fun DetailActionButtons(
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(Color.White.copy(alpha = 0.15f))
+                            .then(
+                                if (isTv) downloadTvFocusState.focusModifier else Modifier
+                            )
+                            .then(
+                                if (isTv) Modifier.tvFocusIndicator(downloadTvFocusState, ShapeCache.smooth12) else Modifier
+                            )
                             .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .tvFocusable().clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                            .clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
@@ -1804,10 +1885,13 @@ private fun DetailContentBody(
                         color = Color.White
                     )
                     Spacer(Modifier.height(16.dp))
-                    CompositionLocalProvider(LocalContentColor provides Color.White) {
+                        CompositionLocalProvider(LocalContentColor provides Color.White) {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .tvFocusRestorer()
+                                .tvFocusExitHandler(),
                         ) {
                             items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
                                 PersonItem(
@@ -1836,6 +1920,9 @@ private fun DetailContentBody(
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer()
+                            .tvFocusExitHandler(),
                     ) {
                         items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
                             val adaptiveInfo = LocalAdaptiveInfo.current
@@ -1867,6 +1954,9 @@ private fun DetailContentBody(
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer()
+                            .tvFocusExitHandler(),
                     ) {
                         items(
                             count = seerrRecommendations.size,
@@ -1918,6 +2008,9 @@ private fun DetailContentBody(
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer()
+                            .tvFocusExitHandler(),
                     ) {
                         items(
                             count = seerrSimilar.size,
@@ -1988,6 +2081,9 @@ private fun SeasonsSection(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(seasons, key = { it.id }, contentType = { "season" }) { season ->
                 val index = seasons.indexOf(season)
@@ -2066,6 +2162,9 @@ private fun SeasonsSection(
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer()
+                            .tvFocusExitHandler(),
                     ) {
                         items(currentEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
                             EpisodeCard(
