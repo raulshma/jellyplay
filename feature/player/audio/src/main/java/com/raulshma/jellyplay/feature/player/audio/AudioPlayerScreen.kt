@@ -7,6 +7,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -823,11 +824,11 @@ private fun AlbumArtwork(
             .scale(scale)
             .shadow(
                 elevation = 24.dp,
-                shape = RoundedCornerShape(24.dp),
+                shape = ShapeCache.smooth24,
                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
             )
-            .clip(RoundedCornerShape(24.dp)),
+            .clip(ShapeCache.smooth24),
         contentAlignment = Alignment.Center,
     ) {
         if (albumArtUrl.isNotBlank()) {

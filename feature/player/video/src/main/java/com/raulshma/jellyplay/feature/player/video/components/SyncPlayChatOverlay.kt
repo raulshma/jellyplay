@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,7 +67,7 @@ fun SyncPlayChatOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.45f)
                 .fillMaxHeight(0.55f)
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.6f), ShapeCache.smooth12)
                 .padding(12.dp),
         ) {
             ChatContent(
@@ -115,7 +118,7 @@ private fun ChatContent(
         }
     }
 
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier.imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -162,7 +165,7 @@ private fun ChatContent(
                     },
                 ),
                 modifier = Modifier.weight(1f).tvFocusable(),
-                shape = RoundedCornerShape(20.dp),
+                shape = ShapeCache.smooth20,
             )
             TextButton(
                 onClick = {

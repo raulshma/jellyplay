@@ -33,6 +33,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleOutline
@@ -79,6 +81,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -154,7 +157,7 @@ fun PlayButtonWithProgress(
         modifier = modifier
             .size(buttonSize)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(10.dp))
+            .clip(ShapeCache.smooth10)
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -168,7 +171,7 @@ fun PlayButtonWithProgress(
                 .fillMaxSize()
                 .background(
                     Color.Black.copy(alpha = 0.65f),
-                    RoundedCornerShape(10.dp),
+                    ShapeCache.smooth10,
                 )
         )
 
@@ -315,8 +318,8 @@ fun PosterCard(
                     onClick = onClick,
                 )
                 .then(if (isTv) Modifier.tvFocusable() else Modifier)
-                .then(if (isTv) Modifier.shadow(12.dp, RoundedCornerShape(12.dp)) else Modifier),
-            shape = RoundedCornerShape(12.dp),
+                .then(if (isTv) Modifier.shadow(12.dp, ShapeCache.smooth12) else Modifier),
+            shape = ShapeCache.smooth12,
             elevation = CardDefaults.cardElevation(defaultElevation = if (isTv) 12.dp else 4.dp),
         ) {
             Box {
@@ -359,7 +362,7 @@ fun PosterCard(
                             .padding(6.dp)
                             .background(
                                 dominantColor.copy(alpha = 0.85f),
-                                RoundedCornerShape(6.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -378,7 +381,7 @@ fun PosterCard(
                             .padding(6.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(6.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -486,6 +489,7 @@ fun MediaRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoadingScreen(modifier: Modifier = Modifier) {
     AnimatedEntrance(visible = true) {
@@ -493,7 +497,10 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            CircularProgressIndicator()
+            ContainedLoadingIndicator(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                indicatorColor = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

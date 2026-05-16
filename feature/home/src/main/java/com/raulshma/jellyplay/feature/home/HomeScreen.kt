@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -81,6 +82,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -274,6 +276,8 @@ fun HomeScreen(
                 label = "appBarColor",
             )
 
+            val contentPad = adaptiveInfo.contentPadding(isTv)
+
             val animatedContainerColor = lerp(
                 Color.Transparent,
                 backgroundColor.copy(alpha = 0.95f),
@@ -374,6 +378,7 @@ fun HomeScreen(
                                             getBackdropUrl = { viewModel.getBackdropUrl(it) },
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
+                                            contentPadding = contentPad,
                                             onItemClick = {
                                                 onItemClick(it)
                                             },
@@ -564,13 +569,13 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .height(40.dp)
+                            .height(64.dp)
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 8.dp),
+                            modifier = Modifier.padding(start = contentPad),
                         ) {
                             ModeSwitch(
                                 currentMode = viewModel.homeMode,
@@ -586,7 +591,7 @@ fun HomeScreen(
 
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(ShapeCache.smooth20)
                                 .padding(horizontal = 4.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -714,6 +719,7 @@ private fun AnimatedHeroHeader(
     getBackdropUrl: (String) -> String,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
+    contentPadding: Dp = 16.dp,
     onItemClick: (String) -> Unit,
 ) {
     AnimatedContent(
@@ -744,6 +750,7 @@ private fun AnimatedHeroHeader(
             backdropUrl = getBackdropUrl(currentFeatured.id),
             height = height,
             backgroundColor = backgroundColor,
+            contentPadding = contentPadding,
             onClick = { onItemClick(currentFeatured.id) },
         )
     }
@@ -755,6 +762,7 @@ private fun HeroHeader(
     backdropUrl: String,
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
+    contentPadding: Dp = 16.dp,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -825,7 +833,7 @@ private fun HeroHeader(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = contentPadding)
                 .padding(bottom = 32.dp)
         ) {
             Text(
@@ -860,7 +868,7 @@ private fun HeroHeader(
                 item.officialRating?.let {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(ShapeCache.smooth4)
                             .background(Color.White.copy(alpha = 0.2f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -897,7 +905,7 @@ private fun HeroHeader(
                     items(item.genres, contentType = { "genre" }) { genre ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(ShapeCache.smooth16)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                         ) {
@@ -932,7 +940,7 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(ShapeCache.smooth24)
                         .background(MaterialTheme.colorScheme.primary)
                         .tvFocusable().clickable(
                             interactionSource = playInteractionSource,
@@ -962,7 +970,7 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(ShapeCache.smooth24)
                         .background(Color.White.copy(alpha = 0.15f))
                         .tvFocusable().clickable(
                             interactionSource = detailsInteractionSource,
@@ -1088,7 +1096,7 @@ private fun WideMediaCard(
                     indication = null,
                     onClick = onClick,
                 ),
-            shape = RoundedCornerShape(12.dp),
+            shape = ShapeCache.smooth12,
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
             Box {
@@ -1131,7 +1139,7 @@ private fun WideMediaCard(
                             .padding(6.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(6.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {

@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,7 +101,8 @@ fun SeerrSettingsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .imePadding(),
             contentPadding = PaddingValues(
                 start = if (isTvDevice()) 80.dp else 16.dp,
                 end = if (isTvDevice()) 80.dp else 16.dp,
@@ -161,7 +164,7 @@ fun SeerrSettingsScreen(
                         onClick = { viewModel.testConnection() },
                         enabled = !isTesting && viewModel.serverUrl.isNotBlank() && viewModel.apiKey.isNotBlank(),
                         modifier = Modifier.tvFocusable(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = ShapeCache.smooth12,
                     ) {
                         if (isTesting) {
                             CircularProgressIndicator(
@@ -178,7 +181,7 @@ fun SeerrSettingsScreen(
                         OutlinedButton(
                             onClick = { viewModel.disconnect() },
                             modifier = Modifier.tvFocusable(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = ShapeCache.smooth12,
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error,
                             ),
@@ -342,7 +345,7 @@ private fun ConnectionStatusCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(
             containerColor = color.copy(alpha = 0.12f),
         ),

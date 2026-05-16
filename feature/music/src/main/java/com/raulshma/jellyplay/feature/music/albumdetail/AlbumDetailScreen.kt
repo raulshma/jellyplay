@@ -56,6 +56,7 @@ import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
 fun AlbumDetailScreen(
@@ -264,7 +265,7 @@ private fun TrackItem(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(6.dp)),
+                .clip(ShapeCache.smooth4),
         ) {
             MediaImage(
                 url = imageUrl,

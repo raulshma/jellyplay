@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
@@ -49,7 +50,7 @@ fun SyncPlayOverlay(
         modifier = modifier,
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = ShapeCache.smooth16,
             color = Color.White.copy(alpha = 0.15f),
             modifier = Modifier.tvFocusable(),
         ) {

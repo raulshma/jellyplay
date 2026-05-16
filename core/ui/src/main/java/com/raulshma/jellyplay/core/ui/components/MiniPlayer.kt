@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
@@ -89,7 +90,7 @@ fun MiniPlayer(
         val contentAlpha = 1f
 
         Surface(
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = ShapeCache.smooth16,
             color = animatedColor,
             shadowElevation = 8.dp,
             tonalElevation = 4.dp,
@@ -110,14 +111,14 @@ fun MiniPlayer(
                         contentDescription = title,
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                            .clip(ShapeCache.smooth8),
                         contentScale = ContentScale.Crop,
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(ShapeCache.smooth8)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -204,7 +205,7 @@ private fun AnimatedIconButton(
         label = "miniPlayerButtonScale",
     )
 
-    val shape = RoundedCornerShape(size / 2)
+    val shape = ShapeCache.smoothPill
 
     Box(
         modifier = Modifier

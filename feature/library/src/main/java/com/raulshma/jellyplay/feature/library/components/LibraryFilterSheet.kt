@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.PlayedStatus
 import com.raulshma.jellyplay.feature.library.SortOption
@@ -89,7 +90,7 @@ fun LibraryFilterSheet(
                 )
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ShapeCache.smooth12)
                         .background(Color.White.copy(alpha = 0.12f))
                         .tvFocusable().clickable {
                             selectedMediaTypes = emptyList()
@@ -207,7 +208,7 @@ fun LibraryFilterSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = ShapeCache.smooth16,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White,
                     contentColor = Color.Black,
@@ -246,7 +247,7 @@ private fun GlassFilterChip(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ShapeCache.smooth16)
             .background(
                 if (selected) Color.White
                 else Color.White.copy(alpha = 0.12f)

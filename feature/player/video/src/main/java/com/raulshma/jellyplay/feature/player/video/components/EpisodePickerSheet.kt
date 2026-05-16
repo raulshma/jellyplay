@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +78,7 @@ internal fun EpisodePickerSheet(
                     modifier = Modifier
                         .width(40.dp)
                         .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(ShapeCache.smooth4)
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
                 )
             }
@@ -109,7 +110,7 @@ internal fun EpisodePickerSheet(
                         }
                         Surface(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(ShapeCache.smooth20)
                                 .tvFocusable().clickable { onSeasonSelect(season.id) },
                             color = containerColor,
                             contentColor = contentColor,
@@ -209,7 +210,7 @@ private fun EpisodeRow(
                 modifier = Modifier
                     .width(4.dp)
                     .height(56.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(ShapeCache.smooth4)
                     .background(MaterialTheme.colorScheme.primary),
             )
             Spacer(Modifier.width(12.dp))
@@ -221,7 +222,7 @@ private fun EpisodeRow(
             modifier = Modifier
                 .width(140.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp)),
+                .clip(ShapeCache.smooth12),
         ) {
             MediaImage(
                 url = imageUrl,
@@ -272,7 +273,7 @@ private fun EpisodeRow(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(ShapeCache.smooth4)
                         .background(Color.Black.copy(alpha = 0.6f))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
@@ -318,7 +319,7 @@ private fun EpisodeRow(
                     Spacer(Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(ShapeCache.smooth4)
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
