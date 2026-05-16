@@ -36,8 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessHigh
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -216,22 +214,12 @@ private fun SeekCircleOverlay(
                     )
                 }
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        imageVector = if (isLeft) Icons.Default.Replay10 else Icons.Default.Forward10,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp),
-                    )
-                    Text(
-                        text = "${seekOffsetMs / 1000}s",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                Text(
+                    text = "${seekOffsetMs / 1000}s",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
