@@ -116,6 +116,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
@@ -799,7 +801,7 @@ private fun HeroHeader(
     )
 
     val heroPlayFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(isTv) {
+    LaunchedEffect(isTv, item.id) {
         if (isTv) {
             heroPlayFocusRequester.requestFocus()
         }
@@ -1081,15 +1083,25 @@ private fun WideMediaCard(
     cardWidth: androidx.compose.ui.unit.Dp,
 ) {
     val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = tween(150, easing = PointToPointEasing),
         label = "wideCardScale",
     )
+    val scale by animateFloatAsState(
+        targetValue = baseScale * tvFocusState.scale,
+        animationSpec = tween(150, easing = PointToPointEasing),
+        label = "wideCardCombinedScale",
+    )
     val elevation by animateFloatAsState(
-        targetValue = if (isPressed) 12f else 4f,
+        targetValue = when {
+            isPressed -> 12f
+            tvFocusState.isFocused -> 16f
+            else -> 4f
+        },
         animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "wideCardElevation",
     )
@@ -1114,18 +1126,20 @@ private fun WideMediaCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(tvFocusState.focusModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     shadowElevation = elevation.dp.toPx()
                 }
+                .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
                 ),
             shape = ShapeCache.smooth12,
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
                 MediaImage(
