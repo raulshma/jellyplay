@@ -53,8 +53,9 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import java.time.LocalDate
 
 @Composable
@@ -66,7 +67,8 @@ fun SeerrMediaCard(
     onRequestClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
 ) {
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -82,10 +84,15 @@ fun SeerrMediaCard(
         }
     }
 
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
         animationSpec = lessSpringySpec(),
         label = "seerrCardScale",
+    )
+    val scale by animateFloatAsState(
+        targetValue = baseScale * tvFocusState.scale,
+        animationSpec = lessSpringySpec(),
+        label = "seerrCardCombinedScale",
     )
 
     val brightnessOverlay by animateFloatAsState(
@@ -154,6 +161,7 @@ fun SeerrMediaCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(tvFocusState.focusModifier)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -177,7 +185,7 @@ fun SeerrMediaCard(
                         Modifier
                     }
                 )
-                .tvFocusable()
+                .tvFocusIndicator(tvFocusState, cardShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -186,7 +194,7 @@ fun SeerrMediaCard(
                 ),
             shape = cardShape,
             elevation = CardDefaults.cardElevation(
-                defaultElevation = if (isLoading) 12.dp else if (isTv) 12.dp else 4.dp
+                defaultElevation = if (isLoading) 12.dp else 0.dp
             ),
         ) {
             Box {
@@ -360,14 +368,16 @@ fun SeerrMediaCard(
                     }
 
                     if (onRequestClick != null && !isAvailable && !hasRequest) {
+                        val requestBtnFocusState = rememberTvFocusState(focusedScale = 1.12f)
                         IconButton(
                             onClick = onRequestClick,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(end = 4.dp, bottom = 4.dp)
+                                .then(requestBtnFocusState.focusModifier)
                                 .clip(ShapeCache.smooth8)
                                 .background(Color.Black.copy(alpha = 0.6f))
-                                .tvFocusable(),
+                                .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
                         ) {
                             Icon(
                                 Icons.Default.Add,

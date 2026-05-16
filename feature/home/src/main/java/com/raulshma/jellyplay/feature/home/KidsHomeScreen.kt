@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -72,7 +74,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +89,7 @@ fun KidsHomeScreen(
     onRefresh: () -> Unit,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
@@ -241,11 +243,14 @@ internal fun SurpriseMeCard(
     onClick: () -> Unit,
     contentPadding: Dp = 16.dp,
 ) {
+    val tvFocusState = rememberTvFocusState()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = contentPadding, vertical = 12.dp)
-            .tvFocusable().clickable(onClick = onClick),
+            .then(tvFocusState.focusModifier)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -263,9 +268,11 @@ internal fun SurpriseMeCard(
         }
         Spacer(Modifier.height(12.dp))
         Card(
-            shape = RoundedCornerShape(24.dp),
+            shape = ShapeCache.smooth24,
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier.width(200.dp),
+            modifier = Modifier
+                .width(200.dp)
+                .tvFocusIndicator(tvFocusState, ShapeCache.smooth24),
         ) {
             MediaImage(
                 url = imageUrl,
@@ -275,7 +282,7 @@ internal fun SurpriseMeCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(24.dp)),
+                    .clip(ShapeCache.smooth24),
                 contentScale = ContentScale.Crop,
             )
         }
@@ -335,6 +342,7 @@ private fun KidsPosterCard(
     onClick: () -> Unit,
     cardWidth: Dp = 160.dp,
 ) {
+    val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -345,22 +353,25 @@ private fun KidsPosterCard(
 
     Column(
         modifier = Modifier
-            .width(cardWidth)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .tvFocusable().clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            ),
+            .width(cardWidth),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Card(
-            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(tvFocusState.focusModifier)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .tvFocusIndicator(tvFocusState, ShapeCache.smooth16)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                ),
+            shape = ShapeCache.smooth16,
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = Modifier.fillMaxWidth(),
         ) {
             MediaImage(
                 url = imageUrl,
@@ -370,7 +381,7 @@ private fun KidsPosterCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(ShapeCache.smooth16),
                 contentScale = ContentScale.Crop,
             )
         }
@@ -391,9 +402,12 @@ private fun IconButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val tvFocusState = rememberTvFocusState()
     Box(
         modifier = Modifier
-            .tvFocusable().clickable(onClick = onClick)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smoothPill)
+            .clickable(onClick = onClick)
             .padding(8.dp),
         contentAlignment = Alignment.Center,
     ) {

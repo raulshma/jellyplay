@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Home
@@ -39,8 +41,13 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.tv.material3.NavigationDrawer
+import androidx.tv.material3.NavigationDrawerItem
+import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
+import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +74,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveLayout
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
+import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
@@ -76,8 +84,19 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
+import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -230,16 +249,36 @@ private fun MainContent(
         label = "navBarColor",
     )
 
-    val isTv = isTvDevice()
+    val isTv = context.isTv()
 
     val configuration = LocalConfiguration.current
     val adaptiveInfo = classifyWindow(configuration.screenWidthDp, configuration.screenHeightDp)
 
-    CompositionLocalProvider(LocalAdaptiveInfo provides adaptiveInfo) {
+    val tvTypography = if (isTv) TvTypography else null
+
+    CompositionLocalProvider(
+        LocalTvMode provides isTv,
+        LocalAdaptiveInfo provides adaptiveInfo,
+        LocalTvTypography provides tvTypography,
+    ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
         CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
             if (isTv && !isPlayerScreen) {
+                TvMaterial3Theme(
+                    colorScheme = tvDarkColorScheme(
+                        background = MaterialTheme.colorScheme.background,
+                        surface = MaterialTheme.colorScheme.surfaceContainer,
+                        onBackground = MaterialTheme.colorScheme.onBackground,
+                        onSurface = MaterialTheme.colorScheme.onSurface,
+                        primary = MaterialTheme.colorScheme.primary,
+                        onPrimary = MaterialTheme.colorScheme.onPrimary,
+                        secondary = MaterialTheme.colorScheme.secondary,
+                        onSecondary = MaterialTheme.colorScheme.onSecondary,
+                        border = MaterialTheme.colorScheme.outline,
+                        borderVariant = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                ) {
                 TvScaffold {
                     TvMainLayout(
                         isExpanded = true,
@@ -254,7 +293,9 @@ private fun MainContent(
                         onModeChange = onModeChange,
                         enterPip = enterPip,
                         enterVideoMiniMode = enterVideoMiniMode,
+                        onBack = { navigator.goBack() },
                     )
+                }
                 }
             } else {
                 Scaffold(
@@ -411,41 +452,84 @@ private fun TvMainLayout(
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
+    onBack: () -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (!isPlayerScreen) {
-            NavigationRail(
-                containerColor = animatedNavBarColor,
-                modifier = Modifier.padding(vertical = 24.dp),
-            ) {
-                Spacer(Modifier.height(24.dp))
-                activeTopLevelRoutes.forEach { (route, label) ->
-                    NavigationRailItem(
-                        selected = route == currentTopLevel,
-                        onClick = { navigator.navigate(route) },
-                        icon = {
-                            NavIcon(route, label)
-                        },
-                        label = {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        },
-                    )
+    val contentFocusRequester = remember { FocusRequester() }
+    val railFocusRequesters = remember(activeTopLevelRoutes.size) {
+        List(activeTopLevelRoutes.size) { FocusRequester() }
+    }
+    var focusedRailIndex by remember { mutableStateOf(0) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                    onBack()
+                    true
+                } else false
+            },
+    ) {
+        NavigationDrawer(
+            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Closed),
+            modifier = Modifier.padding(vertical = 8.dp),
+            drawerContent = {
+                Column(
+                    modifier = Modifier
+                        .focusRestorer()
+                        .selectableGroup(),
+                ) {
+                    activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
+                        val isSelected = route == currentTopLevel
+                        NavigationDrawerItem(
+                            selected = isSelected,
+                            onClick = {
+                                navigator.navigate(route)
+                                focusedRailIndex = index
+                            },
+                            leadingContent = {
+                                NavIcon(route, label)
+                            },
+                            content = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            },
+                            modifier = Modifier
+                                .focusRequester(railFocusRequesters[index])
+                                .onFocusChanged {
+                                    if (it.isFocused || it.hasFocus) {
+                                        focusedRailIndex = index
+                                    }
+                                },
+                        )
+                    }
                 }
-            }
-        }
-        MainNavDisplay(
-            navigationState = navigationState,
-            navigator = navigator,
-            onLogout = onLogout,
-            homeMode = homeMode,
-            onModeChange = onModeChange,
-            enterPip = enterPip,
-            enterVideoMiniMode = enterVideoMiniMode,
-            modifier = Modifier.weight(1f),
+            },
+            content = {
+                MainNavDisplay(
+                    navigationState = navigationState,
+                    navigator = navigator,
+                    onLogout = onLogout,
+                    homeMode = homeMode,
+                    onModeChange = onModeChange,
+                    enterPip = enterPip,
+                    enterVideoMiniMode = enterVideoMiniMode,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(contentFocusRequester)
+                        .tvFocusRestorer(),
+                )
+            },
         )
+    }
+
+    LaunchedEffect(currentTopLevel) {
+        val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
+        focusedRailIndex = initialIndex
+        try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
     }
 }
 

@@ -27,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,8 +60,17 @@ import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import java.text.NumberFormat
 import java.util.*
 
@@ -215,7 +226,7 @@ private fun SeerrDetailContent(
     val scrollState = rememberScrollState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val density = LocalDensity.current
     val artworkColors = LocalArtworkColors.current
 
@@ -254,7 +265,27 @@ private fun SeerrDetailContent(
         label = "appBarColor",
     )
 
-    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+    val contentFocusRequester = remember { FocusRequester() }
+    val hasContent = movieDetail != null || tvDetail != null
+
+    LaunchedEffect(isTv, hasContent) {
+        if (isTv && hasContent) {
+            kotlinx.coroutines.delay(150)
+            try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor)
+            .onKeyEvent { keyEvent ->
+                if (isTv && keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                    onBack()
+                    true
+                } else false
+            },
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -301,6 +332,7 @@ private fun SeerrDetailContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
                 .verticalScroll(scrollState),
         ) {
             Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
@@ -363,7 +395,8 @@ private fun SeerrDetailContent(
                                 movieDetail = movieDetail,
                                 tvDetail = tvDetail,
                                 onRequestClick = onRequestClick,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                contentFocusRequester = contentFocusRequester,
                             )
 
                             Spacer(Modifier.height(24.dp))
@@ -463,7 +496,8 @@ private fun SeerrDetailContent(
                             movieDetail = movieDetail,
                             tvDetail = tvDetail,
                             onRequestClick = onRequestClick,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            contentFocusRequester = contentFocusRequester,
                         )
 
                         Spacer(Modifier.height(32.dp))
@@ -507,12 +541,33 @@ private fun SeerrDetailContent(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
+                if (isTv) {
+                    val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                    Box(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .then(backFocusState.focusModifier)
+                            .tvFocusIndicator(backFocusState, CircleShape)
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -530,10 +585,13 @@ private fun SeerrActionButtons(
     tvDetail: SeerrTvDetails?,
     onRequestClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentFocusRequester: FocusRequester? = null,
 ) {
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
     val status = mediaInfo?.status ?: 0
     val isAvailable = status == 5 || status == 4 // Available or Partially Available
+    val isTv = LocalTvMode.current
+    val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Row(
         modifier = modifier,
@@ -542,7 +600,13 @@ private fun SeerrActionButtons(
         if (!isAvailable) {
             Button(
                 onClick = onRequestClick,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -557,7 +621,13 @@ private fun SeerrActionButtons(
         } else {
             Button(
                 onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White.copy(alpha = 0.1f),
@@ -586,7 +656,7 @@ private fun SeerrDetailBody(
     modifier: Modifier = Modifier,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = isTvDevice()
+    val isTv = LocalTvMode.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
 
@@ -758,7 +828,10 @@ private fun SeerrHorizontalSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(items) { item ->
                 SeerrMediaCard(
@@ -777,7 +850,7 @@ private fun SeerrHorizontalSection(
                         }
                     },
                     modifier = Modifier.width(
-                        LocalAdaptiveInfo.current.rowCardWidth(isTvDevice())
+                        LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                     )
                 )
             }
@@ -886,7 +959,10 @@ private fun CastSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(cast) { member ->
                 val name: String
@@ -958,7 +1034,10 @@ private fun SeasonsSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(seasons.sortedByDescending { it.seasonNumber }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
@@ -1011,17 +1090,25 @@ private fun VideosSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
         ) {
             items(videos) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
 
+                val isTv = LocalTvMode.current
+                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
+
                 Card(
                     modifier = Modifier
                         .width(240.dp)
                         .aspectRatio(16f / 9f)
+                        .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8) else Modifier)
                         .clickable {
                             if (video.site?.lowercase() == "youtube") {
                                 uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")

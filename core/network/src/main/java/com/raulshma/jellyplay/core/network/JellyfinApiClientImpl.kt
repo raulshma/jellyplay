@@ -274,7 +274,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 .onSuccess { list ->
                     if (list.isNotEmpty()) {
                         continueWatchingIds = list.map { it.id }.toSet()
-                        sections.add(HomeSection("Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+                        sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
                     }
                 }
                 .onFailure { if (firstError == null) firstError = it }
@@ -283,7 +283,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 .onSuccess { list ->
                     val filtered = list.filter { it.id !in continueWatchingIds }
                     if (filtered.isNotEmpty()) {
-                        sections.add(HomeSection("Next Up", HomeSectionType.NEXT_UP, filtered))
+                        sections.add(HomeSection("next_up", "Next Up", HomeSectionType.NEXT_UP, filtered))
                     }
                 }
                 .onFailure { if (firstError == null) firstError = it }
@@ -299,7 +299,8 @@ class JellyfinApiClientImpl @Inject constructor(
                         val (folder, result) = deferred.await()
                         result.onSuccess { latest ->
                             if (latest.isNotEmpty()) {
-                                sections.add(HomeSection("Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
+                                val sectionId = "latest_${folder.id}"
+                                sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
                             }
                         }
                     }

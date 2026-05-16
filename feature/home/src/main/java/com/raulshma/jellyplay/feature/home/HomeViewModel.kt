@@ -83,6 +83,7 @@ class HomeViewModel @Inject constructor(
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
     private var homeScrollPosition = HomeScrollPosition()
+    private var homeFocusPosition = HomeFocusPosition()
 
     init {
         // First, listen for user changes 
@@ -93,6 +94,7 @@ class HomeViewModel @Inject constructor(
                     // User switched, force a full refresh with cleared state
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
+                    resetHomeFocusPosition()
                     sections = emptyList()
                     favorites = emptyList()
                     discoverSections = emptyMap()
@@ -145,6 +147,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             resetHomeScrollPosition()
+            resetHomeFocusPosition()
             sections = emptyList()
             favorites = emptyList()
             discoverSections = emptyMap()
@@ -287,6 +290,19 @@ class HomeViewModel @Inject constructor(
         homeScrollPosition = HomeScrollPosition()
     }
 
+    fun getHomeFocusPosition(): HomeFocusPosition = homeFocusPosition
+
+    fun saveHomeFocusPosition(sectionIndex: Int, itemIndex: Int) {
+        homeFocusPosition = HomeFocusPosition(
+            sectionIndex = sectionIndex.coerceAtLeast(0),
+            itemIndex = itemIndex.coerceAtLeast(0),
+        )
+    }
+
+    fun resetHomeFocusPosition() {
+        homeFocusPosition = HomeFocusPosition()
+    }
+
     // ── Seerr request support ──
 
     private val _requestResult = MutableStateFlow<DiscoverRequestResult?>(null)
@@ -391,6 +407,11 @@ class HomeViewModel @Inject constructor(
 data class HomeScrollPosition(
     val firstVisibleItemIndex: Int = 0,
     val firstVisibleItemScrollOffset: Int = 0,
+)
+
+data class HomeFocusPosition(
+    val sectionIndex: Int = 0,
+    val itemIndex: Int = 0,
 )
 
 data class DiscoverRequestResult(

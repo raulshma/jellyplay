@@ -126,7 +126,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -206,8 +206,8 @@ fun SettingsScreen(
                 .padding(padding)
                 .imePadding(),
             contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTvDevice()) - 16.dp,
-                end = adaptiveInfo.contentPadding(isTvDevice()) - 16.dp,
+                start = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
+                end = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
                 bottom = 80.dp,
             ),
         ) {
@@ -1699,7 +1699,6 @@ private fun SettingListItem(
                 indication = null,
                 onClick = onClick,
             )
-            .then(if (isTvDevice()) Modifier.tvFocusable() else Modifier)
     ) {
         ListItem(
             headlineContent = {
@@ -1788,7 +1787,6 @@ private fun SettingToggleItem(
                 interactionSource = interactionSource,
                 indication = null,
             ) { onClick?.invoke() ?: onCheckedChange(!checked) }
-            .then(if (isTvDevice()) Modifier.tvFocusable() else Modifier)
     ) {
         ListItem(
             headlineContent = {

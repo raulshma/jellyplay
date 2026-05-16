@@ -59,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -83,7 +86,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 @Composable
@@ -150,6 +154,16 @@ internal fun PlayerControls(
     isSyncPlaySyncing: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = LocalTvMode.current
+    val tvPlayPauseFocusRequester = remember { FocusRequester() }
+
+    // On TV, auto-focus the play/pause button when controls become visible
+    LaunchedEffect(isVisible, isTv) {
+        if (isTv && isVisible) {
+            tvPlayPauseFocusRequester.requestFocus()
+        }
+    }
+
     Box(modifier = modifier) {
         AnimatedVisibility(
             visible = isVisible,
@@ -176,7 +190,6 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.tvFocusable(),
                         colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -223,13 +236,13 @@ internal fun PlayerControls(
             Row(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
             ) {
                 IconButton(
                     onClick = { onSeekBack() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
-                        .tvFocusable(),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -243,7 +256,7 @@ internal fun PlayerControls(
                     modifier = Modifier
                         .size(64.dp)
                         .background(Color.White.copy(alpha = 0.2f), CircleShape)
-                        .tvFocusable(),
+                        .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
@@ -259,8 +272,7 @@ internal fun PlayerControls(
                     onClick = { onSeekForward() },
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
-                        .tvFocusable(),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                 ) {
                     Icon(
@@ -322,8 +334,8 @@ internal fun PlayerControls(
                                 .clip(ShapeCache.smooth12)
                                 .background(Color.Black.copy(alpha = 0.85f))
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
-                            .tvFocusable().clickable(onClick = onSkipSegment)
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                                .clickable(onClick = onSkipSegment)
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FastForward,
@@ -478,11 +490,10 @@ private fun SyncPlayHeaderIndicator(
     Surface(
         shape = ShapeCache.smooth16,
         color = Color.White.copy(alpha = 0.15f),
-        modifier = Modifier.tvFocusable(),
     ) {
         Row(
             modifier = Modifier
-                .tvFocusable().clickable(onClick = onClick)
+                .clickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
