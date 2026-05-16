@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
@@ -77,7 +78,7 @@ fun SyncPlayPlayerSheet(
             )
 
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = ShapeCache.smooth12,
                 color = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 Row(
@@ -180,7 +181,7 @@ fun SyncPlayPlayerSheet(
 
             if (chatMessages.isNotEmpty()) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = ShapeCache.smooth12,
                     color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     SyncPlayChatPanel(

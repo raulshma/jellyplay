@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
@@ -142,7 +143,7 @@ fun SeerrMediaCard(
             mediaStatus == SeerrMediaStatus.PROCESSING
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
-    val cardShape = RoundedCornerShape(12.dp)
+    val cardShape = ShapeCache.smooth12
     val glowColor = MaterialTheme.colorScheme.primary
 
     val imageModifier = Modifier
@@ -262,7 +263,7 @@ fun SeerrMediaCard(
                             .padding(6.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(6.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -310,7 +311,7 @@ fun SeerrMediaCard(
                             .padding(6.dp)
                             .background(
                                 labelColor,
-                                RoundedCornerShape(4.dp),
+                                ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -341,7 +342,7 @@ fun SeerrMediaCard(
                                 .padding(6.dp)
                                 .background(
                                     badgeColor.copy(alpha = 0.9f),
-                                    RoundedCornerShape(6.dp),
+                                    ShapeCache.smooth4,
                                 )
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         ) {
@@ -364,7 +365,7 @@ fun SeerrMediaCard(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(end = 4.dp, bottom = 4.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(ShapeCache.smooth8)
                                 .background(Color.Black.copy(alpha = 0.6f))
                                 .tvFocusable(),
                         ) {

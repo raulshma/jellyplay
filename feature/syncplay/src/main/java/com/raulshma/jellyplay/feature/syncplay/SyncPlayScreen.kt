@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -680,7 +681,7 @@ private fun ActiveGroupView(
                         placeholder = { Text("Type a message…") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                        shape = ShapeCache.smooth24,
                     )
                     Spacer(Modifier.width(8.dp))
                     IconButton(

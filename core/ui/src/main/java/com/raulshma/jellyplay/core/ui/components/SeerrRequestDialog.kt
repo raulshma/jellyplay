@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 private const val TAG = "SeerrRequestDialog"
@@ -193,7 +194,7 @@ fun SeerrRequestDialog(
     ModalBottomSheet(
         onDismissRequest = { if (!isRequesting) onDismiss() },
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        shape = ShapeCache.smooth20,
         containerColor = Color(0xFF1A1A2E).copy(alpha = 0.95f),
     ) {
         LazyColumn(
@@ -534,7 +535,7 @@ fun SeerrRequestDialog(
                         OutlinedButton(
                             onClick = onDismiss,
                             enabled = !isRequesting,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = ShapeCache.smooth12,
                         ) {
                             Text("Cancel", color = Color.White.copy(alpha = 0.7f))
                         }
@@ -554,7 +555,7 @@ fun SeerrRequestDialog(
                                 onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
                             },
                             enabled = !isRequesting && (!isTv || selectAllSeasons || selectedSeasonNumbers.isNotEmpty()),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = ShapeCache.smooth12,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary,

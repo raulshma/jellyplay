@@ -21,19 +21,6 @@
     </path>
 
     <group android:translateX="92" android:translateY="18" android:scaleX="0.27" android:scaleY="0.27">
-        <path android:pathData="M16,16h480v480h-480z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="16"
-                    android:startY="16"
-                    android:endX="496"
-                    android:endY="496"
-                    android:type="linear">
-                    <item android:color="#140d2b" android:offset="0" />
-                    <item android:color="#090514" android:offset="1" />
-                </gradient>
-            </aapt:attr>
-        </path>
 
         <path
             android:fillColor="#4d8a2be2"

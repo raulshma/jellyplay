@@ -87,6 +87,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -267,7 +268,7 @@ fun SearchScreen(
                             .padding(horizontal = 24.dp)
                             .tvFocusable(),
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = ShapeCache.smooth16,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
@@ -290,7 +291,7 @@ fun SearchScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(ShapeCache.smooth8)
                                         .background(Color.White.copy(alpha = 0.12f))
                                         .tvFocusable().clickable { viewModel.search("") },
                                     contentAlignment = Alignment.Center,
@@ -306,7 +307,7 @@ fun SearchScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(ShapeCache.smooth8)
                                         .background(Color.White.copy(alpha = 0.12f))
                                         .tvFocusable().clickable {
                                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -365,7 +366,7 @@ fun SearchScreen(
                         }
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(ShapeCache.smooth8)
                                 .tvFocusable().clickable { viewModel.clearFilters() }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
@@ -562,7 +563,7 @@ fun SearchScreen(
                                         androidx.compose.material3.LinearProgressIndicator(
                                             modifier = Modifier
                                                 .fillMaxWidth(0.4f)
-                                                .clip(RoundedCornerShape(4.dp)),
+                                                .clip(ShapeCache.smooth4),
                                             color = MaterialTheme.colorScheme.primary,
                                             trackColor = Color.White.copy(alpha = 0.1f),
                                         )
@@ -593,7 +594,7 @@ fun SearchScreen(
                                             androidx.compose.material3.LinearProgressIndicator(
                                                 modifier = Modifier
                                                     .fillMaxWidth(0.4f)
-                                                    .clip(RoundedCornerShape(4.dp)),
+                                                    .clip(ShapeCache.smooth4),
                                                 color = MaterialTheme.colorScheme.primary,
                                                 trackColor = Color.White.copy(alpha = 0.1f),
                                             )
@@ -701,7 +702,7 @@ private fun GlassDismissTag(
 
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(ShapeCache.smooth12)
             .background(Color.White.copy(alpha = 0.12f))
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable().clickable(

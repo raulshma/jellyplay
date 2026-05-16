@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +16,7 @@ import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -291,9 +294,9 @@ private fun MainContent(
                                             },
                                             label = { Text(label) },
                                             colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                indicatorColor = Color.White.copy(alpha = 0.15f),
-                                                selectedIconColor = Color.White,
-                                                selectedTextColor = Color.White,
+                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                                selectedTextColor = MaterialTheme.colorScheme.primary,
                                                 unselectedIconColor = Color.White.copy(alpha = 0.6f),
                                                 unselectedTextColor = Color.White.copy(alpha = 0.6f),
                                             ),
@@ -307,6 +310,7 @@ private fun MainContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
                         Row(modifier = Modifier.fillMaxSize()) {
@@ -408,7 +412,7 @@ private fun TvMainLayout(
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (!isPlayerScreen) {
             NavigationRail(
                 containerColor = animatedNavBarColor,
@@ -521,10 +525,16 @@ private fun MainNavDisplay(
                                 animationSpec = tween(300, easing = AlphaEasing),
                             ) + slideInHorizontally(
                                 initialOffsetX = { it / 8 },
-                                animationSpec = tween(400, easing = FancyTransitionEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
                             ) + scaleIn(
                                 initialScale = 0.985f,
-                                animationSpec = tween(500, easing = PointToPointEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
                             ) togetherWith fadeOut(
                                 animationSpec = tween(180, easing = AlphaEasing),
                             ) + slideOutHorizontally(
@@ -555,10 +565,16 @@ private fun MainNavDisplay(
                                 animationSpec = tween(260, easing = AlphaEasing),
                             ) + slideInHorizontally(
                                 initialOffsetX = { -it / 12 },
-                                animationSpec = tween(300, easing = FancyTransitionEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
                             ) + scaleIn(
                                 initialScale = 1.015f,
-                                animationSpec = tween(300, easing = PointToPointEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
                             ) togetherWith fadeOut(
                                 animationSpec = tween(220, easing = AlphaEasing),
                             ) + slideOutHorizontally(
@@ -575,10 +591,16 @@ private fun MainNavDisplay(
                                 animationSpec = tween(260, easing = AlphaEasing),
                             ) + slideInHorizontally(
                                 initialOffsetX = { -it / 12 },
-                                animationSpec = tween(300, easing = FancyTransitionEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
                             ) + scaleIn(
                                 initialScale = 1.015f,
-                                animationSpec = tween(300, easing = PointToPointEasing),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
                             ) togetherWith fadeOut(
                                 animationSpec = tween(220, easing = AlphaEasing),
                             ) + slideOutHorizontally(
