@@ -75,12 +75,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,9 +117,9 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
@@ -176,7 +178,9 @@ fun HomeScreen(
     }
 
     var featuredIndex by remember { mutableIntStateOf(0) }
-    var autoRotateEnabled by remember { mutableStateOf(true) }
+    val isTvForRotation = LocalContext.current.isTv()
+    var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
+    var focusInHero by remember { mutableStateOf(true) }
 
     LaunchedEffect(showSurprise) {
         if (showSurprise && featuredCandidates.isNotEmpty()) {
@@ -185,7 +189,7 @@ fun HomeScreen(
         }
     }
 
-    if (featuredCandidates.isNotEmpty() && autoRotateEnabled) {
+    if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
         LaunchedEffect(featuredCandidates) {
             while (true) {
                 delay(8000)
@@ -264,7 +268,7 @@ fun HomeScreen(
             }
         }
 
-        if (featuredCandidates.isNotEmpty() && autoRotateEnabled) {
+        if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
             LaunchedEffect(featuredCandidates, listState) {
                 while (true) {
                     delay(8000)
@@ -424,6 +428,9 @@ fun HomeScreen(
                                             },
                                             onDetailsClick = {
                                                 onItemClick(it)
+                                            },
+                                            onFocusChange = { inHero ->
+                                                focusInHero = inHero
                                             },
                                         )
                                     }
@@ -773,6 +780,7 @@ private fun AnimatedHeroHeader(
     contentPadding: Dp = 16.dp,
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     AnimatedContent(
         targetState = featuredItem,
@@ -809,6 +817,7 @@ private fun AnimatedHeroHeader(
             contentPadding = contentPadding,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
+            onFocusChange = onFocusChange,
         )
     }
 }
@@ -822,6 +831,7 @@ private fun HeroHeader(
     contentPadding: Dp = 16.dp,
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -847,6 +857,8 @@ private fun HeroHeader(
     )
 
     val heroPlayFocusRequester = remember { FocusRequester() }
+    val heroDetailsFocusRequester = remember { FocusRequester() }
+
     LaunchedEffect(isTv, item.id) {
         if (isTv) {
             heroPlayFocusRequester.requestFocus()
@@ -1015,6 +1027,9 @@ private fun HeroHeader(
                         .clip(ShapeCache.smooth24)
                         .background(MaterialTheme.colorScheme.primary)
                         .focusRequester(heroPlayFocusRequester)
+                        .onFocusChanged { focusState ->
+                            onFocusChange(focusState.isFocused || focusState.hasFocus)
+                        }
                         .clickable(
                             interactionSource = playInteractionSource,
                             indication = null,
@@ -1045,6 +1060,10 @@ private fun HeroHeader(
                         .height(48.dp)
                         .clip(ShapeCache.smooth24)
                         .background(Color.White.copy(alpha = 0.15f))
+                        .focusRequester(heroDetailsFocusRequester)
+                        .onFocusChanged { focusState ->
+                            onFocusChange(focusState.isFocused || focusState.hasFocus)
+                        }
                         .clickable(
                             interactionSource = detailsInteractionSource,
                             indication = null,
@@ -1096,9 +1115,7 @@ private fun ContinueWatchingRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(
                 count = items.size,
@@ -1323,9 +1340,7 @@ private fun HomeMediaRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(
                 count = items.size,

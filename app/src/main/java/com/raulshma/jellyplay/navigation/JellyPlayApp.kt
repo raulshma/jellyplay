@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Home
@@ -39,6 +41,8 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.tv.material3.NavigationDrawer
+import androidx.tv.material3.NavigationDrawerItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -81,8 +85,10 @@ import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -431,11 +437,12 @@ private fun TvMainLayout(
     enterVideoMiniMode: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val contentFocusRequester = remember { FocusRequester() }
     val railFocusRequesters = remember(activeTopLevelRoutes.size) {
         List(activeTopLevelRoutes.size) { FocusRequester() }
     }
-    var focusedRailIndex by remember { mutableStateOf(-1) }
-    val contentFocusRequester = remember { FocusRequester() }
+    var focusedRailIndex by remember { mutableStateOf(0) }
+    val drawerState = remember { mutableStateOf(androidx.tv.material3.DrawerValue.Open) }
 
     Row(
         modifier = Modifier
@@ -448,51 +455,65 @@ private fun TvMainLayout(
                 } else false
             },
     ) {
-        if (!isPlayerScreen) {
-            NavigationRail(
-                containerColor = animatedNavBarColor,
-                modifier = Modifier.padding(vertical = 24.dp),
-            ) {
-                Spacer(Modifier.height(24.dp))
-                activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
-                    val isSelected = route == currentTopLevel
-                    NavigationRailItem(
-                        selected = isSelected,
-                        onClick = { navigator.navigate(route) },
-                        icon = {
-                            NavIcon(route, label)
-                        },
-                        label = {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        },
-                        modifier = Modifier
-                            .focusRequester(railFocusRequesters[index])
-                            .onFocusChanged {
-                                focusedRailIndex = if (it.isFocused || it.hasFocus) index else focusedRailIndex
+        NavigationDrawer(
+            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Open),
+            modifier = Modifier.padding(vertical = 24.dp),
+            drawerContent = {
+                Column(
+                    modifier = Modifier
+                        .focusRestorer()
+                        .selectableGroup(),
+                ) {
+                    activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
+                        val isSelected = route == currentTopLevel
+                        NavigationDrawerItem(
+                            selected = isSelected,
+                            onClick = {
+                                navigator.navigate(route)
+                                focusedRailIndex = index
                             },
-                    )
+                            leadingContent = {
+                                NavIcon(route, label)
+                            },
+                            content = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            },
+                            modifier = Modifier
+                                .focusRequester(railFocusRequesters[index])
+                                .onFocusChanged {
+                                    if (it.isFocused || it.hasFocus) {
+                                        focusedRailIndex = index
+                                    }
+                                },
+                        )
+                    }
                 }
-            }
-            LaunchedEffect(currentTopLevel) {
-                val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
-                railFocusRequesters.getOrNull(initialIndex)?.requestFocus()
-            }
-        }
-        MainNavDisplay(
-            navigationState = navigationState,
-            navigator = navigator,
-            onLogout = onLogout,
-            homeMode = homeMode,
-            onModeChange = onModeChange,
-            enterPip = enterPip,
-            enterVideoMiniMode = enterVideoMiniMode,
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(contentFocusRequester),
+            },
+            content = {
+                MainNavDisplay(
+                    navigationState = navigationState,
+                    navigator = navigator,
+                    onLogout = onLogout,
+                    homeMode = homeMode,
+                    onModeChange = onModeChange,
+                    enterPip = enterPip,
+                    enterVideoMiniMode = enterVideoMiniMode,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(contentFocusRequester)
+                        .tvFocusRestorer(),
+                )
+            },
         )
+    }
+
+    LaunchedEffect(currentTopLevel) {
+        val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
+        focusedRailIndex = initialIndex
+        railFocusRequesters.getOrNull(initialIndex)?.requestFocus()
     }
 }
 
