@@ -34,7 +34,6 @@ libmpv = "0.1.12"
 libvlc = "3.7.0"
 okhttp = "5.3.2"
 smoothCornerRect = "v1.0.0"
-tvFoundation = "1.0.0"
 tvMaterial = "1.1.0"
 
 [libraries]
@@ -138,7 +137,6 @@ okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver",
 smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
 
 # Android TV
-tv-foundation = { group = "androidx.tv", name = "tv-foundation", version.ref = "tvFoundation" }
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
 
 [plugins]

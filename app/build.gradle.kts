@@ -126,7 +126,6 @@ dependencies {
     implementation("androidx.compose.animation:animation-android")
 
     // Android TV
-    implementation(libs.tv.foundation)
     implementation(libs.tv.material)
 
     implementation(libs.navigation3.runtime)

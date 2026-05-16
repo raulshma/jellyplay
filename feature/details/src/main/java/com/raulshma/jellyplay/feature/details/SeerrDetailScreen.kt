@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -27,6 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -267,6 +270,12 @@ private fun SeerrDetailContent(
 
     val contentFocusRequester = rememberInitialFocus()
 
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            contentFocusRequester.requestFocus()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -386,7 +395,8 @@ private fun SeerrDetailContent(
                                 movieDetail = movieDetail,
                                 tvDetail = tvDetail,
                                 onRequestClick = onRequestClick,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                contentFocusRequester = contentFocusRequester,
                             )
 
                             Spacer(Modifier.height(24.dp))
@@ -486,7 +496,8 @@ private fun SeerrDetailContent(
                             movieDetail = movieDetail,
                             tvDetail = tvDetail,
                             onRequestClick = onRequestClick,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            contentFocusRequester = contentFocusRequester,
                         )
 
                         Spacer(Modifier.height(32.dp))
@@ -575,10 +586,13 @@ private fun SeerrActionButtons(
     tvDetail: SeerrTvDetails?,
     onRequestClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentFocusRequester: FocusRequester? = null,
 ) {
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
     val status = mediaInfo?.status ?: 0
     val isAvailable = status == 5 || status == 4 // Available or Partially Available
+    val isTv = LocalTvMode.current
+    val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Row(
         modifier = modifier,
@@ -587,7 +601,13 @@ private fun SeerrActionButtons(
         if (!isAvailable) {
             Button(
                 onClick = onRequestClick,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -602,7 +622,10 @@ private fun SeerrActionButtons(
         } else {
             Button(
                 onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (isTv) buttonFocusState.focusModifier else Modifier)
+                    .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White.copy(alpha = 0.1f),
@@ -1075,11 +1098,16 @@ private fun VideosSection(
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
 
+                val isTv = LocalTvMode.current
+                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
+
                 Card(
                     modifier = Modifier
                         .width(240.dp)
                         .aspectRatio(16f / 9f)
-                        .tvFocusable().clickable {
+                        .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8) else Modifier)
+                        .clickable {
                             if (video.site?.lowercase() == "youtube") {
                                 uriHandler.openUri("https://www.youtube.com/watch?v=${video.key}")
                             }
