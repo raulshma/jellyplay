@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.music.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -38,12 +40,19 @@ fun ArtistCard(
     modifier: Modifier = Modifier,
     blurHash: String? = null,
 ) {
+    val isTv = LocalTvMode.current
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val baseScale by animateFloatAsState(
         targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
         animationSpec = lessSpringySpec(),
         label = "artistCardScale",
+    )
+    val scale by animateFloatAsState(
+        targetValue = baseScale * tvFocusState.scale,
+        animationSpec = lessSpringySpec(),
+        label = "artistCardCombinedScale",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
@@ -54,11 +63,13 @@ fun ArtistCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(tvFocusState.focusModifier)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .tvFocusable().clickable(
+            .tvFocusIndicator(tvFocusState, androidx.compose.foundation.shape.CircleShape)
+            .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
