@@ -84,8 +84,8 @@ fun rememberTvFocusState(
 
     return TvFocusState(
         isFocused = isFocused && isTv,
-        scale = if (isTv) animatedScale else 1f,
-        borderWidth = if (isTv) animatedBorder else 0.dp,
+        scale = if (isTv) 1f else animatedScale,
+        borderWidth = if (isTv) 0.dp else animatedBorder,
         focusModifier = focusModifier,
     )
 }
@@ -141,6 +141,55 @@ fun Modifier.tvFocusExitHandler(): Modifier {
             when (focusDirection) {
                 FocusDirection.Up -> FocusRequester.Cancel
                 FocusDirection.Down -> FocusRequester.Cancel
+                else -> FocusRequester.Default
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+fun Modifier.tvHeroFocusExitHandler(
+    onDownExit: () -> Unit = {},
+): Modifier {
+    val isTv = LocalTvMode.current
+    if (!isTv) return this
+    return this.focusProperties {
+        @Suppress("DEPRECATION")
+        exit = { focusDirection ->
+            when (focusDirection) {
+                FocusDirection.Up -> FocusRequester.Cancel
+                FocusDirection.Down -> {
+                    onDownExit()
+                    FocusRequester.Default
+                }
+                else -> FocusRequester.Default
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+fun Modifier.tvRowFocusHandler(
+    onUpExit: () -> Unit = {},
+    onDownExit: () -> Unit = {},
+): Modifier {
+    val isTv = LocalTvMode.current
+    if (!isTv) return this
+    return this.focusProperties {
+        @Suppress("DEPRECATION")
+        exit = { focusDirection ->
+            when (focusDirection) {
+                FocusDirection.Up -> {
+                    onUpExit()
+                    FocusRequester.Cancel
+                }
+                FocusDirection.Down -> {
+                    onDownExit()
+                    FocusRequester.Cancel
+                }
+                FocusDirection.Left, FocusDirection.Right -> FocusRequester.Default
                 else -> FocusRequester.Default
             }
         }

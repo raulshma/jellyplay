@@ -492,9 +492,7 @@ fun MediaRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = Modifier
-                .tvFocusRestorer()
-                .tvFocusExitHandler(),
+            modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items, key = { "${title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
                 PosterCard(
