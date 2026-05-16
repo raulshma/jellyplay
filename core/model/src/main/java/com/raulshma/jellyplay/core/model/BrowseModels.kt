@@ -14,6 +14,7 @@ data class SearchResult(
 @Immutable
 @Serializable
 data class HomeSection(
+    val id: String,
     val title: String,
     val type: HomeSectionType,
     val items: List<MediaItem>,

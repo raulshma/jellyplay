@@ -84,6 +84,11 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -266,6 +271,7 @@ private fun MainContent(
                         onModeChange = onModeChange,
                         enterPip = enterPip,
                         enterVideoMiniMode = enterVideoMiniMode,
+                        onBack = { navigator.goBack() },
                     )
                 }
             } else {
@@ -423,13 +429,25 @@ private fun TvMainLayout(
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val railFocusRequesters = remember(activeTopLevelRoutes.size) {
         List(activeTopLevelRoutes.size) { FocusRequester() }
     }
     var focusedRailIndex by remember { mutableStateOf(-1) }
+    val contentFocusRequester = remember { FocusRequester() }
 
-    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                    onBack()
+                    true
+                } else false
+            },
+    ) {
         if (!isPlayerScreen) {
             NavigationRail(
                 containerColor = animatedNavBarColor,
@@ -458,7 +476,7 @@ private fun TvMainLayout(
                     )
                 }
             }
-            LaunchedEffect(Unit) {
+            LaunchedEffect(currentTopLevel) {
                 val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
                 railFocusRequesters.getOrNull(initialIndex)?.requestFocus()
             }
@@ -471,7 +489,9 @@ private fun TvMainLayout(
             onModeChange = onModeChange,
             enterPip = enterPip,
             enterVideoMiniMode = enterVideoMiniMode,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(contentFocusRequester),
         )
     }
 }

@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
@@ -34,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -236,8 +236,12 @@ fun HomeScreen(
     } else {
         val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
 
+        val savedScrollPos = viewModel.getHomeScrollPosition()
         val listState = rememberSaveable(saver = LazyListState.Saver) {
-            LazyListState()
+            LazyListState(
+                firstVisibleItemIndex = savedScrollPos.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = savedScrollPos.firstVisibleItemScrollOffset,
+            )
         }
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -250,6 +254,36 @@ fun HomeScreen(
             else -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.PortraitCompact
         }
         val headerHeightPx = with(density) { headerHeight.toPx() }
+
+        LaunchedEffect(sections) {
+            if (sections.isNotEmpty()) {
+                viewModel.saveHomeScrollPosition(
+                    listState.firstVisibleItemIndex,
+                    listState.firstVisibleItemScrollOffset,
+                )
+            }
+        }
+
+        if (featuredCandidates.isNotEmpty() && autoRotateEnabled) {
+            LaunchedEffect(featuredCandidates, listState) {
+                while (true) {
+                    delay(8000)
+                    if (!listState.isScrollInProgress) {
+                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
+                    } else {
+                        var scrollStopped = false
+                        while (!scrollStopped) {
+                            delay(500)
+                            if (!listState.isScrollInProgress) {
+                                scrollStopped = true
+                            }
+                        }
+                        delay(2000)
+                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
+                    }
+                }
+            }
+        }
 
         ArtworkThemeWrapper(
             imageUrl = backdropUrl,
@@ -397,7 +431,7 @@ fun HomeScreen(
                                     item { Spacer(Modifier.height(100.dp)) }
                                 }
 
-                                items(count = sections.size, key = { sections[it].title }, contentType = { "homeSection" }) { index ->
+                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
                                     val isSectionVisible by remember {
@@ -409,6 +443,22 @@ fun HomeScreen(
                                     }
                                     var hasBeenVisible by rememberSaveable { mutableStateOf(isSectionVisible) }
                                     if (isSectionVisible) hasBeenVisible = true
+
+                                    val sectionAlpha by animateFloatAsState(
+                                        targetValue = if (hasBeenVisible) 1f else 0f,
+                                        animationSpec = tween(350, easing = AlphaEasing),
+                                        label = "sectionAlpha",
+                                    )
+                                    val sectionSlideOffset by animateDpAsState(
+                                        targetValue = if (hasBeenVisible) 0.dp else (16.dp),
+                                        animationSpec = tween(400, easing = FancyTransitionEasing),
+                                        label = "sectionSlide",
+                                    )
+                                    val sectionScale by animateFloatAsState(
+                                        targetValue = if (hasBeenVisible) 1f else 0.97f,
+                                        animationSpec = tween(400, easing = PointToPointEasing),
+                                        label = "sectionScale",
+                                    )
 
                                     val sectionModifier = Modifier
                                         .fillMaxWidth()
@@ -426,20 +476,13 @@ fun HomeScreen(
                                             }
                                         )
                                         .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
+                                        .graphicsLayer {
+                                            alpha = sectionAlpha
+                                            scaleX = sectionScale
+                                            scaleY = sectionScale
+                                        }
+                                        .offset(y = sectionSlideOffset)
 
-                                    AnimatedVisibility(
-                                        visible = hasBeenVisible,
-                                        enter = fadeIn(
-                                            animationSpec = tween(350, easing = AlphaEasing),
-                                        ) + slideInVertically(
-                                            initialOffsetY = { it / 16 },
-                                            animationSpec = tween(400, easing = FancyTransitionEasing),
-                                        ) + scaleIn(
-                                            initialScale = 0.97f,
-                                            animationSpec = tween(400, easing = PointToPointEasing),
-                                        ),
-                                        exit = fadeOut(tween(100, easing = AlphaEasing)),
-                                    ) {
                                     if (section.type == HomeSectionType.CONTINUE_WATCHING ||
                                         section.type == HomeSectionType.NEXT_UP
                                     ) {
@@ -462,7 +505,6 @@ fun HomeScreen(
                                             onPlayClick = mediaOnPlayClick,
                                             modifier = sectionModifier,
                                         )
-                                    }
                                     }
                                 }
 
@@ -754,6 +796,10 @@ private fun AnimatedHeroHeader(
             )
         },
         label = "heroRotation",
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp)),
     ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
