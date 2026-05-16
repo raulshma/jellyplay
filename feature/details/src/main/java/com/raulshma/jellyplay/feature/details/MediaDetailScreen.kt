@@ -136,7 +136,6 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -398,11 +397,12 @@ private fun DetailContent(
         itemId
     }
 
-    val contentFocusRequester = rememberInitialFocus()
+    val contentFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(isTv) {
-        if (isTv) {
-            contentFocusRequester.requestFocus()
+    LaunchedEffect(isTv, contentVisible) {
+        if (isTv && contentVisible) {
+            kotlinx.coroutines.delay(150)
+            try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
         }
     }
 
@@ -481,6 +481,7 @@ private fun DetailContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
                 .verticalScroll(scrollState),
         ) {
             Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
@@ -771,7 +772,6 @@ private fun DetailContent(
                                 )
                                 .then(backFocusState.focusModifier)
                                 .tvFocusIndicator(backFocusState, CircleShape)
-                                .focusable()
                                 .clickable(onClick = onBack),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -1828,6 +1828,9 @@ private fun DetailContentBody(
                     Spacer(Modifier.height(14.dp))
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer()
+                            .tvFocusExitHandler(),
                     ) {
                         items(genres, key = { it }, contentType = { "genre" }) { genre ->
                             Box(
