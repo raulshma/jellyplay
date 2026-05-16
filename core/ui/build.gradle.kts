@@ -34,6 +34,10 @@ dependencies {
     implementation(libs.palette.ktx)
     implementation(libs.paging.compose)
 
+    // Android TV
+    implementation(libs.tv.foundation)
+    implementation(libs.tv.material)
+
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)

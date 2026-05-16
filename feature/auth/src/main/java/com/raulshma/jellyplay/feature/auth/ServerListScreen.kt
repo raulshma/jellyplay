@@ -49,7 +49,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +72,7 @@ fun ServerListScreen(
         },
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
-        val isTv = isTvDevice()
+        val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
         val spacing = adaptiveInfo.itemSpacing(isTv)
 

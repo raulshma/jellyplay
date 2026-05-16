@@ -56,7 +56,7 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
@@ -118,7 +118,7 @@ fun MoodPlaylistsScreen(
             Spacer(Modifier.height(8.dp))
 
             val adaptiveInfo = LocalAdaptiveInfo.current
-            val isTv = isTvDevice()
+            val isTv = LocalTvMode.current
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = adaptiveInfo.gridMinSize(isTv)),
                 modifier = Modifier.fillMaxSize(),

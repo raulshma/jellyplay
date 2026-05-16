@@ -50,7 +50,7 @@ import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,7 +141,7 @@ fun TracksScreen(
                             }
                         } else {
                             val adaptiveInfo = LocalAdaptiveInfo.current
-                            val isTv = isTvDevice()
+                            val isTv = LocalTvMode.current
                             LazyColumn(
                                 contentPadding = PaddingValues(
                                     top = 8.dp,

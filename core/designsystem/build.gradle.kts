@@ -31,4 +31,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.core.ktx)
     api(libs.smooth.corner.rect)
+
+    // Android TV
+    implementation(libs.tv.material)
 }

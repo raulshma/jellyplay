@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveLayout
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
+import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
@@ -76,8 +78,12 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
+import com.raulshma.jellyplay.core.ui.tv.isTv
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -230,12 +236,18 @@ private fun MainContent(
         label = "navBarColor",
     )
 
-    val isTv = isTvDevice()
+    val isTv = context.isTv()
 
     val configuration = LocalConfiguration.current
     val adaptiveInfo = classifyWindow(configuration.screenWidthDp, configuration.screenHeightDp)
 
-    CompositionLocalProvider(LocalAdaptiveInfo provides adaptiveInfo) {
+    val tvTypography = if (isTv) TvTypography else null
+
+    CompositionLocalProvider(
+        LocalTvMode provides isTv,
+        LocalAdaptiveInfo provides adaptiveInfo,
+        LocalTvTypography provides tvTypography,
+    ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
         CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
@@ -412,6 +424,11 @@ private fun TvMainLayout(
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
 ) {
+    val railFocusRequesters = remember(activeTopLevelRoutes.size) {
+        List(activeTopLevelRoutes.size) { FocusRequester() }
+    }
+    var focusedRailIndex by remember { mutableStateOf(-1) }
+
     Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (!isPlayerScreen) {
             NavigationRail(
@@ -419,9 +436,10 @@ private fun TvMainLayout(
                 modifier = Modifier.padding(vertical = 24.dp),
             ) {
                 Spacer(Modifier.height(24.dp))
-                activeTopLevelRoutes.forEach { (route, label) ->
+                activeTopLevelRoutes.entries.toList().forEachIndexed { index, (route, label) ->
+                    val isSelected = route == currentTopLevel
                     NavigationRailItem(
-                        selected = route == currentTopLevel,
+                        selected = isSelected,
                         onClick = { navigator.navigate(route) },
                         icon = {
                             NavIcon(route, label)
@@ -432,8 +450,17 @@ private fun TvMainLayout(
                                 style = MaterialTheme.typography.labelMedium,
                             )
                         },
+                        modifier = Modifier
+                            .focusRequester(railFocusRequesters[index])
+                            .onFocusChanged {
+                                focusedRailIndex = if (it.isFocused || it.hasFocus) index else focusedRailIndex
+                            },
                     )
                 }
+            }
+            LaunchedEffect(Unit) {
+                val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
+                railFocusRequesters.getOrNull(initialIndex)?.requestFocus()
             }
         }
         MainNavDisplay(

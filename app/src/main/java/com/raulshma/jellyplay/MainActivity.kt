@@ -22,7 +22,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.ui.components.PinLockScreen
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
             JellyPlayTheme(
                 dynamicColor = preferences.dynamicTheming && !preferences.kidsModeEnabled,
                 kidsMode = preferences.kidsModeEnabled,
-                isTv = isTvDevice(),
+                isTv = isTv(),
             ) {
                 if (showPinLock) {
                     PinLockScreen(

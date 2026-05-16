@@ -39,7 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.tv.isTvDevice
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -77,7 +77,7 @@ fun LoginScreen(
         },
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
-        val isTv = isTvDevice()
+        val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
 
         Column(
