@@ -35,7 +35,6 @@ dependencies {
     implementation(libs.paging.compose)
 
     // Android TV
-    implementation(libs.tv.foundation)
     implementation(libs.tv.material)
 
     implementation(libs.navigation3.runtime)
