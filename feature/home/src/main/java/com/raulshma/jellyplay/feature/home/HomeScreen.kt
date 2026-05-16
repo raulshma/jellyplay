@@ -856,6 +856,8 @@ private fun HeroHeader(
         label = "detailsButtonScale",
     )
 
+    val heroTvFocusState = rememberTvFocusState()
+
     val heroPlayFocusRequester = remember { FocusRequester() }
     val heroDetailsFocusRequester = remember { FocusRequester() }
 
@@ -1024,6 +1026,8 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
+                        .then(heroTvFocusState.focusModifier)
+                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smooth24)
                         .clip(ShapeCache.smooth24)
                         .background(MaterialTheme.colorScheme.primary)
                         .focusRequester(heroPlayFocusRequester)
@@ -1058,6 +1062,7 @@ private fun HeroHeader(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
+                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smooth24)
                         .clip(ShapeCache.smooth24)
                         .background(Color.White.copy(alpha = 0.15f))
                         .focusRequester(heroDetailsFocusRequester)

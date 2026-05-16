@@ -23,7 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -48,18 +48,26 @@ fun Context.isTv(): Boolean =
 @Composable
 fun isTvDevice(): Boolean = LocalContext.current.isTv()
 
+object TvFocusDefaults {
+    val BorderWidth = 2.dp
+    val GlowElevation = 16.dp
+    const val GlowAmbientAlpha = 0.5f
+    const val GlowSpotAlpha = 0.3f
+}
+
 @Stable
 data class TvFocusState(
     val isFocused: Boolean = false,
     val scale: Float = 1f,
     val borderWidth: Dp = 0.dp,
+    val glowElevation: Dp = 0.dp,
     val focusModifier: Modifier = Modifier,
 )
 
 @Composable
 fun rememberTvFocusState(
     focusedScale: Float = 1.08f,
-    focusedBorderWidth: Dp = 2.dp,
+    focusedBorderWidth: Dp = TvFocusDefaults.BorderWidth,
 ): TvFocusState {
     val isTv = LocalTvMode.current
     var isFocused by remember { mutableStateOf(false) }
@@ -70,8 +78,13 @@ fun rememberTvFocusState(
     )
 
     val animatedBorder by animateDpAsState(
-        targetValue = if (isFocused) focusedBorderWidth else 0.dp,
+        targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
         label = "tvFocusBorder",
+    )
+
+    val animatedGlowElevation by animateDpAsState(
+        targetValue = if (isFocused && isTv) TvFocusDefaults.GlowElevation else 0.dp,
+        label = "tvFocusGlow",
     )
 
     val focusModifier = if (isTv) {
@@ -85,7 +98,8 @@ fun rememberTvFocusState(
     return TvFocusState(
         isFocused = isFocused && isTv,
         scale = if (isTv) 1f else animatedScale,
-        borderWidth = if (isTv) 0.dp else animatedBorder,
+        borderWidth = animatedBorder,
+        glowElevation = animatedGlowElevation,
         focusModifier = focusModifier,
     )
 }
@@ -97,8 +111,22 @@ fun Modifier.tvFocusIndicator(
     val isTv = LocalTvMode.current
     if (!isTv) return@composed this
 
+    val glowColor = MaterialTheme.colorScheme.primary
+
     this
-        .scale(focusState.scale)
+        .then(
+            if (focusState.glowElevation > 0.dp) {
+                Modifier.shadow(
+                    elevation = focusState.glowElevation,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = glowColor.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
+                    spotColor = glowColor.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
+                )
+            } else {
+                Modifier
+            }
+        )
         .then(
             if (focusState.borderWidth > 0.dp) {
                 Modifier.border(

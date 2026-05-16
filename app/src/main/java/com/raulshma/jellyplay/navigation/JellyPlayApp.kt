@@ -43,6 +43,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
+import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
+import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -263,6 +265,20 @@ private fun MainContent(
 
         CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
             if (isTv && !isPlayerScreen) {
+                TvMaterial3Theme(
+                    colorScheme = tvDarkColorScheme(
+                        background = MaterialTheme.colorScheme.background,
+                        surface = MaterialTheme.colorScheme.surfaceContainer,
+                        onBackground = MaterialTheme.colorScheme.onBackground,
+                        onSurface = MaterialTheme.colorScheme.onSurface,
+                        primary = MaterialTheme.colorScheme.primary,
+                        onPrimary = MaterialTheme.colorScheme.onPrimary,
+                        secondary = MaterialTheme.colorScheme.secondary,
+                        onSecondary = MaterialTheme.colorScheme.onSecondary,
+                        border = MaterialTheme.colorScheme.outline,
+                        borderVariant = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                ) {
                 TvScaffold {
                     TvMainLayout(
                         isExpanded = true,
@@ -279,6 +295,7 @@ private fun MainContent(
                         enterVideoMiniMode = enterVideoMiniMode,
                         onBack = { navigator.goBack() },
                     )
+                }
                 }
             } else {
                 Scaffold(
@@ -442,7 +459,6 @@ private fun TvMainLayout(
         List(activeTopLevelRoutes.size) { FocusRequester() }
     }
     var focusedRailIndex by remember { mutableStateOf(0) }
-    val drawerState = remember { mutableStateOf(androidx.tv.material3.DrawerValue.Open) }
 
     Row(
         modifier = Modifier
@@ -456,8 +472,8 @@ private fun TvMainLayout(
             },
     ) {
         NavigationDrawer(
-            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Open),
-            modifier = Modifier.padding(vertical = 24.dp),
+            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Closed),
+            modifier = Modifier.padding(vertical = 8.dp),
             drawerContent = {
                 Column(
                     modifier = Modifier
@@ -513,7 +529,7 @@ private fun TvMainLayout(
     LaunchedEffect(currentTopLevel) {
         val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
         focusedRailIndex = initialIndex
-        railFocusRequesters.getOrNull(initialIndex)?.requestFocus()
+        try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
     }
 }
 

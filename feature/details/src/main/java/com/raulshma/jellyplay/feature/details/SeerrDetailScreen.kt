@@ -11,7 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -62,13 +61,11 @@ import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -268,11 +265,13 @@ private fun SeerrDetailContent(
         label = "appBarColor",
     )
 
-    val contentFocusRequester = rememberInitialFocus()
+    val contentFocusRequester = remember { FocusRequester() }
+    val hasContent = movieDetail != null || tvDetail != null
 
-    LaunchedEffect(isTv) {
-        if (isTv) {
-            contentFocusRequester.requestFocus()
+    LaunchedEffect(isTv, hasContent) {
+        if (isTv && hasContent) {
+            kotlinx.coroutines.delay(150)
+            try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
         }
     }
 
@@ -333,6 +332,7 @@ private fun SeerrDetailContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
                 .verticalScroll(scrollState),
         ) {
             Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
@@ -550,7 +550,6 @@ private fun SeerrDetailContent(
                             .background(Color.Black.copy(alpha = 0.3f))
                             .then(backFocusState.focusModifier)
                             .tvFocusIndicator(backFocusState, CircleShape)
-                            .focusable()
                             .clickable(onClick = onBack),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -624,6 +623,9 @@ private fun SeerrActionButtons(
                 onClick = { /* Could navigate to the item in library if we had the ID mapping */ },
                 modifier = Modifier
                     .weight(1f)
+                    .then(
+                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                    )
                     .then(if (isTv) buttonFocusState.focusModifier else Modifier)
                     .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
