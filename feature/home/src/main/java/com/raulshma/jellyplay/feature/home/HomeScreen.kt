@@ -70,6 +70,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -191,15 +193,6 @@ fun HomeScreen(
         }
     }
 
-    if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
-        LaunchedEffect(featuredCandidates) {
-            while (true) {
-                delay(8000)
-                featuredIndex = (featuredIndex + 1) % featuredCandidates.size
-            }
-        }
-    }
-
     val featuredItem = remember(featuredCandidates, featuredIndex) {
         featuredCandidates.getOrNull(featuredIndex)
     }
@@ -270,25 +263,20 @@ fun HomeScreen(
             }
         }
 
-        if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
-            LaunchedEffect(featuredCandidates, listState) {
-                while (true) {
-                    delay(8000)
-                    if (!listState.isScrollInProgress) {
-                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
-                    } else {
-                        var scrollStopped = false
-                        while (!scrollStopped) {
-                            delay(500)
-                            if (!listState.isScrollInProgress) {
-                                scrollStopped = true
-                            }
+        LaunchedEffect(featuredCandidates, listState) {
+            if (featuredCandidates.isEmpty() || !autoRotateEnabled || !focusInHero) return@LaunchedEffect
+
+            snapshotFlow { listState.isScrollInProgress }
+                .collectLatest { isScrolling ->
+                    if (!isScrolling) {
+                        delay(8000)
+                        if (autoRotateEnabled && focusInHero) {
+                            featuredIndex = (featuredIndex + 1) % featuredCandidates.size
                         }
+                    } else {
                         delay(2000)
-                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
                     }
                 }
-            }
         }
 
         ArtworkThemeWrapper(
@@ -1214,6 +1202,7 @@ private fun WideMediaCard(
                     blurHash = item.blurHashes.backdrop,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
+                    crossfade = false,
                 )
 
                 if (brightnessOverlay > 0.01f) {

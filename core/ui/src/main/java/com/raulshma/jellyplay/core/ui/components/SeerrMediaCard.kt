@@ -204,6 +204,7 @@ fun SeerrMediaCard(
                         contentDescription = item.displayName,
                         modifier = imageModifier,
                         contentScale = ContentScale.Crop,
+                        crossfade = false,
                     )
                 } else {
                     Box(

@@ -109,14 +109,14 @@ fun SearchScreen(
     val query = viewModel.query
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
-    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
+    val isRefreshing = pagedResults.loadState.refresh is LoadState.Loading
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = isSearching,
+        isLoading = isRefreshing,
         hasError = false,
         networkStatus = networkStatus,
     )
@@ -403,7 +403,7 @@ fun SearchScreen(
             // ═══════════════════════════════════════════════════════════════
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                    pagedResults.itemCount == 0 && query.isNotBlank() && !isSearching -> {
+                    pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing -> {
                         // ── Empty state ──
                         Box(
                             modifier = Modifier.fillMaxSize(),

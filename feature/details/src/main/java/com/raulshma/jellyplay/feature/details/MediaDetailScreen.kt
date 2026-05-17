@@ -882,20 +882,14 @@ private fun StaggeredDetailSection(
     AnimatedVisibility(
         visible = visible && shouldShow,
         enter = fadeIn(
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = AlphaEasing),
+            animationSpec = tween(300, delayMillis = delayIndex * 40, easing = AlphaEasing),
         ) + slideInVertically(
-            initialOffsetY = { it / 14 },
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = FancyTransitionEasing),
-        ) + scaleIn(
-            initialScale = 0.985f,
-            animationSpec = tween(340, delayMillis = delayIndex * 70, easing = PointToPointEasing),
+            initialOffsetY = { it / 16 },
+            animationSpec = tween(300, delayMillis = delayIndex * 40, easing = FancyTransitionEasing),
         ),
         exit = fadeOut(tween(160, easing = AlphaEasing)) + slideOutVertically(
             targetOffsetY = { -it / 24 },
             animationSpec = tween(180, easing = FancyTransitionEasing),
-        ) + scaleOut(
-            targetScale = 0.99f,
-            animationSpec = tween(180, easing = PointToPointEasing),
         ),
     ) {
         content()
