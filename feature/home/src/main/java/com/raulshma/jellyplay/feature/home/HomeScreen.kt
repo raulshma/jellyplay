@@ -113,6 +113,8 @@ import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
@@ -1307,12 +1309,42 @@ private fun WideMediaCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            } else if (item.year != null) {
-                Text(
-                    text = item.year.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.55f),
-                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (item.year != null) {
+                        Text(
+                            text = item.year.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.55f),
+                        )
+                    }
+                    val isSeries = item.mediaType == MediaType.SERIES
+                    val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+                    val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+                    val remainingTime = if (hasWatchProgress && hasValidDuration) {
+                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                    } else null
+                    val totalTime = if (hasValidDuration && !hasWatchProgress) {
+                        formatDurationFromTicks(item.runTimeTicks!!)
+                    } else null
+                    
+                    val timeText = remainingTime ?: totalTime
+                    if (timeText != null) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.4f),
+                        )
+                        Text(
+                            text = if (remainingTime != null) "$timeText left" else timeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (remainingTime != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                        )
+                    }
+                }
             }
         }
     }

@@ -133,6 +133,8 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -2423,9 +2425,39 @@ private fun EpisodeCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (episode.runTimeTicks != null) {
+            val hasWatchProgress = episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0 && !episode.isPlayed
+            val remainingTime = if (hasWatchProgress && episode.runTimeTicks != null) {
+                formatRemainingTimeFromTicks(episode.runTimeTicks!!, episode.playbackPositionTicks!!)
+            } else null
+            val totalTime = if (episode.runTimeTicks != null) {
+                formatDurationFromTicks(episode.runTimeTicks!!)
+            } else null
+            
+            if (remainingTime != null && totalTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(
+                        text = "$remainingTime left",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.4f),
+                    )
+                    Text(
+                        text = totalTime,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+            } else if (totalTime != null) {
                 Text(
-                    text = "${episode.runTimeTicks!! / 600_000_000}m",
+                    text = totalTime,
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
