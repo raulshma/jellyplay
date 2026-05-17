@@ -1,28 +1,22 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,13 +27,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cached
@@ -80,17 +73,11 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -98,7 +85,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,17 +92,23 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -126,13 +118,13 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +139,17 @@ fun SettingsScreen(
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
     val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+
+    val backFocusState = rememberTvFocusState()
+    val listFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv) {
+        if (isTv) {
+            kotlinx.coroutines.delay(150)
+            try { listFocusRequester.requestFocus() } catch (_: Exception) {}
+        }
+    }
 
     var showPinDialog by remember { mutableStateOf(false) }
     var showPlayerPicker by remember { mutableStateOf(false) }
@@ -180,12 +183,24 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text("Settings")
-                },
+                title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Box(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .then(backFocusState.focusModifier)
+                            .tvFocusIndicator(backFocusState, CircleShape)
+                            .clickable(onClick = onBack),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .size(20.dp),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -195,819 +210,832 @@ fun SettingsScreen(
         },
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
     ) { padding ->
-        var visibleItemCount by remember { mutableIntStateOf(0) }
-        LaunchedEffect(Unit) {
-            visibleItemCount = Int.MAX_VALUE
-        }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding(),
+                .imePadding()
+                .then(if (isTv) Modifier
+                    .tvFocusRestorer()
+                    .focusRequester(listFocusRequester)
+                    .onKeyEvent { keyEvent ->
+                        if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp) {
+                            onBack()
+                            true
+                        } else false
+                    }
+                else Modifier),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
                 end = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
                 bottom = 80.dp,
             ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (userName.isNotBlank()) {
-                item {
-                    AnimatedSettingsEntrance(0, visibleItemCount) {
+            item {
+                AnimatedSettingsEntrance(0) {
+                    if (userName.isNotBlank()) {
                         SettingsProfileBanner(
                             userName = userName,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
                 }
             }
 
             item {
-                AnimatedSettingsEntrance(1, visibleItemCount) {
-                    SettingsSectionHeader(title = "Account")
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(2, visibleItemCount) {
-                    SettingListItem(
-                        icon = Icons.Default.Dns,
-                        title = "Servers",
-                        subtitle = "Manage your Jellyfin servers",
-                        onClick = onServerManagement,
-                    )
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(3, visibleItemCount) {
-                    SettingListItem(
+                AnimatedSettingsEntrance(1) {
+                    SettingsGroup(
                         icon = Icons.Default.Person,
-                        title = "Switch User",
-                        subtitle = userName.ifBlank { "Manage users" },
-                        onClick = onUserManagement,
-                    )
+                        title = "Account",
+                        summary = { "Signed in as $userName" },
+                        initiallyExpanded = true,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        SettingListItem(
+                            icon = Icons.Default.Dns,
+                            title = "Servers",
+                            subtitle = "Manage your Jellyfin servers",
+                            index = 0, count = 3,
+                            onClick = onServerManagement,
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Person,
+                            title = "Switch User",
+                            subtitle = userName.ifBlank { "Manage users" },
+                            index = 1, count = 3,
+                            onClick = onUserManagement,
+                        )
+                        SettingListItem(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = "Sign Out",
+                            subtitle = "Log out of current account",
+                            index = 2, count = 3,
+                            isDestructive = true,
+                            onClick = {
+                                viewModel.logout()
+                                onLogout()
+                            },
+                        )
+                    }
                 }
             }
 
             item {
-                AnimatedSettingsEntrance(4, visibleItemCount) {
-                    SettingListItem(
-                        icon = Icons.AutoMirrored.Filled.Logout,
-                        title = "Sign Out",
-                        subtitle = "Log out of current account",
-                        isDestructive = true,
-                        onClick = {
-                            viewModel.logout()
-                            onLogout()
-                        },
-                    )
-                }
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                AnimatedSettingsEntrance(5, visibleItemCount) {
-                    SettingsSectionHeader(title = "Integrations")
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(6, visibleItemCount) {
-                    SettingListItem(
+                AnimatedSettingsEntrance(2) {
+                    SettingsGroup(
                         icon = Icons.Default.Extension,
-                        title = "Seerr",
-                        subtitle = "Media request and discovery manager",
-                        onClick = onSeerrSettings,
-                    )
+                        title = "Integrations",
+                        summary = { "Seerr" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        SettingListItem(
+                            icon = Icons.Default.Extension,
+                            title = "Seerr",
+                            subtitle = "Media request and discovery manager",
+                            index = 0, count = 1,
+                            onClick = onSeerrSettings,
+                        )
+                    }
                 }
             }
 
             item {
-                Spacer(Modifier.height(8.dp))
-                AnimatedSettingsEntrance(7, visibleItemCount) {
-                    SettingsSectionHeader(title = "Video Player")
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(8, visibleItemCount) {
-                    SettingListItem(
+                AnimatedSettingsEntrance(3) {
+                    SettingsGroup(
                         icon = Icons.Default.PlayCircle,
-                        title = "Player Engine",
-                        subtitle = "Choose media playback engine",
-                        trailingText = preferences.preferredPlayer.displayName,
-                        onClick = { showPlayerPicker = true },
-                    )
+                        title = "Video Player",
+                        summary = { "Player Engine: ${preferences.preferredPlayer.displayName}" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val videoItems = buildList {
+                            add("player" to 0)
+                            add("seek" to 1)
+                            add("orientation" to 2)
+                            add("timeout" to 3)
+                            add("gestures" to 4)
+                            add("speed" to 5)
+                            add("aspect" to 6)
+                            add("autoplay" to 7)
+                            add("browser" to 8)
+                            add("swipe" to 9)
+                            add("brightness" to 10)
+                            add("trickplay" to 11)
+                            add("trickplayGesture" to 12)
+                        }
+                        val total = videoItems.size
+
+                        SettingListItem(
+                            icon = Icons.Default.PlayCircle,
+                            title = "Player Engine",
+                            subtitle = "Choose media playback engine",
+                            trailingText = preferences.preferredPlayer.displayName,
+                            index = 0, count = total,
+                            onClick = { showPlayerPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.FastForward,
+                            title = "Seek Duration",
+                            subtitle = "Double-tap to seek",
+                            trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                            index = 1, count = total,
+                            onClick = { showVideoSeekDurationPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.ScreenLockLandscape,
+                            title = "Orientation",
+                            subtitle = "Default screen orientation",
+                            trailingText = preferences.videoDefaultOrientation.displayName,
+                            index = 2, count = total,
+                            onClick = { showOrientationPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Timer,
+                            title = "Controls Timeout",
+                            subtitle = "Auto-hide player controls",
+                            trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                            index = 3, count = total,
+                            onClick = { showControlsTimeoutPicker = true },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Gesture,
+                            title = "Gestures",
+                            subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
+                            checked = preferences.videoGesturesEnabled,
+                            index = 4, count = total,
+                            onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Speed,
+                            title = "Default Speed",
+                            subtitle = if (preferences.videoDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.videoDefaultSpeed}x playback",
+                            trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
+                            index = 5, count = total,
+                            onClick = { showVideoSpeedPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.AspectRatio,
+                            title = "Default Aspect",
+                            subtitle = "Video aspect ratio mode",
+                            trailingText = preferences.videoDefaultAspectRatio,
+                            index = 6, count = total,
+                            onClick = { showAspectRatioPicker = true },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.QueuePlayNext,
+                            title = "Auto-play Next",
+                            subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
+                            checked = preferences.videoAutoplayNext,
+                            index = 7, count = total,
+                            onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.VideoLibrary,
+                            title = "Episode Browser",
+                            subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
+                            checked = preferences.videoEpisodeBrowserEnabled,
+                            index = 8, count = total,
+                            onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Swipe,
+                            title = "Swipe Seek Range",
+                            subtitle = "Maximum seek distance",
+                            trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
+                            index = 9, count = total,
+                            onClick = { showSwipeSeekPicker = true },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Brightness6,
+                            title = "Remember Brightness",
+                            subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
+                            checked = preferences.videoRememberBrightness,
+                            index = 10, count = total,
+                            onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.OndemandVideo,
+                            title = "Trickplay Preview",
+                            subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
+                            checked = preferences.trickplayEnabled,
+                            index = 11, count = total,
+                            onCheckedChange = { viewModel.setTrickplayEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.TouchApp,
+                            title = "Trickplay on Gestures",
+                            subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
+                            checked = preferences.trickplayOnSeekGesture,
+                            index = 12, count = total,
+                            onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
+                        )
+                    }
                 }
             }
 
             item {
-                AnimatedSettingsEntrance(9, visibleItemCount) {
-                    SettingListItem(
+                AnimatedSettingsEntrance(4) {
+                    SettingsGroup(
                         icon = Icons.Default.FastForward,
-                        title = "Seek Duration",
-                        subtitle = "Double-tap to seek",
-                        trailingText = "${preferences.videoSeekDurationMs / 1000}s",
-                        onClick = { showVideoSeekDurationPicker = true },
-                    )
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(10, visibleItemCount) {
-                    SettingListItem(
-                        icon = Icons.Default.ScreenLockLandscape,
-                        title = "Orientation",
-                        subtitle = "Default screen orientation",
-                        trailingText = preferences.videoDefaultOrientation.displayName,
-                        onClick = { showOrientationPicker = true },
-                    )
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(11, visibleItemCount) {
-                    SettingListItem(
-                        icon = Icons.Default.Timer,
-                        title = "Controls Timeout",
-                        subtitle = "Auto-hide player controls",
-                        trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
-                        onClick = { showControlsTimeoutPicker = true },
-                    )
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(12, visibleItemCount) {
-                    SettingToggleItem(
-                        icon = Icons.Default.Gesture,
-                        title = "Gestures",
-                        subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
-                        checked = preferences.videoGesturesEnabled,
-                        onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
-                    )
-                }
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Speed,
-                    title = "Default Speed",
-                    subtitle = if (preferences.videoDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.videoDefaultSpeed}x playback",
-                    trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
-                    onClick = { showVideoSpeedPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.AspectRatio,
-                    title = "Default Aspect",
-                    subtitle = "Video aspect ratio mode",
-                    trailingText = preferences.videoDefaultAspectRatio,
-                    onClick = { showAspectRatioPicker = true },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.QueuePlayNext,
-                    title = "Auto-play Next",
-                    subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
-                    checked = preferences.videoAutoplayNext,
-                    onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.VideoLibrary,
-                    title = "Episode Browser",
-                    subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
-                    checked = preferences.videoEpisodeBrowserEnabled,
-                    onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Swipe,
-                    title = "Swipe Seek Range",
-                    subtitle = "Maximum seek distance",
-                    trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                    onClick = { showSwipeSeekPicker = true },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Brightness6,
-                    title = "Remember Brightness",
-                    subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
-                    checked = preferences.videoRememberBrightness,
-                    onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.OndemandVideo,
-                    title = "Trickplay Preview",
-                    subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
-                    checked = preferences.trickplayEnabled,
-                    onCheckedChange = { viewModel.setTrickplayEnabled(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.TouchApp,
-                    title = "Trickplay on Gestures",
-                    subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
-                    checked = preferences.trickplayOnSeekGesture,
-                    onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Skip Intro & Outro")
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.FastForward,
-                    title = "Skip Intro Button",
-                    subtitle = if (preferences.skipIntroEnabled) "Show skip intro button when available" else "Never show skip intro button",
-                    checked = preferences.skipIntroEnabled,
-                    onCheckedChange = { viewModel.setSkipIntroEnabled(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.FastForward,
-                    title = "Skip Outro Button",
-                    subtitle = if (preferences.skipOutroEnabled) "Show skip credits button when available" else "Never show skip credits button",
-                    checked = preferences.skipOutroEnabled,
-                    onCheckedChange = { viewModel.setSkipOutroEnabled(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.SkipNext,
-                    title = "Auto-Skip Intro",
-                    subtitle = if (preferences.autoSkipIntro) "Automatically skip intros" else "Manual intro skip only",
-                    checked = preferences.autoSkipIntro,
-                    onCheckedChange = { viewModel.setAutoSkipIntro(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.SkipNext,
-                    title = "Auto-Skip Outro",
-                    subtitle = if (preferences.autoSkipOutro) "Automatically skip credits" else "Manual credits skip only",
-                    checked = preferences.autoSkipOutro,
-                    onCheckedChange = { viewModel.setAutoSkipOutro(it) },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Advanced Video")
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.RecordVoiceOver,
-                    title = "Dialogue Boost",
-                    subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
-                    checked = preferences.dialogueBoostEnabled,
-                    onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
-                )
-            }
-
-            if (preferences.dialogueBoostEnabled) {
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Audiotrack,
-                        title = "Dialogue Boost Strength",
-                        subtitle = preferences.dialogueBoostStrength.displayName,
-                        trailingText = preferences.dialogueBoostStrength.displayName,
-                        onClick = {
-                            val strengths = EffectStrength.entries
-                            val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
-                            val nextIndex = (currentIndex + 1) % strengths.size
-                            viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                        title = "Skip Intro & Outro",
+                        summary = {
+                            val skipCount = listOf(
+                                preferences.skipIntroEnabled,
+                                preferences.skipOutroEnabled,
+                            ).count { it }
+                            "$skipCount of 2 skip buttons enabled"
                         },
-                    )
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        SettingToggleItem(
+                            icon = Icons.Default.FastForward,
+                            title = "Skip Intro Button",
+                            subtitle = if (preferences.skipIntroEnabled) "Show skip intro button when available" else "Never show skip intro button",
+                            checked = preferences.skipIntroEnabled,
+                            index = 0, count = 4,
+                            onCheckedChange = { viewModel.setSkipIntroEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.FastForward,
+                            title = "Skip Outro Button",
+                            subtitle = if (preferences.skipOutroEnabled) "Show skip credits button when available" else "Never show skip credits button",
+                            checked = preferences.skipOutroEnabled,
+                            index = 1, count = 4,
+                            onCheckedChange = { viewModel.setSkipOutroEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.SkipNext,
+                            title = "Auto-Skip Intro",
+                            subtitle = if (preferences.autoSkipIntro) "Automatically skip intros" else "Manual intro skip only",
+                            checked = preferences.autoSkipIntro,
+                            index = 2, count = 4,
+                            onCheckedChange = { viewModel.setAutoSkipIntro(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.SkipNext,
+                            title = "Auto-Skip Outro",
+                            subtitle = if (preferences.autoSkipOutro) "Automatically skip credits" else "Manual credits skip only",
+                            checked = preferences.autoSkipOutro,
+                            index = 3, count = 4,
+                            onCheckedChange = { viewModel.setAutoSkipOutro(it) },
+                        )
+                    }
                 }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.HighQuality,
-                    title = "Decoder",
-                    subtitle = preferences.decoderMode.displayName,
-                    trailingText = preferences.decoderMode.displayName.split(" ").first(),
-                    onClick = {
-                        val modes = DecoderMode.entries
-                        val currentIndex = modes.indexOf(preferences.decoderMode)
-                        val nextIndex = (currentIndex + 1) % modes.size
-                        viewModel.setDecoderMode(modes[nextIndex])
-                    },
-                )
-            }
+                AnimatedSettingsEntrance(5) {
+                    SettingsGroup(
+                        icon = Icons.Default.HighQuality,
+                        title = "Advanced Video",
+                        summary = { "Decoder: ${preferences.decoderMode.displayName}" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val advancedItems = mutableListOf<Pair<String, Int>>()
+                        advancedItems.add("dialogue" to 0)
+                        if (preferences.dialogueBoostEnabled) {
+                            advancedItems.add("dialogueStrength" to advancedItems.size)
+                        }
+                        advancedItems.add("decoder" to advancedItems.size)
+                        advancedItems.add("passthrough" to advancedItems.size)
+                        advancedItems.add("framerate" to advancedItems.size)
+                        advancedItems.add("quality" to advancedItems.size)
+                        advancedItems.add("delay" to advancedItems.size)
+                        val total = advancedItems.size
 
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Movie,
-                    title = "Audio Passthrough",
-                    subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Software audio processing",
-                    checked = preferences.audioPassthrough,
-                    onCheckedChange = { viewModel.setAudioPassthrough(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Fullscreen,
-                    title = "Frame Rate Match",
-                    subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
-                    checked = preferences.frameRateMatching,
-                    onCheckedChange = { viewModel.setFrameRateMatching(it) },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.HighQuality,
-                    title = "Streaming Quality",
-                    subtitle = streamingQualityLabel(preferences.streamingQuality),
-                    trailingText = streamingQualityShort(preferences.streamingQuality),
-                    onClick = {
-                        val qualities = StreamingQuality.entries
-                        val currentIndex = qualities.indexOf(preferences.streamingQuality)
-                        val nextIndex = (currentIndex + 1) % qualities.size
-                        viewModel.setStreamingQuality(qualities[nextIndex])
-                    },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Audiotrack,
-                    title = "Audio Delay",
-                    subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
-                    trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
-                    onClick = { showAudioDelayPicker = true },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "SyncPlay")
-            }
-
-            item {
-                var progressMode by remember { mutableStateOf(preferences.syncPlayProgressReportingMode) }
-                SettingListItem(
-                    icon = Icons.Default.Speed,
-                    title = "Progress Reporting",
-                    subtitle = when (progressMode) {
-                        "SUPPRESS_DURING" -> "Suppress during SyncPlay"
-                        "ALWAYS" -> "Always report"
-                        "NEVER" -> "Never report"
-                        else -> "Suppress during SyncPlay"
-                    },
-                    onClick = {
-                        val modes = listOf("SUPPRESS_DURING", "ALWAYS", "NEVER")
-                        val nextIndex = (modes.indexOf(progressMode) + 1) % modes.size
-                        progressMode = modes[nextIndex]
-                        viewModel.setSyncPlayProgressReportingMode(progressMode)
-                    },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Group,
-                    title = "Auto-Join Last Group",
-                    subtitle = "Automatically rejoin last group on app start",
-                    checked = preferences.syncPlayAutoJoinLastGroup,
-                    onCheckedChange = { viewModel.setSyncPlayAutoJoinLastGroup(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Notifications,
-                    title = "Join/Leave Notifications",
-                    subtitle = "Show when users join or leave",
-                    checked = preferences.syncPlayNotifyUserJoinLeave,
-                    onCheckedChange = { viewModel.setSyncPlayNotifyUserJoinLeave(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Notifications,
-                    title = "Default Ignore Wait",
-                    subtitle = "Ignore group waits by default when joining",
-                    checked = preferences.syncPlayDefaultIgnoreWait,
-                    onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Speed,
-                    title = "Sync Correction",
-                    subtitle = "Automatically correct playback sync drift",
-                    checked = preferences.syncPlaySyncCorrection,
-                    onCheckedChange = { viewModel.setSyncPlaySyncCorrection(it) },
-                )
-            }
-
-            if (preferences.syncPlaySyncCorrection) {
-                item {
-                    SettingToggleItem(
-                        icon = Icons.Default.Speed,
-                        title = "Speed Correction",
-                        subtitle = "Adjust playback speed to fix small sync drift",
-                        checked = preferences.syncPlaySpeedToSyncEnabled,
-                        onCheckedChange = { viewModel.setSyncPlaySpeedToSyncEnabled(it) },
-                    )
-                }
-            }
-
-            if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Timer,
-                        title = "Speed Correction Min Delay",
-                        subtitle = "Minimum delay before speed correction activates",
-                        trailingText = "${preferences.syncPlaySpeedToSyncMinDelayMs}ms",
-                        onClick = { showSyncPlayMinDelayPicker = true },
-                    )
-                }
-
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Timer,
-                        title = "Speed Correction Max Delay",
-                        subtitle = "Maximum delay for speed correction (seeks above this)",
-                        trailingText = "${preferences.syncPlaySpeedToSyncMaxDelayMs}ms",
-                        onClick = { showSyncPlayMaxDelayPicker = true },
-                    )
-                }
-
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Timer,
-                        title = "Speed Correction Duration",
-                        subtitle = "How long the speed adjustment lasts",
-                        trailingText = "${preferences.syncPlaySpeedToSyncDurationMs}ms",
-                        onClick = { showSyncPlayDurationPicker = true },
-                    )
+                        var idx = 0
+                        SettingToggleItem(
+                            icon = Icons.Default.RecordVoiceOver,
+                            title = "Dialogue Boost",
+                            subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
+                            checked = preferences.dialogueBoostEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                        )
+                        if (preferences.dialogueBoostEnabled) {
+                            SettingListItem(
+                                icon = Icons.Default.Audiotrack,
+                                title = "Dialogue Boost Strength",
+                                subtitle = preferences.dialogueBoostStrength.displayName,
+                                trailingText = preferences.dialogueBoostStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                        SettingListItem(
+                            icon = Icons.Default.HighQuality,
+                            title = "Decoder",
+                            subtitle = preferences.decoderMode.displayName,
+                            trailingText = preferences.decoderMode.displayName.split(" ").first(),
+                            index = idx++, count = total,
+                            onClick = {
+                                val modes = DecoderMode.entries
+                                val currentIndex = modes.indexOf(preferences.decoderMode)
+                                val nextIndex = (currentIndex + 1) % modes.size
+                                viewModel.setDecoderMode(modes[nextIndex])
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Movie,
+                            title = "Audio Passthrough",
+                            subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Software audio processing",
+                            checked = preferences.audioPassthrough,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setAudioPassthrough(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Fullscreen,
+                            title = "Frame Rate Match",
+                            subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
+                            checked = preferences.frameRateMatching,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setFrameRateMatching(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.HighQuality,
+                            title = "Streaming Quality",
+                            subtitle = streamingQualityLabel(preferences.streamingQuality),
+                            trailingText = streamingQualityShort(preferences.streamingQuality),
+                            index = idx++, count = total,
+                            onClick = {
+                                val qualities = StreamingQuality.entries
+                                val currentIndex = qualities.indexOf(preferences.streamingQuality)
+                                val nextIndex = (currentIndex + 1) % qualities.size
+                                viewModel.setStreamingQuality(qualities[nextIndex])
+                            },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Audiotrack,
+                            title = "Audio Delay",
+                            subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
+                            trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
+                            index = idx, count = total,
+                            onClick = { showAudioDelayPicker = true },
+                        )
+                    }
                 }
             }
 
             item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Audio Player")
-            }
+                AnimatedSettingsEntrance(6) {
+                    SettingsGroup(
+                        icon = Icons.Default.Group,
+                        title = "SyncPlay",
+                        summary = { if (preferences.syncPlayProgressReportingMode == "NEVER") "Disabled" else "Active" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val syncItems = mutableListOf<Pair<String, Int>>()
+                        syncItems.add("progress" to 0)
+                        syncItems.add("autoJoin" to 1)
+                        syncItems.add("notifications" to 2)
+                        syncItems.add("ignoreWait" to 3)
+                        syncItems.add("syncCorrection" to 4)
+                        var syncIdx = 5
+                        if (preferences.syncPlaySyncCorrection) {
+                            syncItems.add("speedCorrection" to syncIdx++)
+                        }
+                        if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
+                            syncItems.add("minDelay" to syncIdx++)
+                            syncItems.add("maxDelay" to syncIdx++)
+                            syncItems.add("duration" to syncIdx)
+                        }
+                        val total = syncItems.size
+                        var idx = 0
 
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Speed,
-                    title = "Default Speed",
-                    subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
-                    trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
-                    onClick = { showAudioSpeedPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.LibraryMusic,
-                    title = "Night Mode Volume",
-                    subtitle = "Maximum volume level at night",
-                    trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                    onClick = { showNightModeVolumePicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Tune,
-                    title = "Night Mode Gain",
-                    subtitle = "Loudness compensation",
-                    trailingText = "${preferences.audioNightModeGain}",
-                    onClick = { showNightModeGainPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.SkipNext,
-                    title = "Skip Prev Threshold",
-                    subtitle = "Restart song if past this point",
-                    trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                    onClick = { showSkipPrevThresholdPicker = true },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.QueuePlayNext,
-                    title = "Auto-play Next",
-                    subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
-                    checked = preferences.audioAutoplayNext,
-                    onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Tune,
-                    title = "Equalizer",
-                    subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
-                    checked = preferences.equalizerEnabled,
-                    onCheckedChange = { viewModel.setEqualizerEnabled(it) },
-                    onClick = { showEqualizerEditor = true },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.RecordVoiceOver,
-                    title = "Dialogue Boost",
-                    subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
-                    checked = preferences.dialogueBoostEnabled,
-                    onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
-                )
-            }
-
-            if (preferences.dialogueBoostEnabled) {
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Audiotrack,
-                        title = "Dialogue Boost Strength",
-                        subtitle = preferences.dialogueBoostStrength.displayName,
-                        trailingText = preferences.dialogueBoostStrength.displayName,
-                        onClick = {
-                            val strengths = EffectStrength.entries
-                            val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
-                            val nextIndex = (currentIndex + 1) % strengths.size
-                            viewModel.setDialogueBoostStrength(strengths[nextIndex])
-                        },
-                    )
+                        var progressMode by remember { mutableStateOf(preferences.syncPlayProgressReportingMode) }
+                        SettingListItem(
+                            icon = Icons.Default.Speed,
+                            title = "Progress Reporting",
+                            subtitle = when (progressMode) {
+                                "SUPPRESS_DURING" -> "Suppress during SyncPlay"
+                                "ALWAYS" -> "Always report"
+                                "NEVER" -> "Never report"
+                                else -> "Suppress during SyncPlay"
+                            },
+                            index = idx++, count = total,
+                            onClick = {
+                                val modes = listOf("SUPPRESS_DURING", "ALWAYS", "NEVER")
+                                val nextIndex = (modes.indexOf(progressMode) + 1) % modes.size
+                                progressMode = modes[nextIndex]
+                                viewModel.setSyncPlayProgressReportingMode(progressMode)
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Group,
+                            title = "Auto-Join Last Group",
+                            subtitle = "Automatically rejoin last group on app start",
+                            checked = preferences.syncPlayAutoJoinLastGroup,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setSyncPlayAutoJoinLastGroup(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Join/Leave Notifications",
+                            subtitle = "Show when users join or leave",
+                            checked = preferences.syncPlayNotifyUserJoinLeave,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setSyncPlayNotifyUserJoinLeave(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Default Ignore Wait",
+                            subtitle = "Ignore group waits by default when joining",
+                            checked = preferences.syncPlayDefaultIgnoreWait,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Speed,
+                            title = "Sync Correction",
+                            subtitle = "Automatically correct playback sync drift",
+                            checked = preferences.syncPlaySyncCorrection,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setSyncPlaySyncCorrection(it) },
+                        )
+                        if (preferences.syncPlaySyncCorrection) {
+                            SettingToggleItem(
+                                icon = Icons.Default.Speed,
+                                title = "Speed Correction",
+                                subtitle = "Adjust playback speed to fix small sync drift",
+                                checked = preferences.syncPlaySpeedToSyncEnabled,
+                                index = idx++, count = total,
+                                onCheckedChange = { viewModel.setSyncPlaySpeedToSyncEnabled(it) },
+                            )
+                        }
+                        if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
+                            SettingListItem(
+                                icon = Icons.Default.Timer,
+                                title = "Speed Correction Min Delay",
+                                subtitle = "Minimum delay before speed correction activates",
+                                trailingText = "${preferences.syncPlaySpeedToSyncMinDelayMs}ms",
+                                index = idx++, count = total,
+                                onClick = { showSyncPlayMinDelayPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Icons.Default.Timer,
+                                title = "Speed Correction Max Delay",
+                                subtitle = "Maximum delay for speed correction (seeks above this)",
+                                trailingText = "${preferences.syncPlaySpeedToSyncMaxDelayMs}ms",
+                                index = idx++, count = total,
+                                onClick = { showSyncPlayMaxDelayPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Icons.Default.Timer,
+                                title = "Speed Correction Duration",
+                                subtitle = "How long the speed adjustment lasts",
+                                trailingText = "${preferences.syncPlaySpeedToSyncDurationMs}ms",
+                                index = idx, count = total,
+                                onClick = { showSyncPlayDurationPicker = true },
+                            )
+                        }
+                    }
                 }
             }
 
             item {
-                SettingToggleItem(
-                    icon = Icons.Default.Speed,
-                    title = "Night Mode",
-                    subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
-                    checked = preferences.nightModeEnabled,
-                    onCheckedChange = { viewModel.setNightModeEnabled(it) },
-                )
-            }
+                AnimatedSettingsEntrance(7) {
+                    SettingsGroup(
+                        icon = Icons.Default.LibraryMusic,
+                        title = "Audio Player",
+                        summary = { "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val audioItems = mutableListOf<Int>()
+                        for (i in 0..20) audioItems.add(i)
+                        var idx = 0
+                        val total = run {
+                            var c = 6
+                            if (preferences.equalizerEnabled) c++
+                            if (preferences.dialogueBoostEnabled) c++
+                            if (preferences.nightModeEnabled) c++
+                            c
+                        }
 
-            if (preferences.nightModeEnabled) {
-                item {
-                    SettingListItem(
-                        icon = Icons.Default.Nightlight,
-                        title = "Night Mode Strength",
-                        subtitle = preferences.nightModeStrength.displayName,
-                        trailingText = preferences.nightModeStrength.displayName,
-                        onClick = {
-                            val strengths = EffectStrength.entries
-                            val currentIndex = strengths.indexOf(preferences.nightModeStrength)
-                            val nextIndex = (currentIndex + 1) % strengths.size
-                            viewModel.setNightModeStrength(strengths[nextIndex])
-                        },
-                    )
+                        SettingListItem(
+                            icon = Icons.Default.Speed,
+                            title = "Default Speed",
+                            subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
+                            trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
+                            index = idx++, count = total,
+                            onClick = { showAudioSpeedPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.LibraryMusic,
+                            title = "Night Mode Volume",
+                            subtitle = "Maximum volume level at night",
+                            trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
+                            index = idx++, count = total,
+                            onClick = { showNightModeVolumePicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Tune,
+                            title = "Night Mode Gain",
+                            subtitle = "Loudness compensation",
+                            trailingText = "${preferences.audioNightModeGain}",
+                            index = idx++, count = total,
+                            onClick = { showNightModeGainPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.SkipNext,
+                            title = "Skip Prev Threshold",
+                            subtitle = "Restart song if past this point",
+                            trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
+                            index = idx++, count = total,
+                            onClick = { showSkipPrevThresholdPicker = true },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.QueuePlayNext,
+                            title = "Auto-play Next",
+                            subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
+                            checked = preferences.audioAutoplayNext,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Tune,
+                            title = "Equalizer",
+                            subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
+                            checked = preferences.equalizerEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setEqualizerEnabled(it) },
+                            onClick = { showEqualizerEditor = true },
+                        )
+                        if (preferences.equalizerEnabled) {
+                            SettingToggleItem(
+                                icon = Icons.Default.RecordVoiceOver,
+                                title = "Dialogue Boost",
+                                subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
+                                checked = preferences.dialogueBoostEnabled,
+                                index = idx++, count = total,
+                                onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                            )
+                        }
+                        if (preferences.dialogueBoostEnabled) {
+                            SettingListItem(
+                                icon = Icons.Default.Audiotrack,
+                                title = "Dialogue Boost Strength",
+                                subtitle = preferences.dialogueBoostStrength.displayName,
+                                trailingText = preferences.dialogueBoostStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Icons.Default.Speed,
+                            title = "Night Mode",
+                            subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
+                            checked = preferences.nightModeEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setNightModeEnabled(it) },
+                        )
+                        if (preferences.nightModeEnabled) {
+                            SettingListItem(
+                                icon = Icons.Default.Nightlight,
+                                title = "Night Mode Strength",
+                                subtitle = preferences.nightModeStrength.displayName,
+                                trailingText = preferences.nightModeStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.nightModeStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setNightModeStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                    }
                 }
             }
 
             item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Language")
+                AnimatedSettingsEntrance(8) {
+                    SettingsGroup(
+                        icon = Icons.Default.Language,
+                        title = "Language",
+                        summary = { "Audio: ${preferences.preferredAudioLanguage ?: "Default"}" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        SettingListItem(
+                            icon = Icons.Default.Language,
+                            title = "Audio Language",
+                            subtitle = "Preferred audio track language",
+                            trailingText = preferences.preferredAudioLanguage ?: "Default",
+                            index = 0, count = 2,
+                            onClick = { showAudioLanguagePicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.ClosedCaption,
+                            title = "Subtitle Language",
+                            subtitle = "Preferred subtitle language",
+                            trailingText = preferences.preferredSubtitleLanguage ?: "Default",
+                            index = 1, count = 2,
+                            onClick = { showSubtitleLanguagePicker = true },
+                        )
+                    }
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Language,
-                    title = "Audio Language",
-                    subtitle = "Preferred audio track language",
-                    trailingText = preferences.preferredAudioLanguage ?: "Default",
-                    onClick = { showAudioLanguagePicker = true },
-                )
+                AnimatedSettingsEntrance(9) {
+                    SettingsGroup(
+                        icon = Icons.Default.ClosedCaption,
+                        title = "Subtitles",
+                        summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val subTotal = 6
+                        SettingListItem(
+                            icon = Icons.Default.TextFields,
+                            title = "Font Size",
+                            subtitle = "Subtitle text size",
+                            trailingText = "${preferences.subtitleStyle.fontSize}sp",
+                            index = 0, count = subTotal,
+                            onClick = { showSubtitleFontPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Palette,
+                            title = "Text Color",
+                            subtitle = "Subtitle font color",
+                            trailingText = preferences.subtitleStyle.fontColor.name,
+                            index = 1, count = subTotal,
+                            onClick = { showSubtitleColorPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.ClosedCaption,
+                            title = "Background",
+                            subtitle = "${preferences.subtitleStyle.backgroundColor.name} \u2022 ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
+                            index = 2, count = subTotal,
+                            onClick = { showSubtitleBgColorPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.TextFields,
+                            title = "Edge Style",
+                            subtitle = "Text outline effect",
+                            trailingText = preferences.subtitleStyle.edgeType.name,
+                            index = 3, count = subTotal,
+                            onClick = { showSubtitleEdgePicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Timer,
+                            title = "Sync Offset",
+                            subtitle = "Subtitle timing adjustment",
+                            trailingText = "${preferences.subtitleStyle.offsetMs}ms",
+                            index = 4, count = subTotal,
+                            onClick = { showSubtitleOffsetPicker = true },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.ClosedCaption,
+                            title = "Position",
+                            subtitle = "Vertical placement on screen",
+                            trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
+                            index = 5, count = subTotal,
+                            onClick = { showSubtitlePositionPicker = true },
+                        )
+                    }
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.ClosedCaption,
-                    title = "Subtitle Language",
-                    subtitle = "Preferred subtitle language",
-                    trailingText = preferences.preferredSubtitleLanguage ?: "Default",
-                    onClick = { showSubtitleLanguagePicker = true },
-                )
+                AnimatedSettingsEntrance(10) {
+                    SettingsGroup(
+                        icon = Icons.Default.Storage,
+                        title = "Storage",
+                        summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val storageTotal = 4
+                        SettingInfoItem(
+                            icon = Icons.Default.Storage,
+                            title = "Cache Used",
+                            subtitle = "${viewModel.cacheSizeMb} MB",
+                            index = 0, count = storageTotal,
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Delete,
+                            title = "Clear Cache",
+                            subtitle = "Free up storage space",
+                            index = 1, count = storageTotal,
+                            onClick = { viewModel.clearCache() },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Cached,
+                            title = "Auto-delete Cache",
+                            subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
+                            checked = preferences.autoDeleteCache,
+                            index = 2, count = storageTotal,
+                            onCheckedChange = { viewModel.setAutoDeleteCache(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Storage,
+                            title = "Max Cache Size",
+                            subtitle = "Maximum disk space for caching",
+                            trailingText = "${preferences.maxCacheSizeMb} MB",
+                            index = 3, count = storageTotal,
+                            onClick = {
+                                val sizes = listOf(250, 500, 1000, 2000, 5000)
+                                val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
+                                val nextIndex = (currentIndex + 1) % sizes.size
+                                viewModel.setMaxCacheSize(sizes[nextIndex])
+                            },
+                        )
+                    }
+                }
             }
 
             item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Subtitles")
+                AnimatedSettingsEntrance(11) {
+                    SettingsGroup(
+                        icon = Icons.Default.Palette,
+                        title = "Appearance",
+                        summary = { if (preferences.dynamicTheming) "Dynamic theming: On" else "Default theme" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val appearTotal = 2
+                        SettingToggleItem(
+                            icon = Icons.Default.OndemandVideo,
+                            title = "Dynamic Theming",
+                            subtitle = "Colors extracted from artwork",
+                            checked = preferences.dynamicTheming,
+                            index = 0, count = appearTotal,
+                            onCheckedChange = { viewModel.setDynamicTheming(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Home,
+                            title = "Home Mode",
+                            subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                            trailingText = preferences.homeMode.name,
+                            index = 1, count = appearTotal,
+                            onClick = {
+                                val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                                viewModel.setHomeMode(next)
+                            },
+                        )
+                    }
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.TextFields,
-                    title = "Font Size",
-                    subtitle = "Subtitle text size",
-                    trailingText = "${preferences.subtitleStyle.fontSize}sp",
-                    onClick = { showSubtitleFontPicker = true },
-                )
+                AnimatedSettingsEntrance(12) {
+                    SettingsGroup(
+                        icon = Icons.Default.Lock,
+                        title = "Security",
+                        summary = { if (preferences.pinLockEnabled) "PIN lock: On" else "PIN lock: Off" },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        val secTotal = 2
+                        SettingToggleItem(
+                            icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                            title = "PIN Lock",
+                            subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
+                            checked = preferences.pinLockEnabled,
+                            index = 0, count = secTotal,
+                            onCheckedChange = { enabled ->
+                                if (enabled) showPinDialog = true
+                                else viewModel.clearPin()
+                            },
+                            onClick = {
+                                if (preferences.pinLockEnabled) viewModel.clearPin()
+                                else showPinDialog = true
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.ChildCare,
+                            title = "Kids Mode",
+                            subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
+                            checked = preferences.kidsModeEnabled,
+                            index = 1, count = secTotal,
+                            onCheckedChange = { viewModel.setKidsModeEnabled(it) },
+                            onClick = {
+                                val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
+                                val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
+                                viewModel.setKidsModeMaxRating(nextRating)
+                            },
+                        )
+                    }
+                }
             }
 
             item {
-                SettingListItem(
-                    icon = Icons.Default.Palette,
-                    title = "Text Color",
-                    subtitle = "Subtitle font color",
-                    trailingText = preferences.subtitleStyle.fontColor.name,
-                    onClick = { showSubtitleColorPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.ClosedCaption,
-                    title = "Background",
-                    subtitle = "${preferences.subtitleStyle.backgroundColor.name} \u2022 ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
-                    onClick = { showSubtitleBgColorPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.TextFields,
-                    title = "Edge Style",
-                    subtitle = "Text outline effect",
-                    trailingText = preferences.subtitleStyle.edgeType.name,
-                    onClick = { showSubtitleEdgePicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Timer,
-                    title = "Sync Offset",
-                    subtitle = "Subtitle timing adjustment",
-                    trailingText = "${preferences.subtitleStyle.offsetMs}ms",
-                    onClick = { showSubtitleOffsetPicker = true },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.ClosedCaption,
-                    title = "Position",
-                    subtitle = "Vertical placement on screen",
-                    trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
-                    onClick = { showSubtitlePositionPicker = true },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Storage")
-            }
-
-            item {
-                SettingInfoItem(
-                    icon = Icons.Default.Storage,
-                    title = "Cache Used",
-                    subtitle = "${viewModel.cacheSizeMb} MB",
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Delete,
-                    title = "Clear Cache",
-                    subtitle = "Free up storage space",
-                    onClick = { viewModel.clearCache() },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.Cached,
-                    title = "Auto-delete Cache",
-                    subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
-                    checked = preferences.autoDeleteCache,
-                    onCheckedChange = { viewModel.setAutoDeleteCache(it) },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Storage,
-                    title = "Max Cache Size",
-                    subtitle = "Maximum disk space for caching",
-                    trailingText = "${preferences.maxCacheSizeMb} MB",
-                    onClick = {
-                        val sizes = listOf(250, 500, 1000, 2000, 5000)
-                        val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
-                        val nextIndex = (currentIndex + 1) % sizes.size
-                        viewModel.setMaxCacheSize(sizes[nextIndex])
-                    },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Appearance")
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.OndemandVideo,
-                    title = "Dynamic Theming",
-                    subtitle = "Colors extracted from artwork",
-                    checked = preferences.dynamicTheming,
-                    onCheckedChange = { viewModel.setDynamicTheming(it) },
-                )
-            }
-
-            item {
-                SettingListItem(
-                    icon = Icons.Default.Home,
-                    title = "Home Mode",
-                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
-                    trailingText = preferences.homeMode.name,
-                    onClick = {
-                        val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                        viewModel.setHomeMode(next)
-                    },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "Security")
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                    title = "PIN Lock",
-                    subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
-                    checked = preferences.pinLockEnabled,
-                    onCheckedChange = { enabled ->
-                        if (enabled) showPinDialog = true
-                        else viewModel.clearPin()
-                    },
-                    onClick = {
-                        if (preferences.pinLockEnabled) viewModel.clearPin()
-                        else showPinDialog = true
-                    },
-                )
-            }
-
-            item {
-                SettingToggleItem(
-                    icon = Icons.Default.ChildCare,
-                    title = "Kids Mode",
-                    subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
-                    checked = preferences.kidsModeEnabled,
-                    onCheckedChange = { viewModel.setKidsModeEnabled(it) },
-                    onClick = {
-                        val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
-                        val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
-                        viewModel.setKidsModeMaxRating(nextRating)
-                    },
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                SettingsSectionHeader(title = "About")
-            }
-
-            item {
-                SettingInfoItem(
-                    icon = Icons.Default.OndemandVideo,
-                    title = "Version",
-                    subtitle = "JellyPlay v${viewModel.appVersion}",
-                )
+                AnimatedSettingsEntrance(13) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingInfoItem(
+                            icon = Icons.Default.OndemandVideo,
+                            title = "Version",
+                            subtitle = "JellyPlay v${viewModel.appVersion}",
+                            index = 0, count = 1,
+                        )
+                    }
+                }
             }
         }
     }
@@ -1097,37 +1125,39 @@ fun SettingsScreen(
     }
 
     if (showPlayerPicker) {
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Preferred Player",
-            options = PlayerType.entries.map { RadioOption(it.displayName, it.description, it == preferences.preferredPlayer) },
+            items = PlayerType.entries,
+            label = { it.displayName },
+            subtitle = { it.description },
+            isSelected = { it == preferences.preferredPlayer },
             onDismiss = { showPlayerPicker = false },
-            onSelect = { index ->
-                viewModel.setPreferredPlayer(PlayerType.entries[index])
-                showPlayerPicker = false
-            },
+            onSelect = { viewModel.setPreferredPlayer(it); showPlayerPicker = false },
         )
     }
 
     if (showOrientationPicker) {
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Default Orientation",
-            options = OrientationMode.entries.map { RadioOption(it.displayName, it.constant, it == preferences.videoDefaultOrientation) },
+            items = OrientationMode.entries,
+            label = { it.displayName },
+            subtitle = { it.constant },
+            isSelected = { it == preferences.videoDefaultOrientation },
             onDismiss = { showOrientationPicker = false },
-            onSelect = { index ->
-                viewModel.setVideoDefaultOrientation(OrientationMode.entries[index])
-                showOrientationPicker = false
-            },
+            onSelect = { viewModel.setVideoDefaultOrientation(it); showOrientationPicker = false },
         )
     }
 
     if (showAspectRatioPicker) {
         val aspectRatios = listOf("AUTO", "FIT", "FILL", "CROP", "16:9", "4:3", "21:9")
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Default Aspect Ratio",
-            options = aspectRatios.map { RadioOption(it, "", it == preferences.videoDefaultAspectRatio) },
+            items = aspectRatios,
+            label = { it },
+            isSelected = { it == preferences.videoDefaultAspectRatio },
             onDismiss = { showAspectRatioPicker = false },
-            onSelect = { index ->
-                viewModel.setVideoDefaultAspectRatio(aspectRatios[index])
+            onSelect = {
+                viewModel.setVideoDefaultAspectRatio(it)
                 showAspectRatioPicker = false
             },
         )
@@ -1135,9 +1165,10 @@ fun SettingsScreen(
 
     if (showVideoSpeedPicker) {
         val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Default Video Speed",
-            options = speeds.map { RadioOption(if (it == 1.0f) "1x (Normal)" else "${it}x", "", it == preferences.videoDefaultSpeed) },
+            options = speeds.map { if (it == 1.0f) "1x" else "${it}x" },
+            selectedIndex = speeds.indexOf(preferences.videoDefaultSpeed),
             onDismiss = { showVideoSpeedPicker = false },
             onSelect = { index ->
                 viewModel.setVideoDefaultSpeed(speeds[index])
@@ -1148,9 +1179,10 @@ fun SettingsScreen(
 
     if (showAudioSpeedPicker) {
         val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Default Audio Speed",
-            options = speeds.map { RadioOption(if (it == 1.0f) "1x (Normal)" else "${it}x", "", it == preferences.audioDefaultSpeed) },
+            options = speeds.map { if (it == 1.0f) "1x" else "${it}x" },
+            selectedIndex = speeds.indexOf(preferences.audioDefaultSpeed),
             onDismiss = { showAudioSpeedPicker = false },
             onSelect = { index ->
                 viewModel.setAudioDefaultSpeed(speeds[index])
@@ -1161,9 +1193,10 @@ fun SettingsScreen(
 
     if (showVideoSeekDurationPicker) {
         val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Double-Tap Seek Duration",
-            options = durations.map { RadioOption("${it / 1000}s", "", it == preferences.videoSeekDurationMs) },
+            options = durations.map { "${it / 1000}s" },
+            selectedIndex = durations.indexOf(preferences.videoSeekDurationMs),
             onDismiss = { showVideoSeekDurationPicker = false },
             onSelect = { index ->
                 viewModel.setVideoSeekDurationMs(durations[index])
@@ -1174,9 +1207,10 @@ fun SettingsScreen(
 
     if (showControlsTimeoutPicker) {
         val timeouts = listOf(3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Controls Auto-Hide Timeout",
-            options = timeouts.map { RadioOption("${it / 1000}s", "", it == preferences.videoControlsTimeoutMs) },
+            options = timeouts.map { "${it / 1000}s" },
+            selectedIndex = timeouts.indexOf(preferences.videoControlsTimeoutMs),
             onDismiss = { showControlsTimeoutPicker = false },
             onSelect = { index ->
                 viewModel.setVideoControlsTimeoutMs(timeouts[index])
@@ -1187,9 +1221,10 @@ fun SettingsScreen(
 
     if (showSwipeSeekPicker) {
         val ranges = listOf(30_000L, 60_000L, 90_000L, 120_000L, 180_000L, 300_000L)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Swipe Seek Maximum Range",
-            options = ranges.map { RadioOption("${it / 1000}s", "", it == preferences.videoSwipeSeekMaxMs) },
+            options = ranges.map { "${it / 1000}s" },
+            selectedIndex = ranges.indexOf(preferences.videoSwipeSeekMaxMs),
             onDismiss = { showSwipeSeekPicker = false },
             onSelect = { index ->
                 viewModel.setVideoSwipeSeekMaxMs(ranges[index])
@@ -1199,90 +1234,45 @@ fun SettingsScreen(
     }
 
     if (showNightModeVolumePicker) {
-        var sliderValue by remember { mutableStateOf(preferences.audioNightModeVolume) }
-        AlertDialog(
-            onDismissRequest = { showNightModeVolumePicker = false },
-            title = { Text("Night Mode Volume") },
-            text = {
-                Column {
-                    Text(
-                        "${(sliderValue * 100).toInt()}%",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = 0.1f..0.8f,
-                        steps = 6,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("10%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("80%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setAudioNightModeVolume(sliderValue)
-                    showNightModeVolumePicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNightModeVolumePicker = false }) { Text("Cancel") }
+        SettingsSliderSheet(
+            title = "Night Mode Volume",
+            value = preferences.audioNightModeVolume,
+            valueRange = 0.1f..0.8f,
+            steps = 6,
+            valueLabel = { "${(it * 100).toInt()}%" },
+            rangeStartLabel = "10%",
+            rangeEndLabel = "80%",
+            onDismiss = { showNightModeVolumePicker = false },
+            onConfirm = {
+                viewModel.setAudioNightModeVolume(it)
+                showNightModeVolumePicker = false
             },
         )
     }
 
     if (showNightModeGainPicker) {
-        var sliderValue by remember { mutableStateOf(preferences.audioNightModeGain.toFloat()) }
-        AlertDialog(
-            onDismissRequest = { showNightModeGainPicker = false },
-            title = { Text("Night Mode Loudness Gain") },
-            text = {
-                Column {
-                    Text(
-                        "${sliderValue.toInt()}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = 0f..3000f,
-                        steps = 29,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("0", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("3000", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setAudioNightModeGain(sliderValue.toInt())
-                    showNightModeGainPicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNightModeGainPicker = false }) { Text("Cancel") }
+        SettingsSliderSheet(
+            title = "Night Mode Loudness Gain",
+            value = preferences.audioNightModeGain.toFloat(),
+            valueRange = 0f..3000f,
+            steps = 29,
+            valueLabel = { "${it.toInt()}" },
+            rangeStartLabel = "0",
+            rangeEndLabel = "3000",
+            onDismiss = { showNightModeGainPicker = false },
+            onConfirm = {
+                viewModel.setAudioNightModeGain(it.toInt())
+                showNightModeGainPicker = false
             },
         )
     }
 
     if (showSkipPrevThresholdPicker) {
         val thresholds = listOf(1_000L, 2_000L, 3_000L, 5_000L, 7_000L, 10_000L)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Skip Previous Threshold",
-            options = thresholds.map { RadioOption("${it / 1000}s", "Restarts if past this point", it == preferences.audioSkipPreviousThresholdMs) },
+            options = thresholds.map { "${it / 1000}s" },
+            selectedIndex = thresholds.indexOf(preferences.audioSkipPreviousThresholdMs),
             onDismiss = { showSkipPrevThresholdPicker = false },
             onSelect = { index ->
                 viewModel.setAudioSkipPreviousThresholdMs(thresholds[index])
@@ -1292,89 +1282,64 @@ fun SettingsScreen(
     }
 
     if (showAudioDelayPicker) {
-        var sliderValue by remember { mutableStateOf(preferences.audioDelayMs.toFloat()) }
-        AlertDialog(
-            onDismissRequest = { showAudioDelayPicker = false },
-            title = { Text("Audio Delay") },
-            text = {
-                Column {
-                    Text(
-                        if (sliderValue.toLong() == 0L) "No delay" else "${sliderValue.toLong()}ms",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = -500f..500f,
-                        steps = 99,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("-500ms", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("+500ms", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setAudioDelayMs(sliderValue.toLong())
-                    showAudioDelayPicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAudioDelayPicker = false }) { Text("Cancel") }
+        SettingsSliderSheet(
+            title = "Audio Delay",
+            value = preferences.audioDelayMs.toFloat(),
+            valueRange = -500f..500f,
+            steps = 99,
+            valueLabel = { if (it.toLong() == 0L) "No delay" else "${it.toLong()}ms" },
+            rangeStartLabel = "-500ms",
+            rangeEndLabel = "+500ms",
+            onDismiss = { showAudioDelayPicker = false },
+            onConfirm = {
+                viewModel.setAudioDelayMs(it.toLong())
+                showAudioDelayPicker = false
             },
         )
     }
 
     if (showSyncPlayMinDelayPicker) {
         val values = listOf(30L, 50L, 60L, 100L, 150L, 200L, 300L, 500L)
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Speed Correction Min Delay",
-            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMinDelayMs) },
+            items = values,
+            label = { "${it}ms" },
+            isSelected = { it == preferences.syncPlaySpeedToSyncMinDelayMs },
             onDismiss = { showSyncPlayMinDelayPicker = false },
-            onSelect = { index ->
-                viewModel.setSyncPlaySpeedToSyncMinDelayMs(values[index])
-                showSyncPlayMinDelayPicker = false
-            },
+            onSelect = { viewModel.setSyncPlaySpeedToSyncMinDelayMs(it); showSyncPlayMinDelayPicker = false },
         )
     }
 
     if (showSyncPlayMaxDelayPicker) {
         val values = listOf(1000L, 2000L, 3000L, 5000L, 10000L)
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Speed Correction Max Delay",
-            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncMaxDelayMs) },
+            items = values,
+            label = { "${it}ms" },
+            isSelected = { it == preferences.syncPlaySpeedToSyncMaxDelayMs },
             onDismiss = { showSyncPlayMaxDelayPicker = false },
-            onSelect = { index ->
-                viewModel.setSyncPlaySpeedToSyncMaxDelayMs(values[index])
-                showSyncPlayMaxDelayPicker = false
-            },
+            onSelect = { viewModel.setSyncPlaySpeedToSyncMaxDelayMs(it); showSyncPlayMaxDelayPicker = false },
         )
     }
 
     if (showSyncPlayDurationPicker) {
         val values = listOf(300L, 500L, 1000L, 1500L, 2000L, 3000L)
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Speed Correction Duration",
-            options = values.map { RadioOption("${it}ms", "", it == preferences.syncPlaySpeedToSyncDurationMs) },
+            items = values,
+            label = { "${it}ms" },
+            isSelected = { it == preferences.syncPlaySpeedToSyncDurationMs },
             onDismiss = { showSyncPlayDurationPicker = false },
-            onSelect = { index ->
-                viewModel.setSyncPlaySpeedToSyncDurationMs(values[index])
-                showSyncPlayDurationPicker = false
-            },
+            onSelect = { viewModel.setSyncPlaySpeedToSyncDurationMs(it); showSyncPlayDurationPicker = false },
         )
     }
 
     if (showSubtitleFontPicker) {
         val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
-        RadioPickerDialog(
+        SettingsChipPickerSheet(
             title = "Subtitle Font Size",
-            options = sizes.map { RadioOption("${it}sp", "", it == preferences.subtitleStyle.fontSize) },
+            options = sizes.map { "${it}sp" },
+            selectedIndex = sizes.indexOf(preferences.subtitleStyle.fontSize),
             onDismiss = { showSubtitleFontPicker = false },
             onSelect = { index ->
                 viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = sizes[index]))
@@ -1384,12 +1349,14 @@ fun SettingsScreen(
     }
 
     if (showSubtitleColorPicker) {
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Subtitle Text Color",
-            options = SubtitleColor.entries.map { RadioOption(it.name, "", it == preferences.subtitleStyle.fontColor) },
+            items = SubtitleColor.entries,
+            label = { it.name },
+            isSelected = { it == preferences.subtitleStyle.fontColor },
             onDismiss = { showSubtitleColorPicker = false },
-            onSelect = { index ->
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontColor = SubtitleColor.entries[index]))
+            onSelect = {
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontColor = it))
                 showSubtitleColorPicker = false
             },
         )
@@ -1397,160 +1364,143 @@ fun SettingsScreen(
 
     if (showSubtitleBgColorPicker) {
         var bgOpacity by remember { mutableStateOf(preferences.subtitleStyle.backgroundOpacity) }
-        AlertDialog(
-            onDismissRequest = { showSubtitleBgColorPicker = false },
-            title = { Text("Subtitle Background") },
-            text = {
-                Column {
-                    val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
-                    LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                        items(SubtitleColor.entries.size, contentType = { "subtitleColor" }) { index ->
-                            val color = SubtitleColor.entries[index]
-                            val isSelected = color == preferences.subtitleStyle.backgroundColor
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .tvFocusable().clickable {
-                                        viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundColor = color))
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                RadioButton(selected = isSelected, onClick = {
-                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundColor = color))
-                                })
-                                Spacer(Modifier.size(12.dp))
-                                Text(color.name, style = MaterialTheme.typography.bodyLarge)
-                            }
+        AdaptiveSheet(onDismissRequest = { showSubtitleBgColorPicker = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    "Subtitle Background",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.35f),
+                ) {
+                    itemsIndexed(SubtitleColor.entries, contentType = { _, _ -> "color" }) { index, color ->
+                        val selected = color == preferences.subtitleStyle.backgroundColor
+                        val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(
+                            index, SubtitleColor.entries.size,
+                        )
+                        val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .clip(shape)
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    else Color.White.copy(alpha = 0.04f),
+                                )
+                                .then(tvFocusState.focusModifier)
+                                .tvFocusIndicator(tvFocusState, shape)
+                                .clickable {
+                                    viewModel.setSubtitleStyle(
+                                        preferences.subtitleStyle.copy(backgroundColor = color),
+                                    )
+                                }
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                color.name,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                                color = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Opacity: ${(bgOpacity * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Slider(
-                        value = bgOpacity,
-                        onValueChange = { bgOpacity = it },
-                        valueRange = 0f..1f,
-                        steps = 9,
-                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(backgroundOpacity = bgOpacity))
-                    showSubtitleBgColorPicker = false
-                }) { Text("Done") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSubtitleBgColorPicker = false }) { Text("Cancel") }
-            },
-        )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Opacity: ${(bgOpacity * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = bgOpacity,
+                    onValueChange = { bgOpacity = it },
+                    valueRange = 0f..1f,
+                    steps = 9,
+                )
+            }
+        }
     }
 
     if (showSubtitleEdgePicker) {
-        RadioPickerDialog(
+        SettingsListPickerSheet(
             title = "Subtitle Edge Style",
-            options = SubtitleEdgeType.entries.map { RadioOption(it.name, "", it == preferences.subtitleStyle.edgeType) },
+            items = SubtitleEdgeType.entries,
+            label = { it.name },
+            isSelected = { it == preferences.subtitleStyle.edgeType },
             onDismiss = { showSubtitleEdgePicker = false },
-            onSelect = { index ->
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(edgeType = SubtitleEdgeType.entries[index]))
+            onSelect = {
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(edgeType = it))
                 showSubtitleEdgePicker = false
             },
         )
     }
 
     if (showSubtitleOffsetPicker) {
-        var sliderValue by remember { mutableStateOf(preferences.subtitleStyle.offsetMs.toFloat()) }
-        AlertDialog(
-            onDismissRequest = { showSubtitleOffsetPicker = false },
-            title = { Text("Subtitle Sync Offset") },
-            text = {
-                Column {
-                    Text(
-                        "${sliderValue.toLong()}ms",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = -5000f..5000f,
-                        steps = 99,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("-5s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("+5s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(offsetMs = sliderValue.toLong()))
-                    showSubtitleOffsetPicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSubtitleOffsetPicker = false }) { Text("Cancel") }
+        SettingsSliderSheet(
+            title = "Subtitle Sync Offset",
+            value = preferences.subtitleStyle.offsetMs.toFloat(),
+            valueRange = -5000f..5000f,
+            steps = 99,
+            valueLabel = { "${it.toLong()}ms" },
+            rangeStartLabel = "-5s",
+            rangeEndLabel = "+5s",
+            onDismiss = { showSubtitleOffsetPicker = false },
+            onConfirm = {
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(offsetMs = it.toLong()))
+                showSubtitleOffsetPicker = false
             },
         )
     }
 
     if (showSubtitlePositionPicker) {
-        var sliderValue by remember { mutableStateOf(preferences.subtitleStyle.verticalPosition) }
-        AlertDialog(
-            onDismissRequest = { showSubtitlePositionPicker = false },
-            title = { Text("Subtitle Vertical Position") },
-            text = {
-                Column {
-                    Text(
-                        "${(sliderValue * 100).toInt()}%",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = 0f..0.4f,
-                        steps = 7,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("Bottom", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("40%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = sliderValue))
-                    showSubtitlePositionPicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSubtitlePositionPicker = false }) { Text("Cancel") }
+        SettingsSliderSheet(
+            title = "Subtitle Vertical Position",
+            value = preferences.subtitleStyle.verticalPosition,
+            valueRange = 0f..0.4f,
+            steps = 7,
+            valueLabel = { "${(it * 100).toInt()}%" },
+            rangeStartLabel = "Bottom",
+            rangeEndLabel = "40%",
+            onDismiss = { showSubtitlePositionPicker = false },
+            onConfirm = {
+                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = it))
+                showSubtitlePositionPicker = false
             },
         )
     }
 
     if (showEqualizerEditor) {
         val bandLevels = preferences.equalizerSettings.bandLevels.toMutableStateList()
-        AlertDialog(
-            onDismissRequest = { showEqualizerEditor = false },
-            title = { Text("Equalizer") },
-            text = {
-                val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
-                LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { "equalizerBand" }) { i ->
+        AdaptiveSheet(onDismissRequest = { showEqualizerEditor = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    "Equalizer",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f),
+                ) {
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { _ -> "band" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
@@ -1570,36 +1520,45 @@ fun SettingsScreen(
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setEqualizerSettings(EqualizerSettings(bandLevels.toList()))
-                    showEqualizerEditor = false
-                }) { Text("Apply") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEqualizerEditor = false }) { Text("Cancel") }
-            },
-        )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = { showEqualizerEditor = false }) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        viewModel.setEqualizerSettings(EqualizerSettings(bandLevels.toList()))
+                        showEqualizerEditor = false
+                    }) { Text("Apply") }
+                }
+            }
+        }
     }
 
     if (showAudioLanguagePicker) {
-        LanguagePickerDialog(
-            currentLanguage = preferences.preferredAudioLanguage,
+        SettingsListPickerSheet(
+            title = "Audio Language",
+            items = languages.map { it.first },
+            label = { code -> languages.find { it.first == code }?.second ?: code ?: "Default" },
+            isSelected = { it == preferences.preferredAudioLanguage },
             onDismiss = { showAudioLanguagePicker = false },
-            onSelect = { language ->
-                viewModel.setPreferredAudioLanguage(language)
+            onSelect = {
+                viewModel.setPreferredAudioLanguage(it)
                 showAudioLanguagePicker = false
             },
         )
     }
 
     if (showSubtitleLanguagePicker) {
-        LanguagePickerDialog(
-            currentLanguage = preferences.preferredSubtitleLanguage,
+        SettingsListPickerSheet(
+            title = "Subtitle Language",
+            items = languages.map { it.first },
+            label = { code -> languages.find { it.first == code }?.second ?: code ?: "Default" },
+            isSelected = { it == preferences.preferredSubtitleLanguage },
             onDismiss = { showSubtitleLanguagePicker = false },
-            onSelect = { language ->
-                viewModel.setPreferredSubtitleLanguage(language)
+            onSelect = {
+                viewModel.setPreferredSubtitleLanguage(it)
                 showSubtitleLanguagePicker = false
             },
         )
@@ -1614,7 +1573,7 @@ private fun SettingsProfileBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
+            .clip(ShapeCache.smooth24)
             .background(MaterialTheme.colorScheme.primaryContainer)
             .padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1653,317 +1612,26 @@ private fun SettingsProfileBanner(
 }
 
 @Composable
-private fun SettingsSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun SettingListItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    trailingText: String? = null,
-    isDestructive: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = 500f),
-        label = "settingItemScale",
-    )
-    val alpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
-        label = "settingItemAlpha",
-    )
-
-    val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-    val supportingColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
-    val iconColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
-            .clip(MaterialTheme.shapes.medium)
-            .tvFocusable().clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            )
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = headlineColor,
-                )
-            },
-            supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
-                {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = supportingColor,
-                    )
-                }
-            },
-            leadingContent = {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(24.dp),
-                )
-            },
-            trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    trailingText?.let { text ->
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
-                    Icon(
-                        Icons.AutoMirrored.Filled.NavigateNext,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = Color.Transparent,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun SettingToggleItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    onClick: (() -> Unit)? = null,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = 500f),
-        label = "toggleItemScale",
-    )
-    val rowAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
-        label = "toggleItemAlpha",
-    )
-    val iconColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing),
-        label = "toggleIconColor",
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale; alpha = rowAlpha }
-            .clip(MaterialTheme.shapes.medium)
-            .tvFocusable().clickable(
-                interactionSource = interactionSource,
-                indication = null,
-            ) { onClick?.invoke() ?: onCheckedChange(!checked) }
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-            },
-            supportingContent = subtitle.takeIf { it.isNotBlank() }?.let {
-                {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            leadingContent = {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(24.dp),
-                )
-            },
-            trailingContent = {
-                Switch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                )
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = Color.Transparent,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun SettingInfoItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-) {
-    ListItem(
-        headlineContent = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-            )
-        },
-        supportingContent = {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = Color.Transparent,
-        ),
-    )
-}
-
-@Composable
 private fun AnimatedSettingsEntrance(
     index: Int,
-    visibleCount: Int,
     content: @Composable () -> Unit,
 ) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
     AnimatedVisibility(
-        visible = index < visibleCount,
+        visible = visible,
         enter = fadeIn(
-            animationSpec = tween(250, delayMillis = (index % 8) * 30)
-        ) + slideInVertically(
-            initialOffsetY = { it / 12 },
-            animationSpec = tween(250, delayMillis = (index % 8) * 30, easing = FastOutSlowInEasing),
+            animationSpec = tween(250, delayMillis = index * AnimationTokens.StaggerDelayPerItem),
+        ) + expandVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
         ),
     ) {
         content()
     }
-}
-
-private data class RadioOption(
-    val title: String,
-    val subtitle: String,
-    val isSelected: Boolean,
-)
-
-@Composable
-private fun RadioPickerDialog(
-    title: String,
-    options: List<RadioOption>,
-    onDismiss: () -> Unit,
-    onSelect: (Int) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.SemiBold) },
-        text = {
-            val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
-            LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(options.size, contentType = { "option" }) { index ->
-                    val option = options[index]
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .tvFocusable().clickable { onSelect(index) }
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = option.isSelected, onClick = { onSelect(index) })
-                        Spacer(Modifier.size(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(option.title, style = MaterialTheme.typography.bodyLarge)
-                            if (option.subtitle.isNotBlank()) {
-                                Text(
-                                    option.subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
-}
-
-@Composable
-private fun LanguagePickerDialog(
-    currentLanguage: String?,
-    onDismiss: () -> Unit,
-    onSelect: (String?) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Language", fontWeight = FontWeight.SemiBold) },
-        text = {
-            val maxListHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
-            LazyColumn(modifier = Modifier.heightIn(max = maxListHeight)) {
-                items(languages, contentType = { "language" }) { (code, name) ->
-                    val isSelected = code == currentLanguage
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .tvFocusable().clickable { onSelect(code) }
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = isSelected, onClick = { onSelect(code) })
-                        Spacer(Modifier.size(12.dp))
-                        Text(name, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 private fun streamingQualityLabel(quality: StreamingQuality): String = when (quality) {
@@ -1983,190 +1651,3 @@ private fun streamingQualityShort(quality: StreamingQuality): String = when (qua
     StreamingQuality.FHD_1080P -> "1080p"
     StreamingQuality.UHD_4K -> "4K"
 }
-
-private val languages = listOf(
-    null to "Default",
-    "aar" to "Afar",
-    "abk" to "Abkhazian",
-    "afr" to "Afrikaans",
-    "aka" to "Akan",
-    "alb" to "Albanian",
-    "amh" to "Amharic",
-    "ara" to "Arabic",
-    "arg" to "Aragonese",
-    "arm" to "Armenian",
-    "asm" to "Assamese",
-    "ava" to "Avaric",
-    "ave" to "Avestan",
-    "aym" to "Aymara",
-    "aze" to "Azerbaijani",
-    "bak" to "Bashkir",
-    "bam" to "Bambara",
-    "baq" to "Basque",
-    "bel" to "Belarusian",
-    "ben" to "Bengali",
-    "bih" to "Bihari",
-    "bis" to "Bislama",
-    "bos" to "Bosnian",
-    "bre" to "Breton",
-    "bul" to "Bulgarian",
-    "bur" to "Burmese",
-    "cat" to "Catalan",
-    "cha" to "Chamorro",
-    "che" to "Chechen",
-    "chi" to "Chinese",
-    "chu" to "Church Slavic",
-    "chv" to "Chuvash",
-    "cor" to "Cornish",
-    "cos" to "Corsican",
-    "cre" to "Cree",
-    "cze" to "Czech",
-    "dan" to "Danish",
-    "div" to "Divehi",
-    "dut" to "Dutch",
-    "dzo" to "Dzongkha",
-    "eng" to "English",
-    "epo" to "Esperanto",
-    "est" to "Estonian",
-    "ewe" to "Ewe",
-    "fao" to "Faroese",
-    "fij" to "Fijian",
-    "fin" to "Finnish",
-    "fre" to "French",
-    "fry" to "Western Frisian",
-    "ful" to "Fulah",
-    "geo" to "Georgian",
-    "ger" to "German",
-    "gla" to "Scottish Gaelic",
-    "gle" to "Irish",
-    "glg" to "Galician",
-    "glv" to "Manx",
-    "grn" to "Guarani",
-    "guj" to "Gujarati",
-    "hat" to "Haitian",
-    "hau" to "Hausa",
-    "heb" to "Hebrew",
-    "her" to "Herero",
-    "hin" to "Hindi",
-    "hmo" to "Hiri Motu",
-    "hrv" to "Croatian",
-    "hun" to "Hungarian",
-    "ibo" to "Igbo",
-    "ice" to "Icelandic",
-    "ido" to "Ido",
-    "iii" to "Sichuan Yi",
-    "iku" to "Inuktitut",
-    "ile" to "Interlingue",
-    "ina" to "Interlingua",
-    "ind" to "Indonesian",
-    "ipk" to "Inupiaq",
-    "ita" to "Italian",
-    "jav" to "Javanese",
-    "jpn" to "Japanese",
-    "kal" to "Kalaallisut",
-    "kan" to "Kannada",
-    "kas" to "Kashmiri",
-    "kau" to "Kanuri",
-    "kaz" to "Kazakh",
-    "khm" to "Central Khmer",
-    "kik" to "Kikuyu",
-    "kin" to "Kinyarwanda",
-    "kir" to "Kirghiz",
-    "kom" to "Komi",
-    "kon" to "Kongo",
-    "kor" to "Korean",
-    "kua" to "Kuanyama",
-    "kur" to "Kurdish",
-    "lao" to "Lao",
-    "lat" to "Latin",
-    "lav" to "Latvian",
-    "lim" to "Limburgan",
-    "lin" to "Lingala",
-    "lit" to "Lithuanian",
-    "ltz" to "Luxembourgish",
-    "lub" to "Luba-Katanga",
-    "lug" to "Ganda",
-    "mac" to "Macedonian",
-    "mah" to "Marshallese",
-    "mal" to "Malayalam",
-    "mao" to "Maori",
-    "mar" to "Marathi",
-    "may" to "Malay",
-    "mlg" to "Malagasy",
-    "mlt" to "Maltese",
-    "mon" to "Mongolian",
-    "nau" to "Nauru",
-    "nav" to "Navajo",
-    "nbl" to "South Ndebele",
-    "nde" to "North Ndebele",
-    "ndo" to "Ndonga",
-    "nep" to "Nepali",
-    "nno" to "Norwegian Nynorsk",
-    "nob" to "Norwegian Bokm\u00e5l",
-    "nor" to "Norwegian",
-    "nya" to "Chichewa",
-    "oci" to "Occitan",
-    "oji" to "Ojibwa",
-    "ori" to "Oriya",
-    "orm" to "Oromo",
-    "oss" to "Ossetian",
-    "pan" to "Panjabi",
-    "per" to "Persian",
-    "pli" to "Pali",
-    "pol" to "Polish",
-    "por" to "Portuguese",
-    "pus" to "Pushto",
-    "que" to "Quechua",
-    "roh" to "Romansh",
-    "rum" to "Romanian",
-    "run" to "Rundi",
-    "rus" to "Russian",
-    "sag" to "Sango",
-    "san" to "Sanskrit",
-    "sin" to "Sinhala",
-    "slo" to "Slovak",
-    "slv" to "Slovenian",
-    "sme" to "Northern Sami",
-    "smo" to "Samoan",
-    "sna" to "Shona",
-    "snd" to "Sindhi",
-    "som" to "Somali",
-    "sot" to "Southern Sotho",
-    "spa" to "Spanish",
-    "srd" to "Sardinian",
-    "srp" to "Serbian",
-    "ssw" to "Swati",
-    "sun" to "Sundanese",
-    "swa" to "Swahili",
-    "swe" to "Swedish",
-    "tah" to "Tahitian",
-    "tam" to "Tamil",
-    "tat" to "Tatar",
-    "tel" to "Telugu",
-    "tgk" to "Tajik",
-    "tgl" to "Tagalog",
-    "tha" to "Thai",
-    "tib" to "Tibetan",
-    "tir" to "Tigrinya",
-    "ton" to "Tonga",
-    "tsn" to "Tswana",
-    "tso" to "Tsonga",
-    "tuk" to "Turkmen",
-    "tur" to "Turkish",
-    "twi" to "Twi",
-    "uig" to "Uighur",
-    "ukr" to "Ukrainian",
-    "urd" to "Urdu",
-    "uzb" to "Uzbek",
-    "ven" to "Venda",
-    "vie" to "Vietnamese",
-    "vol" to "Volap\u00fck",
-    "wel" to "Welsh",
-    "wln" to "Walloon",
-    "wol" to "Wolof",
-    "xho" to "Xhosa",
-    "yid" to "Yiddish",
-    "yor" to "Yoruba",
-    "zha" to "Zhuang",
-    "zul" to "Zulu",
-)
