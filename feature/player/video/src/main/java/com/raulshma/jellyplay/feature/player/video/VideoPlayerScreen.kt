@@ -21,12 +21,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -82,12 +82,14 @@ import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
+import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
@@ -123,11 +125,13 @@ fun VideoPlayerScreen(
     val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(true) }
+    var controlsHasFocus by remember { mutableStateOf(false) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
-    
+
+    val isTv = LocalTvMode.current
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -273,11 +277,9 @@ fun VideoPlayerScreen(
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
+        } else if (isTv && showControls) {
+            showControls = false
         } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
-            // Only ExoPlayer supports mini-mode currently.
-            // MPV/LibVLC views are tied to this composable's AndroidView and can't
-            // survive being transferred easily.
-
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
@@ -378,7 +380,6 @@ fun VideoPlayerScreen(
         derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
-    val isTv = LocalTvMode.current
 
     Box(
         modifier = Modifier
@@ -392,20 +393,36 @@ fun VideoPlayerScreen(
                             NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
                                 if (!showControls) {
                                     showControls = true
+                                    true
                                 } else {
-                                    doTogglePlayPause()
+                                    false
                                 }
-                                true
                             }
                             NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                doSeekForward()
-                                showControls = true
-                                true
+                                if (!showControls) {
+                                    doSeekForward()
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                             NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
-                                doSeekBack()
-                                showControls = true
-                                true
+                                if (!showControls) {
+                                    doSeekBack()
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (!showControls) {
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                             NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                 doTogglePlayPause()
@@ -606,6 +623,30 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp, end = 16.dp),
         )
 
+        if (uiState.showVideoStats) {
+            VideoStatsOverlay(
+                stats = uiState.videoStats,
+                currentPositionMs = currentPosition,
+                durationMs = duration,
+                playbackSpeed = playbackSpeed,
+                isPlaying = isPlaying,
+                playbackState = when {
+                    uiState.playerError != null -> "Error"
+                    !isPlaying -> "Paused"
+                    else -> "Playing"
+                },
+                playMethod = uiState.playMethod,
+                streamingQuality = uiState.preferredPlayerType.name,
+                playerType = uiState.preferredPlayerType.name,
+                decoderMode = uiState.decoderMode.displayName,
+                audioSessionId = 0,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 60.dp)
+                    .width(280.dp),
+            )
+        }
+
         AutoAspectRatioBadge(
             detectedAspectRatio = detectedAspectRatio,
             aspectRatio = aspectRatio,
@@ -631,7 +672,7 @@ fun VideoPlayerScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                shape = ShapeCache.smooth12,
+                shape = ShapeCache.smoothPill,
                 containerColor = Color.White.copy(alpha = 0.15f),
                 contentColor = Color.White,
             )
@@ -713,6 +754,10 @@ fun VideoPlayerScreen(
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
             isSyncPlaySynced = uiState.isSyncPlaySynced,
             isSyncPlaySyncing = uiState.isSyncPlaySyncing,
+            showVideoStats = uiState.showVideoStats,
+            onVideoStatsClick = { viewModel.toggleVideoStats() },
+            bufferedPosition = uiState.bufferedPosition,
+            onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -761,8 +806,8 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls) {
-        if (showControls) {
+    LaunchedEffect(showControls, controlsHasFocus) {
+        if (showControls && !controlsHasFocus) {
             delay(uiState.controlsTimeoutMs)
             showControls = false
         }
@@ -826,14 +871,16 @@ private fun BoxScope.AutoAspectRatioBadge(
             .padding(top = 60.dp),
     ) {
         Surface(
-            shape = ShapeCache.smooth16,
-            color = Color.White.copy(alpha = 0.15f),
+            shape = ShapeCache.smoothPill,
+            color = Color.White.copy(alpha = 0.12f),
         ) {
             Text(
                 text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
             )
         }
     }
@@ -890,7 +937,7 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.PlaybackInfo -> {
-            ModalBottomSheet(
+            PlayerModalBottomSheet(
                 onDismissRequest = dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
             ) {
@@ -1031,7 +1078,7 @@ private fun OcrResultSheet(
     onDismiss: () -> Unit,
     context: Context,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
@@ -1043,8 +1090,8 @@ private fun OcrResultSheet(
         ) {
             Text(
                 "OCR Subtitle Text",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(12.dp))
             if (isOcrRunning) {
@@ -1078,6 +1125,7 @@ private fun OcrResultSheet(
                             )
                         },
                         modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smoothPill,
                     ) { Text("Copy") }
                     FilledTonalButton(
                         onClick = {
@@ -1088,6 +1136,7 @@ private fun OcrResultSheet(
                             context.startActivity(Intent.createChooser(intent, "Share"))
                         },
                         modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smoothPill,
                     ) { Text("Share") }
                 }
             }

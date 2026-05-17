@@ -86,6 +86,12 @@ class ExoPlayerEngine(
     private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
 
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
@@ -97,6 +103,8 @@ class ExoPlayerEngine(
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
     private val equalizerHelper = EqualizerHelper()
+
+    private var totalDroppedFrames: Long = 0
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -162,7 +170,7 @@ class ExoPlayerEngine(
             .setEnableDecoderFallback(true)
 
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, 50_000, 1_000, 3_000)
+            .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
             .setTargetBufferBytes(-1)
             .build()
 
@@ -440,6 +448,8 @@ class ExoPlayerEngine(
             while (isActive) {
                 delay(500)
                 trySend(p.currentPosition)
+                _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                updateVideoStats()
             }
         }
 
@@ -447,6 +457,57 @@ class ExoPlayerEngine(
             ticker.cancel()
             p.removeListener(posListener)
         }
+    }
+
+    private fun updateVideoStats() {
+        val p = player ?: return
+        val videoFormat = p.videoFormat
+        val audioFormat = p.audioFormat
+
+        _videoStats.value = EngineVideoStats(
+            videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
+            videoDecoder = videoFormat?.codecs,
+            videoResolution = videoFormat?.let { f ->
+                val w = f.width
+                val h = f.height
+                if (w > 0 && h > 0) "${w}x${h}" else null
+            },
+            videoFrameRate = videoFormat?.frameRate?.let { if (it > 0f) it else null },
+            videoBitrate = videoFormat?.bitrate?.let { if (it > 0) it else null },
+            videoColorRange = videoFormat?.colorInfo?.let { ci ->
+                when (ci.colorRange) {
+                    androidx.media3.common.C.COLOR_RANGE_LIMITED -> "Limited"
+                    androidx.media3.common.C.COLOR_RANGE_FULL -> "Full"
+                    else -> null
+                }
+            },
+            videoHdrType = videoFormat?.colorInfo?.let { ci ->
+                when {
+                    ci.hdrStaticInfo != null -> "HDR10"
+                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"
+                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "Dolby Vision"
+                    ci.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_SDR -> null
+                    else -> null
+                }
+            },
+            audioCodec = audioFormat?.sampleMimeType?.let { codecFromMime(it) },
+            audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
+            audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
+            audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
+            estimatedBandwidthBps = try {
+                val bw = p.bufferedPosition
+                0L
+            } catch (_: Exception) { 0L },
+            droppedFrames = totalDroppedFrames,
+            totalVideoFrames = 0,
+            bufferedPositionMs = _bufferedPositionMs.value,
+        )
+    }
+
+    private fun codecFromMime(mime: String): String = when {
+        mime.startsWith("video/") -> mime.removePrefix("video/")
+        mime.startsWith("audio/") -> mime.removePrefix("audio/")
+        else -> mime
     }
 
     private fun applyAudioEffects() {

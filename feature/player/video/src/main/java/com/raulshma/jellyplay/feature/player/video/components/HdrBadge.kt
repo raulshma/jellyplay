@@ -1,28 +1,22 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
 fun HdrBadge(
@@ -40,24 +34,35 @@ fun HdrBadge(
         else -> hdrType.uppercase()
     }
 
-    val bgColor = when (hdrType.lowercase()) {
-        "dolbyvision", "dolby_vision", "dovi" -> Color(0xFF1A1A2E)
-        else -> Color.White.copy(alpha = 0.15f)
+    val isDolby = hdrType.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi")
+
+    val bgColor = if (isDolby) {
+        Color(0xFF1A1A2E).copy(alpha = 0.85f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+    }
+
+    val borderColor = if (isDolby) {
+        Color(0xFFB8860B).copy(alpha = 0.4f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     }
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(ShapeCache.smoothPill)
             .background(bgColor)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .border(1.dp, borderColor, ShapeCache.smoothPill)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
             text = label,
-            color = Color.White,
+            color = if (isDolby) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
         )
     }
 }

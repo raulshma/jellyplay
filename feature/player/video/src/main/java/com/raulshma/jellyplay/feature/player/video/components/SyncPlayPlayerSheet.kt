@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -20,10 +21,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -73,13 +72,16 @@ fun SyncPlayPlayerSheet(
         ) {
             Text(
                 "SyncPlay",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
             )
 
+            val statusColor = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107)
             Surface(
-                shape = ShapeCache.smooth12,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = ShapeCache.smooth16,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.2f)),
             ) {
                 Row(
                     modifier = Modifier
@@ -89,15 +91,16 @@ fun SyncPlayPlayerSheet(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                        color = statusColor,
                         modifier = Modifier.size(12.dp),
                     ) {}
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             groupName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -114,12 +117,19 @@ fun SyncPlayPlayerSheet(
                             )
                         }
                     }
-                    Text(
-                        if (isSynced) "Synced" else "Buffering",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107),
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Surface(
+                        shape = ShapeCache.smoothPill,
+                        color = statusColor.copy(alpha = 0.15f),
+                    ) {
+                        Text(
+                            if (isSynced) "Synced" else "Buffering",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
                 }
             }
 
@@ -130,6 +140,7 @@ fun SyncPlayPlayerSheet(
                 FilledTonalButton(
                     onClick = onTogglePlayPause,
                     modifier = Modifier.weight(1f).tvFocusable(),
+                    shape = ShapeCache.smoothPill,
                 ) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -142,6 +153,7 @@ fun SyncPlayPlayerSheet(
                 FilledTonalButton(
                     onClick = onStop,
                     modifier = Modifier.tvFocusable(),
+                    shape = ShapeCache.smoothPill,
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
                 }
@@ -173,6 +185,7 @@ fun SyncPlayPlayerSheet(
             FilledTonalButton(
                 onClick = onToggleChatOverlay,
                 modifier = Modifier.fillMaxWidth().tvFocusable(),
+                shape = ShapeCache.smoothPill,
             ) {
                 Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
@@ -181,8 +194,8 @@ fun SyncPlayPlayerSheet(
 
             if (chatMessages.isNotEmpty()) {
                 Surface(
-                    shape = ShapeCache.smooth12,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = ShapeCache.smooth16,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 ) {
                     SyncPlayChatPanel(
                         messages = chatMessages,
@@ -198,6 +211,7 @@ fun SyncPlayPlayerSheet(
             FilledTonalButton(
                 onClick = onLeave,
                 modifier = Modifier.fillMaxWidth().tvFocusable(),
+                shape = ShapeCache.smoothPill,
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))

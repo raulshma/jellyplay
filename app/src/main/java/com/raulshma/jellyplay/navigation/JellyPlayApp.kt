@@ -269,8 +269,8 @@ private fun MainContent(
                     colorScheme = tvDarkColorScheme(
                         background = MaterialTheme.colorScheme.background,
                         surface = MaterialTheme.colorScheme.surfaceContainer,
-                        onBackground = MaterialTheme.colorScheme.onBackground,
-                        onSurface = MaterialTheme.colorScheme.onSurface,
+                        onBackground = Color.White,
+                        onSurface = Color.White,
                         primary = MaterialTheme.colorScheme.primary,
                         onPrimary = MaterialTheme.colorScheme.onPrimary,
                         secondary = MaterialTheme.colorScheme.secondary,
@@ -325,7 +325,10 @@ private fun MainContent(
                                         audioPlaybackManager.skipToNext()
                                     },
                                 )
-                                NavigationBar(containerColor = animatedNavBarColor) {
+                                NavigationBar(
+                                    containerColor = Color(0xFF111111),
+                                    tonalElevation = 0.dp,
+                                ) {
                                     activeTopLevelRoutes.forEach { (route, label) ->
                                         NavigationBarItem(
                                             selected = route == currentTopLevel,
@@ -335,11 +338,11 @@ private fun MainContent(
                                             },
                                             label = { Text(label) },
                                             colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                                unselectedIconColor = Color.White.copy(alpha = 0.6f),
-                                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                selectedIconColor = Color.White,
+                                                selectedTextColor = Color.White,
+                                                unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                                                unselectedTextColor = Color.White.copy(alpha = 0.45f),
                                             ),
                                         )
                                     }
@@ -460,6 +463,11 @@ private fun TvMainLayout(
     }
     var focusedRailIndex by remember { mutableStateOf(0) }
 
+    val drawerState = androidx.tv.material3.rememberDrawerState(
+        initialValue = androidx.tv.material3.DrawerValue.Closed
+    )
+    val currentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -472,7 +480,7 @@ private fun TvMainLayout(
             },
     ) {
         NavigationDrawer(
-            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Closed),
+            drawerState = drawerState,
             modifier = Modifier.padding(vertical = 8.dp),
             drawerContent = {
                 Column(
@@ -487,14 +495,16 @@ private fun TvMainLayout(
                             onClick = {
                                 navigator.navigate(route)
                                 focusedRailIndex = index
+                                drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
                             },
                             leadingContent = {
-                                NavIcon(route, label)
+                                NavIcon(route, label, tint = Color.White)
                             },
                             content = {
                                 Text(
                                     label,
                                     style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
                                 )
                             },
                             modifier = Modifier
@@ -526,21 +536,22 @@ private fun TvMainLayout(
         )
     }
 
-    LaunchedEffect(currentTopLevel) {
+    LaunchedEffect(currentRoute) {
         val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
         focusedRailIndex = initialIndex
+        drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
         try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
     }
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String) {
+private fun NavIcon(route: Route, label: String, tint: Color = MaterialTheme.colorScheme.onSurface) {
     when (route) {
-        Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-        Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label)
+        Route.Home -> Icon(Icons.Default.Home, contentDescription = label, tint = tint)
+        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label, tint = tint)
+        Route.Search -> Icon(Icons.Default.Search, contentDescription = label, tint = tint)
+        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label, tint = tint)
+        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label, tint = tint)
         else -> {}
     }
 }

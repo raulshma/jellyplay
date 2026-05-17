@@ -40,6 +40,8 @@ internal class PlaybackProgressReporter(
                 uiState.update { it.copy(
                     currentPosition = pos,
                     duration = engine.durationMs.coerceAtLeast(0L),
+                    bufferedPosition = engine.bufferedPositionMs.value,
+                    videoStats = engine.videoStats.value,
                 ) }
                 checkAutoSkip(pos)
             }

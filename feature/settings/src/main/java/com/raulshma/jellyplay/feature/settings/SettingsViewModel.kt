@@ -301,6 +301,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
     }
 
+    fun setVideoPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
+        viewModelScope.launch { preferencesStore.setVideoPreloadBufferSize(size) }
+    }
+
     fun setSkipIntroEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setSkipIntroEnabled(enabled) }
     }

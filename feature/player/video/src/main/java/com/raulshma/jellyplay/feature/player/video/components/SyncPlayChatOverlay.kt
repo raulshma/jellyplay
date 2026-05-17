@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,18 +18,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -48,7 +49,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 fun SyncPlayChatOverlay(
@@ -67,7 +67,9 @@ fun SyncPlayChatOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.45f)
                 .fillMaxHeight(0.55f)
-                .background(Color.Black.copy(alpha = 0.6f), ShapeCache.smooth12)
+                .clip(ShapeCache.smooth20)
+                .background(Color.Black.copy(alpha = 0.55f))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), ShapeCache.smooth20)
                 .padding(12.dp),
         ) {
             ChatContent(
@@ -125,14 +127,19 @@ private fun ChatContent(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(messages, key = { it.id }) { message ->
-                Column {
+                Column(
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth12)
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
                     Text(
                         buildAnnotatedString {
                             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = 12.sp)) {
                                 append(message.userName)
                             }
                         },
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.labelSmall,
                     )
                     Text(
@@ -147,12 +154,12 @@ private fun ChatContent(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                placeholder = { Text("Message...", color = Color.White.copy(alpha = 0.5f)) },
+                placeholder = { Text("Message...", color = Color.White.copy(alpha = 0.4f)) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall.copy(color = Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -164,8 +171,13 @@ private fun ChatContent(
                         }
                     },
                 ),
-                modifier = Modifier.weight(1f).tvFocusable(),
-                shape = ShapeCache.smooth20,
+                modifier = Modifier.weight(1f),
+                shape = ShapeCache.smoothPill,
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                ),
             )
             TextButton(
                 onClick = {
@@ -174,9 +186,13 @@ private fun ChatContent(
                         inputText = ""
                     }
                 },
-                modifier = Modifier.tvFocusable(),
+                modifier = Modifier,
             ) {
-                Text("Send", color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Send",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

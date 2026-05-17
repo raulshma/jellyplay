@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToLong
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -69,16 +70,23 @@ fun SubtitleStyleSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
             Text(
                 "Subtitle Settings",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
-            Text("Font Size: ${fontSize}sp", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Font Size: ${fontSize}sp",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Slider(
                 value = fontSize.toFloat(),
                 onValueChange = { fontSize = it.toInt() },
@@ -95,7 +103,12 @@ fun SubtitleStyleSheet(
             )
 
             Spacer(Modifier.height(8.dp))
-            Text("Font Color", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Font Color",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Spacer(Modifier.height(4.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -114,7 +127,12 @@ fun SubtitleStyleSheet(
             }
 
             Spacer(Modifier.height(12.dp))
-            Text("Background Color", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Background Color",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Spacer(Modifier.height(4.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -133,7 +151,12 @@ fun SubtitleStyleSheet(
             }
 
             Spacer(Modifier.height(8.dp))
-            Text("Background Opacity: ${(backgroundOpacity * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Background Opacity: ${(backgroundOpacity * 100).toInt()}%",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Slider(
                 value = backgroundOpacity,
                 onValueChange = { backgroundOpacity = it },
@@ -150,15 +173,21 @@ fun SubtitleStyleSheet(
             )
 
             Spacer(Modifier.height(12.dp))
-            Text("Edge Type", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Edge Type",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Spacer(Modifier.height(4.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SubtitleEdgeType.entries.forEach { type ->
+                    val isSelected = edgeType == type
                     FilterChip(
-                        selected = edgeType == type,
+                        selected = isSelected,
                         onClick = {
                             edgeType = type
                             onStyleChange(currentStyle.copy(edgeType = type))
@@ -173,15 +202,32 @@ fun SubtitleStyleSheet(
                                     SubtitleEdgeType.DEPRESSED -> "Depressed"
                                 },
                                 fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             )
                         },
+                        shape = ShapeCache.smoothPill,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = Color.Transparent,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                            enabled = true,
+                            selected = isSelected,
+                        ),
                     )
                 }
             }
 
             if (edgeType != SubtitleEdgeType.NONE) {
                 Spacer(Modifier.height(8.dp))
-                Text("Edge Color", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Edge Color",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                    ),
+                )
                 Spacer(Modifier.height(4.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -207,7 +253,12 @@ fun SubtitleStyleSheet(
                 offsetMs > 0 -> "+${"%.1f".format(offsetSec)}s"
                 else -> "${"%.1f".format(offsetSec)}s"
             }
-            Text("Subtitle Offset: $offsetLabel", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Subtitle Offset: $offsetLabel",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Slider(
                 value = offsetMs.toFloat(),
                 onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
@@ -224,7 +275,12 @@ fun SubtitleStyleSheet(
             )
 
             Spacer(Modifier.height(12.dp))
-            Text("Vertical Position: ${(verticalPosition * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Vertical Position: ${(verticalPosition * 100).toInt()}%",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
             Slider(
                 value = verticalPosition,
                 onValueChange = { verticalPosition = it },
@@ -258,7 +314,8 @@ fun SubtitleStyleSheet(
                         verticalPosition = default.verticalPosition
                         onStyleChange(default)
                     },
-                    label = { Text("Reset", fontSize = 12.sp) },
+                    label = { Text("Reset", fontSize = 12.sp, fontWeight = FontWeight.Medium) },
+                    shape = ShapeCache.smoothPill,
                 )
             }
         }
@@ -273,16 +330,17 @@ private fun ColorChip(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(34.dp)
             .clip(CircleShape)
             .background(color)
             .then(
                 if (isSelected) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 } else {
                     Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape)
                 }
             )
-            .tvFocusable().clickable(onClick = onClick),
+            .tvFocusable()
+            .clickable(onClick = onClick),
     )
 }

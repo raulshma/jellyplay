@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,13 +15,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,10 +47,12 @@ fun SubtitleDownloadSheet(
         ) {
             Text(
                 "Download Subtitles",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
             if (isLoading) {
                 CircularProgressIndicator(
@@ -58,23 +65,36 @@ fun SubtitleDownloadSheet(
                     "No remote subtitles available.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
                 )
             } else {
                 LazyColumn {
-                    itemsIndexed(subtitles, contentType = { _, _ -> "subtitle" }) { _, sub ->
+                    itemsIndexed(subtitles, contentType = { _, _ -> "subtitle" }) { index, sub ->
+                        val shape = when {
+                            subtitles.size == 1 -> ShapeCache.smooth16
+                            index == 0 -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(0, subtitles.size)
+                            index == subtitles.lastIndex -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, subtitles.size)
+                            else -> ShapeCache.smooth8
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .tvFocusable().clickable { onDownload(sub) }
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .clip(shape)
+                                .background(Color.White.copy(alpha = 0.04f))
+                                .tvFocusable()
+                                .clickable { onDownload(sub) }
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     sub.name ?: sub.language ?: "Unknown",
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Medium,
+                                    ),
                                 )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -89,7 +109,9 @@ fun SubtitleDownloadSheet(
                                     sub.format?.let {
                                         Text(
                                             it.uppercase(),
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontFamily = FontFamily.Monospace,
+                                            ),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
@@ -102,11 +124,15 @@ fun SubtitleDownloadSheet(
                                     }
                                 }
                             }
-                            Text(
-                                "${sub.downloadCount}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            sub.downloadCount?.let { count ->
+                                Text(
+                                    "$count",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

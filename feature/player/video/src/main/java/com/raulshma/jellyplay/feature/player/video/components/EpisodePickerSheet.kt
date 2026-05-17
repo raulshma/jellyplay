@@ -124,7 +124,7 @@ internal fun EpisodePickerSheet(
                         }
                         Surface(
                             modifier = Modifier
-                                .clip(ShapeCache.smooth20)
+                                .clip(ShapeCache.smoothPill)
                                 .then(if (season.id == seasons.firstOrNull()?.id) Modifier.focusRequester(seasonFocusRequester) else Modifier)
                                 .clickable { onSeasonSelect(season.id) },
                             color = containerColor,
@@ -135,7 +135,7 @@ internal fun EpisodePickerSheet(
                                 text = season.name ?: "Season ${season.indexNumber ?: 1}",
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                             )
                         }
                     }
@@ -329,15 +329,16 @@ private fun EpisodeRow(
                     Spacer(Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .clip(ShapeCache.smooth4)
+                            .clip(ShapeCache.smoothPill)
                             .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
                     ) {
                         Text(
                             text = "Now Playing",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
                             color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }

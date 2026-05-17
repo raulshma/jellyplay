@@ -43,7 +43,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
@@ -104,6 +106,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
+import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
@@ -149,33 +153,26 @@ fun AudioPlayerScreen(
     val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
 
+    val artworkColors = rememberArtworkColors(viewModel.albumArtUrl.ifBlank { null })
+    val tintedBg = artworkColors?.tintedBackground ?: Color(0xFF2D1F2D)
+    val tintedBgLight = artworkColors?.tintedBackgroundLight ?: Color(0xFF3D2F3D)
+    val accentColor = artworkColors?.accentColor ?: Color(0xFFE8B4C8)
+    val pillSurface = artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f)
+    val pillSurfaceDark = artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f)
+
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            BlurredArtworkBackground(
-                albumArtUrl = viewModel.albumArtUrl,
-                albumArtBlurHash = viewModel.albumArtBlurHash,
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.4f),
-                                Color.Black.copy(alpha = 0.15f),
-                                Color.Black.copy(alpha = 0.6f),
-                                Color.Black.copy(alpha = 0.85f),
-                            ),
-                            startY = 0f,
-                            endY = Float.POSITIVE_INFINITY,
-                        )
-                    ),
-            )
-
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(tintedBgLight, tintedBg, tintedBg),
+                    )
+                ),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -183,31 +180,30 @@ fun AudioPlayerScreen(
                     .padding(WindowInsets.navigationBars.asPaddingValues()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                PlayerTopBar(
+                // ── Top bar ──
+                PixelPlayerTopBar(
                     onBack = onBack,
+                    hasLyrics = viewModel.lyrics.isNotEmpty(),
+                    onLyricsClick = { showLyrics = true },
+                    onQueueClick = { showQueue = true },
+                    onMenuToggle = { showMenu = it },
+                    showMenu = showMenu,
                     speed = viewModel.speed,
                     dialogueBoostEnabled = viewModel.dialogueBoostEnabled,
                     dialogueBoostStrength = viewModel.dialogueBoostStrength,
                     nightModeEnabled = viewModel.nightModeEnabled,
                     nightModeStrength = viewModel.nightModeStrength,
-                    hasLyrics = viewModel.lyrics.isNotEmpty(),
-                    albumArtUrl = viewModel.albumArtUrl,
-                    title = viewModel.title,
-                    artist = viewModel.artist,
-                    showMenu = showMenu,
-                    onMenuToggle = { showMenu = it },
-                    onQueueClick = { showMenu = false; showQueue = true },
                     onSpeedClick = { showMenu = false; showSpeedPicker = true },
                     onEqualizerClick = { showMenu = false; showEqualizer = true },
                     onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
                     onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                    onLyricsClick = { showMenu = false; showLyrics = true },
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
                 )
 
                 if (isExpanded) {
+                    // Tablet: side-by-side layout
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -228,9 +224,7 @@ fun AudioPlayerScreen(
                                 isExpanded = true,
                             )
                         }
-
                         Spacer(Modifier.width(32.dp))
-
                         Column(
                             modifier = Modifier
                                 .weight(1f)
@@ -238,39 +232,40 @@ fun AudioPlayerScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            TrackInfoSection(
-                                title = viewModel.title,
-                                artist = viewModel.artist,
-                            )
-
+                            TrackInfoSection(title = viewModel.title, artist = viewModel.artist)
                             Spacer(Modifier.height(28.dp))
-
-                            ProgressSlider(
+                            PixelProgressSection(
                                 currentPosition = viewModel.currentPosition,
                                 duration = viewModel.duration,
-                                onSeek = { fraction ->
-                                    if (viewModel.duration > 0) {
-                                        viewModel.seekTo((fraction * viewModel.duration).toLong())
-                                    }
+                                isPlaying = viewModel.isPlaying,
+                                accentColor = accentColor,
+                                onSeek = { frac ->
+                                    if (viewModel.duration > 0) viewModel.seekTo((frac * viewModel.duration).toLong())
                                 },
                             )
-
-                            Spacer(Modifier.height(12.dp))
-
-                            TransportControls(
+                            Spacer(Modifier.height(16.dp))
+                            PixelTransportControls(
                                 isPlaying = viewModel.isPlaying,
-                                shuffleMode = viewModel.shuffleMode,
-                                repeatMode = viewModel.repeatMode,
                                 onTogglePlayPause = { viewModel.togglePlayPause() },
                                 onSkipPrevious = { viewModel.skipToPrevious() },
                                 onSkipNext = { viewModel.skipToNext() },
+                                pillSurface = pillSurface,
+                                accentColor = accentColor,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            PixelSecondaryControls(
+                                shuffleMode = viewModel.shuffleMode,
+                                repeatMode = viewModel.repeatMode,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                                pillSurfaceDark = pillSurfaceDark,
+                                accentColor = accentColor,
                             )
                         }
                     }
                 } else {
-                    Spacer(Modifier.weight(0.6f))
+                    // Phone: vertical layout (Pixel Player style)
+                    Spacer(Modifier.weight(0.5f))
 
                     AlbumArtwork(
                         albumArtUrl = viewModel.albumArtUrl,
@@ -280,7 +275,7 @@ fun AudioPlayerScreen(
                         isExpanded = false,
                     )
 
-                    Spacer(Modifier.weight(0.5f))
+                    Spacer(Modifier.weight(0.4f))
 
                     Column(
                         modifier = Modifier
@@ -289,36 +284,35 @@ fun AudioPlayerScreen(
                             .padding(horizontal = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        TrackInfoSection(
-                            title = viewModel.title,
-                            artist = viewModel.artist,
-                        )
-
-                        Spacer(Modifier.height(28.dp))
-
-                        ProgressSlider(
+                        TrackInfoSection(title = viewModel.title, artist = viewModel.artist)
+                        Spacer(Modifier.height(24.dp))
+                        PixelProgressSection(
                             currentPosition = viewModel.currentPosition,
                             duration = viewModel.duration,
-                            onSeek = { fraction ->
-                                if (viewModel.duration > 0) {
-                                    viewModel.seekTo((fraction * viewModel.duration).toLong())
-                                }
+                            isPlaying = viewModel.isPlaying,
+                            accentColor = accentColor,
+                            onSeek = { frac ->
+                                if (viewModel.duration > 0) viewModel.seekTo((frac * viewModel.duration).toLong())
                             },
                         )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        TransportControls(
+                        Spacer(Modifier.height(20.dp))
+                        PixelTransportControls(
                             isPlaying = viewModel.isPlaying,
-                            shuffleMode = viewModel.shuffleMode,
-                            repeatMode = viewModel.repeatMode,
                             onTogglePlayPause = { viewModel.togglePlayPause() },
                             onSkipPrevious = { viewModel.skipToPrevious() },
                             onSkipNext = { viewModel.skipToNext() },
+                            pillSurface = pillSurface,
+                            accentColor = accentColor,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        PixelSecondaryControls(
+                            shuffleMode = viewModel.shuffleMode,
+                            repeatMode = viewModel.repeatMode,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                            pillSurfaceDark = pillSurfaceDark,
+                            accentColor = accentColor,
                         )
-
                         Spacer(Modifier.height(16.dp))
                     }
                 }
@@ -629,53 +623,30 @@ private fun LyricsSheet(
     }
 }
 
-@Composable
-private fun BlurredArtworkBackground(
-    albumArtUrl: String,
-    albumArtBlurHash: String?,
-) {
-    if (albumArtUrl.isNotBlank()) {
-        MediaImage(
-            url = albumArtUrl,
-            contentDescription = null,
-            blurHash = albumArtBlurHash,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(60.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                .scale(1.3f)
-                .graphicsLayer { alpha = 0.55f },
-            contentScale = ContentScale.Crop,
-        )
-    }
-}
+
+
 
 @Composable
-private fun PlayerTopBar(
+private fun PixelPlayerTopBar(
     onBack: () -> Unit,
+    hasLyrics: Boolean,
+    onLyricsClick: () -> Unit,
+    onQueueClick: () -> Unit,
+    showMenu: Boolean,
+    onMenuToggle: (Boolean) -> Unit,
     speed: Float,
     dialogueBoostEnabled: Boolean,
     dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength,
     nightModeEnabled: Boolean,
     nightModeStrength: com.raulshma.jellyplay.core.model.EffectStrength,
-    hasLyrics: Boolean,
-    albumArtUrl: String,
-    title: String,
-    artist: String,
-    showMenu: Boolean,
-    onMenuToggle: (Boolean) -> Unit,
-    onQueueClick: () -> Unit,
     onSpeedClick: () -> Unit,
     onEqualizerClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
-    onLyricsClick: () -> Unit,
     onAmbientClick: () -> Unit,
 ) {
-    var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
-    var showNightModeSubmenu by remember { mutableStateOf(false) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -685,125 +656,57 @@ private fun PlayerTopBar(
     ) {
         IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
             Icon(
-                Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                Icons.Default.KeyboardArrowDown, "Minimize",
                 tint = Color.White,
+                modifier = Modifier.size(28.dp),
             )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "NOW PLAYING",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.7f),
-                letterSpacing = 2.sp,
-            )
-        }
-        Box {
-            IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
-                Icon(Icons.Default.MoreVert, "More", tint = Color.White)
+        Text(
+            "Now Playing",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White.copy(alpha = 0.8f),
+            letterSpacing = 1.sp,
+        )
+        Row {
+            if (hasLyrics) {
+                IconButton(onClick = onLyricsClick, modifier = Modifier.tvFocusable()) {
+                    Icon(Icons.Default.Mic, "Lyrics", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
             }
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { onMenuToggle(false) },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Queue") },
-                    onClick = onQueueClick,
-                    leadingIcon = { Icon(Icons.Default.QueueMusic, null) },
-                )
-                DropdownMenuItem(
-                    text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
-                    onClick = onSpeedClick,
-                    leadingIcon = { Icon(Icons.Default.Speed, null) },
-                )
-                DropdownMenuItem(
-                    text = { Text("Equalizer") },
-                    onClick = onEqualizerClick,
-                    leadingIcon = { Icon(Icons.Default.Tune, null) },
-                )
-                if (showDialogueBoostSubmenu) {
+            IconButton(onClick = onQueueClick, modifier = Modifier.tvFocusable()) {
+                Icon(Icons.Default.QueueMusic, "Queue", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            Box {
+                IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
+                    Icon(Icons.Default.MoreVert, "More", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { onMenuToggle(false) }) {
                     DropdownMenuItem(
-                        text = { Text("← Dialogue Boost") },
-                        onClick = { showDialogueBoostSubmenu = false },
+                        text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
+                        onClick = onSpeedClick,
+                        leadingIcon = { Icon(Icons.Default.Speed, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Equalizer") },
+                        onClick = onEqualizerClick,
+                        leadingIcon = { Icon(Icons.Default.Tune, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
+                        onClick = { onDialogueBoostClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
                     )
-                    com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    strength.displayName,
-                                    color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
-                                        MaterialTheme.colorScheme.primary else Color.White,
-                                )
-                            },
-                            onClick = {
-                                if (!dialogueBoostEnabled) onDialogueBoostClick()
-                                onDialogueBoostStrengthChange(strength)
-                                onMenuToggle(false)
-                            },
-                            leadingIcon = {
-                                if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
-                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                        )
-                    }
-                } else {
                     DropdownMenuItem(
-                        text = {
-                            Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost")
-                        },
-                        onClick = { showDialogueBoostSubmenu = true },
-                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
-                    )
-                }
-                if (showNightModeSubmenu) {
-                    DropdownMenuItem(
-                        text = { Text("← Night Mode") },
-                        onClick = { showNightModeSubmenu = false },
+                        text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
+                        onClick = { onNightModeClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.Nightlight, null) },
                     )
-                    com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    strength.displayName,
-                                    color = if (nightModeEnabled && nightModeStrength == strength)
-                                        MaterialTheme.colorScheme.primary else Color.White,
-                                )
-                            },
-                            onClick = {
-                                if (!nightModeEnabled) onNightModeClick()
-                                onNightModeStrengthChange(strength)
-                                onMenuToggle(false)
-                            },
-                            leadingIcon = {
-                                if (nightModeEnabled && nightModeStrength == strength) {
-                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                        )
-                    }
-                } else {
                     DropdownMenuItem(
-                        text = {
-                            Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode")
-                        },
-                        onClick = { showNightModeSubmenu = true },
-                        leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                        text = { Text("Ambient Mode") },
+                        onClick = onAmbientClick,
+                        leadingIcon = { Icon(Icons.Default.NightsStay, null) },
                     )
                 }
-                if (hasLyrics) {
-                    DropdownMenuItem(
-                        text = { Text("Lyrics") },
-                        onClick = onLyricsClick,
-                        leadingIcon = { Icon(Icons.Default.Mic, null) },
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Ambient Mode") },
-                    onClick = onAmbientClick,
-                    leadingIcon = { Icon(Icons.Default.NightsStay, null) },
-                )
             }
         }
     }
@@ -871,53 +774,54 @@ private fun TrackInfoSection(
 ) {
     Text(
         title,
-        style = MaterialTheme.typography.headlineSmall,
+        style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
         color = Color.White,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Start,
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(4.dp))
     Text(
         artist,
         style = MaterialTheme.typography.bodyLarge,
-        color = Color.White.copy(alpha = 0.65f),
+        color = Color.White.copy(alpha = 0.7f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Start,
+        textAlign = TextAlign.Center,
     )
 }
 
+/** Waveform seek bar + timestamp row — Pixel Player style. */
 @Composable
-private fun ProgressSlider(
+private fun PixelProgressSection(
     currentPosition: Long,
     duration: Long,
+    isPlaying: Boolean,
+    accentColor: Color,
     onSeek: (Float) -> Unit,
 ) {
-    Slider(
-        value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-        onValueChange = onSeek,
-        colors = SliderDefaults.colors(
-            thumbColor = Color.White,
-            activeTrackColor = Color.White,
-            inactiveTrackColor = Color.White.copy(alpha = 0.2f),
-        ),
+    WaveformSeekBar(
+        progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+        isPlaying = isPlaying,
+        activeColor = accentColor,
+        inactiveColor = Color.White.copy(alpha = 0.25f),
+        onSeek = onSeek,
         modifier = Modifier.fillMaxWidth(),
     )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = (-4).dp),
+            .padding(top = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             formatDuration(currentPosition),
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.5f),
+            color = accentColor.copy(alpha = 0.8f),
         )
         Text(
             if (duration > 0) formatDuration(duration) else "--:--",
@@ -927,73 +831,149 @@ private fun ProgressSlider(
     }
 }
 
+/** Primary transport row in a pill container: |◁  ‖  ▷| */
 @Composable
-private fun TransportControls(
+private fun PixelTransportControls(
     isPlaying: Boolean,
-    shuffleMode: Boolean,
-    repeatMode: Int,
     onTogglePlayPause: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
-    onToggleShuffle: () -> Unit,
-    onCycleRepeatMode: () -> Unit,
+    pillSurface: Color,
+    accentColor: Color,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smoothPill)
+            .background(pillSurface)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButtonWithPressAnimation(
-            onClick = onToggleShuffle,
-            tint = if (shuffleMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
-            icon = {
-                Icon(
-                    Icons.Default.Shuffle,
-                    "Shuffle",
-                    modifier = Modifier.size(22.dp),
-                )
-            },
-        )
         IconButtonWithPressAnimation(
             onClick = onSkipPrevious,
             icon = {
                 Icon(
                     Icons.Default.SkipPrevious, "Previous",
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     tint = Color.White,
                 )
             },
             size = 48.dp,
         )
-        PlayPauseButtonWithAnimation(
+        // Central play/pause — larger, rounded-square, light accent bg
+        PixelPlayPauseButton(
             isPlaying = isPlaying,
             onClick = onTogglePlayPause,
+            accentColor = accentColor,
         )
         IconButtonWithPressAnimation(
             onClick = onSkipNext,
             icon = {
                 Icon(
                     Icons.Default.SkipNext, "Next",
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     tint = Color.White,
                 )
             },
             size = 48.dp,
         )
+    }
+}
+
+/** Secondary controls row: Shuffle, Repeat, Favorite — in darker pill */
+@Composable
+private fun PixelSecondaryControls(
+    shuffleMode: Boolean,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
+    pillSurfaceDark: Color,
+    accentColor: Color,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.7f)
+            .clip(ShapeCache.smoothPill)
+            .background(pillSurfaceDark)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButtonWithPressAnimation(
+            onClick = onToggleShuffle,
+            tint = if (shuffleMode) accentColor else Color.White.copy(alpha = 0.6f),
+            icon = {
+                Icon(Icons.Default.Shuffle, "Shuffle", modifier = Modifier.size(22.dp))
+            },
+        )
         IconButtonWithPressAnimation(
             onClick = onCycleRepeatMode,
-            tint = if (repeatMode > 0) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
+            tint = if (repeatMode > 0) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
                 Icon(
                     if (repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
                     when (repeatMode) {
-                        0 -> "Repeat off"
-                        1 -> "Repeat all"
-                        else -> "Repeat one"
+                        0 -> "Repeat off"; 1 -> "Repeat all"; else -> "Repeat one"
                     },
                     modifier = Modifier.size(22.dp),
                 )
             },
+        )
+        IconButtonWithPressAnimation(
+            onClick = { /* TODO: Favorite via Jellyfin API */ },
+            tint = Color.White.copy(alpha = 0.6f),
+            icon = {
+                Icon(Icons.Default.FavoriteBorder, "Favorite", modifier = Modifier.size(22.dp))
+            },
+        )
+    }
+}
+
+/** Pixel Player play/pause: rounded-square, light accent background */
+@Composable
+private fun PixelPlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    accentColor: Color,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = 500f),
+        label = "pixelPlayScale",
+    )
+
+    // Light tinted background (Pixel Player uses a cream/light pink)
+    val buttonBg = accentColor.copy(alpha = 0.25f).let { c ->
+        Color(
+            red = (c.red + 0.6f).coerceAtMost(1f),
+            green = (c.green + 0.55f).coerceAtMost(1f),
+            blue = (c.blue + 0.6f).coerceAtMost(1f),
+            alpha = 0.9f,
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(ShapeCache.smooth20)
+            .background(buttonBg)
+            .tvFocusable()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            if (isPlaying) "Pause" else "Play",
+            modifier = Modifier.size(36.dp),
+            tint = Color(0xFF1A1A1A),
         )
     }
 }
@@ -1028,46 +1008,6 @@ private fun IconButtonWithPressAnimation(
     }
 }
 
-@Composable
-private fun PlayPauseButtonWithAnimation(
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 500f),
-        label = "playPauseScale",
-    )
-    val iconScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = spring(stiffness = 400f),
-        label = "playPauseIconScale",
-    )
-
-    FilledIconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(68.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable(),
-        shape = CircleShape,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = Color.White,
-            contentColor = Color.Black,
-        ),
-    ) {
-        Icon(
-            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-            if (isPlaying) "Pause" else "Play",
-            modifier = Modifier
-                .size(36.dp)
-                .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
-        )
-    }
-}
-
 private fun formatDuration(ms: Long): String {
     val totalSeconds = ms / 1000
     val hours = totalSeconds / 3600
@@ -1079,3 +1019,4 @@ private fun formatDuration(ms: Long): String {
         String.format("%d:%02d", minutes, seconds)
     }
 }
+

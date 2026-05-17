@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -37,8 +39,10 @@ class LibVlcPlayerEngine(
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
+        private const val LOW_RAM_THRESHOLD_MB = 2048L
     }
 
+    private val isLowRamDevice by lazy { detectLowRamDevice() }
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
@@ -69,6 +73,12 @@ class LibVlcPlayerEngine(
     private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
 
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
     private var libVLC: LibVLC? = null
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
@@ -82,6 +92,15 @@ class LibVlcPlayerEngine(
     private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun detectLowRamDevice(): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            am.isLowRamDevice || am.memoryClass <= 256
+        } else {
+            am.memoryClass <= 256
+        }
+    }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -128,7 +147,12 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.ENDED
             }
             MediaPlayer.Event.Buffering -> {
-                _playbackState.value = EnginePlaybackState.BUFFERING
+                val bufPercent = event.buffering
+                _playbackState.value = if (bufPercent < 100f) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
+                val dur = durationMs
+                if (dur > 0) {
+                    _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
+                }
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
@@ -153,8 +177,16 @@ class LibVlcPlayerEngine(
             "--avcodec-skiploopfilter", "1",
             "--avcodec-skip-frame", "0",
             "--avcodec-skip-idct", "0",
-            "--network-caching=3000",
         )
+
+        if (isLowRamDevice) {
+            options.add("--avcodec-threads=2")
+            options.add("--network-caching=1500")
+            options.add("--clock-jitter=0")
+            options.add("--clock-synchro=0")
+        } else {
+            options.add("--network-caching=3000")
+        }
 
         if (currentConfig.audioDelayMs != 0L) {
             options.add("--audio-desync=${currentConfig.audioDelayMs.toInt()}")
@@ -372,7 +404,12 @@ class LibVlcPlayerEngine(
     ): Media {
         val media = Media(vlc, Uri.parse(request.uri))
         val hwDecoding = currentConfig.decoderMode != DecoderMode.SW_ONLY
-        media.setHWDecoderEnabled(hwDecoding, false)
+        media.setHWDecoderEnabled(hwDecoding, hwDecoding)
+
+        if (isLowRamDevice) {
+            media.addOption(":clock-jitter=0")
+            media.addOption(":clock-synchro=0")
+        }
 
         if (startPositionMs > 0) {
             media.addOption(":start-time=${startPositionMs / 1000.0}")
@@ -471,9 +508,31 @@ class LibVlcPlayerEngine(
             while (isActive) {
                 delay(250)
                 trySend(currentPositionMs)
+                updateBufferAndStats()
             }
         }
         awaitClose { ticker.cancel() }
+    }
+
+    private fun updateBufferAndStats() {
+        val mp = mediaPlayer ?: return
+        try {
+            val dur = durationMs
+            if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) {
+                _bufferedPositionMs.value = dur
+            }
+        } catch (_: Exception) {}
+
+        try {
+            _videoStats.value = EngineVideoStats(
+                audioCodec = try {
+                    val tracks = mp.getAudioTracks()
+                    val currentId = mp.audioTrack
+                    tracks?.find { it.id == currentId }?.name
+                } catch (_: Exception) { null },
+                bufferedPositionMs = _bufferedPositionMs.value,
+            )
+        } catch (_: Exception) {}
     }
 
     private fun buildTracks(): List<MediaTrack> {

@@ -154,13 +154,15 @@ fun JellyPlayTheme(
     isTv: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val effectiveDarkTheme = darkTheme || isTv
+
     val colorScheme = when {
-        kidsMode -> if (darkTheme) KidsDarkColorScheme else KidsLightColorScheme
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        kidsMode -> if (effectiveDarkTheme) KidsDarkColorScheme else KidsLightColorScheme
+        dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (effectiveDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
+        effectiveDarkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
