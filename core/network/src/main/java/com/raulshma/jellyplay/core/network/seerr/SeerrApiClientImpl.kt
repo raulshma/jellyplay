@@ -95,7 +95,8 @@ class SeerrApiClientImpl @Inject constructor(
         query: String,
         page: Int,
     ): Result<SeerrSearchResponse> {
-        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        // URLEncoder.encode uses "+" for spaces (form-encoded), but URLs need "%20".
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8").replace("+", "%20")
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/search?query=$encodedQuery&page=$page"))
             .withApiKey(apiKey)

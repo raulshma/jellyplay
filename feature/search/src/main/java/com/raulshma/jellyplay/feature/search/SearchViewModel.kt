@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -87,13 +88,12 @@ class SearchViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 _isSearching.value = true
+                // Run seerr search inline so flatMapLatest cancellation propagates
                 searchSeerr(currentQuery)
-                val result = mediaRepository.searchPaged(
+                mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = _filters.value.mediaTypes.ifEmpty { null },
-                )
-                _isSearching.value = false
-                result
+                ).also { _isSearching.value = false }
             }
         }
         .cachedIn(viewModelScope)
@@ -150,25 +150,23 @@ class SearchViewModel @Inject constructor(
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
 
-    private fun searchSeerr(query: String) {
-        viewModelScope.launch {
-            try {
-                val connected = seerrRepository.isConnected().first()
-                val enabled = seerrRepository.isSearchEnabled().first()
-                if (!connected || !enabled) {
-                    _seerrResults.value = emptyList()
-                    return@launch
+    private suspend fun searchSeerr(query: String) {
+        _seerrResults.value = emptyList()
+        try {
+            val connected = seerrRepository.isConnected().first()
+            val enabled = seerrRepository.isSearchEnabled().first()
+            if (!connected || !enabled) return
+            seerrRepository.search(query)
+                .onSuccess { response ->
+                    _seerrResults.value = response.results.take(10)
                 }
-                seerrRepository.search(query)
-                    .onSuccess { response ->
-                        _seerrResults.value = response.results.take(10)
-                    }
-                    .onFailure {
-                        _seerrResults.value = emptyList()
-                    }
-            } catch (_: Exception) {
-                _seerrResults.value = emptyList()
-            }
+                .onFailure {
+                    _seerrResults.value = emptyList()
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            _seerrResults.value = emptyList()
         }
     }
 
