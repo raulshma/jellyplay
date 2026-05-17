@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
@@ -64,6 +65,7 @@ private fun SkipButtonOverlay(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val skipFocusState = rememberTvFocusState(focusedScale = 1.08f)
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
@@ -76,7 +78,9 @@ private fun SkipButtonOverlay(
                 .clip(ShapeCache.smooth12)
                 .background(Color.Black.copy(alpha = 0.85f))
                 .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
-                .tvFocusable().clickable(onClick = onSkip)
+                .then(skipFocusState.focusModifier)
+                .tvFocusIndicator(skipFocusState, ShapeCache.smooth12)
+                .clickable(onClick = onSkip)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Icon(

@@ -14,6 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -42,11 +43,11 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -70,8 +71,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +94,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
@@ -152,19 +161,26 @@ internal fun PlayerControls(
     syncPlayParticipantCount: Int = 0,
     isSyncPlaySynced: Boolean = false,
     isSyncPlaySyncing: Boolean = false,
+    onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
 
-    // On TV, auto-focus the play/pause button when controls become visible
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
             tvPlayPauseFocusRequester.requestFocus()
         }
     }
 
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier
+            .onFocusChanged { focusState ->
+                if (isTv) {
+                    onControlsFocusChange(focusState.hasFocus)
+                }
+            }
+    ) {
         AnimatedVisibility(
             visible = isVisible,
             enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
@@ -188,11 +204,21 @@ internal fun PlayerControls(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onBack,
-                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                    Box(
+                        modifier = Modifier
+                            .then(backFocusState.focusModifier)
+                            .tvFocusIndicator(backFocusState, CircleShape)
+                            .clickable(onClick = onBack)
+                            .size(48.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
                     }
                     Spacer(Modifier.width(4.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -238,46 +264,58 @@ internal fun PlayerControls(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
             ) {
-                IconButton(
-                    onClick = { onSeekBack() },
+                val rewindFocusState = rememberTvFocusState(focusedScale = 1.2f)
+                Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .then(rewindFocusState.focusModifier)
+                        .tvFocusIndicator(rewindFocusState, CircleShape)
+                        .clickable(onClick = onSeekBack),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Icons.Default.FastRewind, "Rewind",
-                        modifier = Modifier.size(28.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
                     )
                 }
                 Spacer(Modifier.width(24.dp))
-                IconButton(
-                    onClick = onPlayPause,
+                val playPauseFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                Box(
                     modifier = Modifier
                         .size(64.dp)
                         .background(Color.White.copy(alpha = 0.2f), CircleShape)
-                        .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                        .then(playPauseFocusState.focusModifier)
+                        .tvFocusIndicator(playPauseFocusState, CircleShape)
+                        .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier)
+                        .clickable(onClick = onPlayPause),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
                         Icon(
                             if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                             if (playing) "Pause" else "Play",
                             modifier = Modifier.size(36.dp),
+                            tint = Color.White,
                         )
                     }
                 }
                 Spacer(Modifier.width(24.dp))
-                IconButton(
-                    onClick = { onSeekForward() },
+                val forwardFocusState = rememberTvFocusState(focusedScale = 1.2f)
+                Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .then(forwardFocusState.focusModifier)
+                        .tvFocusIndicator(forwardFocusState, CircleShape)
+                        .clickable(onClick = onSeekForward),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Icons.Default.FastForward, "Forward",
-                        modifier = Modifier.size(28.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
                     )
                 }
             }
@@ -305,7 +343,7 @@ internal fun PlayerControls(
                     .navigationBarsPadding()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
-                YouTubeStyleSeekBar(
+                TvControllableSeekBar(
                     currentPosition = currentPosition,
                     duration = duration,
                     chapters = chapters,
@@ -328,12 +366,14 @@ internal fun PlayerControls(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.End,
                     ) {
+                        val skipFocusState = rememberTvFocusState(focusedScale = 1.08f)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clip(ShapeCache.smooth12)
                                 .background(Color.Black.copy(alpha = 0.85f))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
+                                .then(skipFocusState.focusModifier)
+                                .tvFocusIndicator(skipFocusState, ShapeCache.smooth12)
                                 .clickable(onClick = onSkipSegment)
                                 .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
@@ -357,7 +397,8 @@ internal fun PlayerControls(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp),
+                        .padding(top = 4.dp)
+                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -539,7 +580,7 @@ private fun SyncPlayHeaderIndicator(
 }
 
 @Composable
-private fun YouTubeStyleSeekBar(
+private fun TvControllableSeekBar(
     currentPosition: Long,
     duration: Long,
     chapters: List<ChapterInfo>,
@@ -549,55 +590,117 @@ private fun YouTubeStyleSeekBar(
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val density = LocalDensity.current
 
     var dragFraction by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    var isSeekBarFocused by remember { mutableStateOf(false) }
+    var tvSeekPosition by remember { mutableFloatStateOf(0f) }
+    var tvSeekStarted by remember { mutableStateOf(false) }
 
     val progress = if (duration > 0) {
-        if (isDragging) dragFraction else currentPosition.toFloat() / duration
+        if (isDragging) dragFraction
+        else if (isTv && isSeekBarFocused) tvSeekPosition
+        else currentPosition.toFloat() / duration
     } else 0f
 
     val activeColor = MaterialTheme.colorScheme.primary
     val inactiveColor = Color.White.copy(alpha = 0.2f)
     val trackHeight = 3.dp
-    val thumbRadiusDp = if (isPressed) 7.dp else 6.dp
+    val thumbRadiusDp = if (isPressed || (isTv && isSeekBarFocused)) 7.dp else 6.dp
+
+    val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                .pointerInput(duration) {
-                    if (duration <= 0) return@pointerInput
-                    awaitPointerEventScope {
-                        while (true) {
-                            val downEvent = awaitFirstDown()
-                            downEvent.consume()
-                            onSeekStart()
-                            var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
-                            dragFraction = fraction
-                            onSeek(fraction)
-                            isDragging = true
-
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == downEvent.id }
-                                if (change != null) {
-                                    fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                .then(
+                    if (isTv) {
+                        Modifier
+                            .then(tvFocusState.focusModifier)
+                            .tvFocusIndicator(tvFocusState, ShapeCache.smooth4)
+                            .onFocusChanged { focusState ->
+                                val wasFocused = isSeekBarFocused
+                                isSeekBarFocused = focusState.isFocused
+                                if (focusState.isFocused && !wasFocused) {
+                                    tvSeekPosition = if (duration > 0) currentPosition.toFloat() / duration else 0f
+                                    tvSeekStarted = false
+                                }
+                                if (!focusState.isFocused && tvSeekStarted) {
+                                    tvSeekStarted = false
+                                    onSeekEnd()
+                                }
+                            }
+                            .focusable()
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                if (duration <= 0) return@onKeyEvent false
+                                val seekStep = 10_000f / duration
+                                when (keyEvent.key) {
+                                    Key.DirectionRight -> {
+                                        if (!tvSeekStarted) {
+                                            tvSeekStarted = true
+                                            onSeekStart()
+                                        }
+                                        tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
+                                        onSeek(tvSeekPosition)
+                                        true
+                                    }
+                                    Key.DirectionLeft -> {
+                                        if (!tvSeekStarted) {
+                                            tvSeekStarted = true
+                                            onSeekStart()
+                                        }
+                                        tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
+                                        onSeek(tvSeekPosition)
+                                        true
+                                    }
+                                    Key.Enter, Key.NumPadEnter -> {
+                                        if (tvSeekStarted) {
+                                            tvSeekStarted = false
+                                            onSeekEnd()
+                                        }
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
+                    } else {
+                        Modifier.pointerInput(duration) {
+                            if (duration <= 0) return@pointerInput
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val downEvent = awaitFirstDown()
+                                    downEvent.consume()
+                                    onSeekStart()
+                                    var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
                                     dragFraction = fraction
                                     onSeek(fraction)
-                                    change.consume()
-                                }
-                            } while (change?.pressed == true)
+                                    isDragging = true
 
-                            isDragging = false
-                            onSeekEnd()
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == downEvent.id }
+                                        if (change != null) {
+                                            fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                            dragFraction = fraction
+                                            onSeek(fraction)
+                                            change.consume()
+                                        }
+                                    } while (change?.pressed == true)
+
+                                    isDragging = false
+                                    onSeekEnd()
+                                }
+                            }
                         }
                     }
-                },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(
@@ -688,10 +791,10 @@ private fun YouTubeStyleSeekBar(
             }
         }
 
-        if (isDragging) {
-            val dragMs = (dragFraction * duration).toLong()
+        if (isDragging || (isTv && isSeekBarFocused)) {
+            val displayMs = if (isDragging) (dragFraction * duration).toLong() else (tvSeekPosition * duration).toLong()
             Text(
-                formatDuration(dragMs),
+                formatDuration(displayMs),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier
