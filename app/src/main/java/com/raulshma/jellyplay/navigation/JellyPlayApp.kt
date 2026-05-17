@@ -269,8 +269,8 @@ private fun MainContent(
                     colorScheme = tvDarkColorScheme(
                         background = MaterialTheme.colorScheme.background,
                         surface = MaterialTheme.colorScheme.surfaceContainer,
-                        onBackground = MaterialTheme.colorScheme.onBackground,
-                        onSurface = MaterialTheme.colorScheme.onSurface,
+                        onBackground = Color.White,
+                        onSurface = Color.White,
                         primary = MaterialTheme.colorScheme.primary,
                         onPrimary = MaterialTheme.colorScheme.onPrimary,
                         secondary = MaterialTheme.colorScheme.secondary,
@@ -489,12 +489,13 @@ private fun TvMainLayout(
                                 focusedRailIndex = index
                             },
                             leadingContent = {
-                                NavIcon(route, label)
+                                NavIcon(route, label, tint = Color.White)
                             },
                             content = {
                                 Text(
                                     label,
                                     style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
                                 )
                             },
                             modifier = Modifier
@@ -534,13 +535,13 @@ private fun TvMainLayout(
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String) {
+private fun NavIcon(route: Route, label: String, tint: Color = MaterialTheme.colorScheme.onSurface) {
     when (route) {
-        Route.Home -> Icon(Icons.Default.Home, contentDescription = label)
-        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label)
-        Route.Search -> Icon(Icons.Default.Search, contentDescription = label)
-        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label)
-        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label)
+        Route.Home -> Icon(Icons.Default.Home, contentDescription = label, tint = tint)
+        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label, tint = tint)
+        Route.Search -> Icon(Icons.Default.Search, contentDescription = label, tint = tint)
+        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label, tint = tint)
+        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label, tint = tint)
         else -> {}
     }
 }
