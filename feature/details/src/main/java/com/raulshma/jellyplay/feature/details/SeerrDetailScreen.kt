@@ -726,12 +726,6 @@ private fun SeerrDetailBody(
                 }
             }
 
-            // Watch Providers
-            val watchProviders = movieDetail?.watchProviders ?: tvDetail?.watchProviders ?: emptyList()
-            val regionProviders = watchProviders.find { it.iso31661 == streamingRegion }
-            if (regionProviders != null && (regionProviders.flatrate.isNotEmpty() || regionProviders.buy.isNotEmpty())) {
-                WatchProvidersSection(regionProviders, getPosterUrl, streamingRegion, seerrServerUrl)
-            }
 
             if (isExpanded) {
                 // Two column layout for Cast/Videos and Media Details
@@ -921,55 +915,6 @@ private fun ExternalLinksRow(
                 ),
                 border = null
             )
-        }
-    }
-}
-
-@Composable
-private fun WatchProvidersSection(
-    providers: SeerrWatchProviderRegion,
-    getLogoUrl: (String?) -> String?,
-    region: String = "US",
-    seerrServerUrl: String = "",
-) {
-    val allProviders = (providers.flatrate + providers.buy).distinctBy { it.id }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Watch Now",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            allProviders.forEach { provider ->
-                val logoUrl = provider.logoPath?.let { path ->
-                    val cleanPath = path.trimStart('/')
-                    if (seerrServerUrl.isNotBlank()) {
-                        "${seerrServerUrl.trimEnd('/')}/imageproxy/tmdb/t/p/w45/$cleanPath"
-                    } else {
-                        "https://image.tmdb.org/t/p/w45/$cleanPath"
-                    }
-                }
-                if (logoUrl != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(ShapeCache.smooth8)
-                            .background(Color.White.copy(alpha = 0.1f))
-                    ) {
-                        MediaImage(
-                            url = logoUrl,
-                            contentDescription = provider.name,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
-            }
         }
     }
 }
