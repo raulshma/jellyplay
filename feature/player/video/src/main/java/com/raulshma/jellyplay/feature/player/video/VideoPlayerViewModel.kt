@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
@@ -188,7 +189,7 @@ class VideoPlayerViewModel @Inject constructor(
                         syncPlayController.onPlaybackStateChanged(stateInt)
                     } }
                     launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
-                    launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e) } } }
+                    launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
                 }
             }
         }
@@ -535,6 +536,24 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesStore.setDecoderMode(mode)
         }
+    }
+
+    fun setStreamingQuality(quality: StreamingQuality) {
+        _uiState.update { it.copy(streamingQuality = quality) }
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)?.toInt()
+        playerSessionManager.engine?.setMaxVideoBitrate(maxBitrate)
+    }
+
+    fun retryWithEngine(playerType: PlayerType) {
+        val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
+        _uiState.update { it.copy(showPlaybackErrorDialog = false, playerError = null) }
+        viewModelScope.launch {
+            playerSessionManager.reloadWithEngine(playerType, currentPos)
+        }
+    }
+
+    fun dismissPlaybackError() {
+        _uiState.update { it.copy(showPlaybackErrorDialog = false, playerError = null) }
     }
 
     fun setAudioPassthrough(enabled: Boolean) {

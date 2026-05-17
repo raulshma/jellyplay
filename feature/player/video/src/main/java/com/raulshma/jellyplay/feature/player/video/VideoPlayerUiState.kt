@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -81,6 +82,8 @@ data class VideoPlayerUiState(
     val bufferedPosition: Long = 0L,
     val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
+    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    val showPlaybackErrorDialog: Boolean = false,
 ) {
     /** Chapter names that indicate an intro segment (case-insensitive). */
     private val introChapterNames: Set<String> get() = setOf("intro", "introduction", "opening", "op")

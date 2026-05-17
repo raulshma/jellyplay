@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -80,3 +81,47 @@ internal fun PlayerSpeedButton(
         )
     }
 }
+
+@Composable
+internal fun PlayerQualityButton(
+    quality: StreamingQuality,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    val isActive = quality != StreamingQuality.AUTO
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = modifier
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
+        shape = IconButtonDefaults.smallRoundShape,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            } else {
+                Color.White.copy(alpha = 0.1f)
+            },
+            contentColor = if (isActive) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        ),
+    ) {
+        Text(
+            quality.shortLabel,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+private val StreamingQuality.shortLabel: String
+    get() = when (this) {
+        StreamingQuality.AUTO -> "Auto"
+        StreamingQuality.LOW_360P -> "360p"
+        StreamingQuality.SD_480P -> "480p"
+        StreamingQuality.HD_720P -> "720p"
+        StreamingQuality.FHD_1080P -> "1080p"
+        StreamingQuality.UHD_4K -> "4K"
+    }

@@ -82,6 +82,8 @@ import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
+import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
@@ -757,6 +759,8 @@ fun VideoPlayerScreen(
             showVideoStats = uiState.showVideoStats,
             onVideoStatsClick = { viewModel.toggleVideoStats() },
             bufferedPosition = uiState.bufferedPosition,
+            streamingQuality = uiState.streamingQuality,
+            onQualityClick = { currentSheet = PlayerSheet.Quality },
             onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
@@ -842,6 +846,15 @@ fun VideoPlayerScreen(
         itemId = itemId,
         onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
     )
+
+    if (uiState.showPlaybackErrorDialog && uiState.playerError != null) {
+        PlaybackErrorDialog(
+            errorMessage = uiState.playerError!!,
+            currentPlayerType = uiState.preferredPlayerType,
+            onRetryWithEngine = { viewModel.retryWithEngine(it) },
+            onDismiss = { viewModel.dismissPlaybackError() },
+        )
+    }
 }
 
 
@@ -1063,6 +1076,13 @@ private fun PlayerSheetRouter(
                     onToggleChatOverlay()
                     onSheetChange(PlayerSheet.None)
                 },
+                 onDismiss = dismissSheet,
+             )
+         }
+        is PlayerSheet.Quality -> {
+            QualityPickerSheet(
+                currentQuality = uiState.streamingQuality,
+                onSelect = { viewModel.setStreamingQuality(it) },
                 onDismiss = dismissSheet,
             )
         }
