@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -91,6 +92,7 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_min_delay_ms")
         val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
         val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
+        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -206,6 +208,9 @@ class UserPreferencesStore @Inject constructor(
             syncPlaySpeedToSyncMinDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS]?.toLongOrNull() ?: 60,
             syncPlaySpeedToSyncMaxDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS]?.toLongOrNull() ?: 3000,
             syncPlaySpeedToSyncDurationMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS]?.toLongOrNull() ?: 1000,
+            videoPreloadBufferSize = try {
+                PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
+            } catch (_: Exception) { PreloadBufferSize.MEDIUM },
         )
     }
 
@@ -482,6 +487,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
         context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS] = ms.toString() }
+    }
+
+    suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
+        context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

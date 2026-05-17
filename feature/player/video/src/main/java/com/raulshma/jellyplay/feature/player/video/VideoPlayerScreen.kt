@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -88,6 +89,7 @@ import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
+import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
@@ -621,6 +623,30 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp, end = 16.dp),
         )
 
+        if (uiState.showVideoStats) {
+            VideoStatsOverlay(
+                stats = uiState.videoStats,
+                currentPositionMs = currentPosition,
+                durationMs = duration,
+                playbackSpeed = playbackSpeed,
+                isPlaying = isPlaying,
+                playbackState = when {
+                    uiState.playerError != null -> "Error"
+                    !isPlaying -> "Paused"
+                    else -> "Playing"
+                },
+                playMethod = uiState.playMethod,
+                streamingQuality = uiState.preferredPlayerType.name,
+                playerType = uiState.preferredPlayerType.name,
+                decoderMode = uiState.decoderMode.displayName,
+                audioSessionId = 0,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 60.dp)
+                    .width(280.dp),
+            )
+        }
+
         AutoAspectRatioBadge(
             detectedAspectRatio = detectedAspectRatio,
             aspectRatio = aspectRatio,
@@ -728,6 +754,9 @@ fun VideoPlayerScreen(
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
             isSyncPlaySynced = uiState.isSyncPlaySynced,
             isSyncPlaySyncing = uiState.isSyncPlaySyncing,
+            showVideoStats = uiState.showVideoStats,
+            onVideoStatsClick = { viewModel.toggleVideoStats() },
+            bufferedPosition = uiState.bufferedPosition,
             onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )

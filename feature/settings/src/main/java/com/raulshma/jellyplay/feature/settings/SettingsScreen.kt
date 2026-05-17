@@ -115,6 +115,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
@@ -162,6 +163,7 @@ fun SettingsScreen(
     var showVideoSeekDurationPicker by remember { mutableStateOf(false) }
     var showControlsTimeoutPicker by remember { mutableStateOf(false) }
     var showSwipeSeekPicker by remember { mutableStateOf(false) }
+    var showPreloadBufferPicker by remember { mutableStateOf(false) }
     var showNightModeVolumePicker by remember { mutableStateOf(false) }
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
@@ -322,6 +324,7 @@ fun SettingsScreen(
                             add("brightness" to 10)
                             add("trickplay" to 11)
                             add("trickplayGesture" to 12)
+                            add("preload" to 13)
                         }
                         val total = videoItems.size
 
@@ -428,6 +431,14 @@ fun SettingsScreen(
                             checked = preferences.trickplayOnSeekGesture,
                             index = 12, count = total,
                             onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Cached,
+                            title = "Preload Buffer",
+                            subtitle = "Amount to buffer ahead during playback",
+                            trailingText = preferences.videoPreloadBufferSize.displayName,
+                            index = 13, count = total,
+                            onClick = { showPreloadBufferPicker = true },
                         )
                     }
                 }
@@ -1229,6 +1240,23 @@ fun SettingsScreen(
             onSelect = { index ->
                 viewModel.setVideoSwipeSeekMaxMs(ranges[index])
                 showSwipeSeekPicker = false
+            },
+        )
+    }
+
+    if (showPreloadBufferPicker) {
+        SettingsListPickerSheet(
+            title = "Preload Buffer Size",
+            items = PreloadBufferSize.entries,
+            label = { it.displayName },
+            subtitle = {
+                "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s"
+            },
+            isSelected = { it == preferences.videoPreloadBufferSize },
+            onDismiss = { showPreloadBufferPicker = false },
+            onSelect = {
+                viewModel.setVideoPreloadBufferSize(it)
+                showPreloadBufferPicker = false
             },
         )
     }

@@ -93,6 +93,7 @@ data class UserPreferences(
     val syncPlaySpeedToSyncMinDelayMs: Long = 60,
     val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
     val syncPlaySpeedToSyncDurationMs: Long = 1000,
+    val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
 )
 
 @Immutable
@@ -207,4 +208,17 @@ enum class OrientationMode(val displayName: String, val constant: String) {
     SENSOR("Auto Rotate", "sensor"),
     LOCKED_LANDSCAPE("Locked Landscape", "locked_landscape"),
     LOCKED_PORTRAIT("Locked Portrait", "locked_portrait"),
+}
+
+@Immutable
+@Serializable
+enum class PreloadBufferSize(
+    val displayName: String,
+    val minBufferMs: Int,
+    val maxBufferMs: Int,
+) {
+    LOW("Low (10s)", 10_000, 25_000),
+    MEDIUM("Medium (25s)", 25_000, 50_000),
+    HIGH("High (50s)", 50_000, 120_000),
+    UNLIMITED("Unlimited", 50_000, 500_000),
 }

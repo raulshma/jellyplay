@@ -73,6 +73,12 @@ class LibVlcPlayerEngine(
     private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
 
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
     private var libVLC: LibVLC? = null
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
@@ -141,7 +147,12 @@ class LibVlcPlayerEngine(
                 _playbackState.value = EnginePlaybackState.ENDED
             }
             MediaPlayer.Event.Buffering -> {
-                _playbackState.value = EnginePlaybackState.BUFFERING
+                val bufPercent = event.buffering
+                _playbackState.value = if (bufPercent < 100f) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
+                val dur = durationMs
+                if (dur > 0) {
+                    _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
+                }
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
@@ -497,9 +508,31 @@ class LibVlcPlayerEngine(
             while (isActive) {
                 delay(250)
                 trySend(currentPositionMs)
+                updateBufferAndStats()
             }
         }
         awaitClose { ticker.cancel() }
+    }
+
+    private fun updateBufferAndStats() {
+        val mp = mediaPlayer ?: return
+        try {
+            val dur = durationMs
+            if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) {
+                _bufferedPositionMs.value = dur
+            }
+        } catch (_: Exception) {}
+
+        try {
+            _videoStats.value = EngineVideoStats(
+                audioCodec = try {
+                    val tracks = mp.getAudioTracks()
+                    val currentId = mp.audioTrack
+                    tracks?.find { it.id == currentId }?.name
+                } catch (_: Exception) { null },
+                bufferedPositionMs = _bufferedPositionMs.value,
+            )
+        } catch (_: Exception) {}
     }
 
     private fun buildTracks(): List<MediaTrack> {

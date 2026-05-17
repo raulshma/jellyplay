@@ -222,6 +222,8 @@ class PlayerSessionManager(
             maxVideoBitrate = adaptiveBitrateManager.resolveMaxBitrate(prefs.streamingQuality)?.toInt(),
             serverUrl = serverUrl,
             authToken = token,
+            minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
+            maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
         )
 
         eng.load(request)
