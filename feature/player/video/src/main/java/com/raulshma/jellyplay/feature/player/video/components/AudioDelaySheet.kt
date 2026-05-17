@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToLong
 
@@ -37,11 +39,16 @@ fun AudioDelaySheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text("Audio Delay", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(16.dp))
+            Text(
+                "Audio Delay",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            Spacer(Modifier.height(20.dp))
 
             val delaySec = delayMs / 1000.0
             val label = when {
@@ -49,8 +56,15 @@ fun AudioDelaySheet(
                 delayMs > 0 -> "+${"%.1f".format(delaySec)}s (audio late)"
                 else -> "${"%.1f".format(delaySec)}s (audio early)"
             }
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(12.dp))
 
             Slider(
                 value = delayMs.toFloat(),

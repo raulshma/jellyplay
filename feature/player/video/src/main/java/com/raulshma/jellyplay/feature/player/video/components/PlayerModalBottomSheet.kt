@@ -7,7 +7,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
@@ -28,11 +28,9 @@ fun PlayerModalBottomSheet(
     val isTv = LocalTvMode.current
 
     if (isTv) {
-        // On TV, use TvSafeSheet which renders a full-screen Dialog
         TvSafeSheet(
             onDismissRequest = onDismissRequest,
         ) {
-            // TvSafeSheet doesn't provide ColumnScope, so we wrap
             content()
         }
     } else {
@@ -43,10 +41,10 @@ fun PlayerModalBottomSheet(
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             val view = LocalView.current
-            LaunchedEffect(view) {
-                val window = (view.parent as? DialogWindowProvider)?.window
-                window?.let {
-                    val controller = WindowCompat.getInsetsController(it, it.decorView)
+            val window = (view.parent as? DialogWindowProvider)?.window
+            if (window != null) {
+                SideEffect {
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
                     controller.systemBarsBehavior =
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                     controller.hide(WindowInsetsCompat.Type.systemBars())
