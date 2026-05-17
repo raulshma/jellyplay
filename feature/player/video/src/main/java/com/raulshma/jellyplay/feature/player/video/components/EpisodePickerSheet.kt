@@ -49,6 +49,8 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tvFocusExitHandler
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -318,9 +320,35 @@ private fun EpisodeRow(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val runTime = episode.runTimeTicks
-                if (runTime != null) {
+                val hasWatchProgress = episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0 && !episode.isPlayed
+                val remainingTime = if (hasWatchProgress && runTime != null) {
+                    formatRemainingTimeFromTicks(runTime, episode.playbackPositionTicks!!)
+                } else null
+                val totalTime = if (runTime != null) {
+                    formatDurationFromTicks(runTime)
+                } else null
+                
+                if (remainingTime != null && totalTime != null) {
                     Text(
-                        text = "${runTime / 600_000_000} min",
+                        text = "$remainingTime left",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = totalTime,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (totalTime != null) {
+                    Text(
+                        text = totalTime,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
