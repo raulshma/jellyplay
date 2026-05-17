@@ -614,6 +614,7 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -626,7 +627,6 @@ fun HomeScreen(
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
                             .height(64.dp)
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
