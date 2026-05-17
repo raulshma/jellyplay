@@ -12,10 +12,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -42,16 +40,18 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -70,13 +70,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -87,6 +95,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
@@ -152,19 +162,29 @@ internal fun PlayerControls(
     syncPlayParticipantCount: Int = 0,
     isSyncPlaySynced: Boolean = false,
     isSyncPlaySyncing: Boolean = false,
+    showVideoStats: Boolean = false,
+    onVideoStatsClick: () -> Unit = {},
+    bufferedPosition: Long = 0L,
+    onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val tvPlayPauseFocusRequester = remember { FocusRequester() }
 
-    // On TV, auto-focus the play/pause button when controls become visible
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
             tvPlayPauseFocusRequester.requestFocus()
         }
     }
 
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier
+            .onFocusChanged { focusState ->
+                if (isTv) {
+                    onControlsFocusChange(focusState.hasFocus)
+                }
+            }
+    ) {
         AnimatedVisibility(
             visible = isVisible,
             enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
@@ -177,9 +197,9 @@ internal fun PlayerControls(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.7f),
-                                Color.Black.copy(alpha = 0.4f),
-                                Color.Black.copy(alpha = 0.1f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.08f),
                                 Color.Transparent,
                             )
                         )
@@ -190,16 +210,21 @@ internal fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBack,
-                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                        modifier = Modifier.size(40.dp),
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp),
+                        )
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             title,
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -207,7 +232,7 @@ internal fun PlayerControls(
                             Text(
                                 subtitle,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -234,50 +259,57 @@ internal fun PlayerControls(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
             ) {
-                IconButton(
-                    onClick = { onSeekBack() },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                FilledTonalIconButton(
+                    onClick = onSeekBack,
+                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    shape = IconButtonDefaults.largeRoundShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
                 ) {
                     Icon(
                         Icons.Default.FastRewind, "Rewind",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
                     )
                 }
-                Spacer(Modifier.width(24.dp))
-                IconButton(
+
+                FilledIconButton(
                     onClick = onPlayPause,
                     modifier = Modifier
-                        .size(64.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .size(80.dp)
                         .then(if (isTv) Modifier.focusRequester(tvPlayPauseFocusRequester) else Modifier),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
                         Icon(
                             if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                             if (playing) "Pause" else "Play",
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(40.dp),
                         )
                     }
                 }
-                Spacer(Modifier.width(24.dp))
-                IconButton(
-                    onClick = { onSeekForward() },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+
+                FilledTonalIconButton(
+                    onClick = onSeekForward,
+                    modifier = Modifier.size(IconButtonDefaults.largeContainerSize()),
+                    shape = IconButtonDefaults.largeRoundShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
                 ) {
                     Icon(
                         Icons.Default.FastForward, "Forward",
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(IconButtonDefaults.largeIconSize),
                     )
                 }
             }
@@ -296,21 +328,22 @@ internal fun PlayerControls(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.15f),
-                                Color.Black.copy(alpha = 0.5f),
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.1f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
                             )
                         )
                     )
                     .navigationBarsPadding()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
-                YouTubeStyleSeekBar(
+                TvControllableSeekBar(
                     currentPosition = currentPosition,
                     duration = duration,
                     chapters = chapters,
                     introTimestamps = introTimestamps,
                     creditTimestamps = creditTimestamps,
+                    bufferedPosition = bufferedPosition,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -328,27 +361,31 @@ internal fun PlayerControls(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.End,
                     ) {
+                        val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(ShapeCache.smooth12)
-                                .background(Color.Black.copy(alpha = 0.85f))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
+                                .clip(ShapeCache.smoothPill)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                .then(skipFocusState.focusModifier)
+                                .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                                 .clickable(onClick = onSkipSegment)
                                 .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FastForward,
                                 contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = skipSegmentText ?: "",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.3.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -357,7 +394,8 @@ internal fun PlayerControls(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp),
+                        .padding(top = 4.dp)
+                        .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -399,7 +437,7 @@ internal fun PlayerControls(
                             icon = Icons.Default.AspectRatio,
                             contentDescription = "Aspect Ratio",
                             onClick = onAspectRatioClick,
-                            tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.White,
+                            tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
                         )
                         PlayerIconButton(
                             icon = Icons.Default.Info,
@@ -433,6 +471,7 @@ internal fun PlayerControls(
                                 nightModeStrength = nightModeStrength,
                                 audioPassthrough = audioPassthrough,
                                 isOcrRunning = isOcrRunning,
+                                showVideoStats = showVideoStats,
                                 onSubtitleStyleClick = {
                                     showOverflow = false
                                     onSubtitleStyleClick()
@@ -468,6 +507,10 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onOcrClick()
                                 },
+                                onVideoStatsClick = {
+                                    showOverflow = false
+                                    onVideoStatsClick()
+                                },
                             )
                         }
 
@@ -487,9 +530,15 @@ private fun SyncPlayHeaderIndicator(
     isSyncing: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val statusColor = when {
+        isSynced -> Color(0xFF4CAF50)
+        isSyncing -> Color(0xFF2196F3)
+        else -> Color(0xFFFFC107)
+    }
+
     Surface(
-        shape = ShapeCache.smooth16,
-        color = Color.White.copy(alpha = 0.15f),
+        shape = ShapeCache.smoothPill,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(
             modifier = Modifier
@@ -500,11 +549,7 @@ private fun SyncPlayHeaderIndicator(
         ) {
             Surface(
                 shape = CircleShape,
-                color = when {
-                    isSynced -> Color(0xFF4CAF50)
-                    isSyncing -> Color(0xFF2196F3)
-                    else -> Color(0xFFFFC107)
-                },
+                color = statusColor,
                 modifier = Modifier.size(7.dp),
             ) {}
             Text(
@@ -513,17 +558,13 @@ private fun SyncPlayHeaderIndicator(
                     isSyncing -> "Syncing"
                     else -> "Buffering"
                 },
-                color = when {
-                    isSynced -> Color(0xFF4CAF50)
-                    isSyncing -> Color(0xFF2196F3)
-                    else -> Color(0xFFFFC107)
-                },
+                color = statusColor,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = groupName,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -531,7 +572,7 @@ private fun SyncPlayHeaderIndicator(
             )
             Text(
                 text = "$participantCount",
-                color = Color.White.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
             )
         }
@@ -539,65 +580,143 @@ private fun SyncPlayHeaderIndicator(
 }
 
 @Composable
-private fun YouTubeStyleSeekBar(
+private fun TvControllableSeekBar(
     currentPosition: Long,
     duration: Long,
     chapters: List<ChapterInfo>,
     introTimestamps: IntroTimestamps? = null,
     creditTimestamps: CreditTimestamps? = null,
+    bufferedPosition: Long = 0L,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val isTv = LocalTvMode.current
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val density = LocalDensity.current
 
     var dragFraction by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    var isSeekBarFocused by remember { mutableStateOf(false) }
+    var tvSeekPosition by remember { mutableFloatStateOf(0f) }
+    var tvSeekStarted by remember { mutableStateOf(false) }
 
     val progress = if (duration > 0) {
-        if (isDragging) dragFraction else currentPosition.toFloat() / duration
+        if (isDragging) dragFraction
+        else if (isTv && isSeekBarFocused) tvSeekPosition
+        else currentPosition.toFloat() / duration
+    } else 0f
+
+    val bufferedFraction = if (duration > 0) {
+        (bufferedPosition.toFloat() / duration).coerceIn(0f, 1f)
     } else 0f
 
     val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = Color.White.copy(alpha = 0.2f)
-    val trackHeight = 3.dp
-    val thumbRadiusDp = if (isPressed) 7.dp else 6.dp
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+    val isActive = isPressed || isDragging || (isTv && isSeekBarFocused)
+    val trackHeight by animateDpAsState(
+        targetValue = if (isActive) 5.dp else 3.dp,
+        animationSpec = tween(AnimationTokens.FastDuration),
+        label = "trackH",
+    )
+    val thumbRadiusDp by animateDpAsState(
+        targetValue = if (isActive) 7.dp else 5.dp,
+        animationSpec = tween(AnimationTokens.FastDuration),
+        label = "thumbR",
+    )
+
+    val chapterMarkerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+
+    val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                .pointerInput(duration) {
-                    if (duration <= 0) return@pointerInput
-                    awaitPointerEventScope {
-                        while (true) {
-                            val downEvent = awaitFirstDown()
-                            downEvent.consume()
-                            onSeekStart()
-                            var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
-                            dragFraction = fraction
-                            onSeek(fraction)
-                            isDragging = true
-
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == downEvent.id }
-                                if (change != null) {
-                                    fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                .then(
+                    if (isTv) {
+                        Modifier
+                            .then(tvFocusState.focusModifier)
+                            .tvFocusIndicator(tvFocusState, ShapeCache.smooth4)
+                            .onFocusChanged { focusState ->
+                                val wasFocused = isSeekBarFocused
+                                isSeekBarFocused = focusState.isFocused
+                                if (focusState.isFocused && !wasFocused) {
+                                    tvSeekPosition = if (duration > 0) currentPosition.toFloat() / duration else 0f
+                                    tvSeekStarted = false
+                                }
+                                if (!focusState.isFocused && tvSeekStarted) {
+                                    tvSeekStarted = false
+                                    onSeekEnd()
+                                }
+                            }
+                            .focusable()
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                if (duration <= 0) return@onKeyEvent false
+                                val seekStep = 10_000f / duration
+                                when (keyEvent.key) {
+                                    Key.DirectionRight -> {
+                                        if (!tvSeekStarted) {
+                                            tvSeekStarted = true
+                                            onSeekStart()
+                                        }
+                                        tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
+                                        onSeek(tvSeekPosition)
+                                        true
+                                    }
+                                    Key.DirectionLeft -> {
+                                        if (!tvSeekStarted) {
+                                            tvSeekStarted = true
+                                            onSeekStart()
+                                        }
+                                        tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
+                                        onSeek(tvSeekPosition)
+                                        true
+                                    }
+                                    Key.Enter, Key.NumPadEnter -> {
+                                        if (tvSeekStarted) {
+                                            tvSeekStarted = false
+                                            onSeekEnd()
+                                        }
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
+                    } else {
+                        Modifier.pointerInput(duration) {
+                            if (duration <= 0) return@pointerInput
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val downEvent = awaitFirstDown()
+                                    downEvent.consume()
+                                    onSeekStart()
+                                    var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
                                     dragFraction = fraction
                                     onSeek(fraction)
-                                    change.consume()
-                                }
-                            } while (change?.pressed == true)
+                                    isDragging = true
 
-                            isDragging = false
-                            onSeekEnd()
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == downEvent.id }
+                                        if (change != null) {
+                                            fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                            dragFraction = fraction
+                                            onSeek(fraction)
+                                            change.consume()
+                                        }
+                                    } while (change?.pressed == true)
+
+                                    isDragging = false
+                                    onSeekEnd()
+                                }
+                            }
                         }
                     }
-                },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(
@@ -609,7 +728,7 @@ private fun YouTubeStyleSeekBar(
                 val trackWidth = size.width
 
                 drawRoundRect(
-                    color = inactiveColor,
+                    color = trackColor,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, trackY),
                     size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight.toPx()),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
@@ -621,11 +740,10 @@ private fun YouTubeStyleSeekBar(
                         val startFrac = (introTs.introStartTicks / 10_000f) / duration
                         val endFrac = (introTs.introEndTicks / 10_000f) / duration
                         if (startFrac in 0f..1f && endFrac > startFrac) {
-                            val segHeightDp = 5.dp
-                            val segHeight = segHeightDp.toPx()
+                            val segHeight = 6.dp.toPx()
                             val segY = (size.height / 2f) - (segHeight / 2f)
                             drawRoundRect(
-                                color = Color(0xFF66BB6A).copy(alpha = 0.6f),
+                                color = Color(0xFF66BB6A).copy(alpha = 0.4f),
                                 topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
                                 size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
@@ -637,17 +755,26 @@ private fun YouTubeStyleSeekBar(
                         val startFrac = (creditTs.creditStartTicks / 10_000f) / duration
                         val endFrac = (creditTs.creditEndTicks / 10_000f) / duration
                         if (startFrac in 0f..1f && endFrac > startFrac) {
-                            val segHeightDp = 5.dp
-                            val segHeight = segHeightDp.toPx()
+                            val segHeight = 6.dp.toPx()
                             val segY = (size.height / 2f) - (segHeight / 2f)
                             drawRoundRect(
-                                color = Color(0xFF42A5F5).copy(alpha = 0.6f),
+                                color = Color(0xFF42A5F5).copy(alpha = 0.4f),
                                 topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
                                 size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
                             )
                         }
                     }
+                }
+
+                if (bufferedFraction > 0f) {
+                    val bufferColor = activeColor.copy(alpha = 0.25f)
+                    drawRoundRect(
+                        color = bufferColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, trackY),
+                        size = androidx.compose.ui.geometry.Size(trackWidth * bufferedFraction, trackHeight.toPx()),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
+                    )
                 }
 
                 drawRoundRect(
@@ -665,7 +792,7 @@ private fun YouTubeStyleSeekBar(
                             val markerHeight = 7.dp.toPx()
                             val markerWidth = 2.dp.toPx()
                             drawRoundRect(
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = chapterMarkerColor,
                                 topLeft = androidx.compose.ui.geometry.Offset(
                                     markerX - markerWidth / 2f,
                                     trackY + trackHeight.toPx() / 2f - markerHeight / 2f,
@@ -680,6 +807,15 @@ private fun YouTubeStyleSeekBar(
                 val thumbRadius = thumbRadiusDp.toPx()
                 val thumbCenterX = progress * trackWidth
                 val thumbCenterY = size.height / 2f
+
+                if (isActive) {
+                    drawCircle(
+                        color = activeColor.copy(alpha = 0.2f),
+                        radius = thumbRadius * 2.2f,
+                        center = androidx.compose.ui.geometry.Offset(thumbCenterX, thumbCenterY),
+                    )
+                }
+
                 drawCircle(
                     color = activeColor,
                     radius = thumbRadius,
@@ -688,12 +824,15 @@ private fun YouTubeStyleSeekBar(
             }
         }
 
-        if (isDragging) {
-            val dragMs = (dragFraction * duration).toLong()
+        if (isDragging || (isTv && isSeekBarFocused)) {
+            val displayMs = if (isDragging) (dragFraction * duration).toLong() else (tvSeekPosition * duration).toLong()
             Text(
-                formatDuration(dragMs),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.8f),
+                formatDuration(displayMs),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .align(Alignment.Start)
                     .padding(start = 4.dp),
@@ -705,13 +844,19 @@ private fun YouTubeStyleSeekBar(
             ) {
                 Text(
                     formatDuration(currentPosition),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
                 Text(
                     if (duration > 0) formatDuration(duration) else "--:--",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
             }
         }
@@ -734,6 +879,7 @@ private fun PlayerOverflowMenu(
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
+    showVideoStats: Boolean = false,
     onSubtitleStyleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
@@ -744,6 +890,7 @@ private fun PlayerOverflowMenu(
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onOcrClick: () -> Unit,
+    onVideoStatsClick: () -> Unit = {},
 ) {
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
@@ -751,8 +898,8 @@ private fun PlayerOverflowMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        containerColor = Color(0xE6222222),
-        shape = ShapeCache.smooth12,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.extraLarge,
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(
@@ -775,7 +922,7 @@ private fun PlayerOverflowMenu(
                             Text(
                                 strength.displayName,
                                 color = if (dialogueBoostEnabled && dialogueBoostStrength == strength)
-                                    MaterialTheme.colorScheme.primary else Color.White,
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         },
                         onClick = {
@@ -798,9 +945,9 @@ private fun PlayerOverflowMenu(
             } else {
                 OverflowMenuItem(
                     icon = Icons.Default.Audiotrack,
-                    label = if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
+                    label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = true },
-                    tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                    tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -817,7 +964,7 @@ private fun PlayerOverflowMenu(
                             Text(
                                 strength.displayName,
                                 color = if (nightModeEnabled && nightModeStrength == strength)
-                                    MaterialTheme.colorScheme.primary else Color.White,
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         },
                         onClick = {
@@ -840,9 +987,9 @@ private fun PlayerOverflowMenu(
             } else {
                 OverflowMenuItem(
                     icon = Icons.Default.MoreVert,
-                    label = if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode",
+                    label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
                     onClick = { showNightModeSubmenu = true },
-                    tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                    tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -863,7 +1010,7 @@ private fun PlayerOverflowMenu(
                 icon = Icons.AutoMirrored.Filled.VolumeUp,
                 label = "Passthrough",
                 onClick = onPassthroughClick,
-                tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else Color.White,
+                tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
         }
         OverflowMenuItem(
@@ -879,6 +1026,12 @@ private fun PlayerOverflowMenu(
                 enabled = !isOcrRunning,
             )
         }
+        OverflowMenuItem(
+            icon = Icons.Default.Info,
+            label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
+            onClick = onVideoStatsClick,
+            tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -887,14 +1040,15 @@ private fun OverflowMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = Color.White,
+    tint: Color = Color.Unspecified,
     enabled: Boolean = true,
 ) {
+    val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
     DropdownMenuItem(
         text = {
             Text(
                 label,
-                color = if (enabled) tint else Color.White.copy(alpha = 0.38f),
+                color = if (enabled) effectiveTint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 style = MaterialTheme.typography.bodyMedium,
             )
         },
@@ -904,7 +1058,7 @@ private fun OverflowMenuItem(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (enabled) tint else Color.White.copy(alpha = 0.38f),
+                tint = if (enabled) effectiveTint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 modifier = Modifier.size(20.dp),
             )
         },

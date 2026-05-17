@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,8 +45,9 @@ internal fun TapToTranslateSheet(
         ) {
             Text(
                 "Subtitle Text",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
             )
             Spacer(Modifier.height(12.dp))
             Text(
@@ -62,6 +67,7 @@ internal fun TapToTranslateSheet(
                         clipboard.setPrimaryClip(clip)
                     },
                     modifier = Modifier.weight(1f),
+                    shape = ShapeCache.smoothPill,
                 ) {
                     Text("Copy")
                 }
@@ -74,6 +80,7 @@ internal fun TapToTranslateSheet(
                         context.startActivity(Intent.createChooser(intent, "Share subtitle"))
                     },
                     modifier = Modifier.weight(1f),
+                    shape = ShapeCache.smoothPill,
                 ) {
                     Text("Share")
                 }

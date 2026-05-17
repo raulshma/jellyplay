@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
+import com.raulshma.jellyplay.feature.music.components.BlobArtCollage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import kotlinx.coroutines.launch
 
@@ -352,110 +353,77 @@ private fun MusicHeroHeader(
     height: Dp,
 ) {
     val allItems = remember(sections) { sections.flatMap { it.items } }
-    val currentIndex = remember { mutableStateOf(0) }
-    val featuredItem = remember(allItems, currentIndex.value) {
-        allItems.filter { it.mediaType == MediaType.ALBUM || it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.ARTIST }
-            .let { filtered -> filtered.getOrNull(currentIndex.value % filtered.size.coerceAtLeast(1)) }
-            ?: allItems.firstOrNull()
+    val featuredItem = remember(allItems) { allItems.firstOrNull() }
+    val artworkUrls = remember(allItems) {
+        allItems.take(3).map { item ->
+            item.parentId?.let { backdropUrlBuilder(it) } ?: imageUrlBuilder(item.id)
+        }
     }
 
-    AnimatedContent(
-        targetState = featuredItem?.id,
-        transitionSpec = {
-            (fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) togetherWith fadeOut(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)))
-        },
-        label = "heroRotation",
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .graphicsLayer { translationY = scrollOffset * 0.5f },
-    ) { _ ->
-        Box(
+            .graphicsLayer { translationY = scrollOffset * 0.5f }
+            .then(
+                featuredItem?.let {
+                    Modifier.tvFocusable().clickable { onClick(it.id) }
+                } ?: Modifier
+            ),
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(height)
-                .then(
-                    featuredItem?.let {
-                        Modifier.tvFocusable().clickable { onClick(it.id) }
-                    } ?: Modifier
-                ),
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+                .padding(top = 72.dp),
         ) {
-            featuredItem?.let { item ->
-                MediaImage(
-                    url = item.parentId?.let { backdropUrlBuilder(it) }
-                        ?: imageUrlBuilder(item.id),
-                    contentDescription = item.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.4f),
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.background,
-                            ),
-                            startY = 0f,
-                            endY = Float.POSITIVE_INFINITY,
-                        )
-                    )
-            )
-
-            featuredItem?.let { item ->
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 32.dp),
-                ) {
+            // Large bold title — Pixel Player "Your Mix" style
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                        text = "Your\nMix",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                        ),
                         color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        item.albumArtist?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.8f),
-                            )
-                        }
-                        item.year?.let {
-                            Text(
-                                text = it.toString(),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.8f),
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { onClick(item.id) },
-                        modifier = Modifier.height(44.dp),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Play", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    }
+                    Text(
+                        text = "Today's Mix for you",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.6f),
+                    )
                 }
+
+                // Large translucent play button
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Play Mix",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Blob art collage
+            if (artworkUrls.isNotEmpty()) {
+                BlobArtCollage(
+                    imageUrls = artworkUrls,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
             }
         }
     }

@@ -836,6 +836,10 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(ocrText = null) }
     }
 
+    fun toggleVideoStats() {
+        _uiState.update { it.copy(showVideoStats = !_uiState.value.showVideoStats) }
+    }
+
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
         val state = _uiState.value
         if (!state.trickplayEnabled && !state.trickplayOnSeekGesture) return null

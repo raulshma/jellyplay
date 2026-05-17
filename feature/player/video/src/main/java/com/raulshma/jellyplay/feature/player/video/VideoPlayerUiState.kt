@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -77,6 +78,9 @@ data class VideoPlayerUiState(
     val currentSeasonId: String? = null,
     val isLoadingEpisodes: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
+    val bufferedPosition: Long = 0L,
+    val showVideoStats: Boolean = false,
+    val videoStats: EngineVideoStats = EngineVideoStats(),
 ) {
     /** Chapter names that indicate an intro segment (case-insensitive). */
     private val introChapterNames: Set<String> get() = setOf("intro", "introduction", "opening", "op")

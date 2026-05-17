@@ -23,6 +23,8 @@ data class PlaybackRequest(
     val maxVideoBitrate: Int? = null,
     val serverUrl: String? = null,
     val authToken: String? = null,
+    val minBufferMs: Int = 15_000,
+    val maxBufferMs: Int = 50_000,
 )
 
 data class SubtitleSource(
@@ -84,6 +86,26 @@ data class MediaTrack(
 
 enum class TrackType { AUDIO, SUBTITLE }
 
+data class EngineVideoStats(
+    val videoCodec: String? = null,
+    val videoDecoder: String? = null,
+    val videoResolution: String? = null,
+    val videoFrameRate: Float? = null,
+    val videoBitrate: Int? = null,
+    val videoColorRange: String? = null,
+    val videoHdrType: String? = null,
+    val videoColorDepth: String? = null,
+    val audioCodec: String? = null,
+    val audioSampleRate: Int? = null,
+    val audioChannels: Int? = null,
+    val audioBitrate: Int? = null,
+    val estimatedBandwidthBps: Long = 0,
+    val droppedFrames: Long = 0,
+    val totalVideoFrames: Long = 0,
+    val bufferedPositionMs: Long = 0,
+    val bufferSizeBytes: Long = 0,
+)
+
 interface MediaEngine : PlayerLifecycleCallbacks {
     
     // 1. Initialization
@@ -102,8 +124,10 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     val currentPositionMs: Long
     val durationMs: Long
     val positionFlow: Flow<Long>
-    val currentCues: StateFlow<List<String>> // Simple cue strings for OCR/Translate
+    val currentCues: StateFlow<List<String>>
     val errorFlow: Flow<String>
+    val bufferedPositionMs: StateFlow<Long>
+    val videoStats: StateFlow<EngineVideoStats>
 
     // 4. Configuration & Capabilities
     val capabilities: EngineCapabilities

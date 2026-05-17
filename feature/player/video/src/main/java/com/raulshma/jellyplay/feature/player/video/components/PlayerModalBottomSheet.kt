@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -28,11 +30,9 @@ fun PlayerModalBottomSheet(
     val isTv = LocalTvMode.current
 
     if (isTv) {
-        // On TV, use TvSafeSheet which renders a full-screen Dialog
         TvSafeSheet(
             onDismissRequest = onDismissRequest,
         ) {
-            // TvSafeSheet doesn't provide ColumnScope, so we wrap
             content()
         }
     } else {
@@ -52,7 +52,12 @@ fun PlayerModalBottomSheet(
                     controller.hide(WindowInsetsCompat.Type.systemBars())
                 }
             }
-            content()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                content = content,
+            )
         }
     }
 }

@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -35,8 +37,14 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        private const val LOW_RAM_THRESHOLD_MB = 2048L
+        private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
+        private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
+        private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
+        private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
     }
 
+    private val isLowRamDevice by lazy { detectLowRamDevice() }
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
@@ -67,6 +75,12 @@ class MpvPlayerEngine(
     private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
 
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
     private var mpvView: PlayerMPVView? = null
     private var pendingUrl: String? = null
     private var pendingStartPositionMs: Long = 0L
@@ -79,6 +93,15 @@ class MpvPlayerEngine(
     private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun detectLowRamDevice(): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            am.isLowRamDevice || am.memoryClass <= 256
+        } else {
+            am.memoryClass <= 256
+        }
+    }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -137,12 +160,36 @@ class MpvPlayerEngine(
 
         override fun initOptions() {
             mpv.setOptionString("hwdec", when (currentConfig.decoderMode) {
-                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
             })
+            mpv.setOptionString("hwdec-codecs", "all")
+
             mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
+
+            if (isLowRamDevice) {
+                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_LOW.toString())
+                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_LOW.toString())
+                mpv.setOptionString("vd-lavc-skiploopfilter", "bidir")
+                mpv.setOptionString("vd-lavc-skipframe", "nonref")
+                mpv.setOptionString("opengl-swapinterval", "1")
+            } else {
+                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_NORMAL.toString())
+                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_NORMAL.toString())
+            }
+
+            mpv.setOptionString("msg-level", "all=warn")
+
+            if (currentConfig.decoderMode == DecoderMode.SW_ONLY) {
+                mpv.setOptionString("profile", "fast")
+                if (isLowRamDevice) {
+                    mpv.setOptionString("vf", "format=yuv420p")
+                }
+            }
+
             if (currentConfig.audioPassthrough) {
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
@@ -232,7 +279,8 @@ class MpvPlayerEngine(
             mpvView?.mpv?.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
             
             mpvView?.mpv?.setPropertyString("hwdec", when (config.decoderMode) {
-                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
             })
             
@@ -393,9 +441,71 @@ class MpvPlayerEngine(
             while (isActive) {
                 delay(250)
                 trySend(currentPositionMs)
+                updateBufferAndStats()
             }
         }
         awaitClose { ticker.cancel() }
+    }
+
+    private fun updateBufferAndStats() {
+        val m = mpvView?.mpv ?: return
+        try {
+            val duration = (m.getPropertyDouble("duration") ?: 0.0) * 1000.0
+            if (duration > 0) {
+                val cacheDuration = try {
+                    m.getPropertyDouble("demuxer-cache-duration") ?: 0.0
+                } catch (_: Exception) { 0.0 }
+                val posMs = currentPositionMs
+                _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
+            }
+        } catch (_: Exception) {}
+
+        try {
+            _videoStats.value = EngineVideoStats(
+                videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
+                videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
+                videoResolution = buildString {
+                    val w = try { m.getPropertyInt("width") } catch (_: Exception) { null }
+                    val h = try { m.getPropertyInt("height") } catch (_: Exception) { null }
+                    if (w != null && h != null && w > 0 && h > 0) append("${w}x${h}")
+                }.ifEmpty { null },
+                videoFrameRate = try {
+                    m.getPropertyDouble("container-fps")?.let { fps ->
+                        if (fps > 0f) fps.toFloat() else null
+                    }
+                } catch (_: Exception) { null },
+                videoBitrate = try {
+                    m.getPropertyDouble("video-bitrate")?.let { br ->
+                        if (br > 0) br.toInt() else null
+                    }
+                } catch (_: Exception) { null },
+                audioCodec = try { m.getPropertyString("audio-codec") } catch (_: Exception) { null },
+                audioSampleRate = try {
+                    m.getPropertyInt("audio-params/samplerate")?.let { sr ->
+                        if (sr > 0) sr else null
+                    }
+                } catch (_: Exception) { null },
+                audioChannels = try {
+                    m.getPropertyInt("audio-params/channel-count")?.let { ch ->
+                        if (ch > 0) ch else null
+                    }
+                } catch (_: Exception) { null },
+                audioBitrate = try {
+                    m.getPropertyDouble("audio-bitrate")?.let { br ->
+                        if (br > 0) br.toInt() else null
+                    }
+                } catch (_: Exception) { null },
+                estimatedBandwidthBps = try {
+                    m.getPropertyDouble("packet-bitrate")?.let { br ->
+                        if (br > 0) br.toLong() else 0L
+                    } ?: 0L
+                } catch (_: Exception) { 0L },
+                droppedFrames = try {
+                    m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
+                } catch (_: Exception) { 0L },
+                bufferedPositionMs = _bufferedPositionMs.value,
+            )
+        } catch (_: Exception) {}
     }
 
     private fun buildTracks(): List<MediaTrack> {
