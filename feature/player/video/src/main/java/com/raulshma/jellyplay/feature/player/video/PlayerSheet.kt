@@ -17,4 +17,5 @@ sealed class PlayerSheet {
     data object SubtitleDownload : PlayerSheet()
     data object Episodes : PlayerSheet()
     data object SyncPlay : PlayerSheet()
+    data object Quality : PlayerSheet()
 }

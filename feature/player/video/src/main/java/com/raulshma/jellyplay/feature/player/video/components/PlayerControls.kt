@@ -89,6 +89,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -165,6 +166,8 @@ internal fun PlayerControls(
     showVideoStats: Boolean = false,
     onVideoStatsClick: () -> Unit = {},
     bufferedPosition: Long = 0L,
+    streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    onQualityClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -400,6 +403,10 @@ internal fun PlayerControls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayerQualityButton(
+                            quality = streamingQuality,
+                            onClick = onQualityClick,
+                        )
                         PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
                         PlayerIconButton(
                             icon = Icons.Default.Audiotrack,

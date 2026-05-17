@@ -56,6 +56,9 @@ class PlayerSessionManager(
     private val _engine = MutableStateFlow<MediaEngine?>(null)
     val engineFlow: StateFlow<MediaEngine?> = _engine.asStateFlow()
     val engine: MediaEngine? get() = _engine.value
+
+    private var lastPlaybackRequest: PlaybackRequest? = null
+    private var lastPlayerType: PlayerType? = null
     
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         _engine.value = engine
@@ -154,6 +157,7 @@ class PlayerSessionManager(
     ) {
         val eng = PlayerEngineFactory.create(context, playerType)
         _engine.value = eng
+        lastPlayerType = playerType
         
         playerLifecycleManager.activeCallbacks = eng
         playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
@@ -226,6 +230,45 @@ class PlayerSessionManager(
             maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
         )
 
+        lastPlaybackRequest = request
+        eng.load(request)
+    }
+
+    suspend fun reloadWithEngine(playerType: PlayerType, currentPositionMs: Long) {
+        val last = lastPlaybackRequest ?: return
+        val prefs = preferencesStore.preferences.first()
+
+        _engine.value?.release()
+        _engine.value = null
+
+        val eng = PlayerEngineFactory.create(context, playerType)
+        _engine.value = eng
+        lastPlayerType = playerType
+
+        playerLifecycleManager.activeCallbacks = eng
+        playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
+
+        val config = EngineConfig(
+            decoderMode = prefs.decoderMode,
+            audioPassthrough = prefs.audioPassthrough,
+            audioDelayMs = prefs.audioDelayMs,
+            subtitleDelayMs = prefs.subtitleStyle.offsetMs,
+            subtitleStyle = prefs.subtitleStyle,
+            audioEffects = AudioEffectsConfig(
+                dialogueBoostEnabled = prefs.dialogueBoostEnabled,
+                dialogueBoostStrength = prefs.dialogueBoostStrength,
+                nightModeEnabled = prefs.nightModeEnabled,
+                nightModeStrength = prefs.nightModeStrength,
+                nightModeGain = prefs.audioNightModeGain,
+                equalizerEnabled = prefs.equalizerEnabled,
+                equalizerSettings = prefs.equalizerSettings
+            )
+        )
+        eng.updateConfig(config)
+        eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
+
+        val request = last.copy(startPositionMs = currentPositionMs)
+        lastPlaybackRequest = request
         eng.load(request)
     }
 

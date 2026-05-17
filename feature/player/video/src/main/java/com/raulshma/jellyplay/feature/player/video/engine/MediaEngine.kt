@@ -137,6 +137,9 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     val availableTracks: StateFlow<List<MediaTrack>>
     fun selectTrack(type: TrackType, index: Int, trackGroup: Any? = null)
 
+    // 5b. Quality
+    fun setMaxVideoBitrate(bps: Int?)
+
     // 6. UI Binding
     fun createSurfaceView(context: Context): View
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)

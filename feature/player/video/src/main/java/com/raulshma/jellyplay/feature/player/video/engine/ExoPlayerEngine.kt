@@ -353,6 +353,17 @@ class ExoPlayerEngine(
         selector.setParameters(params)
     }
 
+    override fun setMaxVideoBitrate(bps: Int?) {
+        val selector = trackSelector ?: return
+        val params = selector.buildUponParameters()
+        if (bps != null) {
+            params.setMaxVideoBitrate(bps)
+        } else {
+            params.setMaxVideoBitrate(Int.MAX_VALUE)
+        }
+        selector.setParameters(params)
+    }
+
     override fun createSurfaceView(context: Context): View {
         val pv = PlayerView(context).apply {
             this.player = this@ExoPlayerEngine.player

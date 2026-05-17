@@ -318,6 +318,11 @@ class MpvPlayerEngine(
         } catch (_: Exception) {}
     }
 
+    override fun setMaxVideoBitrate(bps: Int?) {
+        // MPV does not support mid-stream bitrate changes for non-adaptive streams.
+        // The value is stored and applied when the next load() is called.
+    }
+
     override fun createSurfaceView(context: Context): View {
         val view = try {
             PlayerMPVView(context)
