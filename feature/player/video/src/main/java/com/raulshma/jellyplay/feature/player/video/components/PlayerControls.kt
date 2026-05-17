@@ -162,6 +162,9 @@ internal fun PlayerControls(
     syncPlayParticipantCount: Int = 0,
     isSyncPlaySynced: Boolean = false,
     isSyncPlaySyncing: Boolean = false,
+    showVideoStats: Boolean = false,
+    onVideoStatsClick: () -> Unit = {},
+    bufferedPosition: Long = 0L,
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -340,6 +343,7 @@ internal fun PlayerControls(
                     chapters = chapters,
                     introTimestamps = introTimestamps,
                     creditTimestamps = creditTimestamps,
+                    bufferedPosition = bufferedPosition,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
@@ -467,6 +471,7 @@ internal fun PlayerControls(
                                 nightModeStrength = nightModeStrength,
                                 audioPassthrough = audioPassthrough,
                                 isOcrRunning = isOcrRunning,
+                                showVideoStats = showVideoStats,
                                 onSubtitleStyleClick = {
                                     showOverflow = false
                                     onSubtitleStyleClick()
@@ -501,6 +506,10 @@ internal fun PlayerControls(
                                 onOcrClick = {
                                     showOverflow = false
                                     onOcrClick()
+                                },
+                                onVideoStatsClick = {
+                                    showOverflow = false
+                                    onVideoStatsClick()
                                 },
                             )
                         }
@@ -577,6 +586,7 @@ private fun TvControllableSeekBar(
     chapters: List<ChapterInfo>,
     introTimestamps: IntroTimestamps? = null,
     creditTimestamps: CreditTimestamps? = null,
+    bufferedPosition: Long = 0L,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
@@ -596,6 +606,10 @@ private fun TvControllableSeekBar(
         if (isDragging) dragFraction
         else if (isTv && isSeekBarFocused) tvSeekPosition
         else currentPosition.toFloat() / duration
+    } else 0f
+
+    val bufferedFraction = if (duration > 0) {
+        (bufferedPosition.toFloat() / duration).coerceIn(0f, 1f)
     } else 0f
 
     val activeColor = MaterialTheme.colorScheme.primary
@@ -753,6 +767,16 @@ private fun TvControllableSeekBar(
                     }
                 }
 
+                if (bufferedFraction > 0f) {
+                    val bufferColor = activeColor.copy(alpha = 0.25f)
+                    drawRoundRect(
+                        color = bufferColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, trackY),
+                        size = androidx.compose.ui.geometry.Size(trackWidth * bufferedFraction, trackHeight.toPx()),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
+                    )
+                }
+
                 drawRoundRect(
                     color = activeColor,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, trackY),
@@ -855,6 +879,7 @@ private fun PlayerOverflowMenu(
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
+    showVideoStats: Boolean = false,
     onSubtitleStyleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
@@ -865,6 +890,7 @@ private fun PlayerOverflowMenu(
     onPassthroughClick: () -> Unit,
     onSubtitleDownloadClick: () -> Unit,
     onOcrClick: () -> Unit,
+    onVideoStatsClick: () -> Unit = {},
 ) {
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
@@ -1000,6 +1026,12 @@ private fun PlayerOverflowMenu(
                 enabled = !isOcrRunning,
             )
         }
+        OverflowMenuItem(
+            icon = Icons.Default.Info,
+            label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
+            onClick = onVideoStatsClick,
+            tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

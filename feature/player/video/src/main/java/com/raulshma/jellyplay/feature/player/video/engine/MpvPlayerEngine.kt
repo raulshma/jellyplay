@@ -75,6 +75,12 @@ class MpvPlayerEngine(
     private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
 
+    private val _bufferedPositionMs = MutableStateFlow(0L)
+    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    private val _videoStats = MutableStateFlow(EngineVideoStats())
+    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
+
     private var mpvView: PlayerMPVView? = null
     private var pendingUrl: String? = null
     private var pendingStartPositionMs: Long = 0L
@@ -435,9 +441,71 @@ class MpvPlayerEngine(
             while (isActive) {
                 delay(250)
                 trySend(currentPositionMs)
+                updateBufferAndStats()
             }
         }
         awaitClose { ticker.cancel() }
+    }
+
+    private fun updateBufferAndStats() {
+        val m = mpvView?.mpv ?: return
+        try {
+            val duration = (m.getPropertyDouble("duration") ?: 0.0) * 1000.0
+            if (duration > 0) {
+                val cacheDuration = try {
+                    m.getPropertyDouble("demuxer-cache-duration") ?: 0.0
+                } catch (_: Exception) { 0.0 }
+                val posMs = currentPositionMs
+                _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
+            }
+        } catch (_: Exception) {}
+
+        try {
+            _videoStats.value = EngineVideoStats(
+                videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
+                videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
+                videoResolution = buildString {
+                    val w = try { m.getPropertyInt("width") } catch (_: Exception) { null }
+                    val h = try { m.getPropertyInt("height") } catch (_: Exception) { null }
+                    if (w != null && h != null && w > 0 && h > 0) append("${w}x${h}")
+                }.ifEmpty { null },
+                videoFrameRate = try {
+                    m.getPropertyDouble("container-fps")?.let { fps ->
+                        if (fps > 0f) fps.toFloat() else null
+                    }
+                } catch (_: Exception) { null },
+                videoBitrate = try {
+                    m.getPropertyDouble("video-bitrate")?.let { br ->
+                        if (br > 0) br.toInt() else null
+                    }
+                } catch (_: Exception) { null },
+                audioCodec = try { m.getPropertyString("audio-codec") } catch (_: Exception) { null },
+                audioSampleRate = try {
+                    m.getPropertyInt("audio-params/samplerate")?.let { sr ->
+                        if (sr > 0) sr else null
+                    }
+                } catch (_: Exception) { null },
+                audioChannels = try {
+                    m.getPropertyInt("audio-params/channel-count")?.let { ch ->
+                        if (ch > 0) ch else null
+                    }
+                } catch (_: Exception) { null },
+                audioBitrate = try {
+                    m.getPropertyDouble("audio-bitrate")?.let { br ->
+                        if (br > 0) br.toInt() else null
+                    }
+                } catch (_: Exception) { null },
+                estimatedBandwidthBps = try {
+                    m.getPropertyDouble("packet-bitrate")?.let { br ->
+                        if (br > 0) br.toLong() else 0L
+                    } ?: 0L
+                } catch (_: Exception) { 0L },
+                droppedFrames = try {
+                    m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
+                } catch (_: Exception) { 0L },
+                bufferedPositionMs = _bufferedPositionMs.value,
+            )
+        } catch (_: Exception) {}
     }
 
     private fun buildTracks(): List<MediaTrack> {
