@@ -116,6 +116,7 @@ data class SeerrMovieDetails(
     val ratings: SeerrRatings? = null,
     val keywords: List<SeerrKeyword> = emptyList(),
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
+    val releases: SeerrReleases? = null,
 )
 
 @Immutable
@@ -173,6 +174,31 @@ data class SeerrContentRating(
 
 @Immutable
 @Serializable
+data class SeerrReleases(
+    val results: List<SeerrReleaseDateRegion> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrReleaseDateRegion(
+    @SerialName("iso_3166_1")
+    val iso31661: String = "",
+    @SerialName("release_dates")
+    val releaseDates: List<SeerrReleaseDate> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrReleaseDate(
+    val certification: String = "",
+    @SerialName("release_date")
+    val releaseDate: String = "",
+    val type: Int = 0,
+    val note: String? = null,
+)
+
+@Immutable
+@Serializable
 data class SeerrKeyword(
     val id: Int = 0,
     val name: String = "",
@@ -181,6 +207,7 @@ data class SeerrKeyword(
 @Immutable
 @Serializable
 data class SeerrWatchProviderRegion(
+    @SerialName("iso_3166_1")
     val iso31661: String = "",
     val link: String? = null,
     val flatrate: List<SeerrWatchProvider> = emptyList(),
@@ -193,8 +220,8 @@ data class SeerrWatchProviderRegion(
 data class SeerrWatchProvider(
     val displayPriority: Int = 0,
     val logoPath: String? = null,
-    val providerId: Int = 0,
-    val providerName: String = "",
+    val id: Int = 0,
+    val name: String = "",
 )
 
 @Immutable
@@ -586,6 +613,8 @@ data class SeerrPreferences(
     val discoverPopularTv: Boolean = true,
     val discoverUpcomingMovies: Boolean = true,
     val discoverUpcomingTv: Boolean = true,
+    val streamingRegion: String = "US",
+    val discoverRegion: String = "US",
 )
 
 @Immutable
