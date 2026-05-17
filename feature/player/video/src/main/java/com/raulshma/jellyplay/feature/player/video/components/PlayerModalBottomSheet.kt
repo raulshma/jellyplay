@@ -1,13 +1,15 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
@@ -41,16 +43,21 @@ fun PlayerModalBottomSheet(
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             val view = LocalView.current
-            val window = (view.parent as? DialogWindowProvider)?.window
-            if (window != null) {
-                SideEffect {
-                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+            LaunchedEffect(view) {
+                val window = (view.parent as? DialogWindowProvider)?.window
+                window?.let {
+                    val controller = WindowCompat.getInsetsController(it, it.decorView)
                     controller.systemBarsBehavior =
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                     controller.hide(WindowInsetsCompat.Type.systemBars())
                 }
             }
-            content()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                content = content,
+            )
         }
     }
 }

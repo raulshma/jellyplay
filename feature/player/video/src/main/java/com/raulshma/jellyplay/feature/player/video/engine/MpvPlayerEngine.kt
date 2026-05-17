@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -35,8 +37,14 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        private const val LOW_RAM_THRESHOLD_MB = 2048L
+        private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
+        private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
+        private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
+        private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
     }
 
+    private val isLowRamDevice by lazy { detectLowRamDevice() }
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
@@ -79,6 +87,15 @@ class MpvPlayerEngine(
     private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun detectLowRamDevice(): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            am.isLowRamDevice || am.memoryClass <= 256
+        } else {
+            am.memoryClass <= 256
+        }
+    }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -137,12 +154,36 @@ class MpvPlayerEngine(
 
         override fun initOptions() {
             mpv.setOptionString("hwdec", when (currentConfig.decoderMode) {
-                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
             })
+            mpv.setOptionString("hwdec-codecs", "all")
+
             mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("keep-open", "yes")
+
+            if (isLowRamDevice) {
+                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_LOW.toString())
+                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_LOW.toString())
+                mpv.setOptionString("vd-lavc-skiploopfilter", "bidir")
+                mpv.setOptionString("vd-lavc-skipframe", "nonref")
+                mpv.setOptionString("opengl-swapinterval", "1")
+            } else {
+                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_NORMAL.toString())
+                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_NORMAL.toString())
+            }
+
+            mpv.setOptionString("msg-level", "all=warn")
+
+            if (currentConfig.decoderMode == DecoderMode.SW_ONLY) {
+                mpv.setOptionString("profile", "fast")
+                if (isLowRamDevice) {
+                    mpv.setOptionString("vf", "format=yuv420p")
+                }
+            }
+
             if (currentConfig.audioPassthrough) {
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
@@ -232,7 +273,8 @@ class MpvPlayerEngine(
             mpvView?.mpv?.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
             
             mpvView?.mpv?.setPropertyString("hwdec", when (config.decoderMode) {
-                DecoderMode.HW_PREFERRED, DecoderMode.HW_ONLY -> "auto"
+                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
             })
             
