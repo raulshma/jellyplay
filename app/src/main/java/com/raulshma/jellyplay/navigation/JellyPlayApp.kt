@@ -463,6 +463,11 @@ private fun TvMainLayout(
     }
     var focusedRailIndex by remember { mutableStateOf(0) }
 
+    val drawerState = androidx.tv.material3.rememberDrawerState(
+        initialValue = androidx.tv.material3.DrawerValue.Closed
+    )
+    val currentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -475,7 +480,7 @@ private fun TvMainLayout(
             },
     ) {
         NavigationDrawer(
-            drawerState = androidx.tv.material3.rememberDrawerState(initialValue = androidx.tv.material3.DrawerValue.Closed),
+            drawerState = drawerState,
             modifier = Modifier.padding(vertical = 8.dp),
             drawerContent = {
                 Column(
@@ -490,6 +495,7 @@ private fun TvMainLayout(
                             onClick = {
                                 navigator.navigate(route)
                                 focusedRailIndex = index
+                                drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
                             },
                             leadingContent = {
                                 NavIcon(route, label, tint = Color.White)
@@ -530,9 +536,10 @@ private fun TvMainLayout(
         )
     }
 
-    LaunchedEffect(currentTopLevel) {
+    LaunchedEffect(currentRoute) {
         val initialIndex = activeTopLevelRoutes.keys.indexOf(currentTopLevel).coerceAtLeast(0)
         focusedRailIndex = initialIndex
+        drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
         try { contentFocusRequester.requestFocus() } catch (_: Exception) { }
     }
 }
