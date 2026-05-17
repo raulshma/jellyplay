@@ -325,7 +325,10 @@ private fun MainContent(
                                         audioPlaybackManager.skipToNext()
                                     },
                                 )
-                                NavigationBar(containerColor = animatedNavBarColor) {
+                                NavigationBar(
+                                    containerColor = Color(0xFF111111),
+                                    tonalElevation = 0.dp,
+                                ) {
                                     activeTopLevelRoutes.forEach { (route, label) ->
                                         NavigationBarItem(
                                             selected = route == currentTopLevel,
@@ -335,11 +338,11 @@ private fun MainContent(
                                             },
                                             label = { Text(label) },
                                             colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                                unselectedIconColor = Color.White.copy(alpha = 0.6f),
-                                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                selectedIconColor = Color.White,
+                                                selectedTextColor = Color.White,
+                                                unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                                                unselectedTextColor = Color.White.copy(alpha = 0.45f),
                                             ),
                                         )
                                     }

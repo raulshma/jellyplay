@@ -23,9 +23,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -81,52 +80,62 @@ fun MiniPlayer(
         ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
+        // Pixel Player–style: artwork-tinted pill surface
         val navBarColorState = LocalNavigationBarColor.current
+        val fallbackColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        val baseColor = navBarColorState.value ?: fallbackColor
+        val pixelTint = Color(
+            red = (baseColor.red * 0.55f + 0.08f).coerceIn(0f, 1f),
+            green = (baseColor.green * 0.4f + 0.04f).coerceIn(0f, 1f),
+            blue = (baseColor.blue * 0.55f + 0.08f).coerceIn(0f, 1f),
+            alpha = 0.92f,
+        )
         val animatedColor by animateColorAsState(
-            targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            targetValue = pixelTint,
             animationSpec = tween(AnimationTokens.StandardDuration),
             label = "miniPlayerColor",
         )
-        val contentAlpha = 1f
 
         Surface(
-            shape = ShapeCache.smooth16,
+            shape = ShapeCache.smoothPill,
             color = animatedColor,
             shadowElevation = 8.dp,
-            tonalElevation = 4.dp,
-            modifier = Modifier.fillMaxWidth(),
+            tonalElevation = 2.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp)
-                    .graphicsLayer { alpha = contentAlpha }
                     .tvFocusable().clickable(onClick = onClick)
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Circular artwork thumbnail
                 if (artworkUri.isNotBlank()) {
                     MediaImage(
                         url = artworkUri,
                         contentDescription = title,
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(ShapeCache.smooth8),
+                            .size(44.dp)
+                            .clip(CircleShape),
                         contentScale = ContentScale.Crop,
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(ShapeCache.smooth8)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             Icons.Default.MusicNote,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp),
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
@@ -141,6 +150,7 @@ fun MiniPlayer(
                         text = title,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 14.sp,
@@ -148,7 +158,7 @@ fun MiniPlayer(
                     Text(
                         text = artist,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.White.copy(alpha = 0.65f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 12.sp,
@@ -158,8 +168,8 @@ fun MiniPlayer(
                 AnimatedIconButton(
                     onClick = onPlayPause,
                     size = 40.dp,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = Color.White.copy(alpha = 0.2f),
+                    contentColor = Color.White,
                     iconVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     iconDescription = if (isPlaying) "Pause" else "Play",
                     iconSize = 22.dp,
@@ -167,20 +177,11 @@ fun MiniPlayer(
 
                 AnimatedIconButton(
                     onClick = onSkipNext,
-                    size = 40.dp,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    size = 36.dp,
+                    contentColor = Color.White.copy(alpha = 0.8f),
                     iconVector = Icons.Default.SkipNext,
                     iconDescription = "Skip Next",
-                    iconSize = 22.dp,
-                )
-
-                AnimatedIconButton(
-                    onClick = onStop,
-                    size = 36.dp,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    iconVector = Icons.Default.Close,
-                    iconDescription = "Close",
-                    iconSize = 18.dp,
+                    iconSize = 20.dp,
                 )
             }
         }

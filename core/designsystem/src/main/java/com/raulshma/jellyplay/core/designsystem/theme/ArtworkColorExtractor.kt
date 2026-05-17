@@ -15,7 +15,57 @@ data class ArtworkColors(
     val darkMuted: Color?,
     val lightMuted: Color?,
     val dominant: Color?,
-)
+) {
+    /**
+     * Deep muted background tint derived from artwork — matches Pixel Player's
+     * solid-color player background style.
+     */
+    val tintedBackground: Color
+        get() {
+            val base = darkMuted ?: muted ?: dominant ?: Color(0xFF2D1F2D)
+            // Darken and desaturate to get a deep, muted plum tone
+            return base.copy(alpha = 1f).let { c ->
+                Color(
+                    red = (c.red * 0.45f).coerceIn(0f, 1f),
+                    green = (c.green * 0.35f).coerceIn(0f, 1f),
+                    blue = (c.blue * 0.45f).coerceIn(0f, 1f),
+                    alpha = 1f,
+                )
+            }
+        }
+
+    /** Lighter variant of tintedBackground for gradient top edge. */
+    val tintedBackgroundLight: Color
+        get() {
+            val base = muted ?: darkMuted ?: dominant ?: Color(0xFF3D2F3D)
+            return base.copy(alpha = 1f).let { c ->
+                Color(
+                    red = (c.red * 0.55f + 0.08f).coerceIn(0f, 1f),
+                    green = (c.green * 0.45f + 0.05f).coerceIn(0f, 1f),
+                    blue = (c.blue * 0.55f + 0.08f).coerceIn(0f, 1f),
+                    alpha = 1f,
+                )
+            }
+        }
+
+    /** Accent color for seek bar, active controls — a soft pink/vibrant from the artwork. */
+    val accentColor: Color
+        get() = lightVibrant ?: vibrant ?: lightMuted ?: Color(0xFFE8B4C8)
+
+    /** Semi-transparent surface for pill-shaped control containers. */
+    val pillSurface: Color
+        get() {
+            val base = darkMuted ?: muted ?: dominant ?: Color(0xFF3A2A3A)
+            return base.copy(alpha = 0.55f)
+        }
+
+    /** Darker pill surface for the secondary controls row. */
+    val pillSurfaceDark: Color
+        get() {
+            val base = darkMuted ?: dominant ?: Color(0xFF2A1A2A)
+            return base.copy(alpha = 0.7f)
+        }
+}
 
 object ArtworkColorExtractor {
 
