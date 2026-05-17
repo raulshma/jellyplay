@@ -48,7 +48,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @Composable
 fun SyncPlayChatOverlay(
@@ -164,7 +163,7 @@ private fun ChatContent(
                         }
                     },
                 ),
-                modifier = Modifier.weight(1f).tvFocusable(),
+                modifier = Modifier.weight(1f),
                 shape = ShapeCache.smooth20,
             )
             TextButton(
@@ -174,7 +173,7 @@ private fun ChatContent(
                         inputText = ""
                     }
                 },
-                modifier = Modifier.tvFocusable(),
+                modifier = Modifier,
             ) {
                 Text("Send", color = MaterialTheme.colorScheme.primary)
             }

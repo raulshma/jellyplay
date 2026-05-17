@@ -31,7 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun SyncPlayOverlay(
@@ -43,6 +44,7 @@ fun SyncPlayOverlay(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
@@ -52,11 +54,13 @@ fun SyncPlayOverlay(
         Surface(
             shape = ShapeCache.smooth16,
             color = Color.White.copy(alpha = 0.15f),
-            modifier = Modifier.tvFocusable(),
+            modifier = Modifier
+                .then(focusState.focusModifier)
+                .tvFocusIndicator(focusState, ShapeCache.smooth16),
         ) {
             Row(
                 modifier = Modifier
-                    .tvFocusable().clickable(onClick = onClick)
+                    .clickable(onClick = onClick)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

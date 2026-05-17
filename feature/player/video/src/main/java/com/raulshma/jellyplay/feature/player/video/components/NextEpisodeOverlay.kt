@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -123,12 +124,14 @@ fun NextEpisodeOverlay(
                                 .background(Color.Black.copy(alpha = 0.3f))
                         )
                         
-                        // Play button overlay
+                        val playFocusState = rememberTvFocusState(focusedScale = 1.15f)
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .tvFocusable().clickable(onClick = onPlayNext),
+                                .then(playFocusState.focusModifier)
+                                .tvFocusIndicator(playFocusState, CircleShape)
+                                .clickable(onClick = onPlayNext),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -139,14 +142,16 @@ fun NextEpisodeOverlay(
                             )
                         }
 
-                        // Close button in top-right
+                        val closeFocusState = rememberTvFocusState(focusedScale = 1.2f)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(8.dp)
                                 .size(28.dp)
                                 .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .tvFocusable().clickable(onClick = {
+                                .then(closeFocusState.focusModifier)
+                                .tvFocusIndicator(closeFocusState, CircleShape)
+                                .clickable(onClick = {
                                     dismissed = true
                                     onCancel()
                                 }),

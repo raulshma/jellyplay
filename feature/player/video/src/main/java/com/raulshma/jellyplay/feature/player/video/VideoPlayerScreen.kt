@@ -123,11 +123,13 @@ fun VideoPlayerScreen(
     val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(true) }
+    var controlsHasFocus by remember { mutableStateOf(false) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
-    
+
+    val isTv = LocalTvMode.current
 
     var seekOffsetMs by remember { mutableLongStateOf(0L) }
     var seekDirection by remember { mutableIntStateOf(0) }
@@ -273,11 +275,9 @@ fun VideoPlayerScreen(
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
+        } else if (isTv && showControls) {
+            showControls = false
         } else if (uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
-            // Only ExoPlayer supports mini-mode currently.
-            // MPV/LibVLC views are tied to this composable's AndroidView and can't
-            // survive being transferred easily.
-
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
@@ -378,7 +378,6 @@ fun VideoPlayerScreen(
         derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
     }
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
-    val isTv = LocalTvMode.current
 
     Box(
         modifier = Modifier
@@ -392,20 +391,36 @@ fun VideoPlayerScreen(
                             NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER -> {
                                 if (!showControls) {
                                     showControls = true
+                                    true
                                 } else {
-                                    doTogglePlayPause()
+                                    false
                                 }
-                                true
                             }
                             NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                doSeekForward()
-                                showControls = true
-                                true
+                                if (!showControls) {
+                                    doSeekForward()
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                             NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
-                                doSeekBack()
-                                showControls = true
-                                true
+                                if (!showControls) {
+                                    doSeekBack()
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_UP, NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (!showControls) {
+                                    showControls = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                             NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                 doTogglePlayPause()
@@ -713,6 +728,7 @@ fun VideoPlayerScreen(
             syncPlayParticipantCount = uiState.syncPlayParticipantCount,
             isSyncPlaySynced = uiState.isSyncPlaySynced,
             isSyncPlaySyncing = uiState.isSyncPlaySyncing,
+            onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -761,8 +777,8 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls) {
-        if (showControls) {
+    LaunchedEffect(showControls, controlsHasFocus) {
+        if (showControls && !controlsHasFocus) {
             delay(uiState.controlsTimeoutMs)
             showControls = false
         }

@@ -2,17 +2,20 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 internal fun PlayerIconButton(
@@ -23,10 +26,14 @@ internal fun PlayerIconButton(
     enabled: Boolean = true,
     tint: Color = Color.White,
 ) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(40.dp).tvFocusable(),
+        modifier = modifier
+            .size(40.dp)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, CircleShape),
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = tint,
         ),
@@ -47,15 +54,19 @@ internal fun PlayerSpeedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(40.dp).tvFocusable(),
+        modifier = modifier
+            .size(40.dp)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, CircleShape),
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = if (speed != 1.0f) MaterialTheme.colorScheme.primary else Color.White,
         ),
         interactionSource = remember { MutableInteractionSource() },
     ) {
-        androidx.compose.material3.Text(
+        Text(
             if (speed == 1.0f) "1x" else "${speed}x",
             style = MaterialTheme.typography.labelMedium,
         )
