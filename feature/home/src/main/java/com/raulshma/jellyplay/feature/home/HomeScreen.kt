@@ -616,7 +616,6 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -630,22 +629,14 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(64.dp)
+                            .statusBarsPadding()
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        HeaderStatusIndicator(
+                            status = headerStatus,
                             modifier = Modifier.padding(start = contentPad),
-                        ) {
-                            ModeSwitch(
-                                currentMode = viewModel.homeMode,
-                                onModeChange = onModeChange,
-                            )
-                            HeaderStatusIndicator(
-                                status = headerStatus,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
+                        )
 
                         Spacer(Modifier.weight(1f))
 
@@ -655,6 +646,10 @@ fun HomeScreen(
                                 .padding(horizontal = 4.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                ModeSwitch(
+                                    currentMode = viewModel.homeMode,
+                                    onModeChange = onModeChange,
+                                )
                                 IconButton(
                                     onClick = {
                                         showSurprise = !showSurprise
