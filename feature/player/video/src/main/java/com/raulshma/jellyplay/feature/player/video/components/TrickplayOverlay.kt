@@ -52,15 +52,15 @@ fun TrickplayOverlay(
 
     Surface(
         modifier = modifier
-            .width(220.dp)
-            .shadow(16.dp, shape = ShapeCache.smooth16)
+            .width(240.dp)
+            .shadow(20.dp, shape = ShapeCache.smooth20)
             .border(
                 width = 0.5.dp,
-                color = Color.White.copy(alpha = 0.12f),
-                shape = ShapeCache.smooth16,
+                color = Color.White.copy(alpha = 0.1f),
+                shape = ShapeCache.smooth20,
             ),
-        shape = ShapeCache.smooth16,
-        color = Color.Black.copy(alpha = 0.55f),
+        shape = ShapeCache.smooth20,
+        color = Color.Black.copy(alpha = 0.6f),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -68,8 +68,7 @@ fun TrickplayOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(124.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    .height(135.dp)
                     .background(Color.Black),
                 contentAlignment = Alignment.Center,
             ) {
@@ -80,18 +79,18 @@ fun TrickplayOverlay(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(124.dp),
+                            .height(135.dp),
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp)
+                            .height(44.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.Black.copy(alpha = 0.7f),
+                                        Color.Black.copy(alpha = 0.75f),
                                     ),
                                 ),
                             ),
@@ -100,7 +99,7 @@ fun TrickplayOverlay(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(124.dp)
+                            .height(135.dp)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
@@ -125,33 +124,39 @@ fun TrickplayOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(Color.Black.copy(alpha = 0.25f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (isSeeking) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
+                    Surface(
+                        shape = ShapeCache.smoothPill,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                     ) {
-                        Icon(
-                            imageVector = if (isForward) Icons.Default.FastForward else Icons.Default.FastRewind,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = buildString {
-                                append(if (isForward) "+" else "-")
-                                append(formatTime(abs(deltaMs)))
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (isForward) Icons.Default.FastForward else Icons.Default.FastRewind,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = buildString {
+                                    append(if (isForward) "+" else "-")
+                                    append(formatTime(abs(deltaMs)))
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
                     }
                 }
 
@@ -170,9 +175,9 @@ fun TrickplayOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
-                            .clip(ShapeCache.smooth4),
+                            .clip(ShapeCache.smoothPill),
                         color = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.White.copy(alpha = 0.15f),
+                        trackColor = Color.White.copy(alpha = 0.12f),
                     )
                 }
             }

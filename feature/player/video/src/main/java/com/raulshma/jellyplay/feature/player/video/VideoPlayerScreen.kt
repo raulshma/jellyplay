@@ -26,7 +26,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -82,6 +81,7 @@ import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
@@ -646,7 +646,7 @@ fun VideoPlayerScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                shape = ShapeCache.smooth12,
+                shape = ShapeCache.smoothPill,
                 containerColor = Color.White.copy(alpha = 0.15f),
                 contentColor = Color.White,
             )
@@ -842,14 +842,16 @@ private fun BoxScope.AutoAspectRatioBadge(
             .padding(top = 60.dp),
     ) {
         Surface(
-            shape = ShapeCache.smooth16,
-            color = Color.White.copy(alpha = 0.15f),
+            shape = ShapeCache.smoothPill,
+            color = Color.White.copy(alpha = 0.12f),
         ) {
             Text(
                 text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
             )
         }
     }
@@ -906,7 +908,7 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.PlaybackInfo -> {
-            ModalBottomSheet(
+            PlayerModalBottomSheet(
                 onDismissRequest = dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
             ) {
@@ -1047,7 +1049,7 @@ private fun OcrResultSheet(
     onDismiss: () -> Unit,
     context: Context,
 ) {
-    ModalBottomSheet(
+    PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
@@ -1059,8 +1061,8 @@ private fun OcrResultSheet(
         ) {
             Text(
                 "OCR Subtitle Text",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(12.dp))
             if (isOcrRunning) {
@@ -1094,6 +1096,7 @@ private fun OcrResultSheet(
                             )
                         },
                         modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smoothPill,
                     ) { Text("Copy") }
                     FilledTonalButton(
                         onClick = {
@@ -1104,6 +1107,7 @@ private fun OcrResultSheet(
                             context.startActivity(Intent.createChooser(intent, "Share"))
                         },
                         modifier = Modifier.weight(1f),
+                        shape = ShapeCache.smoothPill,
                     ) { Text("Share") }
                 }
             }

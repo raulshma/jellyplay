@@ -1,15 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -24,26 +22,27 @@ internal fun PlayerIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    tint: Color = Color.White,
+    tint: Color = Color.Unspecified,
 ) {
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
-    IconButton(
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
+    FilledTonalIconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .size(40.dp)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, CircleShape),
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = tint,
+            .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
+        shape = IconButtonDefaults.smallRoundShape,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = Color.White.copy(alpha = 0.1f),
+            contentColor = effectiveTint,
         ),
-        interactionSource = remember { MutableInteractionSource() },
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(22.dp),
+            tint = effectiveTint,
+            modifier = Modifier.size(IconButtonDefaults.smallIconSize),
         )
     }
 }
@@ -54,17 +53,26 @@ internal fun PlayerSpeedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
-    IconButton(
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    val isActive = speed != 1.0f
+    FilledTonalIconButton(
         onClick = onClick,
         modifier = modifier
-            .size(40.dp)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, CircleShape),
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = if (speed != 1.0f) MaterialTheme.colorScheme.primary else Color.White,
+            .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
+        shape = IconButtonDefaults.smallRoundShape,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            } else {
+                Color.White.copy(alpha = 0.1f)
+            },
+            contentColor = if (isActive) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
         ),
-        interactionSource = remember { MutableInteractionSource() },
     ) {
         Text(
             if (speed == 1.0f) "1x" else "${speed}x",

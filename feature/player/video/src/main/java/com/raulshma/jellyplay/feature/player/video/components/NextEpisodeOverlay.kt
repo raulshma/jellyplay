@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
@@ -48,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -98,37 +98,47 @@ fun NextEpisodeOverlay(
         modifier = modifier,
     ) {
         Surface(
-            modifier = Modifier.width(280.dp),
-            shape = ShapeCache.smooth16,
-            color = Color.Black.copy(alpha = 0.85f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            modifier = Modifier.width(300.dp),
+            shape = ShapeCache.smooth24,
+            color = Color.Black.copy(alpha = 0.8f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
         ) {
             Column {
                 if (!thumbnailUrl.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                            .aspectRatio(16f / 9f),
                         contentAlignment = Alignment.Center,
                     ) {
                         AsyncImage(
                             model = thumbnailUrl,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(ShapeCache.smooth24),
                         )
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.3f))
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.4f),
+                                        )
+                                    )
+                                )
                         )
-                        
-                        val playFocusState = rememberTvFocusState(focusedScale = 1.15f)
+
+                        val playFocusState = rememberTvFocusState(focusedScale = 1.12f)
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                                .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
                                 .then(playFocusState.focusModifier)
                                 .tvFocusIndicator(playFocusState, CircleShape)
                                 .clickable(onClick = onPlayNext),
@@ -138,7 +148,7 @@ fun NextEpisodeOverlay(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = "Play Next",
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(30.dp),
                             )
                         }
 
@@ -146,9 +156,10 @@ fun NextEpisodeOverlay(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(8.dp)
+                                .padding(10.dp)
                                 .size(28.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.12f))
                                 .then(closeFocusState.focusModifier)
                                 .tvFocusIndicator(closeFocusState, CircleShape)
                                 .clickable(onClick = {
@@ -168,31 +179,44 @@ fun NextEpisodeOverlay(
                 }
 
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Next Episode",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Surface(
+                        shape = ShapeCache.smoothPill,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    ) {
+                        Text(
+                            text = "Next Episode",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = episodeTitle,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                        ),
                         color = Color.White,
-                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (!seriesName.isNullOrBlank() || (seasonNumber != null && episodeNumber != null)) {
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = buildString {
                                 if (seriesName != null) append(seriesName)
                                 if (seasonNumber != null && episodeNumber != null) {
-                                    if (isNotEmpty()) append(" • ")
+                                    if (isNotEmpty()) append(" \u00B7 ")
                                     append("S${seasonNumber}E${episodeNumber}")
                                 }
                             },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Medium,
+                            ),
+                            color = Color.White.copy(alpha = 0.6f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -200,15 +224,28 @@ fun NextEpisodeOverlay(
 
                     if (show && countdown > 0) {
                         Spacer(modifier = Modifier.height(12.dp))
-                        LinearProgressIndicator(
-                            progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(ShapeCache.smooth4),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = Color.White.copy(alpha = 0.1f),
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(3.dp)
+                                    .clip(ShapeCache.smoothPill),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = Color.White.copy(alpha = 0.1f),
+                            )
+                            Text(
+                                text = "${countdown}s",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = Color.White.copy(alpha = 0.6f),
+                            )
+                        }
                     }
                 }
             }

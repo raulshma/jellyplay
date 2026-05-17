@@ -12,12 +12,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material3.Icon
@@ -28,7 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun IntroSkipOverlay(
@@ -65,35 +69,39 @@ private fun SkipButtonOverlay(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val skipFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
+        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)) + slideInHorizontally(animationSpec = tween(AnimationTokens.StandardDuration, easing = PointToPointEasing), initialOffsetX = { it / 3 }),
+        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)) + slideOutHorizontally(animationSpec = tween(AnimationTokens.StandardDuration, easing = PointToPointEasing), targetOffsetX = { it / 3 }),
         modifier = modifier,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(ShapeCache.smooth12)
-                .background(Color.Black.copy(alpha = 0.85f))
-                .border(1.dp, Color.White.copy(alpha = 0.15f), ShapeCache.smooth12)
+                .clip(ShapeCache.smoothPill)
+                .background(Color.White.copy(alpha = 0.12f))
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), ShapeCache.smoothPill)
                 .then(skipFocusState.focusModifier)
-                .tvFocusIndicator(skipFocusState, ShapeCache.smooth12)
+                .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
                 .clickable(onClick = onSkip)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
         ) {
             Icon(
                 imageVector = Icons.Default.FastForward,
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.padding(end = 8.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .size(16.dp),
             )
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp,
+                ),
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

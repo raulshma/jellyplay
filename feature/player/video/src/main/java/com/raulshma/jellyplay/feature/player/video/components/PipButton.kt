@@ -4,9 +4,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,19 +20,22 @@ internal fun PipButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
-    IconButton(
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    FilledTonalIconButton(
         onClick = onClick,
         modifier = modifier
-            .size(40.dp)
             .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, CircleShape),
-        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+            .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
+        shape = IconButtonDefaults.smallRoundShape,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = Color.White.copy(alpha = 0.1f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
     ) {
         Icon(
             Icons.Default.PictureInPictureAlt,
             contentDescription = "Picture in Picture",
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(IconButtonDefaults.smallIconSize),
         )
     }
 }

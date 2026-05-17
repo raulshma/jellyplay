@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -31,13 +32,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,8 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -174,6 +177,8 @@ private fun SeekCircleOverlay(
         }
     }
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(tween(AnimationTokens.FastDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.7f, animationSpec = tween(AnimationTokens.FastDuration, easing = PointToPointEasing)),
@@ -192,19 +197,19 @@ private fun SeekCircleOverlay(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(80.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                    .size(90.dp)
+                    .clip(ShapeCache.smooth24)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), ShapeCache.smooth24),
             ) {
                 androidx.compose.foundation.Canvas(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                    modifier = Modifier.size(90.dp),
                 ) {
                     val strokeWidth = 3.dp.toPx()
                     val arcSize = size.minDimension - strokeWidth * 2
                     val topLeft = androidx.compose.ui.geometry.Offset(strokeWidth, strokeWidth)
                     drawArc(
-                        color = Color.White,
+                        color = primaryColor,
                         startAngle = -90f,
                         sweepAngle = 360 * progress,
                         useCenter = false,
@@ -214,12 +219,24 @@ private fun SeekCircleOverlay(
                     )
                 }
 
-                Text(
-                    text = "${seekOffsetMs / 1000}s",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = if (isLeft) Icons.Default.FastRewind else Icons.Default.FastForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = "${seekOffsetMs / 1000}s",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
         }
     }
@@ -242,33 +259,50 @@ private fun EdgeBarOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
             Box(
                 modifier = Modifier
-                    .width(4.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
                     .height(160.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(Color.White.copy(alpha = 0.2f)),
+                    .clip(ShapeCache.smoothPill)
+                    .background(Color.White.copy(alpha = 0.15f)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(value)
-                        .clip(ShapeCache.smooth4)
-                        .background(Color.White.copy(alpha = 0.8f))
+                        .clip(ShapeCache.smoothPill)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                )
+                            )
+                        )
                         .align(Alignment.BottomCenter),
                 )
             }
             Text(
                 label,
                 color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace,
+                ),
             )
         }
     }
