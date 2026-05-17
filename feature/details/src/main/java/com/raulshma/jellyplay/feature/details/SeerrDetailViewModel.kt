@@ -8,8 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -30,6 +32,7 @@ private const val TAG = "SeerrDetailVM"
 class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val seerrPreferencesStore: SeerrPreferencesStore,
 ) : ViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
@@ -37,6 +40,13 @@ class SeerrDetailViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = UserPreferences()
+        )
+
+    val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = SeerrPreferences()
         )
 
     private val _movieDetails = mutableStateOf<SeerrMovieDetails?>(null)
