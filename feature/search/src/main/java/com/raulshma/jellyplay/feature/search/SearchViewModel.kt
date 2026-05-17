@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,9 +62,6 @@ class SearchViewModel @Inject constructor(
     private val _genres = MutableStateFlow<List<Genre>>(emptyList())
     val genres: StateFlow<List<Genre>> = _genres.asStateFlow()
 
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
-
     private val _showFilters = MutableStateFlow(false)
     val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
 
@@ -79,21 +77,25 @@ class SearchViewModel @Inject constructor(
 
     private val queryFlow = MutableStateFlow("")
 
+    // Track the current seerr search job so we can cancel it when the query changes
+    private var seerrSearchJob: Job? = null
+
     val pagedResults: Flow<PagingData<MediaItem>> = queryFlow
         .debounce(400)
         .distinctUntilChanged()
         .flatMapLatest { currentQuery ->
+            // Cancel previous seerr search when query changes
+            seerrSearchJob?.cancel()
             if (currentQuery.isBlank()) {
                 _seerrResults.value = emptyList()
                 flowOf(PagingData.empty())
             } else {
-                _isSearching.value = true
-                // Run seerr search inline so flatMapLatest cancellation propagates
-                searchSeerr(currentQuery)
+                // Launch seerr search in parallel — does not block library search
+                seerrSearchJob = viewModelScope.launch { searchSeerr(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = _filters.value.mediaTypes.ifEmpty { null },
-                ).also { _isSearching.value = false }
+                )
             }
         }
         .cachedIn(viewModelScope)
@@ -151,11 +153,13 @@ class SearchViewModel @Inject constructor(
         posterPath?.let { buildPosterUrl(it) }
 
     private suspend fun searchSeerr(query: String) {
-        _seerrResults.value = emptyList()
         try {
             val connected = seerrRepository.isConnected().first()
             val enabled = seerrRepository.isSearchEnabled().first()
-            if (!connected || !enabled) return
+            if (!connected || !enabled) {
+                _seerrResults.value = emptyList()
+                return
+            }
             seerrRepository.search(query)
                 .onSuccess { response ->
                     _seerrResults.value = response.results.take(10)

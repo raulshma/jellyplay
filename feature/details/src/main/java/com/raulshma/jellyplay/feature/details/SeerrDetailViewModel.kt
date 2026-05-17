@@ -19,6 +19,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -96,39 +98,52 @@ class SeerrDetailViewModel @Inject constructor(
             _seerrRecommendations.value = emptyList()
             _seerrSimilar.value = emptyList()
 
-            if (mediaType == "movie") {
-                seerrRepository.getMovieDetails(tmdbId).onSuccess {
-                    _movieDetails.value = it
-                    updateRatings(it.ratings, it.voteAverage)
-                }.onFailure {
-                    _error.value = it.message
-                }
-            } else {
-                seerrRepository.getTvDetails(tmdbId).onSuccess {
-                    _tvDetails.value = it
-                    updateRatings(it.ratings, it.voteAverage)
-                }.onFailure {
-                    _error.value = it.message
-                }
-            }
-
-            // Fetch RT + IMDB ratings via Seerr server (/api/v1/movie/{id}/ratingscombined or /tv/{id}/ratings)
-            seerrRepository.getRatings(tmdbId, mediaType)
-                .onSuccess {
-                    Log.d(TAG, "Seerr ratings result: rt=${it.rt}, imdb=${it.imdb}")
-                    updateRatings(it, null)
-                }
-                .onFailure {
-                    Log.w(TAG, "Failed to fetch Seerr ratings: ${it.message}")
+            try {
+                if (mediaType == "movie") {
+                    seerrRepository.getMovieDetails(tmdbId).onSuccess {
+                        _movieDetails.value = it
+                        updateRatings(it.ratings, it.voteAverage)
+                    }.onFailure {
+                        _error.value = it.message
+                    }
+                } else {
+                    seerrRepository.getTvDetails(tmdbId).onSuccess {
+                        _tvDetails.value = it
+                        updateRatings(it.ratings, it.voteAverage)
+                    }.onFailure {
+                        _error.value = it.message
+                    }
                 }
 
-            // Load recommendations and similar
-            val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-            seerrRepository.getRecommendations(tmdbId, type).onSuccess {
-                _seerrRecommendations.value = it.results
-            }
-            seerrRepository.getSimilar(tmdbId, type).onSuccess {
-                _seerrSimilar.value = it.results
+                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+
+                coroutineScope {
+                    val ratingsDeferred = async {
+                        seerrRepository.getRatings(tmdbId, mediaType).getOrNull()
+                    }
+                    val recommendationsDeferred = async {
+                        seerrRepository.getRecommendations(tmdbId, type).getOrNull()
+                    }
+                    val similarDeferred = async {
+                        seerrRepository.getSimilar(tmdbId, type).getOrNull()
+                    }
+
+                    val ratingsResult = ratingsDeferred.await()
+                    if (ratingsResult != null) {
+                        Log.d(TAG, "Seerr ratings result: rt=${ratingsResult.rt}, imdb=${ratingsResult.imdb}")
+                        updateRatings(ratingsResult, null)
+                    }
+
+                    recommendationsDeferred.await()?.let {
+                        _seerrRecommendations.value = it.results
+                    }
+
+                    similarDeferred.await()?.let {
+                        _seerrSimilar.value = it.results
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch Seerr details: ${e.message}")
             }
 
             _isLoading.value = false

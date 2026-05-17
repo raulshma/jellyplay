@@ -354,6 +354,7 @@ fun PosterCard(
                     blurHash = blurHash,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
+                    crossfade = false,
                 )
 
                 if (brightnessOverlay > 0.01f) {
