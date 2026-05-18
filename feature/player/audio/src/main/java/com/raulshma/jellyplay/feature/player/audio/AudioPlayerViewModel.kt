@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -89,6 +91,18 @@ class AudioPlayerViewModel @Inject constructor(
     var currentLyricIndex by mutableIntStateOf(-1)
         private set
 
+    var lyricsSource by mutableStateOf(LyricsSource.UNKNOWN)
+        private set
+
+    var isFetchingLyrics by mutableStateOf(false)
+        private set
+
+    var lyricsSearchResults by mutableStateOf<List<LrcLibTrack>>(emptyList())
+        private set
+
+    var isSearchingLyrics by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
             audioPlaybackManager.title.collect { title = it }
@@ -131,6 +145,12 @@ class AudioPlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             audioPlaybackManager.currentLyricIndex.collect { currentLyricIndex = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.lyricsSource.collect { lyricsSource = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.isFetchingLyrics.collect { isFetchingLyrics = it }
         }
         viewModelScope.launch {
             audioPlaybackManager.nightModeEnabled.collect { nightModeEnabled = it }
@@ -274,6 +294,23 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         audioPlaybackManager.getImageUrl(itemId)
+
+    fun searchLyrics(query: String) {
+        isSearchingLyrics = true
+        audioPlaybackManager.searchLyrics(query) { result ->
+            lyricsSearchResults = result.getOrElse { emptyList() }
+            isSearchingLyrics = false
+        }
+    }
+
+    fun applyLyrics(track: LrcLibTrack) {
+        audioPlaybackManager.applyLyrics(track.id)
+        lyricsSearchResults = emptyList()
+    }
+
+    fun clearLyricsSearch() {
+        lyricsSearchResults = emptyList()
+    }
 
     fun stopPlayback() {
         audioPlaybackManager.stopAndRelease()

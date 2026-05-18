@@ -13,7 +13,9 @@ import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
+import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -107,6 +109,12 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _currentLyricIndex = MutableStateFlow(-1)
     val currentLyricIndex: StateFlow<Int> = _currentLyricIndex.asStateFlow()
+
+    private val _lyricsSource = MutableStateFlow(LyricsSource.UNKNOWN)
+    val lyricsSource: StateFlow<LyricsSource> = _lyricsSource.asStateFlow()
+
+    private val _isFetchingLyrics = MutableStateFlow(false)
+    val isFetchingLyrics: StateFlow<Boolean> = _isFetchingLyrics.asStateFlow()
 
     private val _nightModeEnabled = MutableStateFlow(false)
     val nightModeEnabled: StateFlow<Boolean> = _nightModeEnabled.asStateFlow()
@@ -259,7 +267,13 @@ class AudioPlaybackManager @Inject constructor(
                         )
                     )
 
-                    fetchLyrics(itemId)
+                    fetchLyrics(
+                        itemId = itemId,
+                        artistName = detail.item.albumArtist
+                            ?: detail.item.artistItems.firstOrNull()?.name,
+                        trackName = detail.item.name,
+                        durationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
+                    )
                     startPositionTracking()
                     startProgressReporting()
                 }
@@ -461,11 +475,42 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
-    private fun fetchLyrics(itemId: String) {
+    private fun fetchLyrics(
+        itemId: String,
+        artistName: String?,
+        trackName: String?,
+        durationSec: Double?,
+    ) {
         scope.launch {
-            mediaRepository.getLyrics(itemId)
-                .onSuccess { _lyrics.value = it.lines }
-                .onFailure { _lyrics.value = emptyList() }
+            _isFetchingLyrics.value = true
+            mediaRepository.getLyricsWithFallback(itemId, artistName, trackName, durationSec)
+                .onSuccess {
+                    _lyrics.value = it.lines
+                    _lyricsSource.value = it.source
+                }
+                .onFailure {
+                    _lyrics.value = emptyList()
+                    _lyricsSource.value = LyricsSource.UNKNOWN
+                }
+            _isFetchingLyrics.value = false
+        }
+    }
+
+    fun searchLyrics(query: String, callback: (Result<List<LrcLibTrack>>) -> Unit) {
+        scope.launch {
+            val result = mediaRepository.searchLyrics(query)
+            callback(result)
+        }
+    }
+
+    fun applyLyrics(lrcLibId: Long) {
+        val itemId = currentItemId ?: return
+        scope.launch {
+            mediaRepository.getLyricsById(lrcLibId, itemId)
+                .onSuccess {
+                    _lyrics.value = it.lines
+                    _lyricsSource.value = it.source
+                }
         }
     }
 
@@ -482,7 +527,7 @@ class AudioPlaybackManager @Inject constructor(
                         )
                     }
                 }
-                delay(500)
+                delay(100)
             }
         }
     }
@@ -549,6 +594,8 @@ class AudioPlaybackManager @Inject constructor(
         _duration.value = 0L
         _lyrics.value = emptyList()
         _currentLyricIndex.value = -1
+        _lyricsSource.value = LyricsSource.UNKNOWN
+        _isFetchingLyrics.value = false
         playSessionId = UUID.randomUUID().toString()
 
         if (player != null && itemId != null && pos > 0) {

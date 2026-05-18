@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.dao.ServerDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 
@@ -14,12 +16,14 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         ServerEntity::class,
         UserEntity::class,
         DownloadEntity::class,
+        LyricsCacheEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun userDao(): UserDao
     abstract fun downloadDao(): DownloadDao
+    abstract fun lyricsCacheDao(): LyricsCacheDao
 }

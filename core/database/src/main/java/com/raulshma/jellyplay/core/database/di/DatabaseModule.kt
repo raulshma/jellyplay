@@ -43,6 +43,27 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS lyrics_cache (
+                    itemId TEXT PRIMARY KEY NOT NULL,
+                    provider TEXT NOT NULL,
+                    artistName TEXT,
+                    trackName TEXT,
+                    syncedLyrics TEXT,
+                    plainLyrics TEXT,
+                    duration REAL,
+                    lrcLibId INTEGER,
+                    fetchedAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_fetchedAt ON lyrics_cache(fetchedAt)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(
@@ -52,7 +73,7 @@ object DatabaseModule {
         JellyPlayDatabase::class.java,
         "jellyplay.db",
     )
-        .addMigrations(MIGRATION_2_3, MIGRATION_4_5)
+        .addMigrations(MIGRATION_2_3, MIGRATION_4_5, MIGRATION_7_8)
         .fallbackToDestructiveMigration(true)
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()
@@ -65,4 +86,7 @@ object DatabaseModule {
 
     @Provides
     fun provideDownloadDao(database: JellyPlayDatabase) = database.downloadDao()
+
+    @Provides
+    fun provideLyricsCacheDao(database: JellyPlayDatabase) = database.lyricsCacheDao()
 }
