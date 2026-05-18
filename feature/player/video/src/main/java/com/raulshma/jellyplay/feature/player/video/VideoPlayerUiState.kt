@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.IntroTimestamps
@@ -84,6 +86,10 @@ data class VideoPlayerUiState(
     val videoStats: EngineVideoStats = EngineVideoStats(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
+    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    val audioNormalizationEnabled: Boolean = false,
+    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    val channelMixEnabled: Boolean = false,
 ) {
 
     companion object {

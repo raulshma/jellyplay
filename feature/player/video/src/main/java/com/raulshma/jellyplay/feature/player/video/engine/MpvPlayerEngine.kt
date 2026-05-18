@@ -11,8 +11,12 @@ import android.view.View
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
+import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
+import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
@@ -49,15 +53,17 @@ class MpvPlayerEngine(
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
-        supportsMiniMode = false, // Mini-mode reparenting breaks SurfaceView
+        supportsMiniMode = false,
         supportsOcr = false,
         supportsCues = false,
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
-        supportsSubtitleStyle = true, // Basic MPV subtitle properties
+        supportsSubtitleStyle = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
+        supportsAudioNormalization = true,
+        supportsChannelMixing = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -89,6 +95,8 @@ class MpvPlayerEngine(
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
+    private val audioNormalization = AudioNormalizationHelper()
+    private val channelMix = ChannelMixHelper()
 
     private var wasPlayingBeforeActivityPause = false
 
@@ -193,6 +201,29 @@ class MpvPlayerEngine(
             if (currentConfig.audioPassthrough) {
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
+
+            when (currentConfig.audioEffects.channelMixMode) {
+                ChannelMixMode.STEREO_DOWNMIX -> mpv.setOptionString("audio-channels", "stereo")
+                ChannelMixMode.MONO -> mpv.setOptionString("audio-channels", "mono")
+                ChannelMixMode.SURROUND_UPMIX -> mpv.setOptionString("audio-channels", "5.1")
+                ChannelMixMode.AUTO -> mpv.setOptionString("audio-channels", "auto")
+            }
+
+            if (currentConfig.audioEffects.audioNormalizationEnabled) {
+                val afFilters = mutableListOf<String>()
+                when (currentConfig.audioEffects.audioNormalizationMode) {
+                    AudioNormalizationMode.DYNAMIC -> {
+                        afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
+                    }
+                    AudioNormalizationMode.REPLAYGAIN -> {
+                        afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
+                    }
+                    AudioNormalizationMode.NONE -> {}
+                }
+                if (afFilters.isNotEmpty()) {
+                    mpv.setOptionString("af", afFilters.joinToString(","))
+                }
+            }
         }
 
         override fun postInitOptions() {
@@ -242,6 +273,8 @@ class MpvPlayerEngine(
         pendingSubtitles = emptyList()
         dialogueBoost.detach()
         nightMode.detach()
+        audioNormalization.detach()
+        channelMix.detach()
         mpvView?.let { view ->
             view.removeObserver()
             try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
@@ -291,6 +324,29 @@ class MpvPlayerEngine(
             }
 
             applySubtitleStyleInternal(config.subtitleStyle)
+
+            when (config.audioEffects.channelMixMode) {
+                ChannelMixMode.STEREO_DOWNMIX -> mpvView?.mpv?.setPropertyString("audio-channels", "stereo")
+                ChannelMixMode.MONO -> mpvView?.mpv?.setPropertyString("audio-channels", "mono")
+                ChannelMixMode.SURROUND_UPMIX -> mpvView?.mpv?.setPropertyString("audio-channels", "5.1")
+                ChannelMixMode.AUTO -> mpvView?.mpv?.setPropertyString("audio-channels", "auto")
+            }
+
+            if (config.audioEffects.audioNormalizationEnabled) {
+                val afFilters = mutableListOf<String>()
+                when (config.audioEffects.audioNormalizationMode) {
+                    AudioNormalizationMode.DYNAMIC -> {
+                        afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
+                    }
+                    AudioNormalizationMode.REPLAYGAIN -> {
+                        afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
+                    }
+                    AudioNormalizationMode.NONE -> {}
+                }
+                mpvView?.mpv?.setPropertyString("af", afFilters.joinToString(",").ifEmpty { "!" })
+            } else {
+                mpvView?.mpv?.setPropertyString("af", "!")
+            }
             
             val sid = audioSessionId
             if (sid != 0) {
@@ -301,6 +357,14 @@ class MpvPlayerEngine(
                 nightMode.attach(sid)
                 nightMode.setStrength(config.audioEffects.nightModeStrength)
                 nightMode.setEnabled(config.audioEffects.nightModeEnabled)
+
+                audioNormalization.attach(sid)
+                audioNormalization.setMode(config.audioEffects.audioNormalizationMode)
+                audioNormalization.setEnabled(config.audioEffects.audioNormalizationEnabled)
+
+                channelMix.attach(sid)
+                channelMix.setMode(config.audioEffects.channelMixMode)
+                channelMix.setEnabled(config.audioEffects.channelMixEnabled)
             }
         } catch (_: Exception) {}
     }

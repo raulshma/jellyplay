@@ -196,8 +196,8 @@ private fun SeekCircleOverlay(
 
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(tween(AnimationTokens.FastDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.7f, animationSpec = tween(AnimationTokens.FastDuration, easing = PointToPointEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
+        enter = PlayerAnimations.gestureFeedbackEnter,
+        exit = PlayerAnimations.gestureFeedbackExit,
         modifier = modifier,
     ) {
         Box(
@@ -266,8 +266,8 @@ private fun EdgeBarOverlay(
 ) {
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(tween(AnimationTokens.InstantDuration)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+        enter = PlayerAnimations.edgeBarEnter,
+        exit = PlayerAnimations.edgeBarExit,
         modifier = modifier,
     ) {
         Column(

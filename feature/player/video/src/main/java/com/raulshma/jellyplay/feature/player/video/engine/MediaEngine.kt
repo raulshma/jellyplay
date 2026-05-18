@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.view.View
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -55,6 +57,10 @@ data class AudioEffectsConfig(
     val nightModeGain: Int = 0,
     val equalizerEnabled: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
+    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    val audioNormalizationEnabled: Boolean = false,
+    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    val channelMixEnabled: Boolean = false,
 )
 
 data class EngineCapabilities(
@@ -68,6 +74,8 @@ data class EngineCapabilities(
     val supportsSubtitleStyle: Boolean = false,
     val supportsDialogueBoost: Boolean = false,
     val supportsNightMode: Boolean = false,
+    val supportsAudioNormalization: Boolean = false,
+    val supportsChannelMixing: Boolean = false,
 )
 
 enum class EnginePlaybackState {
