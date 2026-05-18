@@ -547,10 +547,9 @@ fun HomeScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(spacing)
                                             ) {
                                                 rowItems.forEach { item ->
-                                                    val imageUrl = buildPosterUrl(item.posterPath)
                                                     SeerrMediaCard(
                                                         item = item,
-                                                        imageUrl = imageUrl,
+                                                        imageUrl = item.posterUrl,
                                                         isLoading = seerrCardLoadingState.isLoading(item.id),
                                                         onClick = {
                                                             val mediaType = when {

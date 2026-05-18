@@ -158,6 +158,54 @@ fun rememberInitialFocus(): FocusRequester {
     return requester
 }
 
+/**
+ * A shared TvFocusState that can be reused across items in the same row.
+ * This reduces the number of animation state objects created for large lists.
+ *
+ * Usage: Place this at the row level and pass the returned state to child items.
+ * Each item should still use [rememberTvFocusState] for per-item focus tracking,
+ * but this can be used for row-level focus indicators or shared animations.
+ */
+@Composable
+fun rememberRowSharedFocusState(
+    focusedScale: Float = 1.08f,
+    focusedBorderWidth: Dp = TvFocusDefaults.BorderWidth,
+): TvFocusState {
+    val isTv = LocalTvMode.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isFocused) focusedScale else 1f,
+        label = "tvFocusScaleShared",
+    )
+
+    val animatedBorder by animateDpAsState(
+        targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
+        label = "tvFocusBorderShared",
+    )
+
+    val animatedGlowElevation by animateDpAsState(
+        targetValue = if (isFocused && isTv) TvFocusDefaults.GlowElevation else 0.dp,
+        label = "tvFocusGlowShared",
+    )
+
+    val focusModifier = if (isTv) {
+        Modifier.onFocusChanged { focusState ->
+            isFocused = focusState.isFocused
+        }
+    } else {
+        Modifier
+    }
+
+    return TvFocusState(
+        isFocused = isFocused && isTv,
+        scale = if (isTv) 1f else animatedScale,
+        borderWidth = animatedBorder,
+        glowElevation = animatedGlowElevation,
+        focusModifier = focusModifier,
+    )
+}
+
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun Modifier.tvFocusExitHandler(): Modifier {

@@ -192,13 +192,16 @@ fun MediaDetailScreen(
 
         // Seerr card loading state for prefetch animation
         val seerrLoadingState = rememberSeerrCardLoadingState()
-        val seerrPrefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
-            seerrLoadingState.startLoading(tmdbId)
-            viewModel.prefetchSeerrDetails(tmdbId, mediaType) {
-                seerrLoadingState.stopLoading(tmdbId)
-                onDone()
+        val seerrPrefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
+            remember(seerrLoadingState, viewModel) {
+                { tmdbId, mediaType, onDone ->
+                    seerrLoadingState.startLoading(tmdbId)
+                    viewModel.prefetchSeerrDetails(tmdbId, mediaType) {
+                        seerrLoadingState.stopLoading(tmdbId)
+                        onDone()
+                    }
+                }
             }
-        }
 
         androidx.compose.runtime.CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides seerrPrefetchCallback,
@@ -378,29 +381,20 @@ private fun DetailContent(
         animationSpec = tween(durationMillis = 500, easing = AlphaEasing),
         label = "contentAlpha",
     )
-    val appBarColor by animateFloatAsState(
+
+    val scrollCollapsed by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
         animationSpec = tween(durationMillis = 300, easing = FancyTransitionEasing),
-        label = "appBarColor",
+        label = "scrollCollapsed",
     )
 
     val animatedContainerColor = lerp(
         Color.Transparent,
         backgroundColor.copy(alpha = 0.95f),
-        appBarColor,
+        scrollCollapsed,
     )
 
-    val animatedIconColor = lerp(
-        Color.White,
-        Color.White,
-        appBarColor,
-    )
-
-    val animatedTitleAlpha by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
-        label = "titleAlpha",
-    )
+    val animatedTitleAlpha = scrollCollapsed
 
     val targetBackdropId = if (item?.mediaType == MediaType.EPISODE && item.seriesId != null) {
         item.seriesId!!
@@ -784,7 +778,7 @@ private fun DetailContent(
                                 .padding(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                    color = if (scrollCollapsed < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
                                 )
                                 .then(backFocusState.focusModifier)
                                 .tvFocusIndicator(backFocusState, CircleShape)
@@ -794,7 +788,7 @@ private fun DetailContent(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = animatedIconColor,
+                                tint = Color.White,
                                 modifier = Modifier.padding(8.dp),
                             )
                         }
@@ -805,13 +799,13 @@ private fun DetailContent(
                                 .padding(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    color = if (appBarColor < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                    color = if (scrollCollapsed < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
                                 )
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = animatedIconColor,
+                                tint = Color.White,
                             )
                         }
                     }
@@ -2041,13 +2035,12 @@ private fun DetailContentBody(
                             contentType = { "seerrRecItem" },
                         ) { index ->
                             val seerrItem = seerrRecommendations[index]
-                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
                             val adaptiveInfo = LocalAdaptiveInfo.current
                             val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
                             val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
                             SeerrMediaCard(
                                 item = seerrItem,
-                                imageUrl = posterUrl,
+                                imageUrl = seerrItem.posterUrl,
                                 isLoading = loadingState?.isLoading(seerrItem.id) == true,
                                 onClick = {
                                     if (loadingState != null && prefetch != null) {
@@ -2095,13 +2088,12 @@ private fun DetailContentBody(
                             contentType = { "seerrSimItem" },
                         ) { index ->
                             val seerrItem = seerrSimilar[index]
-                            val posterUrl = getSeerrPosterUrl(seerrItem.posterPath)
                             val adaptiveInfo = LocalAdaptiveInfo.current
                             val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
                             val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
                             SeerrMediaCard(
                                 item = seerrItem,
-                                imageUrl = posterUrl,
+                                imageUrl = seerrItem.posterUrl,
                                 isLoading = loadingState?.isLoading(seerrItem.id) == true,
                                 onClick = {
                                     if (loadingState != null && prefetch != null) {
