@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,9 +73,18 @@ fun TrickplayOverlay(
                     .background(Color.Black),
                 contentAlignment = Alignment.Center,
             ) {
-                if (bitmap != null) {
+                val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
+                val thumbnailOverlayGradient = remember {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.75f),
+                        ),
+                    )
+                }
+                if (imageBitmap != null) {
                     Image(
-                        bitmap = bitmap.asImageBitmap(),
+                        bitmap = imageBitmap,
                         contentDescription = "Trickplay thumbnail",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -86,14 +96,7 @@ fun TrickplayOverlay(
                             .fillMaxWidth()
                             .height(44.dp)
                             .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.75f),
-                                    ),
-                                ),
-                            ),
+                            .background(thumbnailOverlayGradient),
                     )
                 } else {
                     Box(

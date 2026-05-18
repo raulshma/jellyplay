@@ -45,6 +45,7 @@ internal class SyncPlayController(
     private var scheduledCommandJob: Job? = null
     private var syncCorrectionEnabled = false
     private var syncCorrectionJob: Job? = null
+    private var syncStateResetJob: Job? = null
     private var pendingItemLoad = false
 
     private val minDelaySkipToSync = 400.0
@@ -102,6 +103,7 @@ internal class SyncPlayController(
     fun reset() {
         scheduledCommandJob?.cancel()
         syncCorrectionJob?.cancel()
+        syncStateResetJob?.cancel()
         syncCorrectionEnabled = false
         suppressNextPausedReadyReport = false
         lastCommand = null
@@ -515,7 +517,8 @@ internal class SyncPlayController(
             val seekMs = serverPositionTicks / 10_000
             engine.seekTo(seekMs)
             uiState.update { it.copy(isSyncPlaySyncing = true) }
-            viewModel.viewModelScope.launch {
+            syncStateResetJob?.cancel()
+            syncStateResetJob = viewModel.viewModelScope.launch {
                 delay(maxDelaySpeedToSync.toLong() / 2)
                 uiState.update { it.copy(isSyncPlaySyncing = false) }
             }
@@ -524,7 +527,8 @@ internal class SyncPlayController(
             val speed = (1.0 + diffMs / speedToSyncDuration).toFloat().coerceIn(0.8f, 1.5f)
             engine.setPlaybackSpeed(speed)
             uiState.update { it.copy(isSyncPlaySyncing = true) }
-            viewModel.viewModelScope.launch {
+            syncStateResetJob?.cancel()
+            syncStateResetJob = viewModel.viewModelScope.launch {
                 delay(speedToSyncDuration.toLong())
                 if (syncCorrectionEnabled) {
                     engine.setPlaybackSpeed(1.0f)

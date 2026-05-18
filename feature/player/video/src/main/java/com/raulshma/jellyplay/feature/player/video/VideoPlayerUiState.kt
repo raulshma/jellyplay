@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.IntroTimestamps
@@ -9,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -81,12 +84,18 @@ data class VideoPlayerUiState(
     val bufferedPosition: Long = 0L,
     val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
+    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    val showPlaybackErrorDialog: Boolean = false,
+    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    val audioNormalizationEnabled: Boolean = false,
+    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    val channelMixEnabled: Boolean = false,
 ) {
-    /** Chapter names that indicate an intro segment (case-insensitive). */
-    private val introChapterNames: Set<String> get() = setOf("intro", "introduction", "opening", "op")
 
-    /** Chapter names that indicate an outro/credits segment (case-insensitive). */
-    private val outroChapterNames: Set<String> get() = setOf("outro", "credits", "end credits", "ending", "ed")
+    companion object {
+        private val INTRO_CHAPTER_NAMES = setOf("intro", "introduction", "opening", "op")
+        private val OUTRO_CHAPTER_NAMES = setOf("outro", "credits", "end credits", "ending", "ed")
+    }
 
     val isInIntro: Boolean
         get() {
@@ -98,8 +107,7 @@ data class VideoPlayerUiState(
                 val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.introEndTicks
                 if (posTicks >= promptStart && posTicks < promptEnd) return true
             }
-            // Fallback: check chapter-based intro segment
-            return isInChapterSegment(introChapterNames)
+            return isInChapterSegment(INTRO_CHAPTER_NAMES)
         }
 
     val isInCredits: Boolean
@@ -112,8 +120,7 @@ data class VideoPlayerUiState(
                 val promptEnd = if (ts.hideSkipPromptAtTicks > 0) ts.hideSkipPromptAtTicks else ts.creditEndTicks
                 if (posTicks >= promptStart && posTicks < promptEnd) return true
             }
-            // Fallback: check chapter-based outro/credits segment
-            return isInChapterSegment(outroChapterNames)
+            return isInChapterSegment(OUTRO_CHAPTER_NAMES)
         }
 
     val shouldShowUpNext: Boolean
@@ -179,7 +186,7 @@ data class VideoPlayerUiState(
 
         val chapter = chapters[currentChapterIndex]
         val chapterNameLower = chapter.name.trim().lowercase()
-        if (chapterNameLower !in outroChapterNames) return null
+        if (chapterNameLower !in OUTRO_CHAPTER_NAMES) return null
 
         return chapter
     }
@@ -189,13 +196,12 @@ data class VideoPlayerUiState(
         get() {
             val ts = introTimestamps
             if (ts != null && ts.hasIntro && isInIntro) return ts.introEndTicks
-            // Chapter-based fallback
             if (chapters.isEmpty() || !isInIntro) return null
             val posTicks = currentPosition * 10_000
             val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
             if (idx < 0) return null
             val chapterNameLower = chapters[idx].name.trim().lowercase()
-            if (chapterNameLower !in introChapterNames) return null
+            if (chapterNameLower !in INTRO_CHAPTER_NAMES) return null
             return if (idx + 1 < chapters.size) chapters[idx + 1].startPositionTicks else duration * 10_000
         }
 
@@ -204,13 +210,12 @@ data class VideoPlayerUiState(
         get() {
             val ts = creditTimestamps
             if (ts != null && ts.hasCredits && isInCredits) return ts.creditEndTicks
-            // Chapter-based fallback
             if (chapters.isEmpty() || !isInCredits) return null
             val posTicks = currentPosition * 10_000
             val idx = chapters.indexOfLast { it.startPositionTicks <= posTicks }
             if (idx < 0) return null
             val chapterNameLower = chapters[idx].name.trim().lowercase()
-            if (chapterNameLower !in outroChapterNames) return null
+            if (chapterNameLower !in OUTRO_CHAPTER_NAMES) return null
             return if (idx + 1 < chapters.size) chapters[idx + 1].startPositionTicks else duration * 10_000
         }
 

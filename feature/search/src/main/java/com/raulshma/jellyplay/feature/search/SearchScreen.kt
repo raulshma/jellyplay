@@ -109,14 +109,14 @@ fun SearchScreen(
     val query = viewModel.query
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
-    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
+    val isRefreshing = pagedResults.loadState.refresh is LoadState.Loading
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = isSearching,
+        isLoading = isRefreshing,
         hasError = false,
         networkStatus = networkStatus,
     )
@@ -401,164 +401,196 @@ fun SearchScreen(
             // ═══════════════════════════════════════════════════════════════
             // ── Grid Content
             // ═══════════════════════════════════════════════════════════════
-            Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    pagedResults.itemCount == 0 && query.isNotBlank() && !isSearching -> {
-                        // ── Empty state ──
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color.White.copy(alpha = 0.3f),
-                                )
-                                Text(
-                                    text = "No results found",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                )
-                                if (hasActiveFilters) {
-                                    Text(
-                                        text = "Try adjusting your filters",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.3f),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    pagedResults.itemCount == 0 && query.isBlank() -> {
-                        // ── Initial state ──
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = Color.White.copy(alpha = 0.15f),
-                                )
-                                Text(
-                                    text = "Search your library",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White.copy(alpha = 0.4f),
-                                )
-                                Text(
-                                    text = "Movies, shows, music, and more",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.25f),
-                                )
-                            }
-                        }
-                    }
-                    else -> {
-                        // Collect Seerr state
-                        val seerrResults by viewModel.seerrResults.collectAsStateWithLifecycle()
-                        val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
-                        val isSeerrSearchEnabled by viewModel.isSeerrSearchEnabled.collectAsStateWithLifecycle()
-                        val showSeerr = isSeerrConnected && isSeerrSearchEnabled && seerrResults.isNotEmpty()
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Collect Seerr state (outside when block so it's always available)
+                val seerrResults by viewModel.seerrResults.collectAsStateWithLifecycle()
+                val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
+                val isSeerrSearchEnabled by viewModel.isSeerrSearchEnabled.collectAsStateWithLifecycle()
+                val showSeerr = isSeerrConnected && isSeerrSearchEnabled && seerrResults.isNotEmpty()
 
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Seerr results horizontal section (above library results)
-                            if (showSeerr) {
+                // Seerr results horizontal section (shown independently of library results)
+                if (showSeerr) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = contentPad, end = contentPad, top = 12.dp),
+                    ) {
+                        Text(
+                            text = "Request via Seerr",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                            contentPadding = PaddingValues(end = contentPad),
+                        ) {
+                            items(
+                                count = seerrResults.size,
+                                key = { index -> "seerr-${seerrResults[index].id}" },
+                                contentType = { "seerrSearchResult" },
+                            ) { index ->
+                                val seerrItem = seerrResults[index]
+                                SeerrMediaCard(
+                                    item = seerrItem,
+                                    imageUrl = seerrItem.posterUrl,
+                                    isLoading = seerrLoadingState.isLoading(seerrItem.id),
+                                    onClick = {
+                                        seerrLoadingState.startLoading(seerrItem.id)
+                                        viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
+                                            seerrLoadingState.stopLoading(seerrItem.id)
+                                            onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    },
+                                    onRequestClick = { requestItem = seerrItem },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Library content (grid, empty state, or initial state)
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    when {
+                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr -> {
+                            // ── Empty state ──
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = contentPad, end = contentPad, top = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    Text(
-                                        text = "Request via Seerr",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = Color.White.copy(alpha = 0.6f),
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = Color.White.copy(alpha = 0.3f),
                                     )
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(spacing),
-                                        contentPadding = PaddingValues(end = contentPad),
-                                    ) {
-                                        items(
-                                            count = seerrResults.size,
-                                            key = { index -> "seerr-${seerrResults[index].id}" },
-                                        ) { index ->
-                                            val seerrItem = seerrResults[index]
-                                            val posterUrl = viewModel.getSeerrPosterUrl(seerrItem.posterPath)
-                                            SeerrMediaCard(
-                                                item = seerrItem,
-                                                imageUrl = posterUrl,
-                                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
-                                                onClick = {
-                                                    seerrLoadingState.startLoading(seerrItem.id)
-                                                    viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
-                                                        seerrLoadingState.stopLoading(seerrItem.id)
-                                                        onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                                    }
-                                                },
-                                                onRequestClick = { requestItem = seerrItem },
+                                    Text(
+                                        text = "No results found",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = Color.White.copy(alpha = 0.5f),
+                                    )
+                                    if (hasActiveFilters) {
+                                        Text(
+                                            text = "Try adjusting your filters",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.3f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        pagedResults.itemCount == 0 && query.isBlank() && !showSeerr -> {
+                            // ── Initial state ──
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = Color.White.copy(alpha = 0.15f),
+                                    )
+                                    Text(
+                                        text = "Search your library",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = Color.White.copy(alpha = 0.4f),
+                                    )
+                                    Text(
+                                        text = "Movies, shows, music, and more",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.25f),
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            // ── Library grid ──
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(gridCellSize),
+                                contentPadding = gridPadding,
+                                horizontalArrangement = Arrangement.spacedBy(spacing),
+                                verticalArrangement = Arrangement.spacedBy(spacing),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(
+                                    count = pagedResults.itemCount,
+                                    key = pagedResults.itemKey { it.id },
+                                    contentType = { "mediaItem" },
+                                ) { index ->
+                                    val item = pagedResults[index]
+                                    if (item != null) {
+                                        AnimatedSearchItem(index = index) {
+                                            PosterCard(
+                                                item = item,
+                                                imageUrl = viewModel.getImageUrl(item.id),
+                                                onClick = { onItemClick(item.id) },
+                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                } else 0f,
+                                                blurHash = item.blurHashes.primary,
                                             )
                                         }
                                     }
                                 }
                             }
 
-                            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(gridCellSize),
-                                    contentPadding = gridPadding,
-                                    horizontalArrangement = Arrangement.spacedBy(spacing),
-                                    verticalArrangement = Arrangement.spacedBy(spacing),
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    items(
-                                        count = pagedResults.itemCount,
-                                        key = pagedResults.itemKey { it.id },
-                                        contentType = { "mediaItem" },
-                                    ) { index ->
-                                        val item = pagedResults[index]
-                                        if (item != null) {
-                                            AnimatedSearchItem(index = index) {
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = viewModel.getImageUrl(item.id),
-                                                    onClick = { onItemClick(item.id) },
-                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                    } else 0f,
-                                                    blurHash = item.blurHashes.primary,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // ── Append loading (gradient fade + progress bar) ──
-                                if (pagedResults.loadState.append is LoadState.Loading) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .fillMaxWidth()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        Color.Transparent,
-                                                        backgroundColor,
-                                                    ),
-                                                )
+                            // ── Append loading (gradient fade + progress bar) ──
+                            if (pagedResults.loadState.append is LoadState.Loading) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    backgroundColor,
+                                                ),
                                             )
-                                            .padding(vertical = 20.dp),
+                                        )
+                                        .padding(vertical = 20.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    androidx.compose.material3.LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.4f)
+                                            .clip(ShapeCache.smooth4),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = Color.White.copy(alpha = 0.1f),
+                                    )
+                                }
+                            }
+
+                            // ── Append error ──
+                            if (pagedResults.loadState.append is LoadState.Error) {
+                                val appendError = pagedResults.loadState.append as LoadState.Error
+                                Text(
+                                    text = appendError.error.localizedMessage ?: "Failed to load more",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                )
+                            }
+
+                            // ── Refresh loading ──
+                            when (val refreshState = pagedResults.loadState.refresh) {
+                                is LoadState.Loading -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         androidx.compose.material3.LinearProgressIndicator(
@@ -570,51 +602,19 @@ fun SearchScreen(
                                         )
                                     }
                                 }
-
-                                // ── Append error ──
-                                if (pagedResults.loadState.append is LoadState.Error) {
-                                    val appendError = pagedResults.loadState.append as LoadState.Error
-                                    Text(
-                                        text = appendError.error.localizedMessage ?: "Failed to load more",
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .padding(16.dp)
-                                            .fillMaxWidth(),
+                                is LoadState.Error -> {
+                                    ErrorScreen(
+                                        message = refreshState.error.localizedMessage ?: "Search failed",
+                                        onRetry = { pagedResults.refresh() },
+                                        modifier = Modifier.fillMaxSize(),
                                     )
                                 }
-
-                                // ── Refresh loading ──
-                                when (val refreshState = pagedResults.loadState.refresh) {
-                                    is LoadState.Loading -> {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            androidx.compose.material3.LinearProgressIndicator(
-                                                modifier = Modifier
-                                                    .fillMaxWidth(0.4f)
-                                                    .clip(ShapeCache.smooth4),
-                                                color = MaterialTheme.colorScheme.primary,
-                                                trackColor = Color.White.copy(alpha = 0.1f),
-                                            )
-                                        }
-                                    }
-                                    is LoadState.Error -> {
-                                        ErrorScreen(
-                                            message = refreshState.error.localizedMessage ?: "Search failed",
-                                            onRetry = { pagedResults.refresh() },
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    }
-                                    is LoadState.NotLoading -> Unit
-                                }
-                            } // close inner Box(weight)
-                        } // close Column(else branch content)
+                                is LoadState.NotLoading -> Unit
+                            }
+                        }
                     }
-                }
-            }
+                } // close Box(library content)
+            } // close Column(Grid Content)
         }
     }
 

@@ -15,6 +15,7 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
+import okhttp3.Protocol
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -72,6 +73,8 @@ abstract class NetworkModule {
                 .writeTimeout(15, TimeUnit.SECONDS)
                 .cache(Cache(cacheDir, 50L * 1024 * 1024))
                 .connectionPool(ConnectionPool(5, 10, TimeUnit.MINUTES))
+                .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+                .retryOnConnectionFailure(true)
                 .build()
         }
     }

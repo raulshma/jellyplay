@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -47,10 +50,12 @@ class HomeViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
-) : ViewModel() {
+) : ViewModel(), DefaultLifecycleObserver {
 
     companion object {
-        private const val REFRESH_INTERVAL_MS = 60_000L
+        private const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
+        private const val REFRESH_INTERVAL_BACKGROUND_MS = 120_000L
+        private const val MIN_REFRESH_INTERVAL_MS = 30_000L
     }
 
     var sections by mutableStateOf<List<HomeSection>>(emptyList())
@@ -84,8 +89,12 @@ class HomeViewModel @Inject constructor(
     private var refreshJob: Job? = null
     private var homeScrollPosition = HomeScrollPosition()
     private var homeFocusPosition = HomeFocusPosition()
+    private var lastRefreshTime = 0L
+    private var isAppInForeground = true
 
     init {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        
         // First, listen for user changes 
         viewModelScope.launch {
             var previousUserId: String? = null
@@ -161,6 +170,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun fetchAndUpdateSections() {
         if (!refreshMutex.tryLock()) return
         try {
+            lastRefreshTime = System.currentTimeMillis()
             val prefs = preferencesStore.preferences.first()
             mediaRepository.getHomeSections()
                 .onSuccess { fetchedSections ->
@@ -257,10 +267,32 @@ class HomeViewModel @Inject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             while (true) {
-                delay(REFRESH_INTERVAL_MS)
+                val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
+                delay(interval)
+
+                val now = System.currentTimeMillis()
+                if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
+
                 fetchAndUpdateSections()
+                lastRefreshTime = System.currentTimeMillis()
             }
         }
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        super.onStart(owner)
+        isAppInForeground = true
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        super.onStop(owner)
+        isAppInForeground = false
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
+        refreshJob?.cancel()
     }
 
     private fun isAllowedForKids(item: MediaItem, maxRating: String): Boolean {

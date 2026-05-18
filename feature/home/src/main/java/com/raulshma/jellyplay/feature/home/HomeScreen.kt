@@ -70,6 +70,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,6 +115,8 @@ import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
@@ -189,15 +193,6 @@ fun HomeScreen(
         }
     }
 
-    if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
-        LaunchedEffect(featuredCandidates) {
-            while (true) {
-                delay(8000)
-                featuredIndex = (featuredIndex + 1) % featuredCandidates.size
-            }
-        }
-    }
-
     val featuredItem = remember(featuredCandidates, featuredIndex) {
         featuredCandidates.getOrNull(featuredIndex)
     }
@@ -268,25 +263,20 @@ fun HomeScreen(
             }
         }
 
-        if (featuredCandidates.isNotEmpty() && autoRotateEnabled && focusInHero) {
-            LaunchedEffect(featuredCandidates, listState) {
-                while (true) {
-                    delay(8000)
-                    if (!listState.isScrollInProgress) {
-                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
-                    } else {
-                        var scrollStopped = false
-                        while (!scrollStopped) {
-                            delay(500)
-                            if (!listState.isScrollInProgress) {
-                                scrollStopped = true
-                            }
+        LaunchedEffect(featuredCandidates, listState) {
+            if (featuredCandidates.isEmpty() || !autoRotateEnabled || !focusInHero) return@LaunchedEffect
+
+            snapshotFlow { listState.isScrollInProgress }
+                .collectLatest { isScrolling ->
+                    if (!isScrolling) {
+                        delay(8000)
+                        if (autoRotateEnabled && focusInHero) {
+                            featuredIndex = (featuredIndex + 1) % featuredCandidates.size
                         }
+                    } else {
                         delay(2000)
-                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
                     }
                 }
-            }
         }
 
         ArtworkThemeWrapper(
@@ -438,18 +428,21 @@ fun HomeScreen(
                                     item { Spacer(Modifier.height(100.dp)) }
                                 }
 
-                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection" }) { index ->
+                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
-                                    val isSectionVisible by remember {
+                                    val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
+                                    
+                                    val isCurrentlyVisible by remember {
                                         derivedStateOf {
-                                            val layoutInfo = listState.layoutInfo
-                                            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index + (if (featuredItem != null) 1 else 0) }
-                                            itemInfo != null
+                                            listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
                                         }
                                     }
-                                    var hasBeenVisible by rememberSaveable { mutableStateOf(isSectionVisible) }
-                                    if (isSectionVisible) hasBeenVisible = true
+                                    
+                                    var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
+                                    if (isCurrentlyVisible && !hasBeenVisible) {
+                                        hasBeenVisible = true
+                                    }
 
                                     val sectionAlpha by animateFloatAsState(
                                         targetValue = if (hasBeenVisible) 1f else 0f,
@@ -554,10 +547,9 @@ fun HomeScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(spacing)
                                             ) {
                                                 rowItems.forEach { item ->
-                                                    val imageUrl = buildPosterUrl(item.posterPath)
                                                     SeerrMediaCard(
                                                         item = item,
-                                                        imageUrl = imageUrl,
+                                                        imageUrl = item.posterUrl,
                                                         isLoading = seerrCardLoadingState.isLoading(item.id),
                                                         onClick = {
                                                             val mediaType = when {
@@ -626,24 +618,15 @@ fun HomeScreen(
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
                             .height(64.dp)
+                            .statusBarsPadding()
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        HeaderStatusIndicator(
+                            status = headerStatus,
                             modifier = Modifier.padding(start = contentPad),
-                        ) {
-                            ModeSwitch(
-                                currentMode = viewModel.homeMode,
-                                onModeChange = onModeChange,
-                            )
-                            HeaderStatusIndicator(
-                                status = headerStatus,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
+                        )
 
                         Spacer(Modifier.weight(1f))
 
@@ -653,6 +636,10 @@ fun HomeScreen(
                                 .padding(horizontal = 4.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                ModeSwitch(
+                                    currentMode = viewModel.homeMode,
+                                    onModeChange = onModeChange,
+                                )
                                 IconButton(
                                     onClick = {
                                         showSurprise = !showSurprise
@@ -1217,6 +1204,7 @@ private fun WideMediaCard(
                     blurHash = item.blurHashes.backdrop,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
+                    crossfade = false,
                 )
 
                 if (brightnessOverlay > 0.01f) {
@@ -1307,12 +1295,42 @@ private fun WideMediaCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            } else if (item.year != null) {
-                Text(
-                    text = item.year.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.55f),
-                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (item.year != null) {
+                        Text(
+                            text = item.year.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.55f),
+                        )
+                    }
+                    val isSeries = item.mediaType == MediaType.SERIES
+                    val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+                    val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+                    val remainingTime = if (hasWatchProgress && hasValidDuration) {
+                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                    } else null
+                    val totalTime = if (hasValidDuration && !hasWatchProgress) {
+                        formatDurationFromTicks(item.runTimeTicks!!)
+                    } else null
+                    
+                    val timeText = remainingTime ?: totalTime
+                    if (timeText != null) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.4f),
+                        )
+                        Text(
+                            text = if (remainingTime != null) "$timeText left" else timeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (remainingTime != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                        )
+                    }
+                }
             }
         }
     }
