@@ -9,8 +9,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
+import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
@@ -56,6 +60,8 @@ class LibVlcPlayerEngine(
         supportsSubtitleStyle = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
+        supportsAudioNormalization = true,
+        supportsChannelMixing = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -87,6 +93,8 @@ class LibVlcPlayerEngine(
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
+    private val audioNormalization = AudioNormalizationHelper()
+    private val channelMix = ChannelMixHelper()
 
     private var pendingPlay = false
     private var wasPlayingBeforeActivityPause = false
@@ -132,6 +140,12 @@ class LibVlcPlayerEngine(
                 }
                 if (currentConfig.audioEffects.nightModeEnabled) {
                     applyNightMode()
+                }
+                if (currentConfig.audioEffects.audioNormalizationEnabled) {
+                    applyAudioNormalization()
+                }
+                if (currentConfig.audioEffects.channelMixEnabled) {
+                    applyChannelMix()
                 }
             }
             MediaPlayer.Event.Paused -> {
@@ -197,6 +211,28 @@ class LibVlcPlayerEngine(
             options.add("--codec=ac3,eac3,dts,dtshd,truehd")
         }
 
+        when (currentConfig.audioEffects.channelMixMode) {
+            ChannelMixMode.STEREO_DOWNMIX -> options.add("--stereo-mode=stereo")
+            ChannelMixMode.MONO -> options.add("--stereo-mode=mono")
+            ChannelMixMode.SURROUND_UPMIX -> options.add("--stereo-mode=surround")
+            ChannelMixMode.AUTO -> {}
+        }
+
+        if (currentConfig.audioEffects.audioNormalizationEnabled) {
+            when (currentConfig.audioEffects.audioNormalizationMode) {
+                AudioNormalizationMode.DYNAMIC -> {
+                    options.add("--audio-filter=compressor")
+                    options.add("--compressor-ratio=3")
+                    options.add("--compressor-threshold=-18")
+                }
+                AudioNormalizationMode.REPLAYGAIN -> {
+                    options.add("--audio-filter=normvol")
+                    options.add("--norm-max-level=0.8")
+                }
+                AudioNormalizationMode.NONE -> {}
+            }
+        }
+
         val vlc = try {
             LibVLC(context.applicationContext, options)
         } catch (e: Exception) {
@@ -249,6 +285,8 @@ class LibVlcPlayerEngine(
         currentPlaybackRequest = null
         dialogueBoost.detach()
         nightMode.detach()
+        audioNormalization.detach()
+        channelMix.detach()
         val mp = mediaPlayer ?: return
         mediaPlayer = null
         mp.setEventListener(null)
@@ -312,6 +350,20 @@ class LibVlcPlayerEngine(
             ) {
                 if (_isPlaying.value) {
                     applyNightMode()
+                }
+            }
+
+            if (oldConfig.audioEffects.audioNormalizationEnabled != config.audioEffects.audioNormalizationEnabled
+                || oldConfig.audioEffects.audioNormalizationMode != config.audioEffects.audioNormalizationMode
+            ) {
+                if (_isPlaying.value) {
+                    applyAudioNormalization()
+                }
+            }
+
+            if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
+                if (_isPlaying.value) {
+                    applyChannelMix()
                 }
             }
 
@@ -607,6 +659,24 @@ class LibVlcPlayerEngine(
             nightMode.attach(sid)
             nightMode.setStrength(currentConfig.audioEffects.nightModeStrength)
             nightMode.setEnabled(currentConfig.audioEffects.nightModeEnabled)
+        }
+    }
+
+    private fun applyAudioNormalization() {
+        val sid = audioSessionId
+        if (sid != 0) {
+            audioNormalization.attach(sid)
+            audioNormalization.setMode(currentConfig.audioEffects.audioNormalizationMode)
+            audioNormalization.setEnabled(currentConfig.audioEffects.audioNormalizationEnabled)
+        }
+    }
+
+    private fun applyChannelMix() {
+        val sid = audioSessionId
+        if (sid != 0) {
+            channelMix.attach(sid)
+            channelMix.setMode(currentConfig.audioEffects.channelMixMode)
+            channelMix.setEnabled(currentConfig.audioEffects.channelMixEnabled)
         }
     }
 }

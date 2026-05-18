@@ -94,6 +94,10 @@ data class UserPreferences(
     val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
     val syncPlaySpeedToSyncDurationMs: Long = 1000,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    val audioNormalizationEnabled: Boolean = false,
+    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    val channelMixEnabled: Boolean = false,
 )
 
 @Immutable

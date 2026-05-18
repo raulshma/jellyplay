@@ -30,6 +30,8 @@ import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
+import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
+import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -69,6 +71,8 @@ class ExoPlayerEngine(
         supportsSubtitleStyle = true,
         supportsDialogueBoost = true,
         supportsNightMode = true,
+        supportsAudioNormalization = true,
+        supportsChannelMixing = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -103,6 +107,8 @@ class ExoPlayerEngine(
     private val dialogueBoost = DialogueBoostHelper()
     private val nightMode = NightModeHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val audioNormalizationHelper = AudioNormalizationHelper()
+    private val channelMixHelper = ChannelMixHelper()
 
     private var lastVideoStats: EngineVideoStats? = null
 
@@ -544,12 +550,22 @@ class ExoPlayerEngine(
         equalizerHelper.attach(sid)
         equalizerHelper.setSettings(currentConfig.audioEffects.equalizerSettings)
         equalizerHelper.setEnabled(currentConfig.audioEffects.equalizerEnabled)
+
+        audioNormalizationHelper.attach(sid)
+        audioNormalizationHelper.setMode(currentConfig.audioEffects.audioNormalizationMode)
+        audioNormalizationHelper.setEnabled(currentConfig.audioEffects.audioNormalizationEnabled)
+
+        channelMixHelper.attach(sid)
+        channelMixHelper.setMode(currentConfig.audioEffects.channelMixMode)
+        channelMixHelper.setEnabled(currentConfig.audioEffects.channelMixEnabled)
     }
 
     private fun releaseAudioEffects() {
         dialogueBoost.detach()
         nightMode.detach()
         equalizerHelper.detach()
+        audioNormalizationHelper.detach()
+        channelMixHelper.detach()
     }
 
     private fun buildTracks(): List<MediaTrack> {
