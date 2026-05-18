@@ -239,6 +239,13 @@ fun MediaDetailScreen(
             onItemClick = onItemClick,
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
+            onSeasonSelected = { seasonId ->
+                val seriesId = detail?.item?.seriesId ?: itemId
+                viewModel.loadEpisodesForSeason(seriesId, seasonId)
+            },
+            onLoadSeerrData = {
+                detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
+            },
             onBack = onBack,
             seerrRecommendations = seerrRecommendations,
             seerrSimilar = seerrSimilar,
@@ -312,6 +319,8 @@ private fun DetailContent(
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
+    onSeasonSelected: (seasonId: String) -> Unit = {},
+    onLoadSeerrData: () -> Unit = {},
     onBack: () -> Unit,
     seerrRecommendations: List<SeerrSearchItem> = emptyList(),
     seerrSimilar: List<SeerrSearchItem> = emptyList(),
@@ -550,6 +559,7 @@ private fun DetailContent(
                                         item = item,
                                         detail = detail,
                                         seasons = seasons,
+                                        episodes = episodes,
                                         fetchedSeasonIds = fetchedSeasonIds,
                                         smartPlayTarget = smartPlayTarget,
                                         isAudio = isAudio,
@@ -607,6 +617,8 @@ private fun DetailContent(
                                     onItemClick = onItemClick,
                                     onPersonClick = onPersonClick,
                                     onNavigateToSeries = onNavigateToSeries,
+                                    onSeasonSelected = onSeasonSelected,
+                                    onLoadSeerrData = onLoadSeerrData,
                                     modifier = Modifier,
                                     contentAlignment = Alignment.TopStart,
                                     showActionButtons = false,
@@ -723,6 +735,8 @@ private fun DetailContent(
                                     onItemClick = onItemClick,
                                     onPersonClick = onPersonClick,
                                     onNavigateToSeries = onNavigateToSeries,
+                                    onSeasonSelected = onSeasonSelected,
+                                    onLoadSeerrData = onLoadSeerrData,
                                     contentFocusRequester = contentFocusRequester,
                                     seerrRecommendations = seerrRecommendations,
                                     seerrSimilar = seerrSimilar,
@@ -1252,6 +1266,7 @@ private fun DetailActionButtons(
     item: MediaItem,
     detail: MediaDetail,
     seasons: List<MediaItem>,
+    episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
     smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     isAudio: Boolean,
@@ -1271,10 +1286,13 @@ private fun DetailActionButtons(
     val isSeries = item.mediaType == MediaType.SERIES
     val target = if (isSeriesOrEpisode) smartPlayTarget else null
     val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+    val allSeasonsFetched = seasons.isNotEmpty() && fetchedSeasonIds.size >= seasons.size
+    val allEpisodesEmpty = seasons.isNotEmpty() && episodes.values.all { it.isEmpty() }
     val isResolvingSeriesTarget = isSeries &&
         target == null &&
-        (seasons.isEmpty() || fetchedSeasonIds.size < seasons.size)
-    val canPlayPrimary = isAudio || !isSeries || target != null
+        !allSeasonsFetched
+    val hasNoEpisodes = isSeries && allSeasonsFetched && allEpisodesEmpty
+    val canPlayPrimary = isAudio || !isSeries || target != null || hasNoEpisodes
     val progress = if (target != null) {
         val t = target.startPositionTicks
         val rt = target.episode.runTimeTicks
@@ -1286,6 +1304,7 @@ private fun DetailActionButtons(
     val playLabel = when {
         target != null -> target.label
         isResolvingSeriesTarget -> "Finding Episode"
+        hasNoEpisodes -> "No Episodes Available"
         isSeries -> "No Episodes"
         hasProgress -> "Resume"
         else -> "Play"
@@ -1649,6 +1668,8 @@ private fun DetailContentBody(
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
     onNavigateToSeries: (String) -> Unit,
+    onSeasonSelected: (seasonId: String) -> Unit = {},
+    onLoadSeerrData: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.TopCenter,
     showActionButtons: Boolean = true,
@@ -1852,6 +1873,7 @@ private fun DetailContentBody(
                 item = item,
                 detail = detail,
                 seasons = seasons,
+                episodes = episodes,
                 fetchedSeasonIds = fetchedSeasonIds,
                 smartPlayTarget = smartPlayTarget,
                 isAudio = isAudio,
@@ -1905,6 +1927,7 @@ private fun DetailContentBody(
                         seasons = seasons,
                         episodes = episodes,
                         fetchedSeasonIds = fetchedSeasonIds,
+                        smartPlayTarget = smartPlayTarget,
                         getImageUrl = getImageUrl,
                         currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
                         currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
@@ -1915,7 +1938,8 @@ private fun DetailContentBody(
                         },
                         onEpisodeDetailClick = { episode ->
                             onItemClick(episode.id)
-                        }
+                        },
+                        onSeasonSelected = onSeasonSelected,
                     )
                 }
             }
@@ -1987,6 +2011,13 @@ private fun DetailContentBody(
         }
 
         // ── Seerr Recommendations Section ──
+        LaunchedEffect(isSeerrConnected, isSeerrRecommendationsEnabled, seerrRecommendations.isEmpty()) {
+            if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isEmpty()) {
+                kotlinx.coroutines.delay(1000)
+                onLoadSeerrData()
+            }
+        }
+        
         if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 8) {
                 Column {
@@ -2103,16 +2134,32 @@ private fun SeasonsSection(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     fetchedSeasonIds: Set<String>,
+    smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     getImageUrl: (String) -> String,
     currentItemId: String? = null,
     currentSeasonId: String? = null,
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
+    onSeasonSelected: (seasonId: String) -> Unit = {},
 ) {
-    val initialSeasonIndex = if (currentSeasonId != null) {
-        seasons.indexOfFirst { it.id == currentSeasonId }.coerceAtLeast(0)
-    } else 0
+    val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
+    val initialSeasonIndex = when {
+        smartTargetSeasonId != null -> {
+            seasons.indexOfFirst { it.id == smartTargetSeasonId }.coerceAtLeast(0)
+        }
+        currentSeasonId != null -> {
+            seasons.indexOfFirst { it.id == currentSeasonId }.coerceAtLeast(0)
+        }
+        else -> 0
+    }
     var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
+
+    LaunchedEffect(selectedSeasonIndex) {
+        val season = seasons.getOrNull(selectedSeasonIndex)
+        if (season != null) {
+            onSeasonSelected(season.id)
+        }
+    }
 
     Column {
         Text(

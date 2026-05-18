@@ -843,7 +843,7 @@ private fun SeerrHorizontalSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(items) { item ->
+            items(items, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
                     imageUrl = getPosterUrl(item.posterPath),
@@ -938,7 +938,7 @@ private fun CastSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(cast) { member ->
+            items(cast, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
                 val profilePath: String?
@@ -1013,7 +1013,7 @@ private fun SeasonsSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(seasons.sortedByDescending { it.seasonNumber }) { season ->
+            items(seasons.sortedByDescending { it.seasonNumber }, contentType = { "season" }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
                     Card(
                         modifier = Modifier
@@ -1069,7 +1069,7 @@ private fun VideosSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(videos) { video ->
+            items(videos, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null

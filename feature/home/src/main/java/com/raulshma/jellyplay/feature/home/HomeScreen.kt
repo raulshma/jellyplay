@@ -428,18 +428,21 @@ fun HomeScreen(
                                     item { Spacer(Modifier.height(100.dp)) }
                                 }
 
-                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection" }) { index ->
+                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                                     val section = sections[index]
                                     val isFirstAfterHero = index == 0 && featuredItem != null
-                                    val isSectionVisible by remember {
+                                    val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
+                                    
+                                    val isCurrentlyVisible by remember {
                                         derivedStateOf {
-                                            val layoutInfo = listState.layoutInfo
-                                            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index + (if (featuredItem != null) 1 else 0) }
-                                            itemInfo != null
+                                            listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
                                         }
                                     }
-                                    var hasBeenVisible by rememberSaveable { mutableStateOf(isSectionVisible) }
-                                    if (isSectionVisible) hasBeenVisible = true
+                                    
+                                    var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
+                                    if (isCurrentlyVisible && !hasBeenVisible) {
+                                        hasBeenVisible = true
+                                    }
 
                                     val sectionAlpha by animateFloatAsState(
                                         targetValue = if (hasBeenVisible) 1f else 0f,
