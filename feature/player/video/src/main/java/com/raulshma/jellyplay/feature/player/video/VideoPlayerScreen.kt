@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +55,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -70,6 +72,8 @@ import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
@@ -103,6 +107,17 @@ import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.media3.ui.AspectRatioFrameLayout
+
+private val SubtitleOutlineOffsets = listOf(
+    -1 to -1,
+    0 to -1,
+    1 to -1,
+    -1 to 0,
+    1 to 0,
+    -1 to 1,
+    0 to 1,
+    1 to 1,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,6 +167,8 @@ fun VideoPlayerScreen(
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    val mpvSubtitleText = uiState.currentSubtitleText
+        ?.takeIf { uiState.usesSubtitleOverlay && it.isNotBlank() }
 
     LaunchedEffect(itemId) {
         viewModel.initialize(
@@ -504,6 +521,12 @@ fun VideoPlayerScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
+        MpvSubtitleOverlay(
+            text = mpvSubtitleText,
+            style = uiState.subtitleStyle,
+            visible = !isInPipMode,
+        )
 
         GestureOverlay(
             seekDirection = seekDirection,
@@ -885,7 +908,100 @@ fun VideoPlayerScreen(
     }
 }
 
+@Composable
+private fun BoxScope.MpvSubtitleOverlay(
+    text: String?,
+    style: SubtitleStyle,
+    visible: Boolean,
+) {
+    if (!visible || text.isNullOrBlank()) return
 
+    val bottomPadding = (24 + style.verticalPosition.coerceIn(0f, 0.4f) * 240).dp
+    val backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 1f)
+    val backgroundColor = Color(style.backgroundColor.value)
+        .copy(alpha = backgroundOpacity)
+    val edgeColor = Color(style.edgeColor.value)
+    val fontSize = style.fontSize.coerceIn(12, 56)
+    val textStyle = TextStyle(
+        fontSize = fontSize.sp,
+        lineHeight = (fontSize + 4).sp,
+    )
+
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(start = 32.dp, end = 32.dp, bottom = bottomPadding)
+            .then(
+                if (backgroundOpacity > 0f) {
+                    Modifier.background(backgroundColor, RoundedCornerShape(6.dp))
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when (style.edgeType) {
+            SubtitleEdgeType.NONE -> Unit
+            SubtitleEdgeType.OUTLINE -> {
+                SubtitleOutlineOffsets.forEach { (x, y) ->
+                    SubtitleTextLayer(
+                        text = text,
+                        color = edgeColor,
+                        textStyle = textStyle,
+                        modifier = Modifier.offset(x.dp, y.dp),
+                    )
+                }
+            }
+            SubtitleEdgeType.DROP_SHADOW -> {
+                SubtitleTextLayer(
+                    text = text,
+                    color = edgeColor.copy(alpha = 0.85f),
+                    textStyle = textStyle,
+                    modifier = Modifier.offset(2.dp, 2.dp),
+                )
+            }
+            SubtitleEdgeType.RAISED -> {
+                SubtitleTextLayer(
+                    text = text,
+                    color = edgeColor.copy(alpha = 0.75f),
+                    textStyle = textStyle,
+                    modifier = Modifier.offset(1.dp, 1.dp),
+                )
+            }
+            SubtitleEdgeType.DEPRESSED -> {
+                SubtitleTextLayer(
+                    text = text,
+                    color = edgeColor.copy(alpha = 0.75f),
+                    textStyle = textStyle,
+                    modifier = Modifier.offset((-1).dp, (-1).dp),
+                )
+            }
+        }
+
+        SubtitleTextLayer(
+            text = text,
+            color = Color(style.fontColor.value),
+            textStyle = textStyle,
+        )
+    }
+}
+
+@Composable
+private fun SubtitleTextLayer(
+    text: String,
+    color: Color,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        color = color,
+        textAlign = TextAlign.Center,
+        style = textStyle,
+    )
+}
 
 @Composable
 private fun BoxScope.AutoAspectRatioBadge(

@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -46,6 +47,8 @@ class MpvPlayerEngine(
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
+        private val MPV_SUBTITLE_LOG_PATTERN =
+            Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
     }
 
     private val isLowRamDevice by lazy { detectLowRamDevice() }
@@ -55,7 +58,7 @@ class MpvPlayerEngine(
         supportsPip = true,
         supportsMiniMode = false,
         supportsOcr = false,
-        supportsCues = false,
+        supportsCues = true,
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
@@ -88,9 +91,10 @@ class MpvPlayerEngine(
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
     private var mpvView: PlayerMPVView? = null
-    private var pendingUrl: String? = null
-    private var pendingStartPositionMs: Long = 0L
+    private var pendingRequest: PlaybackRequest? = null
     private var pendingSubtitles: List<SubtitleSource> = emptyList()
+    private var pendingPreferredSubtitleLanguage: String? = null
+    private var lastLoggedSubtitleText: String? = null
     
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
@@ -138,31 +142,52 @@ class MpvPlayerEngine(
                 if (property == "paused-for-cache") {
                     _playbackState.value = if (value) EnginePlaybackState.BUFFERING else EnginePlaybackState.READY
                 }
+                if (property == "sub-visibility") {
+                    Log.d(TAG, "MPV subtitle visibility changed to $value")
+                }
             }
-            override fun eventProperty(property: String, value: String) {}
-            override fun eventProperty(property: String, value: MPVNode) {}
-            override fun event(eventId: Int, node: MPVNode) {
+            override fun eventProperty(property: String, value: String) {
+                if (property == "sid" || property == "aid") {
+                    Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
+                    refreshTracks("property:$property")
+                }
+                if (property == "sub-text" && value != lastLoggedSubtitleText) {
+                    lastLoggedSubtitleText = value
+                    _currentCues.value = value.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: emptyList()
+                    if (value.isNotBlank()) {
+                        Log.v(TAG, "MPV active subtitle text: ${value.take(120)}")
+                    }
+                }
+            }
+            override fun eventProperty(property: String, value: MPVNode) {
+                if (property == "track-list") {
+                    refreshTracks("property:track-list")
+                }
+            }
+            override fun event(eventId: Int, data: MPVNode) {
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
+                        Log.d(TAG, "MPV start file")
                         _playbackState.value = EnginePlaybackState.IDLE
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
-                        pendingSubtitles.forEach { sub ->
-                            try {
-                                val cleanUrl = if (sub.url.contains("api_key=")) sub.url.substringBefore("?") else sub.url
-                                mpv.command("sub-add", cleanUrl, "auto", sub.label)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to add subtitle: ${sub.url}", e)
-                            }
-                        }
-                        pendingSubtitles = emptyList()
+                        Log.d(TAG, "MPV file loaded; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
+                        addPendingSubtitles(mpv)
                         _playbackState.value = EnginePlaybackState.READY
-                        _availableTracks.value = buildTracks()
+                        refreshTracks("file-loaded")
+                        refreshTracks("file-loaded-delayed", delayMs = 750)
                     }
                     MPV.mpvEvent.MPV_EVENT_END_FILE -> {
+                        Log.d(TAG, "MPV end file")
                         _playbackState.value = EnginePlaybackState.ENDED
                     }
                 }
+            }
+        }
+
+        private val logObserver = object : MPV.LogObserver {
+            override fun logMessage(prefix: String, level: Int, text: String) {
+                logMpvMessage(prefix, level, text)
             }
         }
 
@@ -176,7 +201,13 @@ class MpvPlayerEngine(
 
             mpv.setOptionString("ao", "audiotrack,aaudio")
             mpv.setOptionString("sub-auto", "fuzzy")
+            mpv.setOptionString("sub-visibility", "yes")
+            mpv.setOptionString("secondary-sub-visibility", "yes")
+            mpv.setOptionString("blend-subtitles", "video")
+            mpv.setOptionString("sub-ass", "yes")
+            mpv.setOptionString("sub-ass-override", "force")
             mpv.setOptionString("keep-open", "yes")
+            applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
 
             if (isLowRamDevice) {
                 mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_LOW.toString())
@@ -228,38 +259,40 @@ class MpvPlayerEngine(
 
         override fun postInitOptions() {
             mpv.addObserver(observer)
+            mpv.addLogObserver(logObserver)
             mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("paused-for-cache", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            mpv.observeProperty("sid", MPV.mpvFormat.MPV_FORMAT_STRING)
+            mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
+            mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
+            mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
+            mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
         }
 
         override fun observeProperties() {}
 
         fun removeObserver() {
             try { mpv.removeObserver(observer) } catch (_: Exception) {}
+            try { mpv.removeLogObserver(logObserver) } catch (_: Exception) {}
         }
     }
 
     override fun load(request: PlaybackRequest) {
-        pendingUrl = request.uri
-        pendingStartPositionMs = request.startPositionMs
+        pendingRequest = request
         pendingSubtitles = request.externalSubtitles
+        pendingPreferredSubtitleLanguage = request.preferredSubtitleLanguage
+        Log.d(
+            TAG,
+            "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
+                "externalSubtitles=${request.externalSubtitles.size}, headers=${request.headers.keys}"
+        )
 
         mpvView?.let { view ->
             try {
-                if (request.startPositionMs > 0) {
-                    view.mpv.setOptionString("start", "+${request.startPositionMs / 1000.0}")
-                }
-                
-                // HTTP Headers for auth (if needed for MPV)
-                if (request.headers.isNotEmpty()) {
-                    val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
-                    view.mpv.setOptionString("http-header-fields", headerStr)
-                }
-
+                configureMpvForRequest(view, request)
                 view.playFile(request.uri)
-                pendingUrl = null
-                pendingStartPositionMs = 0L
+                pendingRequest = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
                 _errorFlow.tryEmit(e.message ?: "Failed to start MPV playback")
@@ -268,9 +301,12 @@ class MpvPlayerEngine(
     }
 
     override fun release() {
-        pendingUrl = null
-        pendingStartPositionMs = 0L
+        pendingRequest = null
         pendingSubtitles = emptyList()
+        pendingPreferredSubtitleLanguage = null
+        lastLoggedSubtitleText = null
+        _currentCues.value = emptyList()
+        mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
         nightMode.detach()
         audioNormalization.detach()
@@ -343,9 +379,14 @@ class MpvPlayerEngine(
                     }
                     AudioNormalizationMode.NONE -> {}
                 }
-                mpvView?.mpv?.setPropertyString("af", afFilters.joinToString(",").ifEmpty { "!" })
+                val filterString = afFilters.joinToString(",")
+                if (filterString.isNotEmpty()) {
+                    mpvView?.mpv?.setPropertyString("af", filterString)
+                } else {
+                    mpvView?.mpv?.command("af", "clr", "")
+                }
             } else {
-                mpvView?.mpv?.setPropertyString("af", "!")
+                mpvView?.mpv?.command("af", "clr", "")
             }
             
             val sid = audioSessionId
@@ -373,13 +414,24 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             if (type == TrackType.AUDIO) {
+                Log.d(TAG, "Selecting MPV audio track id=$index")
                 if (index < 0) m.setPropertyString("aid", "auto")
-                else m.setPropertyString("aid", "${index + 1}") // MPV 1-indexed?
+                else m.setPropertyString("aid", "$index")
             } else {
-                if (index < 0) m.setPropertyString("sid", "no")
-                else m.setPropertyString("sid", "${index + 1}")
+                Log.d(TAG, "Selecting MPV subtitle track id=$index")
+                if (index < 0) {
+                    _currentCues.value = emptyList()
+                    lastLoggedSubtitleText = null
+                    m.setPropertyString("sid", "no")
+                } else {
+                    m.setPropertyString("sid", "$index")
+                }
             }
-        } catch (_: Exception) {}
+            refreshTracks("select-${type.name.lowercase()}")
+            logSubtitleRenderState("select-${type.name.lowercase()}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to select MPV ${type.name.lowercase()} track id=$index", e)
+        }
     }
 
     override fun setMaxVideoBitrate(bps: Int?) {
@@ -406,15 +458,11 @@ class MpvPlayerEngine(
             return view
         }
 
-        pendingUrl?.let { url ->
-            pendingUrl = null
-            val startPos = pendingStartPositionMs
-            pendingStartPositionMs = 0L
+        pendingRequest?.let { request ->
+            pendingRequest = null
             try {
-                if (startPos > 0) {
-                    view.mpv.setOptionString("start", "+${startPos / 1000.0}")
-                }
-                view.playFile(url)
+                configureMpvForRequest(view, request)
+                view.playFile(request.uri)
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
@@ -431,53 +479,24 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleInternal(style: SubtitleStyle) {
         try {
             val m = mpvView?.mpv ?: return
-            val colorHex = String.format("#%06X", (0xFFFFFF and style.fontColor.value))
-            val bgHex = String.format("#%06X", (0xFFFFFF and style.backgroundColor.value))
-            val alphaHex = String.format("%02X", (style.backgroundOpacity * 255).toInt().coerceIn(0, 255))
-            val edgeHex = String.format("#%06X", (0xFFFFFF and style.edgeColor.value))
-            
-            m.setPropertyString("sub-color", colorHex)
-            m.setPropertyString("sub-back-color", "#${alphaHex}${bgHex.substring(1)}")
-            m.setPropertyDouble("sub-scale", (style.fontSize / 16.0).coerceIn(0.5, 3.0))
-            
-            m.setPropertyString("sub-border-color", edgeHex)
-            m.setPropertyString("sub-shadow-color", edgeHex)
-            
-            when (style.edgeType) {
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> {
-                    m.setPropertyDouble("sub-border-size", 0.0)
-                    m.setPropertyDouble("sub-shadow-offset", 0.0)
-                }
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> {
-                    m.setPropertyDouble("sub-border-size", 2.0)
-                    m.setPropertyDouble("sub-shadow-offset", 0.0)
-                }
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
-                    m.setPropertyDouble("sub-border-size", 0.0)
-                    m.setPropertyDouble("sub-shadow-offset", 2.0)
-                }
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
-                    m.setPropertyDouble("sub-border-size", 1.0)
-                    m.setPropertyDouble("sub-shadow-offset", 1.5)
-                }
-            }
-            
-            m.setPropertyInt("sub-pos", (100 - (style.verticalPosition * 100)).toInt().coerceIn(0, 100))
-        } catch (_: Exception) {}
+            applySubtitleStyleProperties(m, style)
+            logSubtitleRenderState("style")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply MPV subtitle style", e)
+        }
     }
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {
         val aspectValue = when {
             mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> "-1"
-            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "fit"
+            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "-1"
             ratio != null && ratio > 0f -> {
                 val w = (ratio * 100).toInt()
                 val h = 100
                 val gcd = gcd(w, h)
                 "${w / gcd}:${h / gcd}"
             }
-            else -> "fit"
+            else -> "-1"
         }
         try { mpvView?.mpv?.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
     }
@@ -569,11 +588,7 @@ class MpvPlayerEngine(
                         if (br > 0) br.toInt() else null
                     }
                 } catch (_: Exception) { null },
-                estimatedBandwidthBps = try {
-                    m.getPropertyDouble("packet-bitrate")?.let { br ->
-                        if (br > 0) br.toLong() else 0L
-                    } ?: 0L
-                } catch (_: Exception) { 0L },
+                estimatedBandwidthBps = 0L,
                 droppedFrames = try {
                     m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
                 } catch (_: Exception) { 0L },
@@ -588,30 +603,31 @@ class MpvPlayerEngine(
 
     private fun buildTracks(): List<MediaTrack> {
         val m = mpvView?.mpv ?: return emptyList()
-        val count = try { m.getPropertyInt("track-list/count") ?: 0 } catch (_: Exception) { 0 }
+        val trackList = try {
+            m.getPropertyNode("track-list")?.asArray()
+        } catch (_: Exception) {
+            null
+        } ?: return emptyList()
         val result = mutableListOf<MediaTrack>()
-        for (i in 0 until count) {
-            val t = m.getPropertyString("track-list/$i/type") ?: continue
+        for (node in trackList) {
+            val track = node.asMap() ?: continue
+            val t = track["type"]?.asString() ?: continue
             val trackType = when (t) {
                 "audio" -> TrackType.AUDIO
                 "sub" -> TrackType.SUBTITLE
                 else -> continue
             }
-            val id = m.getPropertyInt("track-list/$i/id") ?: continue
-            val lang = m.getPropertyString("track-list/$i/lang")
-            val title = m.getPropertyString("track-list/$i/title")
-            val codec = m.getPropertyString("track-list/$i/codec")
-            val selected = m.getPropertyBoolean("track-list/$i/selected") ?: false
-            val label = listOfNotNull(
-                lang?.let { l -> try { java.util.Locale(l).displayLanguage } catch (_: Exception) { l } },
-                title,
-                codec,
-            ).joinToString(" · ").ifBlank { "Track $id" }
+            val id = track["id"].asTrackId() ?: continue
+            val lang = track["lang"]?.asString()
+            val title = track["title"]?.asString()
+            val codec = track["codec"]?.asString()
+            val selected = track["selected"]?.asBoolean() ?: false
+            val label = buildTrackLabel(trackType, id, lang, title, codec)
             
             result.add(
                 MediaTrack(
                     id = "mpv_${t}_${id}",
-                    index = id - 1, // MPV indices might be 1-based but UI selects 0-based index? Wait, the UI selector maps `index` directly.
+                    index = id,
                     label = label,
                     language = lang,
                     isSelected = selected,
@@ -621,6 +637,282 @@ class MpvPlayerEngine(
         }
         return result
     }
+
+    private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
+        if (request.startPositionMs > 0) {
+            view.mpv.setOptionString("start", "+${request.startPositionMs / 1000.0}")
+        }
+
+        view.mpv.setOptionString("sub-visibility", "yes")
+        view.mpv.setPropertyBoolean("sub-visibility", true)
+        view.mpv.setPropertyBoolean("secondary-sub-visibility", true)
+        request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+            view.mpv.setOptionString("alang", normalizeLanguageList(language))
+        }
+        request.preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+            view.mpv.setOptionString("slang", normalizeLanguageList(language))
+        }
+
+        if (request.headers.isNotEmpty()) {
+            val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
+            view.mpv.setOptionString("http-header-fields", headerStr)
+            Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
+        }
+    }
+
+    private fun addPendingSubtitles(mpv: MPV) {
+        val subtitles = pendingSubtitles
+        if (subtitles.isEmpty()) return
+
+        var selectedSubtitleAdded = false
+        subtitles.forEach { sub ->
+            val shouldSelect = !selectedSubtitleAdded && shouldSelectSubtitle(sub, pendingPreferredSubtitleLanguage)
+            val flags = if (shouldSelect) "select" else "auto"
+            try {
+                Log.d(
+                    TAG,
+                    "Adding Jellyfin subtitle to MPV: id=${sub.id}, label=${sub.label}, lang=${sub.language}, " +
+                        "codec=${sub.codec}, default=${sub.isDefault}, forced=${sub.isForced}, flags=$flags, " +
+                        "url=${redactSensitive(sub.url)}"
+                )
+                if (sub.language.isNullOrBlank()) {
+                    mpv.command("sub-add", sub.url, flags, sub.label)
+                } else {
+                    mpv.command("sub-add", sub.url, flags, sub.label, sub.language)
+                }
+                if (shouldSelect) selectedSubtitleAdded = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add Jellyfin subtitle: ${redactSensitive(sub.url)}", e)
+            }
+        }
+        pendingSubtitles = emptyList()
+        logSubtitleRenderState("sub-add")
+    }
+
+    private fun shouldSelectSubtitle(subtitle: SubtitleSource, preferredLanguage: String?): Boolean {
+        if (subtitle.isDefault || subtitle.isForced) return true
+        val preferred = preferredLanguage?.takeIf { it.isNotBlank() } ?: return false
+        return languageMatches(subtitle.language, preferred)
+    }
+
+    private fun languageMatches(candidate: String?, preferredLanguageList: String): Boolean {
+        val candidateValues = normalizedLanguageValues(candidate) ?: return false
+        return preferredLanguageList
+            .split(',', ';')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .any { preferred ->
+                val preferredValues = normalizedLanguageValues(preferred) ?: return@any false
+                candidateValues.any { it in preferredValues }
+            }
+    }
+
+    private fun normalizedLanguageValues(language: String?): Set<String>? {
+        val raw = language?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val tag = raw.replace('_', '-').lowercase()
+        val base = tag.substringBefore('-')
+        val display = try {
+            java.util.Locale.forLanguageTag(tag).displayLanguage.lowercase()
+        } catch (_: Exception) {
+            null
+        }
+        return buildSet {
+            add(tag)
+            add(base)
+            if (!display.isNullOrBlank()) add(display)
+        }
+    }
+
+    private fun normalizeLanguageList(language: String): String =
+        language.split(',', ';')
+            .map { it.trim().replace('_', '-') }
+            .filter { it.isNotBlank() }
+            .joinToString(",")
+
+    private fun refreshTracks(reason: String, delayMs: Long = 0L) {
+        val action = Runnable {
+            try {
+                val tracks = buildTracks()
+                val previous = _availableTracks.value
+                _availableTracks.value = tracks
+                if (tracks != previous || reason.startsWith("select")) {
+                    Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
+                    logSubtitleRenderState(reason)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to refresh MPV tracks ($reason)", e)
+            }
+        }
+        if (delayMs > 0) mainHandler.postDelayed(action, delayMs) else mainHandler.post(action)
+    }
+
+    private fun describeTracks(tracks: List<MediaTrack>): String {
+        val audio = tracks.filter { it.type == TrackType.AUDIO }
+        val subtitles = tracks.filter { it.type == TrackType.SUBTITLE }
+        val selectedSubtitle = subtitles.firstOrNull { it.isSelected }?.let { "${it.index}:${it.label}" } ?: "none"
+        return "audio=${audio.size}, subtitles=${subtitles.size}, selectedSubtitle=$selectedSubtitle, " +
+            "subtitleTracks=${subtitles.take(8).joinToString { "${it.index}:${it.label}${if (it.isSelected) "*" else ""}" }}" +
+            if (subtitles.size > 8) ", ..." else ""
+    }
+
+    private fun applySubtitleStyleOptions(mpv: MPV, style: SubtitleStyle) {
+        val values = subtitleStyleValues(style)
+        mpv.setOptionString("sub-color", values.textColor)
+        mpv.setOptionString("sub-back-color", values.backgroundColor)
+        mpv.setOptionString("sub-outline-color", values.edgeColor)
+        mpv.setOptionString("sub-shadow-color", values.edgeColor)
+        mpv.setOptionString("sub-border-style", "outline-and-shadow")
+        mpv.setOptionString("sub-font", "sans-serif")
+        mpv.setOptionString("sub-font-size", values.fontSize.toString())
+        mpv.setOptionString("sub-scale", "1.0")
+        mpv.setOptionString("sub-pos", "100")
+        mpv.setOptionString("sub-margin-y", values.marginY.toString())
+        mpv.setOptionString("sub-outline-size", values.outlineSize.toString())
+        mpv.setOptionString("sub-shadow-offset", values.shadowOffset.toString())
+    }
+
+    private fun applySubtitleStyleProperties(mpv: MPV, style: SubtitleStyle) {
+        val values = subtitleStyleValues(style)
+        mpv.setPropertyBoolean("sub-visibility", true)
+        mpv.setPropertyBoolean("secondary-sub-visibility", true)
+        mpv.setPropertyString("sub-color", values.textColor)
+        mpv.setPropertyString("sub-back-color", values.backgroundColor)
+        mpv.setPropertyString("sub-outline-color", values.edgeColor)
+        mpv.setPropertyString("sub-shadow-color", values.edgeColor)
+        mpv.setPropertyString("sub-border-style", "outline-and-shadow")
+        mpv.setPropertyDouble("sub-font-size", values.fontSize.toDouble())
+        mpv.setPropertyDouble("sub-scale", 1.0)
+        mpv.setPropertyInt("sub-pos", 100)
+        mpv.setPropertyInt("sub-margin-y", values.marginY)
+        mpv.setPropertyDouble("sub-outline-size", values.outlineSize)
+        mpv.setPropertyDouble("sub-shadow-offset", values.shadowOffset)
+    }
+
+    private data class MpvSubtitleStyleValues(
+        val textColor: String,
+        val backgroundColor: String,
+        val edgeColor: String,
+        val fontSize: Int,
+        val marginY: Int,
+        val outlineSize: Double,
+        val shadowOffset: Double,
+    )
+
+    private fun subtitleStyleValues(style: SubtitleStyle): MpvSubtitleStyleValues {
+        val marginY = (style.verticalPosition.coerceIn(0f, 0.4f) * 720).toInt().coerceAtLeast(0)
+        val outlineSize: Double
+        val shadowOffset: Double
+        when (style.edgeType) {
+            SubtitleEdgeType.NONE -> {
+                outlineSize = 0.0
+                shadowOffset = 0.0
+            }
+            SubtitleEdgeType.OUTLINE -> {
+                outlineSize = 2.0
+                shadowOffset = 0.0
+            }
+            SubtitleEdgeType.DROP_SHADOW -> {
+                outlineSize = 0.0
+                shadowOffset = 2.0
+            }
+            SubtitleEdgeType.RAISED,
+            SubtitleEdgeType.DEPRESSED -> {
+                outlineSize = 1.0
+                shadowOffset = 1.5
+            }
+        }
+        return MpvSubtitleStyleValues(
+            textColor = colorToMpvHex(style.fontColor.value, 1f),
+            backgroundColor = colorToMpvHex(style.backgroundColor.value, style.backgroundOpacity),
+            edgeColor = colorToMpvHex(style.edgeColor.value, 1f),
+            fontSize = style.fontSize.coerceIn(10, 72),
+            marginY = marginY,
+            outlineSize = outlineSize,
+            shadowOffset = shadowOffset,
+        )
+    }
+
+    private fun colorToMpvHex(color: Int, opacity: Float): String {
+        val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)
+        val rgb = color and 0x00FFFFFF
+        return String.format("#%02X%06X", alpha, rgb)
+    }
+
+    private fun buildTrackLabel(
+        trackType: TrackType,
+        id: Int,
+        language: String?,
+        title: String?,
+        codec: String?,
+    ): String {
+        val cleanTitle = title?.takeIf { it.isNotBlank() }
+        if (trackType == TrackType.SUBTITLE && cleanTitle != null) return cleanTitle
+
+        val languageLabel = language?.takeIf { it.isNotBlank() }?.let { lang ->
+            try {
+                java.util.Locale.forLanguageTag(lang.replace('_', '-')).displayLanguage.takeIf { it.isNotBlank() }
+            } catch (_: Exception) {
+                lang
+            }
+        }
+        val parts = listOfNotNull(languageLabel, cleanTitle, codec?.takeIf { it.isNotBlank() })
+            .distinctBy { it.lowercase() }
+        val fallbackPrefix = if (trackType == TrackType.SUBTITLE) "Subtitle" else "Audio"
+        return parts.joinToString(" · ").ifBlank { "$fallbackPrefix $id" }
+    }
+
+    private fun MPVNode?.asTrackId(): Int? =
+        this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()
+
+    private fun logSubtitleRenderState(reason: String) {
+        val m = mpvView?.mpv ?: return
+        try {
+            val sid = m.getPropertyString("sid")
+            val visible = m.getPropertyBoolean("sub-visibility")
+            val subText = try { m.getPropertyString("sub-text") } catch (_: Exception) { null }
+            val selected = buildTracks().firstOrNull { it.type == TrackType.SUBTITLE && it.isSelected }
+            Log.d(
+                TAG,
+                "MPV subtitle render state ($reason): sid=$sid, visible=$visible, " +
+                    "fontSize=${m.getPropertyDouble("sub-font-size")}, marginY=${m.getPropertyInt("sub-margin-y")}, " +
+                    "pos=${m.getPropertyInt("sub-pos")}, selected=${selected?.index}:${selected?.label}, " +
+                    "activeText=${subText?.take(80).orEmpty()}"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to read MPV subtitle render state ($reason)", e)
+        }
+    }
+
+    private fun logMpvMessage(prefix: String, level: Int, text: String) {
+        val cleanText = redactSensitive(text.trim()).takeIf { it.isNotBlank() } ?: return
+        if (level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN && !MPV_SUBTITLE_LOG_PATTERN.containsMatchIn("$prefix $cleanText")) {
+            return
+        }
+
+        val message = "MPV ${mpvLogLevelName(level)} [$prefix] $cleanText"
+        when {
+            level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_ERROR -> Log.e(TAG, message)
+            level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN -> Log.w(TAG, message)
+            level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_INFO -> Log.i(TAG, message)
+            else -> Log.d(TAG, message)
+        }
+    }
+
+    private fun mpvLogLevelName(level: Int): String = when {
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_FATAL -> "fatal"
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_ERROR -> "error"
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN -> "warn"
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_INFO -> "info"
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_V -> "verbose"
+        level <= MPV.mpvLogLevel.MPV_LOG_LEVEL_DEBUG -> "debug"
+        else -> "trace"
+    }
+
+    private fun redactSensitive(value: String): String =
+        value
+            .replace(Regex("(?i)(api_key=)[^&\\s]+"), "\$1***")
+            .replace(Regex("(?i)(api_key%3D)[^&\\s]+"), "\$1***")
+            .replace(Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+"), "\$1***")
 
     private fun gcd(a: Int, b: Int): Int {
         var x = a

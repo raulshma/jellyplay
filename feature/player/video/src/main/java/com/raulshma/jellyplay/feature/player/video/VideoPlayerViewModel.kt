@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 
@@ -169,6 +170,8 @@ class VideoPlayerViewModel @Inject constructor(
                     val prefs = preferencesStore.preferences.first()
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
+                        usesSubtitleOverlay = engine is MpvPlayerEngine,
+                        currentSubtitleText = null,
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
@@ -198,6 +201,12 @@ class VideoPlayerViewModel @Inject constructor(
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
                                 }
                                 syncPlayController.onPlaybackStateChanged(stateInt)
+                            } }
+                            launch { engine.currentCues.collect { cues ->
+                                val subtitleText = cues.joinToString("\n").takeIf { it.isNotBlank() }
+                                _uiState.update { s ->
+                                    if (s.currentSubtitleText == subtitleText) s else s.copy(currentSubtitleText = subtitleText)
+                                }
                             } }
                             launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
