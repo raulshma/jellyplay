@@ -52,3 +52,21 @@ data class DownloadEntity(
     val imageBlurHash: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+@Entity(
+    tableName = "lyrics_cache",
+    indices = [
+        Index(value = ["fetchedAt"]),
+    ],
+)
+data class LyricsCacheEntity(
+    @PrimaryKey val itemId: String,
+    val provider: String,
+    val artistName: String? = null,
+    val trackName: String? = null,
+    val syncedLyrics: String? = null,
+    val plainLyrics: String? = null,
+    val duration: Double? = null,
+    val lrcLibId: Long? = null,
+    val fetchedAt: Long = System.currentTimeMillis(),
+)
