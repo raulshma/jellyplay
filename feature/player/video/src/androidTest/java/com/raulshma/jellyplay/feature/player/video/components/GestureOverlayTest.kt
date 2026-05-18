@@ -28,6 +28,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -156,6 +158,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }
@@ -177,6 +181,8 @@ class GestureOverlayTest {
                     onBrightnessGesture = {},
                     onVolumeGesture = {},
                     onClearOverlays = {},
+                    showControls = true,
+                    onEdgeSwipe = {},
                 )
             }
         }

@@ -23,6 +23,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -31,6 +33,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
@@ -127,6 +130,8 @@ class VideoPlayerViewModel @Inject constructor(
         preferencesFlow = syncPlayPrefs,
     )
 
+    private var engineCollectionJob: Job? = null
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -159,6 +164,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         viewModelScope.launch {
             playerSessionManager.engineFlow.collect { engine ->
+                engineCollectionJob?.cancel()
                 if (engine != null) {
                     val prefs = preferencesStore.preferences.first()
                     _uiState.update { it.copy(
@@ -171,24 +177,32 @@ class VideoPlayerViewModel @Inject constructor(
                         dialogueBoostStrength = prefs.dialogueBoostStrength,
                         nightModeEnabled = prefs.nightModeEnabled,
                         nightModeStrength = prefs.nightModeStrength,
+                        audioNormalizationMode = prefs.audioNormalizationMode,
+                        audioNormalizationEnabled = prefs.audioNormalizationEnabled,
+                        channelMixMode = prefs.channelMixMode,
+                        channelMixEnabled = prefs.channelMixEnabled,
                     )}
-                    launch { engine.isPlaying.collect { isPlaying ->
-                        _uiState.update { s -> s.copy(isPlaying = isPlaying) }
-                        syncPlayController.onIsPlayingChanged(isPlaying)
-                    } }
-                    launch { engine.playbackState.collect { state ->
-                        _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
-                        val stateInt = when (state) {
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                    engineCollectionJob = viewModelScope.launch {
+                        kotlinx.coroutines.coroutineScope {
+                            launch { engine.isPlaying.collect { isPlaying ->
+                                _uiState.update { s -> s.copy(isPlaying = isPlaying) }
+                                syncPlayController.onIsPlayingChanged(isPlaying)
+                            } }
+                            launch { engine.playbackState.collect { state ->
+                                _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
+                                val stateInt = when (state) {
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                                }
+                                syncPlayController.onPlaybackStateChanged(stateInt)
+                            } }
+                            launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
+                            launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
                         }
-                        syncPlayController.onPlaybackStateChanged(stateInt)
-                    } }
-                    launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
-                    launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e) } } }
+                    }
                 }
             }
         }
@@ -537,6 +551,24 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    fun setStreamingQuality(quality: StreamingQuality) {
+        _uiState.update { it.copy(streamingQuality = quality) }
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)?.toInt()
+        playerSessionManager.engine?.setMaxVideoBitrate(maxBitrate)
+    }
+
+    fun retryWithEngine(playerType: PlayerType) {
+        val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
+        _uiState.update { it.copy(showPlaybackErrorDialog = false, playerError = null) }
+        viewModelScope.launch {
+            playerSessionManager.reloadWithEngine(playerType, currentPos)
+        }
+    }
+
+    fun dismissPlaybackError() {
+        _uiState.update { it.copy(showPlaybackErrorDialog = false, playerError = null) }
+    }
+
     fun setAudioPassthrough(enabled: Boolean) {
         _uiState.update { it.copy(audioPassthrough = enabled) }
         updateConfigWithUiState()
@@ -561,10 +593,44 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
-        // Will be updated via prefs flow, but let's push config immediately if needed
         viewModelScope.launch {
             preferencesStore.setEqualizerSettings(settings)
-            // Wait for pref update to propagate, then update engine config
+        }
+    }
+
+    fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
+        _uiState.update { it.copy(audioNormalizationMode = mode, audioNormalizationEnabled = mode != AudioNormalizationMode.NONE) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setAudioNormalizationMode(mode)
+            preferencesStore.setAudioNormalizationEnabled(mode != AudioNormalizationMode.NONE)
+        }
+    }
+
+    fun toggleAudioNormalization() {
+        val newVal = !_uiState.value.audioNormalizationEnabled
+        _uiState.update { it.copy(audioNormalizationEnabled = newVal) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setAudioNormalizationEnabled(newVal)
+        }
+    }
+
+    fun setChannelMixMode(mode: ChannelMixMode) {
+        _uiState.update { it.copy(channelMixMode = mode, channelMixEnabled = mode != ChannelMixMode.AUTO) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setChannelMixMode(mode)
+            preferencesStore.setChannelMixEnabled(mode != ChannelMixMode.AUTO)
+        }
+    }
+
+    fun toggleChannelMix() {
+        val newVal = !_uiState.value.channelMixEnabled
+        _uiState.update { it.copy(channelMixEnabled = newVal) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setChannelMixEnabled(newVal)
         }
     }
     
@@ -582,7 +648,11 @@ class VideoPlayerViewModel @Inject constructor(
                 nightModeEnabled = state.nightModeEnabled,
                 nightModeStrength = state.nightModeStrength,
                 equalizerEnabled = equalizerEnabled,
-                equalizerSettings = _syncPlayPrefs.value.equalizerSettings
+                equalizerSettings = _syncPlayPrefs.value.equalizerSettings,
+                audioNormalizationMode = state.audioNormalizationMode,
+                audioNormalizationEnabled = state.audioNormalizationEnabled,
+                channelMixMode = state.channelMixMode,
+                channelMixEnabled = state.channelMixEnabled,
             )
         )
         playerSessionManager.engine?.updateConfig(config)
@@ -1048,8 +1118,10 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
-                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+                }
             }
         }
     }

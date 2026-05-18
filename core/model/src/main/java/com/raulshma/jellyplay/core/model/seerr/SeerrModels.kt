@@ -40,6 +40,12 @@ data class SeerrSearchItem(
         get() = try {
             (releaseDate ?: firstAirDate)?.take(4)?.toInt()
         } catch (_: Exception) { null }
+
+    // Pre-computed image URLs to avoid string construction during composition
+    val posterUrl: String?
+        get() = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val backdropUrl: String?
+        get() = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
 }
 
 @Immutable
@@ -116,7 +122,13 @@ data class SeerrMovieDetails(
     val ratings: SeerrRatings? = null,
     val keywords: List<SeerrKeyword> = emptyList(),
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
-)
+    val releases: SeerrReleases? = null,
+) {
+    val posterUrl: String?
+        get() = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val backdropUrl: String?
+        get() = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+}
 
 @Immutable
 @Serializable
@@ -156,7 +168,12 @@ data class SeerrTvDetails(
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
     val contentRatings: SeerrContentRatingsResponse? = null,
-)
+) {
+    val posterUrl: String?
+        get() = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val backdropUrl: String?
+        get() = backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+}
 
 @Immutable
 @Serializable
@@ -173,6 +190,31 @@ data class SeerrContentRating(
 
 @Immutable
 @Serializable
+data class SeerrReleases(
+    val results: List<SeerrReleaseDateRegion> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrReleaseDateRegion(
+    @SerialName("iso_3166_1")
+    val iso31661: String = "",
+    @SerialName("release_dates")
+    val releaseDates: List<SeerrReleaseDate> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrReleaseDate(
+    val certification: String = "",
+    @SerialName("release_date")
+    val releaseDate: String = "",
+    val type: Int = 0,
+    val note: String? = null,
+)
+
+@Immutable
+@Serializable
 data class SeerrKeyword(
     val id: Int = 0,
     val name: String = "",
@@ -181,6 +223,7 @@ data class SeerrKeyword(
 @Immutable
 @Serializable
 data class SeerrWatchProviderRegion(
+    @SerialName("iso_3166_1")
     val iso31661: String = "",
     val link: String? = null,
     val flatrate: List<SeerrWatchProvider> = emptyList(),
@@ -193,8 +236,8 @@ data class SeerrWatchProviderRegion(
 data class SeerrWatchProvider(
     val displayPriority: Int = 0,
     val logoPath: String? = null,
-    val providerId: Int = 0,
-    val providerName: String = "",
+    val id: Int = 0,
+    val name: String = "",
 )
 
 @Immutable
@@ -214,7 +257,10 @@ data class SeerrAggregateCast(
     val roles: List<SeerrRole> = emptyList(),
     val totalEpisodeCount: Int = 0,
     val order: Int = 0,
-)
+) {
+    val profileUrl: String?
+        get() = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+}
 
 @Immutable
 @Serializable
@@ -226,7 +272,10 @@ data class SeerrAggregateCrew(
     val jobs: List<SeerrJob> = emptyList(),
     val totalEpisodeCount: Int = 0,
     val department: String? = null,
-)
+) {
+    val profileUrl: String?
+        get() = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+}
 
 @Immutable
 @Serializable
@@ -332,7 +381,10 @@ data class SeerrCast(
     val name: String = "",
     val order: Int = 0,
     val profilePath: String? = null,
-)
+) {
+    val profileUrl: String?
+        get() = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+}
 
 @Immutable
 @Serializable
@@ -344,7 +396,10 @@ data class SeerrCrew(
     val job: String? = null,
     val department: String? = null,
     val profilePath: String? = null,
-)
+) {
+    val profileUrl: String?
+        get() = profilePath?.let { "https://image.tmdb.org/t/p/h632$it" }
+}
 
 @Immutable
 @Serializable
@@ -375,7 +430,10 @@ data class SeerrSeason(
     val overview: String? = null,
     val posterPath: String? = null,
     val seasonNumber: Int = 0,
-)
+) {
+    val posterUrl: String?
+        get() = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+}
 
 @Immutable
 @Serializable
@@ -586,6 +644,8 @@ data class SeerrPreferences(
     val discoverPopularTv: Boolean = true,
     val discoverUpcomingMovies: Boolean = true,
     val discoverUpcomingTv: Boolean = true,
+    val streamingRegion: String = "US",
+    val discoverRegion: String = "US",
 )
 
 @Immutable

@@ -32,6 +32,8 @@ class SeerrPreferencesStore @Inject constructor(
         val DISCOVER_POPULAR_TV = booleanPreferencesKey("seerr_discover_popular_tv")
         val DISCOVER_UPCOMING_MOVIES = booleanPreferencesKey("seerr_discover_upcoming_movies")
         val DISCOVER_UPCOMING_TV = booleanPreferencesKey("seerr_discover_upcoming_tv")
+        val STREAMING_REGION = stringPreferencesKey("seerr_streaming_region")
+        val DISCOVER_REGION = stringPreferencesKey("seerr_discover_region")
     }
 
     val preferences: Flow<SeerrPreferences> = context.seerrDataStore.data.map { prefs ->
@@ -47,6 +49,8 @@ class SeerrPreferencesStore @Inject constructor(
             discoverPopularTv = prefs[Keys.DISCOVER_POPULAR_TV] ?: true,
             discoverUpcomingMovies = prefs[Keys.DISCOVER_UPCOMING_MOVIES] ?: true,
             discoverUpcomingTv = prefs[Keys.DISCOVER_UPCOMING_TV] ?: true,
+            streamingRegion = prefs[Keys.STREAMING_REGION] ?: "US",
+            discoverRegion = prefs[Keys.DISCOVER_REGION] ?: "US",
         )
     }
 
@@ -96,6 +100,14 @@ class SeerrPreferencesStore @Inject constructor(
         context.seerrDataStore.edit { it[Keys.DISCOVER_UPCOMING_TV] = enabled }
     }
 
+    suspend fun setStreamingRegion(region: String) {
+        context.seerrDataStore.edit { it[Keys.STREAMING_REGION] = region }
+    }
+
+    suspend fun setDiscoverRegion(region: String) {
+        context.seerrDataStore.edit { it[Keys.DISCOVER_REGION] = region }
+    }
+
     suspend fun disconnect() {
         context.seerrDataStore.edit { prefs ->
             prefs.remove(Keys.SERVER_URL)
@@ -109,6 +121,8 @@ class SeerrPreferencesStore @Inject constructor(
             prefs[Keys.DISCOVER_POPULAR_TV] = true
             prefs[Keys.DISCOVER_UPCOMING_MOVIES] = true
             prefs[Keys.DISCOVER_UPCOMING_TV] = true
+            prefs[Keys.STREAMING_REGION] = "US"
+            prefs[Keys.DISCOVER_REGION] = "US"
         }
     }
 }

@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -93,6 +95,10 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
         val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
+        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
+        val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
+        val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
+        val CHANNEL_MIX_ENABLED = stringPreferencesKey("channel_mix_enabled")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -211,6 +217,14 @@ class UserPreferencesStore @Inject constructor(
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
+            audioNormalizationMode = try {
+                AudioNormalizationMode.valueOf(prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name)
+            } catch (_: Exception) { AudioNormalizationMode.NONE },
+            audioNormalizationEnabled = prefs[Keys.AUDIO_NORMALIZATION_ENABLED]?.toBoolean() ?: false,
+            channelMixMode = try {
+                ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
+            } catch (_: Exception) { ChannelMixMode.AUTO },
+            channelMixEnabled = prefs[Keys.CHANNEL_MIX_ENABLED]?.toBoolean() ?: false,
         )
     }
 
@@ -491,6 +505,22 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
         context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
+    }
+
+    suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
+        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
+    }
+
+    suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setChannelMixMode(mode: ChannelMixMode) {
+        context.dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
+    }
+
+    suspend fun setChannelMixEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

@@ -127,6 +127,14 @@ class SeerrSettingsViewModel @Inject constructor(
         viewModelScope.launch { seerrPreferencesStore.setDiscoverUpcomingTv(enabled) }
     }
 
+    fun setStreamingRegion(region: String) {
+        viewModelScope.launch { seerrPreferencesStore.setStreamingRegion(region) }
+    }
+
+    fun setDiscoverRegion(region: String) {
+        viewModelScope.launch { seerrPreferencesStore.setDiscoverRegion(region) }
+    }
+
     fun disconnect() {
         viewModelScope.launch {
             seerrPreferencesStore.disconnect()

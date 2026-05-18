@@ -41,7 +41,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +59,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -317,6 +322,30 @@ fun SeerrSettingsScreen(
                         }
                     }
                 }
+
+                // ── Region Settings ──
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    SectionHeader(title = "Regions")
+                }
+
+                item {
+                    RegionSelector(
+                        label = "Streaming Region",
+                        subtitle = "Region used to determine available streaming providers",
+                        selectedRegion = preferences.streamingRegion,
+                        onRegionChange = viewModel::setStreamingRegion,
+                    )
+                }
+
+                item {
+                    RegionSelector(
+                        label = "Discover Region",
+                        subtitle = "Region used for release dates and content discovery",
+                        selectedRegion = preferences.discoverRegion,
+                        onRegionChange = viewModel::setDiscoverRegion,
+                    )
+                }
             }
         }
     }
@@ -375,6 +404,83 @@ private fun ConnectionStatusCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = color.copy(alpha = 0.8f),
                 )
+            }
+        }
+    }
+}
+
+private val COMMON_REGIONS = listOf(
+    "US" to "\uD83C\uDDFA\uD83C\uDDF8 United States",
+    "GB" to "\uD83C\uDDEC\uD83C\uDDE7 United Kingdom",
+    "CA" to "\uD83C\uDDE8\uD83C\uDDE6 Canada",
+    "AU" to "\uD83C\uDDE6\uD83C\uDDFA Australia",
+    "DE" to "\uD83C\uDDE9\uD83C\uDDEA Germany",
+    "FR" to "\uD83C\uDDEB\uD83C\uDDF7 France",
+    "JP" to "\uD83C\uDDEF\uD83C\uDDF5 Japan",
+    "KR" to "\uD83C\uDDF0\uD83C\uDDF7 South Korea",
+    "BR" to "\uD83C\uDDE7\uD83C\uDDF7 Brazil",
+    "IN" to "\uD83C\uDDEE\uD83C\uDDF3 India",
+    "ES" to "\uD83C\uDDEA\uD83C\uDDF8 Spain",
+    "IT" to "\uD83C\uDDEE\uD83C\uDDF9 Italy",
+    "MX" to "\uD83C\uDDF2\uD83C\uDDFD Mexico",
+    "NL" to "\uD83C\uDDF3\uD83C\uDDF1 Netherlands",
+    "SE" to "\uD83C\uDDF8\uD83C\uDDEA Sweden",
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RegionSelector(
+    label: String,
+    subtitle: String,
+    selectedRegion: String,
+    onRegionChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = COMMON_REGIONS.find { it.first == selectedRegion }?.second ?: selectedRegion
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+        ) {
+            OutlinedTextField(
+                value = selectedLabel,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+                    .tvFocusable(),
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                COMMON_REGIONS.forEach { (code, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onRegionChange(code)
+                            expanded = false
+                        },
+                    )
+                }
             }
         }
     }

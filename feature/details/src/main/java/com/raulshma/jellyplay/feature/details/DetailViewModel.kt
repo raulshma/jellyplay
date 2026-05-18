@@ -201,24 +201,32 @@ class DetailViewModel @Inject constructor(
                         smartPlayTarget = null
                     }
 
-                    // Load Seerr recommendations/similar if enabled
-                    loadSeerrData(detail)
+                    // Seerr data will be loaded on-demand when user scrolls to that section
+                    // loadSeerrData(detail)
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load details" }
             _isLoading.value = false
         }
     }
 
+    private var currentSeriesId: String? = null
+
     private fun loadSeasons(seriesId: String) {
+        currentSeriesId = seriesId
         viewModelScope.launch {
             mediaRepository.getSeasons(seriesId)
                 .onSuccess { seasonList ->
                     seasons = seasonList
-                    seasonList.forEach { season ->
-                        loadEpisodes(seriesId, season.id)
+                    if (seasonList.isNotEmpty()) {
+                        loadEpisodes(seriesId, seasonList.first().id)
                     }
                 }
         }
+    }
+
+    fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
+        if (fetchedSeasonIds.contains(seasonId)) return
+        loadEpisodes(seriesId, seasonId)
     }
 
     private fun loadEpisodes(seriesId: String, seasonId: String) {
@@ -228,18 +236,38 @@ class DetailViewModel @Inject constructor(
                     episodes = episodes.toMutableMap().apply {
                         this[seasonId] = episodeList
                     }
-                    maybeComputeSmartPlayTarget()
+                    
+                    if (episodeList.isEmpty()) {
+                        val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
+                        if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
+                            val nextSeasonId = seasons[seasonIndex + 1].id
+                            loadEpisodes(seriesId, nextSeasonId)
+                        } else {
+                            maybeComputeSmartPlayTarget()
+                        }
+                    } else {
+                        maybeComputeSmartPlayTarget()
+                    }
                 }
                 .onFailure {
-                    // On failure store empty list so UI stops showing skeleton
                     if (!episodes.containsKey(seasonId)) {
                         episodes = episodes.toMutableMap().apply {
                             this[seasonId] = emptyList()
                         }
                     }
-                    maybeComputeSmartPlayTarget()
+                    
+                    val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
+                    if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
+                        val nextSeasonId = seasons[seasonIndex + 1].id
+                        if (!fetchedSeasonIds.contains(nextSeasonId)) {
+                            loadEpisodes(seriesId, nextSeasonId)
+                        } else {
+                            maybeComputeSmartPlayTarget()
+                        }
+                    } else {
+                        maybeComputeSmartPlayTarget()
+                    }
                 }
-            // Always mark as fetched so UI never spins forever
             fetchedSeasonIds = fetchedSeasonIds + seasonId
         }
     }
@@ -256,13 +284,15 @@ class DetailViewModel @Inject constructor(
     private fun computeSeriesSmartPlayTarget() {
         val allEpisodes = episodes.values.flatten()
         if (allEpisodes.isEmpty()) {
-            smartPlayTarget = null
+            if (hasMoreSeasonsToLoad()) {
+                loadNextUnfetchedSeason()
+            } else {
+                smartPlayTarget = null
+            }
             return
         }
         val sorted = allEpisodes.sortedByPlaybackOrder()
 
-        // Match Jellyfin's "next thing to watch" behavior: resume in-progress
-        // episodes first, then continue with the first unwatched episode.
         val resumeEpisode = sorted.firstOrNull { it.hasResumeProgress() }
         if (resumeEpisode != null) {
             val s = resumeEpisode.seasonNumber ?: 1
@@ -283,7 +313,7 @@ class DetailViewModel @Inject constructor(
                 .takeWhile { it.id != nextEpisode.id }
                 .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
             val label = if (hasWatchedBefore) {
-                "Play Next S${s}:E${e}"
+                "Next Up S${s}:E${e}"
             } else {
                 "Play S${s}:E${e}"
             }
@@ -295,6 +325,11 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        if (hasMoreSeasonsToLoad()) {
+            loadNextUnfetchedSeason()
+            return
+        }
+
         val first = sorted.first()
         val s = first.seasonNumber ?: 1
         val e = first.episodeNumber ?: first.indexNumber ?: 1
@@ -303,6 +338,20 @@ class DetailViewModel @Inject constructor(
             label = "Replay S${s}:E${e}",
             startPositionTicks = 0,
         )
+    }
+
+    private fun hasMoreSeasonsToLoad(): Boolean {
+        return seasons.any { season -> !fetchedSeasonIds.contains(season.id) }
+    }
+
+    private fun loadNextUnfetchedSeason() {
+        val seriesId = currentSeriesId ?: return
+        val nextSeason = seasons.firstOrNull { season -> !fetchedSeasonIds.contains(season.id) }
+        if (nextSeason != null) {
+            loadEpisodes(seriesId, nextSeason.id)
+        } else {
+            smartPlayTarget = null
+        }
     }
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
@@ -457,6 +506,14 @@ class DetailViewModel @Inject constructor(
                 _seerrSimilar.value = similarDeferred.await().results.take(20)
             }
         }
+    }
+
+    private var seerrDataLoaded = false
+
+    fun loadSeerrDataIfNeeded(detail: MediaDetail) {
+        if (seerrDataLoaded) return
+        seerrDataLoaded = true
+        loadSeerrData(detail)
     }
 
     private fun resolveTmdbId(detail: MediaDetail): Int? {

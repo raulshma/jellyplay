@@ -85,10 +85,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -165,6 +168,18 @@ internal fun PlayerControls(
     showVideoStats: Boolean = false,
     onVideoStatsClick: () -> Unit = {},
     bufferedPosition: Long = 0L,
+    streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    onQualityClick: () -> Unit = {},
+    audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    audioNormalizationEnabled: Boolean = false,
+    channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    channelMixEnabled: Boolean = false,
+    supportsAudioNormalization: Boolean = false,
+    supportsChannelMixing: Boolean = false,
+    onAudioNormalizationClick: () -> Unit = {},
+    onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
+    onChannelMixClick: () -> Unit = {},
+    onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -187,8 +202,8 @@ internal fun PlayerControls(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { -it },
+            enter = PlayerAnimations.topControlsEnter,
+            exit = PlayerAnimations.topControlsExit,
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Box(
@@ -254,8 +269,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
-            exit = fadeOut(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
+            enter = PlayerAnimations.playButtonEnter,
+            exit = PlayerAnimations.playButtonExit,
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
@@ -317,8 +332,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { it },
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)) { it },
+            enter = PlayerAnimations.bottomControlsEnter,
+            exit = PlayerAnimations.bottomControlsExit,
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Column(
@@ -354,8 +369,8 @@ internal fun PlayerControls(
 
                 AnimatedVisibility(
                     visible = skipSegmentText != null,
-                    enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)),
+                    enter = PlayerAnimations.skipButtonEnter,
+                    exit = PlayerAnimations.skipButtonExit,
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -400,6 +415,10 @@ internal fun PlayerControls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayerQualityButton(
+                            quality = streamingQuality,
+                            onClick = onQualityClick,
+                        )
                         PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
                         PlayerIconButton(
                             icon = Icons.Default.Audiotrack,
@@ -465,6 +484,8 @@ internal fun PlayerControls(
                                 supportsAudioDelay = supportsAudioDelay,
                                 supportsAudioPassthrough = supportsAudioPassthrough,
                                 supportsOcr = supportsOcr,
+                                supportsAudioNormalization = supportsAudioNormalization,
+                                supportsChannelMixing = supportsChannelMixing,
                                 dialogueBoostEnabled = dialogueBoostEnabled,
                                 dialogueBoostStrength = dialogueBoostStrength,
                                 nightModeEnabled = nightModeEnabled,
@@ -472,6 +493,10 @@ internal fun PlayerControls(
                                 audioPassthrough = audioPassthrough,
                                 isOcrRunning = isOcrRunning,
                                 showVideoStats = showVideoStats,
+                                audioNormalizationMode = audioNormalizationMode,
+                                audioNormalizationEnabled = audioNormalizationEnabled,
+                                channelMixMode = channelMixMode,
+                                channelMixEnabled = channelMixEnabled,
                                 onSubtitleStyleClick = {
                                     showOverflow = false
                                     onSubtitleStyleClick()
@@ -510,6 +535,22 @@ internal fun PlayerControls(
                                 onVideoStatsClick = {
                                     showOverflow = false
                                     onVideoStatsClick()
+                                },
+                                onAudioNormalizationClick = {
+                                    showOverflow = false
+                                    onAudioNormalizationClick()
+                                },
+                                onAudioNormalizationModeChange = {
+                                    showOverflow = false
+                                    onAudioNormalizationModeChange(it)
+                                },
+                                onChannelMixClick = {
+                                    showOverflow = false
+                                    onChannelMixClick()
+                                },
+                                onChannelMixModeChange = {
+                                    showOverflow = false
+                                    onChannelMixModeChange(it)
                                 },
                             )
                         }
@@ -617,12 +658,12 @@ private fun TvControllableSeekBar(
     val isActive = isPressed || isDragging || (isTv && isSeekBarFocused)
     val trackHeight by animateDpAsState(
         targetValue = if (isActive) 5.dp else 3.dp,
-        animationSpec = tween(AnimationTokens.FastDuration),
+        animationSpec = PlayerAnimations.seekbarDpSpec,
         label = "trackH",
     )
     val thumbRadiusDp by animateDpAsState(
         targetValue = if (isActive) 7.dp else 5.dp,
-        animationSpec = tween(AnimationTokens.FastDuration),
+        animationSpec = PlayerAnimations.seekbarDpSpec,
         label = "thumbR",
     )
 
@@ -873,6 +914,8 @@ private fun PlayerOverflowMenu(
     supportsAudioDelay: Boolean,
     supportsAudioPassthrough: Boolean,
     supportsOcr: Boolean,
+    supportsAudioNormalization: Boolean,
+    supportsChannelMixing: Boolean,
     dialogueBoostEnabled: Boolean,
     dialogueBoostStrength: EffectStrength,
     nightModeEnabled: Boolean,
@@ -880,6 +923,10 @@ private fun PlayerOverflowMenu(
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
     showVideoStats: Boolean = false,
+    audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    audioNormalizationEnabled: Boolean = false,
+    channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    channelMixEnabled: Boolean = false,
     onSubtitleStyleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
@@ -891,9 +938,15 @@ private fun PlayerOverflowMenu(
     onSubtitleDownloadClick: () -> Unit,
     onOcrClick: () -> Unit,
     onVideoStatsClick: () -> Unit = {},
+    onAudioNormalizationClick: () -> Unit = {},
+    onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
+    onChannelMixClick: () -> Unit = {},
+    onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
 ) {
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
+    var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
+    var showChannelMixSubmenu by remember { mutableStateOf(false) }
 
     DropdownMenu(
         expanded = expanded,
@@ -990,6 +1043,88 @@ private fun PlayerOverflowMenu(
                     label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
                     onClick = { showNightModeSubmenu = true },
                     tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        if (supportsAudioNormalization) {
+            if (showAudioNormalizationSubmenu) {
+                OverflowMenuItem(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    label = "Audio Normalization",
+                    onClick = { showAudioNormalizationSubmenu = false },
+                )
+                AudioNormalizationMode.entries.forEach { mode ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                mode.displayName,
+                                color = if (audioNormalizationEnabled && audioNormalizationMode == mode)
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
+                        onClick = {
+                            onAudioNormalizationModeChange(mode)
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            if (audioNormalizationEnabled && audioNormalizationMode == mode) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        },
+                    )
+                }
+            } else {
+                OverflowMenuItem(
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
+                    onClick = { showAudioNormalizationSubmenu = true },
+                    tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        if (supportsChannelMixing) {
+            if (showChannelMixSubmenu) {
+                OverflowMenuItem(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    label = "Channel Mixing",
+                    onClick = { showChannelMixSubmenu = false },
+                )
+                ChannelMixMode.entries.forEach { mode ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                mode.displayName,
+                                color = if (channelMixEnabled && channelMixMode == mode)
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
+                        onClick = {
+                            onChannelMixModeChange(mode)
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            if (channelMixEnabled && channelMixMode == mode) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        },
+                    )
+                }
+            } else {
+                OverflowMenuItem(
+                    icon = Icons.Default.Audiotrack,
+                    label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
+                    onClick = { showChannelMixSubmenu = true },
+                    tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

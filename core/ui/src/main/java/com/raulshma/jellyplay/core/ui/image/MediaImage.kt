@@ -23,6 +23,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size as CoilSize
 
 @Composable
 fun MediaImage(
@@ -32,6 +33,8 @@ fun MediaImage(
     contentScale: ContentScale = ContentScale.Crop,
     fallbackUrls: List<String> = emptyList(),
     blurHash: String? = null,
+    crossfade: Boolean = true,
+    size: CoilSize = CoilSize.ORIGINAL,
 ) {
     val allUrls = remember(url, fallbackUrls) { listOf(url) + fallbackUrls }
     var currentIndex by remember(url, fallbackUrls) { mutableIntStateOf(0) }
@@ -50,7 +53,8 @@ fun MediaImage(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(allUrls[currentIndex])
-                    .crossfade(true)
+                    .crossfade(crossfade)
+                    .size(size)
                     .build(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),

@@ -24,6 +24,7 @@ class TrickplayManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
+    private var preloadJob: kotlinx.coroutines.Job? = null
 
     fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
@@ -54,7 +55,9 @@ class TrickplayManager(
         val offsetY = tileRow * currentInfo.height
 
         try {
-            val thumbnail = Bitmap.createBitmap(sheet, offsetX, offsetY, currentInfo.width, currentInfo.height)
+            val thumbnail = Bitmap.createBitmap(
+                sheet, offsetX, offsetY, currentInfo.width, currentInfo.height,
+            )
             thumbnailCache.put(thumbnailIndex, thumbnail)
             preloadNeighbors(id, thumbnailIndex, currentInfo)
             return thumbnail
@@ -74,7 +77,12 @@ class TrickplayManager(
 
             val data = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
                 ?: return@withLock null
-            val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+                inMutable = false
+            }
+            val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
             if (bitmap != null) {
                 spriteSheetCache.put(sheetIndex, bitmap)
             }
@@ -87,20 +95,43 @@ class TrickplayManager(
         currentIndex: Int,
         trickplayInfo: TrickplayInfo,
     ) {
-        val preloadRange = PRELOAD_NEIGHBOR_COUNT
-        val minIndex = (currentIndex - preloadRange).coerceAtLeast(0)
-        val maxIndex = (currentIndex + preloadRange).coerceAtMost(trickplayInfo.thumbnailCount - 1)
+        preloadJob?.cancel()
+        preloadJob = scope.launch {
+            val preloadRange = PRELOAD_NEIGHBOR_COUNT
+            val minIndex = (currentIndex - preloadRange).coerceAtLeast(0)
+            val maxIndex = (currentIndex + preloadRange).coerceAtMost(trickplayInfo.thumbnailCount - 1)
+            val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
 
-        for (i in minIndex..maxIndex) {
-            if (i == currentIndex) continue
-            if (thumbnailCache.get(i) != null) continue
-            scope.launch {
-                getThumbnail(i * trickplayInfo.interval.toLong())
+            for (i in minIndex..maxIndex) {
+                if (i == currentIndex) continue
+                if (thumbnailCache.get(i) != null) continue
+
+                val sheetIndex = i / thumbnailsPerSheet
+                val tileIndex = i % thumbnailsPerSheet
+                val tileCol = tileIndex % trickplayInfo.tileWidth
+                val tileRow = tileIndex / trickplayInfo.tileWidth
+
+                val sheet = spriteSheetCache.get(sheetIndex)
+                    ?: loadSpriteSheet(id, sheetIndex, trickplayInfo)
+                    ?: continue
+
+                val offsetX = tileCol * trickplayInfo.width
+                val offsetY = tileRow * trickplayInfo.height
+
+                try {
+                    val thumbnail = Bitmap.createBitmap(
+                        sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height,
+                    )
+                    thumbnailCache.put(i, thumbnail)
+                } catch (_: Exception) { }
             }
         }
     }
 
     fun clear() {
+        preloadJob?.cancel()
+        preloadJob = null
+
         val it = thumbnailCache.snapshot().values.iterator()
         while (it.hasNext()) {
             it.next().recycle()

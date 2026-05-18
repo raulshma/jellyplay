@@ -91,6 +91,7 @@ fun SeerrDetailScreen(
     val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
     val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
 
     val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
     val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
@@ -100,8 +101,7 @@ fun SeerrDetailScreen(
         viewModel.loadDetails(tmdbId, mediaType)
     }
 
-    val backdropPath = movieDetail?.backdropPath ?: tvDetail?.backdropPath
-    val backdropUrl = viewModel.getSeerrBackdropUrl(backdropPath)
+    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
@@ -109,13 +109,16 @@ fun SeerrDetailScreen(
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
-        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
-            seerrLoadingState.startLoading(tmdbId)
-            viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
-                seerrLoadingState.stopLoading(tmdbId)
-                onDone()
+        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
+            remember(seerrLoadingState, viewModel) {
+                { tmdbId, mediaType, onDone ->
+                    seerrLoadingState.startLoading(tmdbId)
+                    viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
+                        seerrLoadingState.stopLoading(tmdbId)
+                        onDone()
+                    }
+                }
             }
-        }
 
         androidx.compose.runtime.CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides prefetchCallback,
@@ -145,11 +148,12 @@ fun SeerrDetailScreen(
                         ratings = ratings,
                         recommendations = seerrRecommendations,
                         similar = seerrSimilar,
-                        getPosterUrl = { viewModel.getSeerrPosterUrl(it) },
-                        getBackdropUrl = { viewModel.getSeerrBackdropUrl(it) },
                         onRequestClick = { showRequestDialog = true },
                         onNavigate = onNavigate,
-                        onBack = onBack
+                        onBack = onBack,
+                        streamingRegion = seerrPrefs.streamingRegion,
+                        discoverRegion = seerrPrefs.discoverRegion,
+                        seerrServerUrl = seerrPrefs.serverUrl,
                     )
                 }
             }
@@ -217,11 +221,12 @@ private fun SeerrDetailContent(
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
-    getBackdropUrl: (String?) -> String?,
     onRequestClick: () -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     onBack: () -> Unit,
+    streamingRegion: String = "US",
+    discoverRegion: String = "US",
+    seerrServerUrl: String = "",
 ) {
     val scrollState = rememberScrollState()
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -230,9 +235,9 @@ private fun SeerrDetailContent(
     val density = LocalDensity.current
     val artworkColors = LocalArtworkColors.current
 
-    val backdropPath = movieDetail?.backdropPath ?: tvDetail?.backdropPath
+    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
     val title = movieDetail?.title ?: tvDetail?.name ?: ""
-    val posterPath = movieDetail?.posterPath ?: tvDetail?.posterPath
+    val posterUrl = movieDetail?.posterUrl ?: tvDetail?.posterUrl
 
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
@@ -295,9 +300,9 @@ private fun SeerrDetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            if (backdropPath != null) {
+            if (backdropUrl != null) {
                 MediaImage(
-                    url = getBackdropUrl(backdropPath) ?: "",
+                    url = backdropUrl,
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
@@ -373,7 +378,7 @@ private fun SeerrDetailContent(
                                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                             ) {
                                 MediaImage(
-                                    url = getPosterUrl(posterPath) ?: "",
+                                    url = posterUrl ?: "",
                                     contentDescription = title,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -415,9 +420,11 @@ private fun SeerrDetailContent(
                             ratings = ratings,
                             recommendations = recommendations,
                             similar = similar,
-                            getPosterUrl = getPosterUrl,
                             onNavigate = onNavigate,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            streamingRegion = streamingRegion,
+                            discoverRegion = discoverRegion,
+                            seerrServerUrl = seerrServerUrl,
                         )
                     }
                 } else {
@@ -436,7 +443,7 @@ private fun SeerrDetailContent(
                                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                             ) {
                                 MediaImage(
-                                    url = getPosterUrl(posterPath) ?: "",
+                                    url = posterUrl ?: "",
                                     contentDescription = title,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -508,9 +515,11 @@ private fun SeerrDetailContent(
                             ratings = ratings,
                             recommendations = recommendations,
                             similar = similar,
-                            getPosterUrl = getPosterUrl,
                             onNavigate = onNavigate,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            streamingRegion = streamingRegion,
+                            discoverRegion = discoverRegion,
+                            seerrServerUrl = seerrServerUrl,
                         )
                     }
                 }
@@ -651,9 +660,11 @@ private fun SeerrDetailBody(
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     modifier: Modifier = Modifier,
+    streamingRegion: String = "US",
+    discoverRegion: String = "US",
+    seerrServerUrl: String = "",
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -710,12 +721,6 @@ private fun SeerrDetailBody(
                 }
             }
 
-            // Watch Providers
-            val watchProviders = movieDetail?.watchProviders ?: tvDetail?.watchProviders ?: emptyList()
-            val usProviders = watchProviders.find { it.iso31661 == "US" }
-            if (usProviders != null && (usProviders.flatrate.isNotEmpty() || usProviders.buy.isNotEmpty())) {
-                WatchProvidersSection(usProviders, getPosterUrl)
-            }
 
             if (isExpanded) {
                 // Two column layout for Cast/Videos and Media Details
@@ -730,12 +735,12 @@ private fun SeerrDetailBody(
                         // Cast
                         val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
                         if (cast.isNotEmpty()) {
-                            CastSection(cast, getPosterUrl)
+                            CastSection(cast)
                         }
 
                         // Seasons (TV only)
                         if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
-                            SeasonsSection(tvDetail.seasons, getPosterUrl)
+                            SeasonsSection(tvDetail.seasons)
                         }
 
                         // Videos
@@ -749,18 +754,18 @@ private fun SeerrDetailBody(
                         modifier = Modifier.width(300.dp),
                         verticalArrangement = Arrangement.spacedBy(32.dp)
                     ) {
-                        MediaInformationSection(movieDetail, tvDetail)
+                        MediaInformationSection(movieDetail, tvDetail, streamingRegion, discoverRegion, seerrServerUrl)
                     }
                 }
             } else {
                 // Stacked layout for compact screens
                 val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
                 if (cast.isNotEmpty()) {
-                    CastSection(cast, getPosterUrl)
+                    CastSection(cast)
                 }
 
                 if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
-                    SeasonsSection(tvDetail.seasons, getPosterUrl)
+                    SeasonsSection(tvDetail.seasons)
                 }
 
                 val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
@@ -768,7 +773,7 @@ private fun SeerrDetailBody(
                     VideosSection(videos)
                 }
 
-                MediaInformationSection(movieDetail, tvDetail)
+                MediaInformationSection(movieDetail, tvDetail, streamingRegion, discoverRegion, seerrServerUrl)
             }
 
             // Recommendations
@@ -784,7 +789,6 @@ private fun SeerrDetailBody(
                 SeerrHorizontalSection(
                     title = "Recommendations",
                     items = recommendations,
-                    getPosterUrl = getPosterUrl,
                     onNavigate = onNavigate
                 )
             }
@@ -802,7 +806,6 @@ private fun SeerrDetailBody(
                 SeerrHorizontalSection(
                     title = "Similar",
                     items = similar,
-                    getPosterUrl = getPosterUrl,
                     onNavigate = onNavigate
                 )
             }
@@ -814,7 +817,6 @@ private fun SeerrDetailBody(
 private fun SeerrHorizontalSection(
     title: String,
     items: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
 ) {
     val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
@@ -833,10 +835,10 @@ private fun SeerrHorizontalSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(items) { item ->
+            items(items, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
-                    imageUrl = getPosterUrl(item.posterPath),
+                    imageUrl = item.posterUrl,
                     isLoading = loadingState?.isLoading(item.id) == true,
                     onClick = {
                         if (loadingState != null && prefetch != null) {
@@ -910,45 +912,8 @@ private fun ExternalLinksRow(
 }
 
 @Composable
-private fun WatchProvidersSection(
-    providers: SeerrWatchProviderRegion,
-    getLogoUrl: (String?) -> String?,
-) {
-    val allProviders = (providers.flatrate + providers.buy).distinctBy { it.providerId }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Watch Now",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            allProviders.forEach { provider ->
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(ShapeCache.smooth8)
-                ) {
-                    MediaImage(
-                        url = getLogoUrl(provider.logoPath) ?: "",
-                        contentDescription = provider.providerName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun CastSection(
     cast: List<Any>, // Can be SeerrCast or SeerrAggregateCast
-    getProfileUrl: (String?) -> String?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -964,19 +929,19 @@ private fun CastSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(cast) { member ->
+            items(cast, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
-                val profilePath: String?
+                val profileUrl: String?
 
                 if (member is SeerrAggregateCast) {
                     name = member.name
                     character = member.roles.firstOrNull()?.character ?: ""
-                    profilePath = member.profilePath
+                    profileUrl = member.profileUrl
                 } else if (member is SeerrCast) {
                     name = member.name
                     character = member.character ?: ""
-                    profilePath = member.profilePath
+                    profileUrl = member.profileUrl
                 } else return@items
 
                 Column(
@@ -990,7 +955,7 @@ private fun CastSection(
                             .background(Color.White.copy(alpha = 0.1f))
                     ) {
                         MediaImage(
-                            url = getProfileUrl(profilePath) ?: "",
+                            url = profileUrl ?: "",
                             contentDescription = name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -1023,7 +988,6 @@ private fun CastSection(
 @Composable
 private fun SeasonsSection(
     seasons: List<SeerrSeason>,
-    getPosterUrl: (String?) -> String?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -1039,7 +1003,7 @@ private fun SeasonsSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(seasons.sortedByDescending { it.seasonNumber }) { season ->
+            items(seasons.sortedByDescending { it.seasonNumber }, contentType = { "season" }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
                     Card(
                         modifier = Modifier
@@ -1049,7 +1013,7 @@ private fun SeasonsSection(
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         MediaImage(
-                            url = getPosterUrl(season.posterPath) ?: "",
+                            url = season.posterUrl ?: "",
                             contentDescription = season.name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -1095,7 +1059,7 @@ private fun VideosSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(videos) { video ->
+            items(videos, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
@@ -1336,7 +1300,13 @@ private fun MediaInfoCondensed(
 }
 
 @Composable
-private fun MediaInformationSection(movie: SeerrMovieDetails?, tv: SeerrTvDetails?) {
+private fun MediaInformationSection(
+    movie: SeerrMovieDetails?,
+    tv: SeerrTvDetails?,
+    streamingRegion: String = "US",
+    discoverRegion: String = "US",
+    seerrServerUrl: String = "",
+) {
     val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.US)
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1353,10 +1323,14 @@ private fun MediaInformationSection(movie: SeerrMovieDetails?, tv: SeerrTvDetail
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Icons.Default.Info)
-            
+
             val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
-            MediaInfoRow("Release Date", releaseDate ?: "Unknown", Icons.Default.Event)
-            
+            if (movie != null) {
+                ReleaseDateRow(releaseDate, movie.releases, discoverRegion)
+            } else {
+                MediaInfoRow("Release Date", releaseDate ?: "Unknown", Icons.Default.Event)
+            }
+
             if (movie != null) {
                 movie.revenue?.takeIf { it > 0 }?.let {
                     MediaInfoRow("Revenue", currencyFormatter.format(it), Icons.Default.Payments)
@@ -1383,6 +1357,147 @@ private fun MediaInformationSection(movie: SeerrMovieDetails?, tv: SeerrTvDetail
             val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
             if (studios.isNotEmpty()) {
                 MediaInfoRow("Studios", studios.joinToString(", "), Icons.Default.Business)
+            }
+
+            val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
+            val regionProviders = watchProviders.find { it.iso31661 == streamingRegion }
+            val streamingProviders = regionProviders?.flatrate.orEmpty()
+            if (streamingProviders.isNotEmpty()) {
+                StreamingProvidersRow(streamingProviders, streamingRegion, seerrServerUrl)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReleaseDateRow(
+    releaseDate: String?,
+    releases: SeerrReleases?,
+    discoverRegion: String,
+) {
+    val regionReleases = releases?.results?.find { it.iso31661 == discoverRegion }?.releaseDates.orEmpty()
+    val filteredReleases = regionReleases
+        .filter { it.type in 3..5 }
+        .distinctBy { it.type }
+        .sortedBy { it.type }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Event,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = Color.White.copy(alpha = 0.4f)
+        )
+        Column {
+            Text(
+                text = "Release Date",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.4f),
+                fontWeight = FontWeight.Medium
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = releaseDate ?: "Unknown",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.9f),
+                    lineHeight = 20.sp
+                )
+                if (filteredReleases.isNotEmpty()) {
+                    Spacer(Modifier.width(4.dp))
+                    filteredReleases.forEach { release ->
+                        ReleaseTypeIcon(release.type)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReleaseTypeIcon(type: Int) {
+    when (type) {
+        3 -> Icon(
+            imageVector = Icons.Default.LocalActivity,
+            contentDescription = "Theatrical Release",
+            modifier = Modifier.size(16.dp),
+            tint = Color.White.copy(alpha = 0.7f)
+        )
+        4 -> Icon(
+            imageVector = Icons.Default.CloudDownload,
+            contentDescription = "Digital Release",
+            modifier = Modifier.size(16.dp),
+            tint = Color.White.copy(alpha = 0.7f)
+        )
+        5 -> Icon(
+            imageVector = Icons.Default.FiberManualRecord,
+            contentDescription = "Physical Release",
+            modifier = Modifier.size(16.dp),
+            tint = Color.White.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
+private fun StreamingProvidersRow(
+    providers: List<SeerrWatchProvider>,
+    region: String,
+    seerrServerUrl: String = "",
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.PlayCircle,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = Color.White.copy(alpha = 0.4f)
+        )
+        Column {
+            Text(
+                text = "Currently Streaming On",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.4f),
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                providers.forEach { provider ->
+                    val logoUrl = provider.logoPath?.let { path ->
+                        val cleanPath = path.trimStart('/')
+                        if (seerrServerUrl.isNotBlank()) {
+                            "${seerrServerUrl.trimEnd('/')}/imageproxy/tmdb/t/p/w45/$cleanPath"
+                        } else {
+                            "https://image.tmdb.org/t/p/w45/$cleanPath"
+                        }
+                    }
+                    if (logoUrl != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(ShapeCache.smooth8)
+                                .background(Color.White.copy(alpha = 0.1f))
+                        ) {
+                            MediaImage(
+                                url = logoUrl,
+                                contentDescription = provider.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
             }
         }
     }
