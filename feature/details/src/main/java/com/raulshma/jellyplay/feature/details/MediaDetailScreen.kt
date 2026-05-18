@@ -1054,7 +1054,7 @@ private fun MediaInfoSection(
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        items(options, key = { "${activePicker}_${it.index}_${it.label}" }) { option ->
+                        items(options, key = { "${activePicker}_${it.index}_${it.label}" }, contentType = { "streamOption" }) { option ->
                             val isSelected = option.index == selectedIndex
                             val optionInteractionSource = remember { MutableInteractionSource() }
                             val isOptionPressed by optionInteractionSource.collectIsPressedAsState()

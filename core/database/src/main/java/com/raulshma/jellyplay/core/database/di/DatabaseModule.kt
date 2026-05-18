@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
@@ -53,6 +54,7 @@ object DatabaseModule {
     )
         .addMigrations(MIGRATION_2_3, MIGRATION_4_5)
         .fallbackToDestructiveMigration(true)
+        .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()
 
     @Provides

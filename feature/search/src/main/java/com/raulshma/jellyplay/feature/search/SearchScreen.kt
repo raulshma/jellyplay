@@ -429,6 +429,7 @@ fun SearchScreen(
                             items(
                                 count = seerrResults.size,
                                 key = { index -> "seerr-${seerrResults[index].id}" },
+                                contentType = { "seerrSearchResult" },
                             ) { index ->
                                 val seerrItem = seerrResults[index]
                                 SeerrMediaCard(

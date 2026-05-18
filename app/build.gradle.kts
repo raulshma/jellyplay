@@ -88,6 +88,11 @@ android {
     }
 }
 
+composeCompiler {
+    metricsDestination = layout.buildDirectory.dir("compose-metrics")
+    reportsDestination = layout.buildDirectory.dir("compose-reports")
+}
+
 dependencies {
     // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so
     implementation(libs.libmpv)
