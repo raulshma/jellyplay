@@ -104,7 +104,7 @@ class ExoPlayerEngine(
     private val nightMode = NightModeHelper()
     private val equalizerHelper = EqualizerHelper()
 
-    private var totalDroppedFrames: Long = 0
+    private var lastVideoStats: EngineVideoStats? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -247,7 +247,8 @@ class ExoPlayerEngine(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("JellyPlay")
             .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(15_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
             
         val baseFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
@@ -274,6 +275,7 @@ class ExoPlayerEngine(
         player?.release()
         player = null
         trackSelector = null
+        lastVideoStats = null
         releaseAudioEffects()
         engineScope.cancel()
     }
@@ -455,12 +457,17 @@ class ExoPlayerEngine(
         p.addListener(posListener)
         trySend(p.currentPosition)
 
+        var lastPlayingState = p.isPlaying
         val ticker = engineScope.launch {
             while (isActive) {
                 delay(500)
+                val currentlyPlaying = p.isPlaying
                 trySend(p.currentPosition)
                 _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                updateVideoStats()
+                if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
+                    updateVideoStats()
+                }
+                lastPlayingState = currentlyPlaying
             }
         }
 
@@ -474,8 +481,9 @@ class ExoPlayerEngine(
         val p = player ?: return
         val videoFormat = p.videoFormat
         val audioFormat = p.audioFormat
+        val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
 
-        _videoStats.value = EngineVideoStats(
+        val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
             videoDecoder = videoFormat?.codecs,
             videoResolution = videoFormat?.let { f ->
@@ -505,14 +513,14 @@ class ExoPlayerEngine(
             audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
             audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
-            estimatedBandwidthBps = try {
-                val bw = p.bufferedPosition
-                0L
-            } catch (_: Exception) { 0L },
-            droppedFrames = totalDroppedFrames,
-            totalVideoFrames = 0,
-            bufferedPositionMs = _bufferedPositionMs.value,
+            bufferedPositionMs = bufferedPos,
         )
+
+        val currentStats = lastVideoStats
+        if (newStats != currentStats) {
+            lastVideoStats = newStats
+            _videoStats.value = newStats
+        }
     }
 
     private fun codecFromMime(mime: String): String = when {
@@ -550,9 +558,11 @@ class ExoPlayerEngine(
         val result = mutableListOf<MediaTrack>()
         
         fun processType(exoType: Int, trackType: TrackType) {
-            val groups = tracks.groups.filter { it.type == exoType }
-            for (groupIndex in groups.indices) {
-                val group = groups[groupIndex]
+            val groupCount = tracks.groups.size
+            var groupIndex = 0
+            for (i in 0 until groupCount) {
+                val group = tracks.groups[i]
+                if (group.type != exoType) continue
                 val isSelected = (0 until group.length).any { group.isTrackSelected(it) }
                 val format = group.getTrackFormat(0)
                 result.add(
@@ -566,6 +576,7 @@ class ExoPlayerEngine(
                         trackGroup = group.mediaTrackGroup,
                     )
                 )
+                groupIndex++
             }
         }
         

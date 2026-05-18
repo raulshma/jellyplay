@@ -509,11 +509,16 @@ class LibVlcPlayerEngine(
 
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
+        var lastPlayingState = _isPlaying.value
         val ticker = engineScope.launch {
             while (isActive) {
-                delay(250)
+                delay(500)
                 trySend(currentPositionMs)
-                updateBufferAndStats()
+                val currentlyPlaying = _isPlaying.value
+                if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
+                    updateBufferAndStats()
+                }
+                lastPlayingState = currentlyPlaying
             }
         }
         awaitClose { ticker.cancel() }
@@ -529,7 +534,7 @@ class LibVlcPlayerEngine(
         } catch (_: Exception) {}
 
         try {
-            _videoStats.value = EngineVideoStats(
+            val newStats = EngineVideoStats(
                 audioCodec = try {
                     val tracks = mp.getAudioTracks()
                     val currentId = mp.audioTrack
@@ -537,6 +542,10 @@ class LibVlcPlayerEngine(
                 } catch (_: Exception) { null },
                 bufferedPositionMs = _bufferedPositionMs.value,
             )
+            val currentStats = _videoStats.value
+            if (newStats != currentStats) {
+                _videoStats.value = newStats
+            }
         } catch (_: Exception) {}
     }
 
