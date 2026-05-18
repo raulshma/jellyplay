@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,27 +72,34 @@ internal fun GestureOverlay(
     volumeValue: Float,
     gesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
+    showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
     onBrightnessGesture: (Float) -> Unit,
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
+    onEdgeSwipe: () -> Unit,
 ) {
     val currentOnSeekGesture by rememberUpdatedState(onSeekGesture)
     val currentOnBrightnessGesture by rememberUpdatedState(onBrightnessGesture)
     val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
     val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
+    val currentOnEdgeSwipe by rememberUpdatedState(onEdgeSwipe)
+
+    val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs) {
+                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startX = down.position.x
                         val startY = down.position.y
                         var decided = false
                         var isHorizontal = false
+                        var isEdgeSwipeGesture = false
+                        var edgeSwipeConsumed = false
                         do {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
@@ -101,9 +109,16 @@ internal fun GestureOverlay(
                             if (!decided && (abs(totalDx) > 50 || abs(totalDy) > 50)) {
                                 decided = true
                                 isHorizontal = abs(totalDx) > abs(totalDy)
+                                isEdgeSwipeGesture = isHorizontal &&
+                                    (startX < edgeThresholdPx || startX > size.width - edgeThresholdPx)
                             }
                             if (decided) {
-                                if (isHorizontal) {
+                                if (isEdgeSwipeGesture) {
+                                    if (!edgeSwipeConsumed) {
+                                        edgeSwipeConsumed = true
+                                        currentOnEdgeSwipe()
+                                    }
+                                } else if (isHorizontal) {
                                     val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
                                     currentOnSeekGesture(seekDeltaMs)
                                 } else {

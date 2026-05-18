@@ -431,10 +431,9 @@ fun SearchScreen(
                                 key = { index -> "seerr-${seerrResults[index].id}" },
                             ) { index ->
                                 val seerrItem = seerrResults[index]
-                                val posterUrl = viewModel.getSeerrPosterUrl(seerrItem.posterPath)
                                 SeerrMediaCard(
                                     item = seerrItem,
-                                    imageUrl = posterUrl,
+                                    imageUrl = seerrItem.posterUrl,
                                     isLoading = seerrLoadingState.isLoading(seerrItem.id),
                                     onClick = {
                                         seerrLoadingState.startLoading(seerrItem.id)

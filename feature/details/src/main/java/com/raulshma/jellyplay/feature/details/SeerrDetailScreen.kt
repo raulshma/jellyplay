@@ -101,8 +101,7 @@ fun SeerrDetailScreen(
         viewModel.loadDetails(tmdbId, mediaType)
     }
 
-    val backdropPath = movieDetail?.backdropPath ?: tvDetail?.backdropPath
-    val backdropUrl = viewModel.getSeerrBackdropUrl(backdropPath)
+    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
@@ -110,13 +109,16 @@ fun SeerrDetailScreen(
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
-        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback = { tmdbId, mediaType, onDone ->
-            seerrLoadingState.startLoading(tmdbId)
-            viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
-                seerrLoadingState.stopLoading(tmdbId)
-                onDone()
+        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
+            remember(seerrLoadingState, viewModel) {
+                { tmdbId, mediaType, onDone ->
+                    seerrLoadingState.startLoading(tmdbId)
+                    viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
+                        seerrLoadingState.stopLoading(tmdbId)
+                        onDone()
+                    }
+                }
             }
-        }
 
         androidx.compose.runtime.CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides prefetchCallback,
@@ -146,8 +148,6 @@ fun SeerrDetailScreen(
                         ratings = ratings,
                         recommendations = seerrRecommendations,
                         similar = seerrSimilar,
-                        getPosterUrl = { viewModel.getSeerrPosterUrl(it) },
-                        getBackdropUrl = { viewModel.getSeerrBackdropUrl(it) },
                         onRequestClick = { showRequestDialog = true },
                         onNavigate = onNavigate,
                         onBack = onBack,
@@ -221,8 +221,6 @@ private fun SeerrDetailContent(
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
-    getBackdropUrl: (String?) -> String?,
     onRequestClick: () -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     onBack: () -> Unit,
@@ -237,9 +235,9 @@ private fun SeerrDetailContent(
     val density = LocalDensity.current
     val artworkColors = LocalArtworkColors.current
 
-    val backdropPath = movieDetail?.backdropPath ?: tvDetail?.backdropPath
+    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
     val title = movieDetail?.title ?: tvDetail?.name ?: ""
-    val posterPath = movieDetail?.posterPath ?: tvDetail?.posterPath
+    val posterUrl = movieDetail?.posterUrl ?: tvDetail?.posterUrl
 
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
@@ -302,9 +300,9 @@ private fun SeerrDetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            if (backdropPath != null) {
+            if (backdropUrl != null) {
                 MediaImage(
-                    url = getBackdropUrl(backdropPath) ?: "",
+                    url = backdropUrl,
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
@@ -380,7 +378,7 @@ private fun SeerrDetailContent(
                                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                             ) {
                                 MediaImage(
-                                    url = getPosterUrl(posterPath) ?: "",
+                                    url = posterUrl ?: "",
                                     contentDescription = title,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -422,7 +420,6 @@ private fun SeerrDetailContent(
                             ratings = ratings,
                             recommendations = recommendations,
                             similar = similar,
-                            getPosterUrl = getPosterUrl,
                             onNavigate = onNavigate,
                             modifier = Modifier.weight(1f),
                             streamingRegion = streamingRegion,
@@ -446,7 +443,7 @@ private fun SeerrDetailContent(
                                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                             ) {
                                 MediaImage(
-                                    url = getPosterUrl(posterPath) ?: "",
+                                    url = posterUrl ?: "",
                                     contentDescription = title,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -518,7 +515,6 @@ private fun SeerrDetailContent(
                             ratings = ratings,
                             recommendations = recommendations,
                             similar = similar,
-                            getPosterUrl = getPosterUrl,
                             onNavigate = onNavigate,
                             modifier = Modifier.fillMaxWidth(),
                             streamingRegion = streamingRegion,
@@ -664,7 +660,6 @@ private fun SeerrDetailBody(
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     modifier: Modifier = Modifier,
     streamingRegion: String = "US",
@@ -740,12 +735,12 @@ private fun SeerrDetailBody(
                         // Cast
                         val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
                         if (cast.isNotEmpty()) {
-                            CastSection(cast, getPosterUrl)
+                            CastSection(cast)
                         }
 
                         // Seasons (TV only)
                         if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
-                            SeasonsSection(tvDetail.seasons, getPosterUrl)
+                            SeasonsSection(tvDetail.seasons)
                         }
 
                         // Videos
@@ -766,11 +761,11 @@ private fun SeerrDetailBody(
                 // Stacked layout for compact screens
                 val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
                 if (cast.isNotEmpty()) {
-                    CastSection(cast, getPosterUrl)
+                    CastSection(cast)
                 }
 
                 if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
-                    SeasonsSection(tvDetail.seasons, getPosterUrl)
+                    SeasonsSection(tvDetail.seasons)
                 }
 
                 val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
@@ -794,7 +789,6 @@ private fun SeerrDetailBody(
                 SeerrHorizontalSection(
                     title = "Recommendations",
                     items = recommendations,
-                    getPosterUrl = getPosterUrl,
                     onNavigate = onNavigate
                 )
             }
@@ -812,7 +806,6 @@ private fun SeerrDetailBody(
                 SeerrHorizontalSection(
                     title = "Similar",
                     items = similar,
-                    getPosterUrl = getPosterUrl,
                     onNavigate = onNavigate
                 )
             }
@@ -824,7 +817,6 @@ private fun SeerrDetailBody(
 private fun SeerrHorizontalSection(
     title: String,
     items: List<SeerrSearchItem>,
-    getPosterUrl: (String?) -> String?,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
 ) {
     val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
@@ -846,7 +838,7 @@ private fun SeerrHorizontalSection(
             items(items, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
-                    imageUrl = getPosterUrl(item.posterPath),
+                    imageUrl = item.posterUrl,
                     isLoading = loadingState?.isLoading(item.id) == true,
                     onClick = {
                         if (loadingState != null && prefetch != null) {
@@ -922,7 +914,6 @@ private fun ExternalLinksRow(
 @Composable
 private fun CastSection(
     cast: List<Any>, // Can be SeerrCast or SeerrAggregateCast
-    getProfileUrl: (String?) -> String?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -941,16 +932,16 @@ private fun CastSection(
             items(cast, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
-                val profilePath: String?
+                val profileUrl: String?
 
                 if (member is SeerrAggregateCast) {
                     name = member.name
                     character = member.roles.firstOrNull()?.character ?: ""
-                    profilePath = member.profilePath
+                    profileUrl = member.profileUrl
                 } else if (member is SeerrCast) {
                     name = member.name
                     character = member.character ?: ""
-                    profilePath = member.profilePath
+                    profileUrl = member.profileUrl
                 } else return@items
 
                 Column(
@@ -964,7 +955,7 @@ private fun CastSection(
                             .background(Color.White.copy(alpha = 0.1f))
                     ) {
                         MediaImage(
-                            url = getProfileUrl(profilePath) ?: "",
+                            url = profileUrl ?: "",
                             contentDescription = name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -997,7 +988,6 @@ private fun CastSection(
 @Composable
 private fun SeasonsSection(
     seasons: List<SeerrSeason>,
-    getPosterUrl: (String?) -> String?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -1023,7 +1013,7 @@ private fun SeasonsSection(
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         MediaImage(
-                            url = getPosterUrl(season.posterPath) ?: "",
+                            url = season.posterUrl ?: "",
                             contentDescription = season.name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop

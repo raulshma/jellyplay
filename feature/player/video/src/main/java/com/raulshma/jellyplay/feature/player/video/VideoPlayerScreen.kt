@@ -565,6 +565,14 @@ fun VideoPlayerScreen(
                 volumeGestureAccumulator = 0f
                 isGestureSeeking = false
             },
+            showControls = showControls,
+            onEdgeSwipe = {
+                if (!showControls) {
+                    showControls = true
+                } else {
+                    onBack()
+                }
+            },
         )
 
         // Trickplay overlay for seek gestures
