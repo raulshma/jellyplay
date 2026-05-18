@@ -128,6 +128,8 @@ class VideoPlayerViewModel @Inject constructor(
         preferencesFlow = syncPlayPrefs,
     )
 
+    private var engineCollectionJob: Job? = null
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -160,6 +162,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         viewModelScope.launch {
             playerSessionManager.engineFlow.collect { engine ->
+                engineCollectionJob?.cancel()
                 if (engine != null) {
                     val prefs = preferencesStore.preferences.first()
                     _uiState.update { it.copy(
@@ -173,23 +176,27 @@ class VideoPlayerViewModel @Inject constructor(
                         nightModeEnabled = prefs.nightModeEnabled,
                         nightModeStrength = prefs.nightModeStrength,
                     )}
-                    launch { engine.isPlaying.collect { isPlaying ->
-                        _uiState.update { s -> s.copy(isPlaying = isPlaying) }
-                        syncPlayController.onIsPlayingChanged(isPlaying)
-                    } }
-                    launch { engine.playbackState.collect { state ->
-                        _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
-                        val stateInt = when (state) {
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
-                            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                    engineCollectionJob = viewModelScope.launch {
+                        kotlinx.coroutines.coroutineScope {
+                            launch { engine.isPlaying.collect { isPlaying ->
+                                _uiState.update { s -> s.copy(isPlaying = isPlaying) }
+                                syncPlayController.onIsPlayingChanged(isPlaying)
+                            } }
+                            launch { engine.playbackState.collect { state ->
+                                _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
+                                val stateInt = when (state) {
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
+                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                                }
+                                syncPlayController.onPlaybackStateChanged(stateInt)
+                            } }
+                            launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
+                            launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
                         }
-                        syncPlayController.onPlaybackStateChanged(stateInt)
-                    } }
-                    launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
-                    launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
+                    }
                 }
             }
         }
@@ -1067,8 +1074,10 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
-                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+                }
             }
         }
     }

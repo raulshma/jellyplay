@@ -37,7 +37,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -304,6 +303,9 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.aspectRatio
     val detectedAspectRatio = uiState.detectedAspectRatio
 
+    val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
+    val syncPlayChatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
+
     val isInIntro = uiState.isInIntro
     val isInCredits = uiState.isInCredits
     val shouldShowUpNext = uiState.shouldShowUpNext
@@ -313,10 +315,12 @@ fun VideoPlayerScreen(
         isInCredits -> "Skip Credits"
         else -> null
     }
-    val onSkipSegment: () -> Unit = when {
-        isInIntro -> { { viewModel.skipIntro() } }
-        isInCredits -> { { viewModel.skipCredits() } }
-        else -> { {} }
+    val onSkipSegment: () -> Unit = remember(isInIntro, isInCredits) {
+        when {
+            isInIntro -> { viewModel::skipIntro }
+            isInCredits -> { viewModel::skipCredits }
+            else -> { {} }
+        }
     }
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -341,7 +345,9 @@ fun VideoPlayerScreen(
     val playMethod = uiState.playMethod
     val subtitleStyle = uiState.subtitleStyle
     val nextEpisode = uiState.nextEpisode
-    val nextEpisodeImageUrl = nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
+    val nextEpisodeImageUrl = remember(nextEpisode) {
+        nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
+    }
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
     val doPlay: () -> Unit = remember(engine, isInSyncPlaySession) {
@@ -378,8 +384,8 @@ fun VideoPlayerScreen(
             }
         }
     }
-    val doTogglePlayPause: () -> Unit by remember(isPlaying, doPlay, doPause) {
-        derivedStateOf { { if (isPlaying) doPause() else doPlay() } }
+    val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
+        { if (isPlaying) doPause() else doPlay() }
     }
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
@@ -663,9 +669,8 @@ fun VideoPlayerScreen(
         )
 
         if (uiState.isInSyncPlaySession && syncPlayChatVisible) {
-            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
             SyncPlayChatOverlay(
-                messages = chatMessages,
+                messages = syncPlayChatMessages,
                 isVisible = syncPlayChatVisible,
                 onSendMessage = { viewModel.syncPlaySendChatMessage(it) },
                 modifier = Modifier
@@ -826,20 +831,23 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.castSessionEvents.collect { event ->
-            when (event) {
-                is CastSessionEvent.Connected -> viewModel.castToDevice()
-                is CastSessionEvent.Disconnected -> { /* local playback continues */ }
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                viewModel.castSessionEvents.collect { event ->
+                    when (event) {
+                        is CastSessionEvent.Connected -> viewModel.castToDevice()
+                        is CastSessionEvent.Disconnected -> { /* local playback continues */ }
+                    }
+                }
             }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.syncPlayNotifications.collect { message ->
-            snackbarHostState.showSnackbar(
-                message = message,
-                duration = androidx.compose.material3.SnackbarDuration.Short,
-            )
+            launch {
+                viewModel.syncPlayNotifications.collect { message ->
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+            }
         }
     }
 
@@ -853,6 +861,8 @@ fun VideoPlayerScreen(
         viewModel = viewModel,
         itemId = itemId,
         onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
+        syncPlayIgnoreWait = syncPlayIgnoreWait,
+        syncPlayChatMessages = syncPlayChatMessages,
     )
 
     if (uiState.showPlaybackErrorDialog && uiState.playerError != null) {
@@ -919,6 +929,8 @@ private fun PlayerSheetRouter(
     viewModel: VideoPlayerViewModel,
     itemId: String,
     onToggleChatOverlay: () -> Unit,
+    syncPlayIgnoreWait: Boolean,
+    syncPlayChatMessages: List<com.raulshma.jellyplay.core.model.SyncPlayChatMessage>,
 ) {
     val context = LocalContext.current
 
@@ -1062,15 +1074,13 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SyncPlay -> {
-            val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
-            val chatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
             SyncPlayPlayerSheet(
                 groupName = uiState.syncPlayGroupName ?: "Group",
                 participantCount = uiState.syncPlayParticipantCount,
                 isSynced = uiState.isSyncPlaySynced,
                 isPlaying = uiState.isPlaying,
                 ignoreWait = syncPlayIgnoreWait,
-                chatMessages = chatMessages,
+                chatMessages = syncPlayChatMessages,
                 onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
                 onStop = { viewModel.syncPlayStop() },
                 onLeave = {
