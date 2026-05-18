@@ -126,7 +126,7 @@ private fun ChatContent(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(messages, key = { it.id }) { message ->
+            items(messages, key = { it.id }, contentType = { "chatMessage" }) { message ->
                 Column(
                     modifier = Modifier
                         .clip(ShapeCache.smooth12)
