@@ -168,7 +168,7 @@ class MpvPlayerEngine(
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
                         Log.d(TAG, "MPV start file")
-                        _playbackState.value = EnginePlaybackState.IDLE
+                        _playbackState.value = EnginePlaybackState.BUFFERING
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
                         Log.d(TAG, "MPV file loaded; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
@@ -320,6 +320,7 @@ class MpvPlayerEngine(
     }
 
     override fun play() {
+        _isPlaying.value = true
         try {
             if (_playbackState.value == EnginePlaybackState.ENDED) {
                 mpvView?.mpv?.command("seek", "0", "absolute")
@@ -329,11 +330,12 @@ class MpvPlayerEngine(
     }
 
     override fun pause() {
+        _isPlaying.value = false
         try { mpvView?.mpv?.setPropertyBoolean("pause", true) } catch (_: Exception) {}
     }
 
     override fun seekTo(positionMs: Long) {
-        try { mpvView?.mpv?.command("seek", "${positionMs / 1000.0}", "absolute") } catch (_: Exception) {}
+        try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (_: Exception) {}
     }
 
     override fun setPlaybackSpeed(speed: Float) {
@@ -505,7 +507,7 @@ class MpvPlayerEngine(
 
     override val currentPositionMs: Long
         get() = try {
-            ((mpvView?.mpv?.getPropertyDouble("time-pos") ?: 0.0) * 1000).toLong()
+            Math.round((mpvView?.mpv?.getPropertyDouble("time-pos") ?: 0.0) * 1000)
         } catch (_: Exception) { 0L }
 
     override val durationMs: Long
