@@ -15,6 +15,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
@@ -76,6 +77,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
+    private val sleepTimerManager: SleepTimerManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
@@ -143,6 +145,14 @@ class VideoPlayerViewModel @Inject constructor(
                         updateConfigWithUiState()
                     }
                 }
+                if (_uiState.value.sleepTimerLastUsedDurationMs != prefs.sleepTimerDurationMs) {
+                    _uiState.update { it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            sleepTimerManager.remainingMs.collect { remaining ->
+                _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
             }
         }
         syncPlayController.start()
@@ -1102,6 +1112,51 @@ class VideoPlayerViewModel @Inject constructor(
             currentSeasonId = null,
             isLoadingEpisodes = false,
         ) }
+    }
+
+    fun startSleepTimer(durationMs: Long) {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerDurationMs(durationMs)
+            preferencesStore.setSleepTimerEndOfEpisode(false)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            playerSessionManager.engine?.pause()
+        }
+        sleepTimerManager.start(durationMs)
+        _uiState.update { it.copy(
+            sleepTimerActive = true,
+            sleepTimerEndOfEpisode = false,
+            sleepTimerRemainingMs = durationMs,
+            sleepTimerLastUsedDurationMs = durationMs,
+        ) }
+    }
+
+    fun startSleepTimerEndOfEpisode() {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerEndOfEpisode(true)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            playerSessionManager.engine?.pause()
+        }
+        sleepTimerManager.startEndOfEpisode()
+        _uiState.update { it.copy(
+            sleepTimerActive = true,
+            sleepTimerEndOfEpisode = true,
+            sleepTimerRemainingMs = 0,
+        ) }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerManager.cancel()
+        _uiState.update { it.copy(
+            sleepTimerActive = false,
+            sleepTimerEndOfEpisode = false,
+            sleepTimerRemainingMs = 0,
+        ) }
+    }
+
+    fun triggerSleepTimerEndOfEpisode() {
+        sleepTimerManager.triggerEndOfEpisode()
     }
 
     fun prepareForMiniMode(

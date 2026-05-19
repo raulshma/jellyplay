@@ -100,6 +100,8 @@ data class UserPreferences(
     val channelMixEnabled: Boolean = false,
     val audioGaplessEnabled: Boolean = true,
     val audioCrossfadeDurationMs: Long = 0L,
+    val sleepTimerDurationMs: Long = 0L,
+    val sleepTimerEndOfEpisode: Boolean = false,
 )
 
 @Immutable
