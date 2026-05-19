@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -1212,6 +1214,37 @@ class JellyfinApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = java.net.URL("${server.address}/MediaSegments/$itemId")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("X-Emby-Token", user.accessToken)
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        try {
+            if (conn.responseCode !in 200..299) {
+                emptyList()
+            } else {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                val response = json.decodeFromString<MediaSegmentsResponse>(body)
+                response.Items.map { dto ->
+                    MediaSegment(
+                        id = dto.Id,
+                        itemId = dto.ItemId,
+                        type = MediaSegmentType.fromApiName(dto.Type),
+                        startTicks = dto.StartTicks,
+                        endTicks = dto.EndTicks,
+                    )
+                }
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
@@ -1468,3 +1501,18 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class MediaSegmentDto(
+    val Id: String,
+    val ItemId: String,
+    val Type: String,
+    val StartTicks: Long,
+    val EndTicks: Long,
+)
+
+@kotlinx.serialization.Serializable
+private data class MediaSegmentsResponse(
+    val Items: List<MediaSegmentDto> = emptyList(),
+    val TotalRecordCount: Int = 0,
+)

@@ -89,9 +89,8 @@ import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -119,8 +118,7 @@ internal fun PlayerControls(
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
-    introTimestamps: IntroTimestamps? = null,
-    creditTimestamps: CreditTimestamps? = null,
+    segments: List<MediaSegment> = emptyList(),
     skipSegmentText: String? = null,
     onSkipSegment: () -> Unit = {},
     currentAspectRatio: AspectRatio,
@@ -360,8 +358,7 @@ internal fun PlayerControls(
                     currentPosition = currentPosition,
                     duration = duration,
                     chapters = chapters,
-                    introTimestamps = introTimestamps,
-                    creditTimestamps = creditTimestamps,
+                    segments = segments,
                     bufferedPosition = bufferedPosition,
                     onSeek = { fraction ->
                         onSeek(fraction)
@@ -635,8 +632,7 @@ private fun TvControllableSeekBar(
     currentPosition: Long,
     duration: Long,
     chapters: List<ChapterInfo>,
-    introTimestamps: IntroTimestamps? = null,
-    creditTimestamps: CreditTimestamps? = null,
+    segments: List<MediaSegment> = emptyList(),
     bufferedPosition: Long = 0L,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
@@ -786,35 +782,19 @@ private fun TvControllableSeekBar(
                 )
 
                 if (duration > 0) {
-                    val introTs = introTimestamps
-                    if (introTs != null && introTs.hasIntro) {
-                        val startFrac = (introTs.introStartTicks / 10_000f) / duration
-                        val endFrac = (introTs.introEndTicks / 10_000f) / duration
-                        if (startFrac in 0f..1f && endFrac > startFrac) {
-                            val segHeight = 6.dp.toPx()
-                            val segY = (size.height / 2f) - (segHeight / 2f)
-                            drawRoundRect(
-                                color = Color(0xFF66BB6A).copy(alpha = 0.4f),
-                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
-                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
-                            )
-                        }
-                    }
-                    val creditTs = creditTimestamps
-                    if (creditTs != null && creditTs.hasCredits) {
-                        val startFrac = (creditTs.creditStartTicks / 10_000f) / duration
-                        val endFrac = (creditTs.creditEndTicks / 10_000f) / duration
-                        if (startFrac in 0f..1f && endFrac > startFrac) {
-                            val segHeight = 6.dp.toPx()
-                            val segY = (size.height / 2f) - (segHeight / 2f)
-                            drawRoundRect(
-                                color = Color(0xFF42A5F5).copy(alpha = 0.4f),
-                                topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
-                                size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
-                            )
-                        }
+                    segments.forEach { segment ->
+                        if (!segment.hasSegment) return@forEach
+                        val startFrac = (segment.startTicks / 10_000f) / duration
+                        val endFrac = (segment.endTicks / 10_000f) / duration
+                        if (startFrac !in 0f..1f || endFrac <= startFrac) return@forEach
+                        val segHeight = 6.dp.toPx()
+                        val segY = (size.height / 2f) - (segHeight / 2f)
+                        drawRoundRect(
+                            color = Color(segment.type.colorLong).copy(alpha = 0.4f),
+                            topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
+                            size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
+                        )
                     }
                 }
 

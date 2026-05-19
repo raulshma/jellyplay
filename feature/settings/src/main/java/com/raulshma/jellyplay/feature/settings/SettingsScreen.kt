@@ -449,48 +449,33 @@ fun SettingsScreen(
                 AnimatedSettingsEntrance(4) {
                     SettingsGroup(
                         icon = Icons.Default.FastForward,
-                        title = "Skip Intro & Outro",
+                        title = "Media Segments",
                         summary = {
-                            val skipCount = listOf(
-                                preferences.skipIntroEnabled,
-                                preferences.skipOutroEnabled,
-                            ).count { it }
-                            "$skipCount of 2 skip buttons enabled"
+                            val autoCount = preferences.segmentBehaviors.count { it.value == com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP }
+                            val buttonCount = preferences.segmentBehaviors.count { it.value == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON }
+                            "$autoCount auto-skip, $buttonCount show button"
                         },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     ) {
-                        SettingToggleItem(
-                            icon = Icons.Default.FastForward,
-                            title = "Skip Intro Button",
-                            subtitle = if (preferences.skipIntroEnabled) "Show skip intro button when available" else "Never show skip intro button",
-                            checked = preferences.skipIntroEnabled,
-                            index = 0, count = 4,
-                            onCheckedChange = { viewModel.setSkipIntroEnabled(it) },
-                        )
-                        SettingToggleItem(
-                            icon = Icons.Default.FastForward,
-                            title = "Skip Outro Button",
-                            subtitle = if (preferences.skipOutroEnabled) "Show skip credits button when available" else "Never show skip credits button",
-                            checked = preferences.skipOutroEnabled,
-                            index = 1, count = 4,
-                            onCheckedChange = { viewModel.setSkipOutroEnabled(it) },
-                        )
-                        SettingToggleItem(
-                            icon = Icons.Default.SkipNext,
-                            title = "Auto-Skip Intro",
-                            subtitle = if (preferences.autoSkipIntro) "Automatically skip intros" else "Manual intro skip only",
-                            checked = preferences.autoSkipIntro,
-                            index = 2, count = 4,
-                            onCheckedChange = { viewModel.setAutoSkipIntro(it) },
-                        )
-                        SettingToggleItem(
-                            icon = Icons.Default.SkipNext,
-                            title = "Auto-Skip Outro",
-                            subtitle = if (preferences.autoSkipOutro) "Automatically skip credits" else "Manual credits skip only",
-                            checked = preferences.autoSkipOutro,
-                            index = 3, count = 4,
-                            onCheckedChange = { viewModel.setAutoSkipOutro(it) },
-                        )
+                        val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
+                        val totalTypes = segmentTypes.size
+                        segmentTypes.forEachIndexed { index, type ->
+                            val behavior = preferences.segmentBehaviors[type]
+                                ?: com.raulshma.jellyplay.core.model.SegmentBehavior.IGNORE
+                            SettingListItem(
+                                icon = Icons.Default.FastForward,
+                                title = type.displayName,
+                                subtitle = type.description,
+                                trailingText = behavior.displayName,
+                                index = index, count = totalTypes,
+                                onClick = {
+                                    val behaviors = com.raulshma.jellyplay.core.model.SegmentBehavior.entries
+                                    val currentIndex = behaviors.indexOf(behavior)
+                                    val nextIndex = (currentIndex + 1) % behaviors.size
+                                    viewModel.setSegmentBehavior(type, behaviors[nextIndex])
+                                },
+                            )
+                        }
                     }
                 }
             }

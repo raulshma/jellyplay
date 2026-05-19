@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -297,6 +298,8 @@ interface JellyfinApiClient {
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
 
     suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
+
+    suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>>
 
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 
