@@ -42,6 +42,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = sampleSubtitles,
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -57,6 +58,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = sampleSubtitles,
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -73,6 +75,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = sampleSubtitles,
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -89,6 +92,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = sampleSubtitles,
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -107,6 +111,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = sampleSubtitles,
                     isLoading = false,
                     onDownload = { downloaded = it },
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -123,6 +128,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = emptyList(),
                     isLoading = true,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -138,6 +144,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = emptyList(),
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }
@@ -156,6 +163,7 @@ class SubtitleDownloadSheetTest {
                     subtitles = subs,
                     isLoading = false,
                     onDownload = {},
+                    onLoadLocalFile = {},
                     onDismiss = {},
                 )
             }

@@ -167,6 +167,7 @@ fun SettingsScreen(
     var showNightModeVolumePicker by remember { mutableStateOf(false) }
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
+    var showCrossfadePicker by remember { mutableStateOf(false) }
     var showAudioDelayPicker by remember { mutableStateOf(false) }
     var showSyncPlayMinDelayPicker by remember { mutableStateOf(false) }
     var showSyncPlayMaxDelayPicker by remember { mutableStateOf(false) }
@@ -720,7 +721,7 @@ fun SettingsScreen(
                         for (i in 0..20) audioItems.add(i)
                         var idx = 0
                         val total = run {
-                            var c = 6
+                            var c = 8
                             if (preferences.equalizerEnabled) c++
                             if (preferences.dialogueBoostEnabled) c++
                             if (preferences.nightModeEnabled) c++
@@ -766,6 +767,22 @@ fun SettingsScreen(
                             checked = preferences.audioAutoplayNext,
                             index = idx++, count = total,
                             onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.QueuePlayNext,
+                            title = "Gapless Playback",
+                            subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
+                            checked = preferences.audioGaplessEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setGaplessEnabled(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Audiotrack,
+                            title = "Crossfade Duration",
+                            subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
+                            trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
+                            index = idx++, count = total,
+                            onClick = { showCrossfadePicker = true },
                         )
                         SettingToggleItem(
                             icon = Icons.Default.Tune,
@@ -1305,6 +1322,20 @@ fun SettingsScreen(
             onSelect = { index ->
                 viewModel.setAudioSkipPreviousThresholdMs(thresholds[index])
                 showSkipPrevThresholdPicker = false
+            },
+        )
+    }
+
+    if (showCrossfadePicker) {
+        val durations = listOf(0L, 2000L, 3000L, 5000L, 8000L, 12000L)
+        SettingsChipPickerSheet(
+            title = "Crossfade Duration",
+            options = durations.map { if (it == 0L) "Off" else "${it / 1000}s" },
+            selectedIndex = durations.indexOf(preferences.audioCrossfadeDurationMs),
+            onDismiss = { showCrossfadePicker = false },
+            onSelect = { index ->
+                viewModel.setCrossfadeDurationMs(durations[index])
+                showCrossfadePicker = false
             },
         )
     }

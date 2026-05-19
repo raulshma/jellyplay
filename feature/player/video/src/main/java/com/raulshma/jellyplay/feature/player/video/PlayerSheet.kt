@@ -18,4 +18,5 @@ sealed class PlayerSheet {
     data object Episodes : PlayerSheet()
     data object SyncPlay : PlayerSheet()
     data object Quality : PlayerSheet()
+    data object SleepTimer : PlayerSheet()
 }

@@ -368,4 +368,12 @@ class SettingsViewModel @Inject constructor(
     fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
         viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncDurationMs(ms) }
     }
+
+    fun setGaplessEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setGaplessEnabled(enabled) }
+    }
+
+    fun setCrossfadeDurationMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setCrossfadeDurationMs(ms) }
+    }
 }

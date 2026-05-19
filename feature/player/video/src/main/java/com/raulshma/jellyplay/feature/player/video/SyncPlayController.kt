@@ -47,6 +47,7 @@ internal class SyncPlayController(
     private var syncCorrectionJob: Job? = null
     private var syncStateResetJob: Job? = null
     private var pendingItemLoad = false
+    private var lastPlayCommandTimeMs = 0L
 
     private val minDelaySkipToSync = 400.0
     private val syncCorrectionInitialDelay = 500.0
@@ -97,6 +98,7 @@ internal class SyncPlayController(
             suppressNextPausedReadyReport = false
             pendingItemLoad = false
             lastCommand = null
+            lastPlayCommandTimeMs = 0L
         }
     }
 
@@ -108,6 +110,7 @@ internal class SyncPlayController(
         suppressNextPausedReadyReport = false
         lastCommand = null
         pendingItemLoad = false
+        lastPlayCommandTimeMs = 0L
         uiState.update { it.copy(isSyncPlaySyncing = false) }
     }
 
@@ -167,6 +170,11 @@ internal class SyncPlayController(
                 }
             }
             2 -> {
+                val timeSincePlayCmd = System.currentTimeMillis() - lastPlayCommandTimeMs
+                if (timeSincePlayCmd < 2000 && lastCommand is SyncPlayCommand.Play) {
+                    Log.d(TAG, "STATE_BUFFERING: suppressed (Play command ${timeSincePlayCmd}ms ago)")
+                    return
+                }
                 Log.d(TAG, "STATE_BUFFERING: posTicks=$positionTicks, isPlaying=${engine.isPlaying.value}")
                 stopSyncCorrection()
                 viewModel.viewModelScope.launch {
@@ -249,6 +257,7 @@ internal class SyncPlayController(
             is SyncPlayCommand.Play -> {
                 scheduledCommandJob?.cancel()
                 lastCommand = command
+                lastPlayCommandTimeMs = System.currentTimeMillis()
                 currentPlaylistItemId = command.playlistItemId.takeIf { it.isNotBlank() }
                     ?: currentPlaylistItemId
 
