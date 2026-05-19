@@ -387,6 +387,19 @@ class LibVlcPlayerEngine(
         } catch (_: Exception) {}
     }
 
+    override fun addExternalSubtitle(source: SubtitleSource) {
+        val mp = mediaPlayer ?: return
+        try {
+            mp.addSlave(
+                org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle,
+                source.url,
+                true,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to add external subtitle: ${source.url}", e)
+        }
+    }
+
     override fun setMaxVideoBitrate(bps: Int?) {
         // VLC does not support mid-stream bitrate changes for non-adaptive streams.
         // The value is stored and applied when the next load() is called.

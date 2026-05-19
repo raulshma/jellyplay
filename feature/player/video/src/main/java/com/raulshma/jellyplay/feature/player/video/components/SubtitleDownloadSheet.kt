@@ -10,10 +10,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -34,6 +39,7 @@ fun SubtitleDownloadSheet(
     subtitles: List<RemoteSubtitleInfo>,
     isLoading: Boolean,
     onDownload: (RemoteSubtitleInfo) -> Unit,
+    onLoadLocalFile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     PlayerModalBottomSheet(
@@ -53,6 +59,22 @@ fun SubtitleDownloadSheet(
                 modifier = Modifier.padding(horizontal = 24.dp),
             )
             Spacer(Modifier.height(12.dp))
+
+            FilledTonalButton(
+                onClick = onLoadLocalFile,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.size(8.dp))
+                Text("Load from device")
+            }
+            Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
                 CircularProgressIndicator(
