@@ -20,9 +20,7 @@
 
 <div align="center">
 
-# Project Overview
-
-JellyPlay is an Android Jellyfin application with multi-server support, adaptive layouts, modern playback controls, offline downloads, and a Compose-based UI.
+JellyPlay is a modern Android Jellyfin client with multi-server support, adaptive layouts, multi-engine playback, offline downloads, SyncPlay watch parties, and a fully Compose-based UI — optimized for phones, tablets, and Android TV.
 
 </div>
 
@@ -31,13 +29,17 @@ JellyPlay is an Android Jellyfin application with multi-server support, adaptive
 ## Features
 
 ### Platform & UI
-- Multi-server Jellyfin support
-- Token-based authentication
-- Material 3 UI
-- Dynamic theming from artwork
-- Predictive back support
+- Multi-server Jellyfin support with auto-discovery
+- Token-based and Quick Connect authentication
+- Multi-user support with per-server user switching
+- Material 3 UI with dynamic theming from artwork
+- Predictive back gesture support
 - Edge-to-edge immersive layouts
-- Adaptive layouts for phone, tablet, and TV
+- Adaptive layouts for phone, tablet, foldable, and TV
+- Android TV support with D-pad navigation and Leanback launcher
+- PIN lock protection and Kids Mode with content filtering
+- Home screen widgets (Now Playing, Continue Watching)
+- Quick settings tile launcher
 
 ### Search
 - Global Jellyfin search across movies, shows, music, albums, and more
@@ -45,80 +47,120 @@ JellyPlay is an Android Jellyfin application with multi-server support, adaptive
 - Voice search support
 
 ### Video Player
+- **Three built-in engines**: ExoPlayer (Media3), libmpv, and LibVLC
+- External player launching (MX Player, VLC, etc.)
 - Direct play, direct stream, and transcoding support
 - Resume playback and progress reporting
 - Audio and subtitle track selection
-- Subtitle styling and offset support
 - Playback speed control
 - Gesture controls for seek, brightness, and volume
-- Chapter navigation
-- Media session support for lock screen and notifications
+- Chapter and episode navigation
+- HDR badge indicator
+- Picture-in-Picture support
+- Mini player overlay
+- Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets)
+- Frame rate matching for display refresh rate sync
+- Adaptive bitrate streaming
+- Intro skip and next episode auto-play
+- Chromecast support via Google Cast SDK
+- Media session integration for lock screen and notifications
 
 ### Subtitle System
-- External subtitle loading
-- Subtitle codec mapping for common formats
-- Subtitle styling persistence
+- External subtitle loading and download
+- ASS/SSA subtitle format parsing
+- Subtitle styling (font size, color, background, edge type, position) with persistence
+- Subtitle delay offset control
 - Preferred subtitle language selection
-- Dual subtitle support
+- Subtitle OCR via ML Kit for extracting text from video frames
 
 ### Audio Player
-- Music browsing for artists, albums, tracks, and genres
-- Queue management
+- Music browsing for artists, albums, tracks, genres, and playlists
+- Queue management with drag-to-reorder
 - Shuffle and repeat modes
 - Playback speed control
-- Album art and playback progress display
+- Waveform-style seek bar
+- Synced and unsynced lyrics via LRCLIB API
+- 10-band equalizer
+- Night Mode (loudness enhancement with configurable strength)
+- Dialogue Boost (vocal frequency equalization with configurable strength)
+- Audio normalization and channel mix modes
+- Ambient Mode with animated color blobs derived from album art
+
+### Music Discovery
+- Smart playlists with criteria-based filtering (genre, artist, year, rating, play count, tags)
+- Mood playlists with 10 presets (Happy Vibes, Chill Out, Energetic, Deep Focus, Workout, Melancholy, Romantic, Party Time, Sleep, Late Night Drive)
+- Recently played, frequent artists, and recommended albums
 
 ### Library & Browsing
-- Home sections such as Continue Watching, Next Up, Latest, and Favorites
+- Home sections: Continue Watching, Next Up, Latest, Favorites, and Surprise Me shuffle
 - Library browsing with pagination and folder filtering
 - Media detail pages with cast, crew, metadata, and related items
 - Person detail pages with filmography browsing
-- Live TV channel browsing and EPG guide support
+- Collection/box set browsing
+
+### Seerr Integration
+- Jellyseerr and Overseerr connection support
+- Discover trending, popular, and upcoming content
+- Request content via Radarr/Sonarr directly from the app
+- Seerr detail pages for unavailable media
+
+### SyncPlay (Watch Parties)
+- Create and join synchronized watch groups
+- Real-time playback sync with speed-to-sync and skip-to-sync correction
+- Server time synchronization for precise coordination
+- In-player group chat
+- Group settings for repeat and shuffle modes
+
+### Live TV & DVR
+- Live TV channel browsing with current program info
+- Electronic Program Guide (EPG) with program timeline
+- DVR recording management
 
 ### Downloads & Offline
-- Video downloads with persistence and progress tracking
-- Pause and resume support
+- Video downloads via WorkManager with progress tracking
+- Pause, resume, and retry support with HTTP Range resumption
 - Offline playback for completed downloads
+- Foreground notification with speed and ETA
 
-### Profiles & Parental Controls
-- Multi-user support per server
-- Kids mode content filtering
-- PIN lock protection
-
-### Notifications & System Integration
-- Widgets for Now Playing and Continue Watching
-- Quick settings tile launcher
-- Foreground playback service
-- Notification support for ongoing playback
-
-### Special Features
-- Smart playlists
-- Mood playlists
-- Night Mode Audio
-- Dialogue Boost
-- Ambient UI
+### Settings
+- Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer
+- Audio: default speed, night mode, dialogue boost, equalizer, audio normalization, channel mix
+- Subtitles: language, style, trickplay, intro/outro skip (manual and auto)
+- SyncPlay: progress reporting, auto-join, sync correction parameters
+- Visual: dynamic theming, streaming quality
+- Security: PIN lock
+- Kids: mode toggle, max content rating
 
 ---
 
 ## Tech Stack
 
-**Android**
-- Kotlin, Jetpack Compose, Material 3
-- Navigation 3, Hilt, Room, DataStore, WorkManager
-- Coroutines and StateFlow
-- Media3 / ExoPlayer
-- Jellyfin API integration
-- Moshi for JSON serialization
-- Coil for image loading
-- Media session integration
+| Category | Technologies |
+|---|---|
+| Language | Kotlin |
+| UI | Jetpack Compose, Material 3, Material 3 Adaptive |
+| TV | Android TV Material, Leanback |
+| Navigation | Navigation 3 |
+| DI | Hilt |
+| Storage | Room, DataStore |
+| Background | WorkManager, Coroutines, StateFlow |
+| Video Players | Media3/ExoPlayer, libmpv, LibVLC |
+| Audio Effects | Android Equalizer, LoudnessEnhancer |
+| Media Session | Media3 Session, Media3 Cast |
+| Casting | Google Play Services Cast Framework |
+| Networking | OkHttp, Jellyfin SDK |
+| Serialization | kotlinx.serialization |
+| Images | Coil (with BlurHash support) |
+| Text Recognition | ML Kit |
+| Testing | JUnit 4, Espresso, Compose UI Test, OkHttp MockWebServer |
 
 ---
 
 ## Requirements
 
-- Android 8.0 (API 28) or later
+- Android 9.0 (API 28) or later
 - JDK 17
-- Android Studio with a recent Android SDK
+- Android Studio with Android SDK (compileSdk 37)
 - A Jellyfin server for authentication and playback
 
 ---
@@ -128,29 +170,33 @@ JellyPlay is an Android Jellyfin application with multi-server support, adaptive
 <details>
 <summary><strong>Prerequisites</strong></summary>
 
-	- Android Studio or Gradle CLI
-	- JDK 17
+- Android Studio or Gradle CLI
+- JDK 17
 </details>
 
 ### Build Commands
 
 ```bash
-# Build the app
-./gradlew assembleDebug
+# Debug builds (phone and TV)
+./gradlew assemblePhoneDebug
+./gradlew assembleTvDebug
 
-# Build a release variant
-./gradlew assembleRelease
+# Release builds
+./gradlew assemblePhoneRelease
+./gradlew assembleTvRelease
 ```
 
-### Web UI Development
-
-The repository currently does not include the separate web UI project from the reference repo, so there is no additional frontend build step here.
+The project uses product flavors — `phone` (standard mobile) and `tv` (Android TV with Leanback launcher). ABI splits produce `arm64-v8a`, `x86_64`, and universal APKs.
 
 ---
 
 ## CI/CD
 
-A GitHub Actions workflow automates Android CI and release-related build tasks.
+A GitHub Actions workflow (`.github/workflows/release.yml`) automates release builds:
+- Triggered on push to `v[0-9]+*` or `release/**` branches
+- Auto-calculates version from branch name with git tag-based patch incrementing
+- Builds signed release APKs for both phone and TV flavors
+- Publishes APKs to GitHub Releases with auto-generated release notes
 
 ---
 
@@ -159,9 +205,13 @@ A GitHub Actions workflow automates Android CI and release-related build tasks.
 | Permission | Purpose |
 |---|---|
 | `INTERNET` | Jellyfin API access and media playback |
-| `FOREGROUND_SERVICE` | Keeping playback alive in the foreground |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback service operation |
-| `POST_NOTIFICATIONS` | Playback and widget-related notifications |
+| `ACCESS_NETWORK_STATE` | Network connectivity monitoring |
+| `ACCESS_WIFI_STATE` | WiFi state for server discovery and streaming |
+| `CHANGE_WIFI_MULTICAST_STATE` | Jellyfin server auto-discovery |
+| `FOREGROUND_SERVICE` | Foreground service for playback and downloads |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback foreground service type |
+| `FOREGROUND_SERVICE_DATA_SYNC` | Download worker foreground service type |
+| `POST_NOTIFICATIONS` | Playback, download, and widget notifications |
 
 ---
 
@@ -170,23 +220,24 @@ A GitHub Actions workflow automates Android CI and release-related build tasks.
 ```
 app/                     Main Android application module
 core/model/              Shared data models
-core/designsystem/        Shared theming and UI primitives
-core/network/             Jellyfin networking and API access
-core/database/            Room database and persistence
-core/datastore/           DataStore preferences
-core/data/                Repository implementations and data orchestration
-core/ui/                  Shared UI helpers and components
-feature/auth/             Server selection and authentication
-feature/home/             Home screen and browse sections
-feature/library/          Library browsing and media collections
-feature/search/           Search experience
-feature/details/          Media detail and related content screens
-feature/player/video/     Video playback UI and controls
-feature/player/audio/     Audio playback UI and controls
-feature/downloads/        Download management and offline playback
-feature/settings/         Settings and preferences UI
-feature/music/            Music browsing and album/artist details
-feature/livetv/           Live TV browsing and guide screens
+core/designsystem/       Shared theming, artwork colors, and UI primitives
+core/network/            Jellyfin API client, Seerr client, server discovery
+core/database/           Room database and persistence
+core/datastore/          DataStore preferences
+core/data/               Repositories, playback managers, audio effects, SyncPlay, Cast, downloads
+core/ui/                 Shared UI components, adaptive layouts, TV focus, animations, navigation
+feature/auth/            Server selection and authentication
+feature/home/            Home screen, Kids home, and discover sections
+feature/library/         Library browsing and media collections
+feature/search/          Search experience
+feature/details/         Media detail, person detail, collection detail, Seerr detail
+feature/player/video/    Video playback UI, multi-engine support, SyncPlay integration
+feature/player/audio/    Audio playback UI, lyrics, equalizer, ambient mode
+feature/downloads/       Download management and offline playback
+feature/settings/        Settings, server/user management, Seerr configuration
+feature/music/           Music browsing, smart/mood playlists, artist/album details
+feature/livetv/          Live TV channels, EPG guide, and DVR
+feature/syncplay/        SyncPlay group management and watch party UI
 ```
 
 ---
