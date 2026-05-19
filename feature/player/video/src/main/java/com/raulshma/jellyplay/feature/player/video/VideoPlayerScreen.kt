@@ -95,6 +95,7 @@ import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
@@ -819,6 +820,9 @@ fun VideoPlayerScreen(
             onAudioNormalizationModeChange = { viewModel.setAudioNormalizationMode(it) },
             onChannelMixClick = { viewModel.toggleChannelMix() },
             onChannelMixModeChange = { viewModel.setChannelMixMode(it) },
+            sleepTimerActive = uiState.sleepTimerActive,
+            sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
+            onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
             onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
@@ -1252,6 +1256,18 @@ private fun PlayerSheetRouter(
             QualityPickerSheet(
                 currentQuality = uiState.streamingQuality,
                 onSelect = { viewModel.setStreamingQuality(it) },
+                onDismiss = dismissSheet,
+            )
+        }
+        is PlayerSheet.SleepTimer -> {
+            SleepTimerSheet(
+                isActive = uiState.sleepTimerActive,
+                isEndOfEpisodeMode = uiState.sleepTimerEndOfEpisode,
+                remainingMs = uiState.sleepTimerRemainingMs,
+                lastUsedDurationMs = uiState.sleepTimerLastUsedDurationMs,
+                onSelectDuration = { viewModel.startSleepTimer(it) },
+                onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
+                onCancel = { viewModel.cancelSleepTimer() },
                 onDismiss = dismissSheet,
             )
         }

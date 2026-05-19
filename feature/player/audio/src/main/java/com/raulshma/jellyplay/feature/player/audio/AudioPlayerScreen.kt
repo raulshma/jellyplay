@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -140,6 +141,7 @@ fun AudioPlayerScreen(
     var showLyrics by remember { mutableStateOf(false) }
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var showSleepTimer by remember { mutableStateOf(false) }
 
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
@@ -219,6 +221,9 @@ fun AudioPlayerScreen(
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
+                    sleepTimerActive = viewModel.sleepTimerActive,
+                    sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else formatDuration(viewModel.sleepTimerRemainingMs),
+                    onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                 )
 
                 if (isExpanded) {
@@ -393,6 +398,19 @@ fun AudioPlayerScreen(
             onSearch = { viewModel.searchLyrics(it) },
             onApplyTrack = { viewModel.applyLyrics(it) },
             onDismiss = { showLyricsSearch = false; viewModel.clearLyricsSearch() },
+        )
+    }
+
+    if (showSleepTimer) {
+        AudioSleepTimerSheet(
+            isActive = viewModel.sleepTimerActive,
+            isEndOfEpisodeMode = viewModel.sleepTimerEndOfEpisode,
+            remainingMs = viewModel.sleepTimerRemainingMs,
+            lastUsedDurationMs = viewModel.sleepTimerLastUsedDurationMs,
+            onSelectDuration = { viewModel.startSleepTimer(it) },
+            onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
+            onCancel = { viewModel.cancelSleepTimer() },
+            onDismiss = { showSleepTimer = false },
         )
     }
 }
@@ -969,6 +987,9 @@ private fun PixelPlayerTopBar(
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onAmbientClick: () -> Unit,
+    sleepTimerActive: Boolean = false,
+    sleepTimerDisplayText: String = "",
+    onSleepTimerClick: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -1033,6 +1054,11 @@ private fun PixelPlayerTopBar(
                         text = { Text("Ambient Mode") },
                         onClick = onAmbientClick,
                         leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
+                        onClick = onSleepTimerClick,
+                        leadingIcon = { Icon(Icons.Default.Timer, null) },
                     )
                 }
             }
@@ -1352,6 +1378,108 @@ private fun IconButtonWithPressAnimation(
             androidx.compose.material3.LocalContentColor provides tint
         ) {
             icon()
+        }
+    }
+}
+
+private val SLEEP_TIMER_PRESETS = listOf(
+    15 * 60 * 1000L,
+    30 * 60 * 1000L,
+    45 * 60 * 1000L,
+    60 * 60 * 1000L,
+    90 * 60 * 1000L,
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AudioSleepTimerSheet(
+    isActive: Boolean,
+    isEndOfEpisodeMode: Boolean,
+    remainingMs: Long,
+    lastUsedDurationMs: Long,
+    onSelectDuration: (Long) -> Unit,
+    onSelectEndOfEpisode: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                "Sleep Timer",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            Spacer(Modifier.height(20.dp))
+
+            if (isActive) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                            ShapeCache.smoothPill,
+                        )
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (isEndOfEpisodeMode) "End of episode" else formatDuration(remainingMs),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "Cancel",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { onCancel() },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            Text(
+                "Duration",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SLEEP_TIMER_PRESETS.forEach { durationMs ->
+                    val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
+                    val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                    val minutes = durationMs / (60 * 1000)
+                    val label = if (minutes % 60L == 0L) "${minutes / 60}h" else "${minutes}m"
+                    androidx.compose.material3.FilterChip(
+                        selected = isSelected || isLastUsed,
+                        onClick = { onSelectDuration(durationMs); onDismiss() },
+                        label = { Text(label) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            val isEndSelected = isActive && isEndOfEpisodeMode
+            androidx.compose.material3.FilterChip(
+                selected = isEndSelected,
+                onClick = { onSelectEndOfEpisode(); onDismiss() },
+                label = { Text("End of episode") },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

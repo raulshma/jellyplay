@@ -92,6 +92,10 @@ data class VideoPlayerUiState(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val sleepTimerActive: Boolean = false,
+    val sleepTimerEndOfEpisode: Boolean = false,
+    val sleepTimerRemainingMs: Long = 0L,
+    val sleepTimerLastUsedDurationMs: Long = 0L,
 ) {
 
     companion object {

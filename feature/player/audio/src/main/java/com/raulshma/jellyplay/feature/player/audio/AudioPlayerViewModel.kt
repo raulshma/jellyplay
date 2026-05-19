@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -27,6 +28,7 @@ class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val preferencesStore: UserPreferencesStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val sleepTimerManager: SleepTimerManager,
 ) : ViewModel() {
 
     val preferences = preferencesStore.preferences
@@ -106,6 +108,15 @@ class AudioPlayerViewModel @Inject constructor(
     var isSearchingLyrics by mutableStateOf(false)
         private set
 
+    var sleepTimerActive by mutableStateOf(false)
+        private set
+    var sleepTimerEndOfEpisode by mutableStateOf(false)
+        private set
+    var sleepTimerRemainingMs by mutableLongStateOf(0L)
+        private set
+    var sleepTimerLastUsedDurationMs by mutableLongStateOf(0L)
+        private set
+
     init {
         viewModelScope.launch {
             audioPlaybackManager.title.collect { title = it }
@@ -169,6 +180,26 @@ class AudioPlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             audioPlaybackManager.crossfadeDurationMs.collect { crossfadeDurationMs = it }
+        }
+        viewModelScope.launch {
+            sleepTimerManager.remainingMs.collect { remaining ->
+                sleepTimerRemainingMs = remaining
+            }
+        }
+        viewModelScope.launch {
+            sleepTimerManager.isActive.collect { active ->
+                sleepTimerActive = active
+            }
+        }
+        viewModelScope.launch {
+            sleepTimerManager.isEndOfEpisodeMode.collect { endOfEpisode ->
+                sleepTimerEndOfEpisode = endOfEpisode
+            }
+        }
+        viewModelScope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs
+            }
         }
     }
 
@@ -332,6 +363,43 @@ class AudioPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesStore.setGaplessEnabled(enabled)
         }
+    }
+
+    fun startSleepTimer(durationMs: Long) {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerDurationMs(durationMs)
+            preferencesStore.setSleepTimerEndOfEpisode(false)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            audioPlaybackManager.togglePlayPause()
+        }
+        sleepTimerManager.start(durationMs)
+        sleepTimerActive = true
+        sleepTimerEndOfEpisode = false
+        sleepTimerLastUsedDurationMs = durationMs
+    }
+
+    fun startSleepTimerEndOfEpisode() {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerEndOfEpisode(true)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            audioPlaybackManager.togglePlayPause()
+        }
+        sleepTimerManager.startEndOfEpisode()
+        sleepTimerActive = true
+        sleepTimerEndOfEpisode = true
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerManager.cancel()
+        sleepTimerActive = false
+        sleepTimerEndOfEpisode = false
+        sleepTimerRemainingMs = 0
+    }
+
+    fun triggerSleepTimerEndOfEpisode() {
+        sleepTimerManager.triggerEndOfEpisode()
     }
 
     fun stopPlayback() {
