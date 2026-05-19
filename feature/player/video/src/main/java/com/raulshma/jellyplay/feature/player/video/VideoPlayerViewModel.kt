@@ -36,10 +36,9 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
-import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -800,6 +799,31 @@ class VideoPlayerViewModel @Inject constructor(
                 ) }
             }
         }
+    }
+
+    fun addLocalSubtitle(uri: Uri, fileName: String) {
+        val engine = playerSessionManager.engine ?: return
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val codec = when (ext) {
+            "srt" -> "srt"
+            "ass", "ssa" -> "ass"
+            "vtt" -> "vtt"
+            "ttml", "dfxp" -> "ttml"
+            else -> null
+        }
+
+        val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
+        val source = SubtitleSource(
+            url = uri.toString(),
+            label = label,
+            language = null,
+            mimeType = null,
+            codec = codec,
+            isDefault = false,
+            isForced = false,
+            id = "local:${System.currentTimeMillis()}",
+        )
+        engine.addExternalSubtitle(source)
     }
 
     fun joinSyncPlay(groupId: String) {

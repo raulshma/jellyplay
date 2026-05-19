@@ -691,6 +691,20 @@ class MpvPlayerEngine(
         logSubtitleRenderState("sub-add")
     }
 
+    override fun addExternalSubtitle(source: SubtitleSource) {
+        val mpv = mpvView?.mpv ?: return
+        try {
+            if (source.language.isNullOrBlank()) {
+                mpv.command("sub-add", source.url, "select", source.label)
+            } else {
+                mpv.command("sub-add", source.url, "select", source.label, source.language)
+            }
+            refreshTracks("addExternalSubtitle", delayMs = 500)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add external subtitle: ${source.url}", e)
+        }
+    }
+
     private fun shouldSelectSubtitle(subtitle: SubtitleSource, preferredLanguage: String?): Boolean {
         if (subtitle.isDefault || subtitle.isForced) return true
         val preferred = preferredLanguage?.takeIf { it.isNotBlank() } ?: return false

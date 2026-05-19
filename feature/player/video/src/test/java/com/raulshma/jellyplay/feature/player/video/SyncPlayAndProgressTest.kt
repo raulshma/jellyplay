@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
 import org.junit.Test
 import org.junit.Assert.*
@@ -197,113 +197,32 @@ class PlaybackProgressReporterTickConversionTest {
     }
 }
 
-class PlayerEngineDefaultBehaviorTest {
+class EngineCapabilitiesDefaultTest {
 
     @Test
-    fun defaultSupportsAudioDelay_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsAudioDelay)
+    fun defaultCapabilities_allDisabled() {
+        val caps = EngineCapabilities()
+        assertFalse(caps.supportsPip)
+        assertFalse(caps.supportsMiniMode)
+        assertFalse(caps.supportsOcr)
+        assertFalse(caps.supportsCues)
+        assertFalse(caps.supportsAudioDelay)
+        assertFalse(caps.supportsSubtitleDelay)
+        assertFalse(caps.supportsAudioPassthrough)
+        assertFalse(caps.supportsSubtitleStyle)
+        assertFalse(caps.supportsDialogueBoost)
+        assertFalse(caps.supportsNightMode)
+        assertFalse(caps.supportsAudioNormalization)
+        assertFalse(caps.supportsChannelMixing)
     }
 
     @Test
-    fun defaultSupportsAudioPassthrough_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsAudioPassthrough)
-    }
-
-    @Test
-    fun defaultSupportsSubtitleStyle_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsSubtitleStyle)
-    }
-
-    @Test
-    fun defaultSupportsDialogueBoost_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsDialogueBoost)
-    }
-
-    @Test
-    fun defaultSupportsNightMode_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsNightMode)
-    }
-
-    @Test
-    fun defaultSupportsOcr_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsOcr)
-    }
-
-    @Test
-    fun defaultSupportsCues_isFalse() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertFalse(engine.supportsCues)
-    }
-
-    @Test
-    fun defaultSetSubtitleStyle_doesNothing() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        engine.setSubtitleStyle(com.raulshma.jellyplay.core.model.SubtitleStyle(), null)
-    }
-
-    @Test
-    fun defaultGetCurrentCues_returnsEmpty() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertTrue(engine.getCurrentCues().isEmpty())
-    }
-
-    @Test
-    fun defaultSetDialogueBoostEnabled_doesNothing() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        engine.setDialogueBoostEnabled(true)
-    }
-
-    @Test
-    fun defaultSetNightModeEnabled_doesNothing() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        engine.setNightModeEnabled(true, 0)
-    }
-
-    @Test
-    fun defaultSetEqualizerEnabled_doesNothing() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        engine.setEqualizerEnabled(true)
-    }
-
-    @Test
-    fun defaultCaptureViewBitmap_returnsNull() {
-        val engine: PlayerEngine = FakePlayerEngine()
-        assertNull(engine.captureViewBitmap())
-    }
-
-    private class FakePlayerEngine : PlayerEngine {
-        override fun initialize(url: String, title: String, startPositionMs: Long) {}
-        override fun release() {}
-        override fun play() {}
-        override fun pause() {}
-        override fun seekTo(positionMs: Long) {}
-        override fun seekForward(amountMs: Long) {}
-        override fun seekBack(amountMs: Long) {}
-        override fun setPlaybackSpeed(speed: Float) {}
-        override fun setAudioDelay(ms: Long) {}
-        override fun setSubtitleDelay(ms: Long) {}
-        override fun setDecoderMode(mode: com.raulshma.jellyplay.core.model.DecoderMode) {}
-        override fun setAudioPassthrough(enabled: Boolean) {}
-        override fun setAspectRatio(mode: Int, ratio: Float?) {}
-        override val isPlaying: Boolean get() = false
-        override val currentPositionMs: Long get() = 0L
-        override val durationMs: Long get() = 0L
-        override val playbackSpeed: Float get() = 1f
-        override val audioSessionId: Int get() = 0
-        override val audioTracks: List<PlayerEngine.TrackInfo> get() = emptyList()
-        override val subtitleTracks: List<PlayerEngine.TrackInfo> get() = emptyList()
-        override fun selectAudioTrack(index: Int) {}
-        override fun selectSubtitleTrack(index: Int) {}
-        override fun createPlayerView(context: android.content.Context): android.view.View {
-            return android.view.View(context)
-        }
-        override fun setOnStateChanged(callback: ((Boolean) -> Unit)?) {}
-        override fun setOnTracksChanged(callback: (() -> Unit)?) {}
+    fun capabilities_dataClassCopy() {
+        val caps = EngineCapabilities()
+        val modified = caps.copy(supportsPip = true, supportsOcr = true)
+        assertFalse(caps.supportsPip)
+        assertTrue(modified.supportsPip)
+        assertTrue(modified.supportsOcr)
+        assertFalse(modified.supportsMiniMode)
     }
 }

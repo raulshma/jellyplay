@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
  * via an Android Intent chooser.
  *
  * Only used when the user selects [PlayerType.EXTERNAL].
- * mpv and LibVLC are now embedded as in-app engines via [PlayerEngine].
+ * mpv and LibVLC are now embedded as in-app engines via [com.raulshma.jellyplay.feature.player.video.engine.MediaEngine].
  */
 object ExternalPlayerLauncher {
 

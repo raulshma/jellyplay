@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -164,6 +166,16 @@ fun VideoPlayerScreen(
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
 
     var syncPlayChatVisible by remember { mutableStateOf(false) }
+
+    val localSubtitleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "subtitle.srt"
+            viewModel.addLocalSubtitle(uri, fileName)
+            currentSheet = PlayerSheet.None
+        }
+    }
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -896,6 +908,17 @@ fun VideoPlayerScreen(
         onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
         syncPlayIgnoreWait = syncPlayIgnoreWait,
         syncPlayChatMessages = syncPlayChatMessages,
+        onLoadLocalSubtitle = {
+            localSubtitleLauncher.launch(
+                arrayOf(
+                    "application/x-subrip",
+                    "text/vtt",
+                    "text/plain",
+                    "text/x-ssa",
+                    "application/ttml+xml",
+                )
+            )
+        },
     )
 
     if (uiState.showPlaybackErrorDialog && uiState.playerError != null) {
@@ -1057,6 +1080,7 @@ private fun PlayerSheetRouter(
     onToggleChatOverlay: () -> Unit,
     syncPlayIgnoreWait: Boolean,
     syncPlayChatMessages: List<com.raulshma.jellyplay.core.model.SyncPlayChatMessage>,
+    onLoadLocalSubtitle: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -1169,6 +1193,7 @@ private fun PlayerSheetRouter(
                     viewModel.downloadSubtitle(it)
                     onSheetChange(PlayerSheet.None)
                 },
+                onLoadLocalFile = onLoadLocalSubtitle,
                 onDismiss = dismissSheet,
             )
         }

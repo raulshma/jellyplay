@@ -148,6 +148,9 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     // 5b. Quality
     fun setMaxVideoBitrate(bps: Int?)
 
+    // 5c. Runtime subtitle addition
+    fun addExternalSubtitle(source: SubtitleSource) {}
+
     // 6. UI Binding
     fun createSurfaceView(context: Context): View
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
