@@ -98,6 +98,8 @@ data class UserPreferences(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val audioGaplessEnabled: Boolean = true,
+    val audioCrossfadeDurationMs: Long = 0L,
 )
 
 @Immutable

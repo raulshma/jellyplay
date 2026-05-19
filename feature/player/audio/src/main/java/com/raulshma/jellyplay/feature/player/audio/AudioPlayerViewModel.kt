@@ -62,6 +62,9 @@ class AudioPlayerViewModel @Inject constructor(
     var skipPreviousThresholdMs by mutableLongStateOf(3_000L)
         private set
 
+    var crossfadeDurationMs by mutableLongStateOf(0L)
+        private set
+
     var queue by mutableStateOf<List<AudioQueueItem>>(emptyList())
         private set
     var currentIndex by mutableIntStateOf(-1)
@@ -164,6 +167,9 @@ class AudioPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             audioPlaybackManager.equalizerSettings.collect { equalizerSettings = it }
         }
+        viewModelScope.launch {
+            audioPlaybackManager.crossfadeDurationMs.collect { crossfadeDurationMs = it }
+        }
     }
 
     fun play(itemId: String) {
@@ -183,6 +189,8 @@ class AudioPlayerViewModel @Inject constructor(
             _nightModeStrength.value = prefs.nightModeStrength
             audioPlaybackManager.setDialogueBoostStrength(prefs.dialogueBoostStrength)
             audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
+            audioPlaybackManager.setCrossfadeDurationMs(prefs.audioCrossfadeDurationMs)
+            audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
         }
 
         fetchBlurHash(itemId)
@@ -310,6 +318,20 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun clearLyricsSearch() {
         lyricsSearchResults = emptyList()
+    }
+
+    fun updateCrossfadeDuration(ms: Long) {
+        audioPlaybackManager.setCrossfadeDurationMs(ms)
+        viewModelScope.launch {
+            preferencesStore.setCrossfadeDurationMs(ms)
+        }
+    }
+
+    fun updateGaplessPlayback(enabled: Boolean) {
+        audioPlaybackManager.setGaplessEnabled(enabled)
+        viewModelScope.launch {
+            preferencesStore.setGaplessEnabled(enabled)
+        }
     }
 
     fun stopPlayback() {
