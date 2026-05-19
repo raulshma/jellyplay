@@ -11,10 +11,12 @@ import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -82,6 +84,7 @@ class UserPreferencesStore @Inject constructor(
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
+        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
         val SYNCPLAY_PROGRESS_REPORTING_MODE = stringPreferencesKey("syncplay_progress_reporting_mode")
         val SYNCPLAY_AUTO_JOIN_LAST_GROUP = stringPreferencesKey("syncplay_auto_join_last_group")
@@ -114,6 +117,37 @@ class UserPreferencesStore @Inject constructor(
         } catch (_: Exception) {
             emptyMap()
         }
+    }
+
+    private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {
+        val raw = prefs[Keys.SEGMENT_BEHAVIORS]
+        if (raw != null) {
+            return try {
+                val stored = json.decodeFromString<Map<String, String>>(raw)
+                stored.mapNotNull { (typeStr, behaviorStr) ->
+                    try {
+                        MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
+                    } catch (_: Exception) { null }
+                }.toMap()
+            } catch (_: Exception) { emptyMap() }
+        }
+
+        val migrated = mutableMapOf<MediaSegmentType, SegmentBehavior>()
+        val skipIntro = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true
+        val skipOutro = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true
+        val autoIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false
+        val autoOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false
+        migrated[MediaSegmentType.INTRO] = when {
+            autoIntro -> SegmentBehavior.AUTO_SKIP
+            skipIntro -> SegmentBehavior.SHOW_BUTTON
+            else -> SegmentBehavior.IGNORE
+        }
+        migrated[MediaSegmentType.OUTRO] = when {
+            autoOutro -> SegmentBehavior.AUTO_SKIP
+            skipOutro -> SegmentBehavior.SHOW_BUTTON
+            else -> SegmentBehavior.IGNORE
+        }
+        return SegmentBehavior.DEFAULT_BEHAVIORS + migrated
     }
 
     private suspend fun writeMediaStreamSelections(
@@ -202,10 +236,7 @@ class UserPreferencesStore @Inject constructor(
             audioAutoplayNext = prefs[Keys.AUDIO_AUTOPLAY_NEXT]?.toBoolean() ?: true,
             trickplayEnabled = prefs[Keys.TRICKPLAY_ENABLED]?.toBoolean() ?: true,
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
-            skipIntroEnabled = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true,
-            skipOutroEnabled = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true,
-            autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false,
-            autoSkipOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false,
+            segmentBehaviors = readSegmentBehaviors(prefs),
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
             syncPlayProgressReportingMode = prefs[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] ?: "SUPPRESS_DURING",
             syncPlayAutoJoinLastGroup = prefs[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP]?.toBoolean() ?: false,
@@ -447,20 +478,14 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled.toString() }
     }
 
-    suspend fun setSkipIntroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SKIP_INTRO_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setSkipOutroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SKIP_OUTRO_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setAutoSkipIntro(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_SKIP_INTRO] = enabled.toString() }
-    }
-
-    suspend fun setAutoSkipOutro(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_SKIP_OUTRO] = enabled.toString() }
+    suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
+        context.dataStore.edit { prefs ->
+            val current = readSegmentBehaviors(prefs).toMutableMap()
+            current[type] = behavior
+            prefs[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
+                current.mapKeys { it.key.name }.mapValues { it.value.name }
+            )
+        }
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {

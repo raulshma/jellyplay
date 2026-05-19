@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -33,6 +34,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+@Composable
+fun SegmentSkipOverlay(
+    isVisible: Boolean,
+    segmentType: MediaSegmentType,
+    onSkip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SkipButtonOverlay(
+        isVisible = isVisible,
+        text = segmentType.skipLabel,
+        onSkip = onSkip,
+        modifier = modifier,
+    )
+}
 
 @Composable
 fun IntroSkipOverlay(

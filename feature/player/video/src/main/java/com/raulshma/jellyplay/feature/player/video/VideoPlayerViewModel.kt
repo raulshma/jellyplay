@@ -113,8 +113,7 @@ class VideoPlayerViewModel @Inject constructor(
         getPlaySessionId = { playSessionId },
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
-        onAutoSkipIntro = { skipIntro() },
-        onAutoSkipOutro = { skipCredits() },
+        onAutoSkip = { segment -> skipSegment(segment) },
     )
     private val syncPlayController = SyncPlayController(
         syncPlayManager = syncPlayManager,
@@ -279,8 +278,7 @@ class VideoPlayerViewModel @Inject constructor(
                     )
                     progressReporter.startPositionTracking()
                     progressReporter.startProgressReporting()
-                    fetchIntroTimestamps(itemId)
-                    fetchCreditTimestamps(itemId)
+                    fetchMediaSegments(itemId)
                     fetchNextEpisode(detail)
                     loadSeriesEpisodes(detail)
                 }
@@ -338,10 +336,7 @@ class VideoPlayerViewModel @Inject constructor(
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
-                skipIntroEnabled = prefs.skipIntroEnabled,
-                skipOutroEnabled = prefs.skipOutroEnabled,
-                autoSkipIntro = prefs.autoSkipIntro,
-                autoSkipOutro = prefs.autoSkipOutro,
+                segmentBehaviors = prefs.segmentBehaviors,
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
             ) }
             autoplayNext = prefs.videoAutoplayNext
@@ -375,8 +370,7 @@ class VideoPlayerViewModel @Inject constructor(
 
             progressReporter.startPositionTracking()
             progressReporter.startProgressReporting()
-            fetchIntroTimestamps(itemId)
-            fetchCreditTimestamps(itemId)
+            fetchMediaSegments(itemId)
             if (detail != null) {
                 fetchNextEpisode(detail)
                 loadSeriesEpisodes(detail)
@@ -701,33 +695,21 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun skipIntro() {
         val state = _uiState.value
-        val ts = state.introTimestamps
-        
-        // Prefer API timestamps if they are valid
-        val endTicks = if (ts != null && ts.hasIntro) {
-            ts.introEndTicks
-        } else {
-            // Fall back to chapter-based segment end
-            state.introSegmentEndTicks
+        val seg = state.activeSegment
+        if (seg != null && seg.type == com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO) {
+            skipSegment(seg)
+            return
         }
-
+        val endTicks = state.introSegmentEndTicks
         if (endTicks != null && endTicks > 0) {
-            val targetMs = endTicks / 10_000
-            playerSessionManager.engine?.seekTo(targetMs)
+            playerSessionManager.engine?.seekTo(endTicks / 10_000)
         }
     }
 
-    private fun fetchIntroTimestamps(itemId: String) {
+    private fun fetchMediaSegments(itemId: String) {
         viewModelScope.launch {
-            val ts = playbackRepository.getIntroTimestamps(itemId).getOrNull()
-            _uiState.update { it.copy(introTimestamps = ts) }
-        }
-    }
-
-    private fun fetchCreditTimestamps(itemId: String) {
-        viewModelScope.launch {
-            val ts = playbackRepository.getCreditTimestamps(itemId).getOrNull()
-            _uiState.update { it.copy(creditTimestamps = ts) }
+            val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
+            _uiState.update { it.copy(segments = segments) }
         }
     }
 
@@ -748,25 +730,27 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun skipCredits() {
         val state = _uiState.value
-        
-        // If we are in credits and near the end, and autoplay is on, just play next
+
         if (state.isOutroNearEnd && state.nextEpisode != null && autoplayNext) {
             playNextEpisode()
             return
         }
 
-        val ts = state.creditTimestamps
-        // Prefer API timestamps if they are valid
-        val endTicks = if (ts != null && ts.hasCredits) {
-            ts.creditEndTicks
-        } else {
-            // Fall back to chapter-based segment end
-            state.creditSegmentEndTicks
+        val seg = state.activeSegment
+        if (seg != null && seg.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO) {
+            skipSegment(seg)
+            return
         }
-
+        val endTicks = state.creditSegmentEndTicks
         if (endTicks != null && endTicks > 0) {
-            val targetMs = endTicks / 10_000
-            playerSessionManager.engine?.seekTo(targetMs)
+            playerSessionManager.engine?.seekTo(endTicks / 10_000)
+        }
+    }
+
+    fun skipSegment(segment: com.raulshma.jellyplay.core.model.MediaSegment) {
+        val endTicks = _uiState.value.segmentEndTicks(segment)
+        if (endTicks != null && endTicks > 0) {
+            playerSessionManager.engine?.seekTo(endTicks / 10_000)
         }
     }
 
@@ -1101,8 +1085,7 @@ class VideoPlayerViewModel @Inject constructor(
         pendingAudioStreamIndex = null
         
         _uiState.update { it.copy(
-            introTimestamps = null,
-            creditTimestamps = null,
+            segments = emptyList(),
             nextEpisode = null,
             seriesId = null,
             remoteSubtitles = emptyList(),
