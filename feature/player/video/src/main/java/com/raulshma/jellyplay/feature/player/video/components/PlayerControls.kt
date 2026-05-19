@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -180,6 +181,9 @@ internal fun PlayerControls(
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
     onChannelMixClick: () -> Unit = {},
     onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
+    sleepTimerActive: Boolean = false,
+    sleepTimerDisplayText: String = "",
+    onSleepTimerClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -551,6 +555,12 @@ internal fun PlayerControls(
                                 onChannelMixModeChange = {
                                     showOverflow = false
                                     onChannelMixModeChange(it)
+                                },
+                                sleepTimerActive = sleepTimerActive,
+                                sleepTimerDisplayText = sleepTimerDisplayText,
+                                onSleepTimerClick = {
+                                    showOverflow = false
+                                    onSleepTimerClick()
                                 },
                             )
                         }
@@ -927,6 +937,8 @@ private fun PlayerOverflowMenu(
     audioNormalizationEnabled: Boolean = false,
     channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     channelMixEnabled: Boolean = false,
+    sleepTimerActive: Boolean = false,
+    sleepTimerDisplayText: String = "",
     onSubtitleStyleClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
@@ -942,6 +954,7 @@ private fun PlayerOverflowMenu(
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
     onChannelMixClick: () -> Unit = {},
     onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
+    onSleepTimerClick: () -> Unit = {},
 ) {
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
@@ -1166,6 +1179,12 @@ private fun PlayerOverflowMenu(
             label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
             onClick = onVideoStatsClick,
             tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+        OverflowMenuItem(
+            icon = Icons.Default.Timer,
+            label = if (sleepTimerActive) "Sleep Timer \u00B7 $sleepTimerDisplayText" else "Sleep Timer",
+            onClick = onSleepTimerClick,
+            tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

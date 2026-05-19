@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.engine.TrackType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -264,53 +266,56 @@ class EngineCapabilitiesCrossPlayerTest {
     }
 }
 
-class PlayerEngineInterfaceContractTest {
+class MediaTrackContractTest {
 
     @Test
-    fun trackInfo_containsRequiredFields() {
-        val trackInfo = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackInfo(
+    fun mediaTrack_containsRequiredFields() {
+        val track = MediaTrack(
+            id = "0",
             index = 0,
             label = "English",
             language = "eng",
             isSelected = true,
-            type = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.AUDIO,
+            type = TrackType.AUDIO,
         )
-        assertEquals(0, trackInfo.index)
-        assertEquals("English", trackInfo.label)
-        assertEquals("eng", trackInfo.language)
-        assertTrue(trackInfo.isSelected)
-        assertEquals(com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.AUDIO, trackInfo.type)
+        assertEquals("0", track.id)
+        assertEquals(0, track.index)
+        assertEquals("English", track.label)
+        assertEquals("eng", track.language)
+        assertTrue(track.isSelected)
+        assertEquals(TrackType.AUDIO, track.type)
     }
 
     @Test
-    fun trackInfo_defaultTrackGroupIsNull() {
-        val trackInfo = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackInfo(
+    fun mediaTrack_defaultTrackGroupIsNull() {
+        val track = MediaTrack(
+            id = "0",
             index = 0,
             label = "Test",
             language = null,
             isSelected = false,
-            type = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.SUBTITLE,
+            type = TrackType.SUBTITLE,
         )
-        assertEquals(null, trackInfo.trackGroup)
+        assertEquals(null, track.trackGroup)
     }
 
     @Test
-    fun trackInfo_dataClassEquality() {
-        val a = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackInfo(
-            index = 1, label = "Spanish", language = "spa", isSelected = false,
-            type = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.AUDIO,
+    fun mediaTrack_dataClassEquality() {
+        val a = MediaTrack(
+            id = "1", index = 1, label = "Spanish", language = "spa", isSelected = false,
+            type = TrackType.AUDIO,
         )
-        val b = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackInfo(
-            index = 1, label = "Spanish", language = "spa", isSelected = false,
-            type = com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.AUDIO,
+        val b = MediaTrack(
+            id = "1", index = 1, label = "Spanish", language = "spa", isSelected = false,
+            type = TrackType.AUDIO,
         )
         assertEquals(a, b)
     }
 
     @Test
     fun trackType_hasAudioAndSubtitle() {
-        assertEquals(2, com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.entries.size)
-        assertNotNull(com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.AUDIO)
-        assertNotNull(com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine.TrackType.SUBTITLE)
+        assertEquals(2, TrackType.entries.size)
+        assertNotNull(TrackType.AUDIO)
+        assertNotNull(TrackType.SUBTITLE)
     }
 }

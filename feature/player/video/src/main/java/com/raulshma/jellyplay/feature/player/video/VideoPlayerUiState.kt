@@ -29,6 +29,7 @@ data class VideoPlayerUiState(
     val playbackSpeed: Float = 1.0f,
     val audioTracks: List<TrackOption> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
+    val currentSubtitleText: String? = null,
     val chapters: List<ChapterInfo> = emptyList(),
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,
@@ -68,6 +69,7 @@ data class VideoPlayerUiState(
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
+    val usesSubtitleOverlay: Boolean = false,
     val playerError: String? = null,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
@@ -90,6 +92,10 @@ data class VideoPlayerUiState(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val sleepTimerActive: Boolean = false,
+    val sleepTimerEndOfEpisode: Boolean = false,
+    val sleepTimerRemainingMs: Long = 0L,
+    val sleepTimerLastUsedDurationMs: Long = 0L,
 ) {
 
     companion object {

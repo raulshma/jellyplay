@@ -99,6 +99,8 @@ class ExoPlayerEngine(
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
+    private var currentMediaItem: MediaItem? = null
+    private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
     
@@ -236,6 +238,9 @@ class ExoPlayerEngine(
             .build()
 
         exo.setMediaItem(mediaItem)
+        currentMediaItem = mediaItem
+        currentSubtitleConfigs.clear()
+        currentSubtitleConfigs.addAll(subtitleConfigs)
         exo.prepare()
         if (request.startPositionMs > 0) {
             exo.seekTo(request.startPositionMs)
@@ -281,6 +286,8 @@ class ExoPlayerEngine(
         player?.release()
         player = null
         trackSelector = null
+        currentMediaItem = null
+        currentSubtitleConfigs.clear()
         lastVideoStats = null
         releaseAudioEffects()
         engineScope.cancel()
@@ -612,6 +619,37 @@ class ExoPlayerEngine(
             1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> null
         }
         return listOfNotNull(lang, codec, channels).joinToString(" · ").ifBlank { "Unknown" }
+    }
+
+    override fun addExternalSubtitle(source: SubtitleSource) {
+        val exo = player ?: return
+        val item = currentMediaItem ?: return
+        val mimeType = source.mimeType ?: mapSubtitleCodecToMime(source.codec ?: source.label) ?: return
+
+        val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
+            .setId(source.id)
+            .setMimeType(mimeType)
+            .setLanguage(source.language)
+            .setLabel(source.label)
+            .setSelectionFlags(
+                (if (source.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
+                (if (source.isForced) C.SELECTION_FLAG_FORCED else 0)
+            )
+            .build()
+
+        currentSubtitleConfigs.add(newSubConfig)
+
+        val currentPos = exo.currentPosition
+        val wasPlaying = exo.isPlaying
+
+        val newItem = item.buildUpon()
+            .setSubtitleConfigurations(currentSubtitleConfigs.toList())
+            .build()
+        currentMediaItem = newItem
+
+        exo.setMediaItem(newItem, currentPos)
+        exo.prepare()
+        if (wasPlaying) exo.play()
     }
 
     private fun mapSubtitleCodecToMime(codecOrLabel: String?): String? {

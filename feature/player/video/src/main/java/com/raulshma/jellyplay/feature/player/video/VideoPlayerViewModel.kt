@@ -15,6 +15,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
@@ -36,9 +37,9 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
-import com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -76,6 +77,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
+    private val sleepTimerManager: SleepTimerManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
@@ -143,6 +145,14 @@ class VideoPlayerViewModel @Inject constructor(
                         updateConfigWithUiState()
                     }
                 }
+                if (_uiState.value.sleepTimerLastUsedDurationMs != prefs.sleepTimerDurationMs) {
+                    _uiState.update { it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            sleepTimerManager.remainingMs.collect { remaining ->
+                _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
             }
         }
         syncPlayController.start()
@@ -169,6 +179,8 @@ class VideoPlayerViewModel @Inject constructor(
                     val prefs = preferencesStore.preferences.first()
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
+                        usesSubtitleOverlay = engine is MpvPlayerEngine,
+                        currentSubtitleText = null,
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
@@ -198,6 +210,12 @@ class VideoPlayerViewModel @Inject constructor(
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
                                 }
                                 syncPlayController.onPlaybackStateChanged(stateInt)
+                            } }
+                            launch { engine.currentCues.collect { cues ->
+                                val subtitleText = cues.joinToString("\n").takeIf { it.isNotBlank() }
+                                _uiState.update { s ->
+                                    if (s.currentSubtitleText == subtitleText) s else s.copy(currentSubtitleText = subtitleText)
+                                }
                             } }
                             launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
                             launch { engine.errorFlow.collect { e -> _uiState.update { s -> s.copy(playerError = e, showPlaybackErrorDialog = true) } } }
@@ -793,6 +811,31 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    fun addLocalSubtitle(uri: Uri, fileName: String) {
+        val engine = playerSessionManager.engine ?: return
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val codec = when (ext) {
+            "srt" -> "srt"
+            "ass", "ssa" -> "ass"
+            "vtt" -> "vtt"
+            "ttml", "dfxp" -> "ttml"
+            else -> null
+        }
+
+        val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
+        val source = SubtitleSource(
+            url = uri.toString(),
+            label = label,
+            language = null,
+            mimeType = null,
+            codec = codec,
+            isDefault = false,
+            isForced = false,
+            id = "local:${System.currentTimeMillis()}",
+        )
+        engine.addExternalSubtitle(source)
+    }
+
     fun joinSyncPlay(groupId: String) {
         syncPlayController.joinGroup(groupId)
     }
@@ -1069,6 +1112,51 @@ class VideoPlayerViewModel @Inject constructor(
             currentSeasonId = null,
             isLoadingEpisodes = false,
         ) }
+    }
+
+    fun startSleepTimer(durationMs: Long) {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerDurationMs(durationMs)
+            preferencesStore.setSleepTimerEndOfEpisode(false)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            playerSessionManager.engine?.pause()
+        }
+        sleepTimerManager.start(durationMs)
+        _uiState.update { it.copy(
+            sleepTimerActive = true,
+            sleepTimerEndOfEpisode = false,
+            sleepTimerRemainingMs = durationMs,
+            sleepTimerLastUsedDurationMs = durationMs,
+        ) }
+    }
+
+    fun startSleepTimerEndOfEpisode() {
+        viewModelScope.launch {
+            preferencesStore.setSleepTimerEndOfEpisode(true)
+        }
+        sleepTimerManager.setOnTimerExpired {
+            playerSessionManager.engine?.pause()
+        }
+        sleepTimerManager.startEndOfEpisode()
+        _uiState.update { it.copy(
+            sleepTimerActive = true,
+            sleepTimerEndOfEpisode = true,
+            sleepTimerRemainingMs = 0,
+        ) }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerManager.cancel()
+        _uiState.update { it.copy(
+            sleepTimerActive = false,
+            sleepTimerEndOfEpisode = false,
+            sleepTimerRemainingMs = 0,
+        ) }
+    }
+
+    fun triggerSleepTimerEndOfEpisode() {
+        sleepTimerManager.triggerEndOfEpisode()
     }
 
     fun prepareForMiniMode(

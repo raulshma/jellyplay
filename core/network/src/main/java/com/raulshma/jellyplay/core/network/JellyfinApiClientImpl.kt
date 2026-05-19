@@ -1423,14 +1423,48 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = apiResult {
-        requireApi().sessionApi.postCapabilities(
-            playableMediaTypes = listOf(
-                org.jellyfin.sdk.model.api.MediaType.VIDEO,
-                org.jellyfin.sdk.model.api.MediaType.AUDIO,
-            ),
-            supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
-            supportsMediaControl = true,
-            supportsPersistentIdentifier = true,
+        requireApi().sessionApi.postFullCapabilities(
+            data = org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
+                playableMediaTypes = listOf(
+                    org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                    org.jellyfin.sdk.model.api.MediaType.AUDIO,
+                ),
+                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
+                supportsMediaControl = true,
+                supportsPersistentIdentifier = true,
+                deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
+                    directPlayProfiles = emptyList(),
+                    transcodingProfiles = emptyList(),
+                    containerProfiles = emptyList(),
+                    codecProfiles = emptyList(),
+                    subtitleProfiles = listOf(
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "srt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ass",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ssa",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "subrip",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "vtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "webvtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                    ),
+                ),
+            )
         )
     }
 }

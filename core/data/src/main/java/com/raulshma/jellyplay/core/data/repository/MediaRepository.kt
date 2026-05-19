@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.Playlist
@@ -91,6 +92,17 @@ interface MediaRepository {
     ): Result<SearchResult>
 
     suspend fun getLyrics(itemId: String): Result<LyricsResult>
+
+    suspend fun getLyricsWithFallback(
+        itemId: String,
+        artistName: String?,
+        trackName: String?,
+        duration: Double?,
+    ): Result<LyricsResult>
+
+    suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>>
+
+    suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult>
 
     suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
 

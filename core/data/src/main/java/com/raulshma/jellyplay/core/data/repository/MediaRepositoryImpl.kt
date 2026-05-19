@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
+import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
@@ -13,7 +15,10 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
+import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
@@ -25,6 +30,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.LrcLibApi
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +38,8 @@ import javax.inject.Singleton
 @Singleton
 class MediaRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val lrcLibApi: LrcLibApi,
+    private val lyricsCacheDao: LyricsCacheDao,
 ) : MediaRepository {
 
     override suspend fun getHomeSections(): Result<List<HomeSection>> =
@@ -150,6 +158,148 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiClient.getLyrics(itemId)
 
+    override suspend fun getLyricsWithFallback(
+        itemId: String,
+        artistName: String?,
+        trackName: String?,
+        duration: Double?,
+    ): Result<LyricsResult> = runCatching {
+        val cached = lyricsCacheDao.getByItemId(itemId)
+        if (cached != null) {
+            val cachedSynced = cached.syncedLyrics
+            val cachedPlain = cached.plainLyrics
+            if (!cachedSynced.isNullOrBlank()) {
+                val lines = parseLrc(cachedSynced)
+                if (lines.isNotEmpty()) {
+                    return@runCatching LyricsResult(
+                        lines = lines,
+                        source = LyricsSource.entries.find { it.name == cached.provider } ?: LyricsSource.UNKNOWN,
+                    )
+                }
+            }
+            if (!cachedPlain.isNullOrBlank() && cachedSynced.isNullOrBlank()) {
+                return@runCatching LyricsResult(
+                    lines = cachedPlain.lineSequence().filter { it.isNotBlank() }
+                        .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList(),
+                    source = LyricsSource.entries.find { it.name == cached.provider } ?: LyricsSource.UNKNOWN,
+                )
+            }
+            if (cachedSynced == null && cachedPlain == null && cached.artistName != null) {
+                return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
+            }
+        }
+
+        val jellyfinResult = apiClient.getLyrics(itemId)
+        if (jellyfinResult.isSuccess) {
+            val result = jellyfinResult.getOrThrow()
+            if (result.lines.isNotEmpty()) {
+                cacheLyrics(itemId, result.source, artistName, trackName, duration, result.lines)
+                return@runCatching result
+            }
+        }
+
+        if (artistName.isNullOrBlank() || trackName.isNullOrBlank()) {
+            return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
+        }
+
+        val lrcLibResult = lrcLibApi.getBestMatch(artistName, trackName, duration)
+        if (lrcLibResult.isSuccess) {
+            val track = lrcLibResult.getOrThrow()
+            val trackSynced = track.syncedLyrics
+            val trackPlain = track.plainLyrics
+            if (track.instrumental) {
+                lyricsCacheDao.insert(
+                    LyricsCacheEntity(
+                        itemId = itemId,
+                        provider = LyricsSource.LRCLIB.name,
+                        artistName = artistName,
+                        trackName = trackName,
+                        duration = duration,
+                        lrcLibId = track.id,
+                        fetchedAt = System.currentTimeMillis(),
+                    )
+                )
+                return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
+            }
+            if (!trackSynced.isNullOrBlank()) {
+                val lines = parseLrc(trackSynced)
+                if (lines.isNotEmpty()) {
+                    lyricsCacheDao.insert(
+                        LyricsCacheEntity(
+                            itemId = itemId,
+                            provider = LyricsSource.LRCLIB.name,
+                            artistName = artistName,
+                            trackName = trackName,
+                            syncedLyrics = trackSynced,
+                            plainLyrics = trackPlain,
+                            duration = duration,
+                            lrcLibId = track.id,
+                            fetchedAt = System.currentTimeMillis(),
+                        )
+                    )
+                    return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+                }
+            }
+            if (!trackPlain.isNullOrBlank()) {
+                val lines = trackPlain.lineSequence().filter { it.isNotBlank() }
+                    .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
+                lyricsCacheDao.insert(
+                    LyricsCacheEntity(
+                        itemId = itemId,
+                        provider = LyricsSource.LRCLIB.name,
+                        artistName = artistName,
+                        trackName = trackName,
+                        plainLyrics = trackPlain,
+                        duration = duration,
+                        lrcLibId = track.id,
+                        fetchedAt = System.currentTimeMillis(),
+                    )
+                )
+                return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+            }
+        }
+
+        lyricsCacheDao.insert(
+            LyricsCacheEntity(
+                itemId = itemId,
+                provider = LyricsSource.UNKNOWN.name,
+                artistName = artistName,
+                trackName = trackName,
+                duration = duration,
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+        LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
+    }
+
+    override suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>> =
+        lrcLibApi.search(query)
+
+    override suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult> =
+        lrcLibApi.getById(lrcLibId).mapCatching { track ->
+            val trackSynced = track.syncedLyrics
+            val trackPlain = track.plainLyrics
+            val lines = if (!trackSynced.isNullOrBlank()) {
+                parseLrc(trackSynced)
+            } else if (!trackPlain.isNullOrBlank()) {
+                trackPlain.lineSequence().filter { it.isNotBlank() }
+                    .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
+            } else {
+                emptyList()
+            }
+            lyricsCacheDao.insert(
+                LyricsCacheEntity(
+                    itemId = itemId,
+                    provider = LyricsSource.LRCLIB.name,
+                    syncedLyrics = track.syncedLyrics,
+                    plainLyrics = track.plainLyrics,
+                    lrcLibId = track.id,
+                    fetchedAt = System.currentTimeMillis(),
+                )
+            )
+            LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+        }
+
     override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = apiClient.getPlaylists(limit)
 
     override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
@@ -248,8 +398,57 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun cancelTimer(timerId: String): Result<Unit> =
         apiClient.cancelTimer(timerId)
 
+    private suspend fun cacheLyrics(
+        itemId: String,
+        source: LyricsSource,
+        artistName: String?,
+        trackName: String?,
+        duration: Double?,
+        lines: List<LyricsLine>,
+    ) {
+        val syncedLrc = lines.joinToString("\n") { line ->
+            val min = line.timeMs / 60_000
+            val sec = (line.timeMs % 60_000) / 1000.0
+            "[%02d:%06.3f] %s".format(min, sec, line.text)
+        }
+        lyricsCacheDao.insert(
+            LyricsCacheEntity(
+                itemId = itemId,
+                provider = source.name,
+                artistName = artistName,
+                trackName = trackName,
+                syncedLyrics = syncedLrc,
+                duration = duration,
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
     companion object {
         private const val PAGE_SIZE = 50
         private const val PREFETCH_DISTANCE = 20
+        private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
+
+        private fun parseLrc(lrcContent: String): List<LyricsLine> {
+            val lines = mutableListOf<LyricsLine>()
+            lrcContent.lineSequence().forEach { rawLine ->
+                val line = rawLine.trim()
+                if (line.isEmpty()) return@forEach
+                val times = TIME_REGEX.findAll(line).map { match ->
+                    val minutes = match.groupValues[1].toLong()
+                    val seconds = match.groupValues[2].toDouble()
+                    minutes * 60_000 + (seconds * 1000).toLong()
+                }.toList()
+                if (times.isEmpty()) return@forEach
+                val textStart = line.lastIndexOf(']') + 1
+                val text = line.substring(textStart).trim()
+                if (text.isEmpty()) {
+                    times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = "")) }
+                } else {
+                    times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = text)) }
+                }
+            }
+            return lines.sortedBy { it.timeMs }
+        }
     }
 }

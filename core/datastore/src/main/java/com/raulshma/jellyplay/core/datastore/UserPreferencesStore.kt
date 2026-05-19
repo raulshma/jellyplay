@@ -99,6 +99,10 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
         val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
         val CHANNEL_MIX_ENABLED = stringPreferencesKey("channel_mix_enabled")
+        val AUDIO_GAPLESS_ENABLED = stringPreferencesKey("audio_gapless_enabled")
+        val AUDIO_CROSSFADE_DURATION_MS = stringPreferencesKey("audio_crossfade_duration_ms")
+        val SLEEP_TIMER_DURATION_MS = stringPreferencesKey("sleep_timer_duration_ms")
+        val SLEEP_TIMER_END_OF_EPISODE = stringPreferencesKey("sleep_timer_end_of_episode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -225,6 +229,10 @@ class UserPreferencesStore @Inject constructor(
                 ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
             } catch (_: Exception) { ChannelMixMode.AUTO },
             channelMixEnabled = prefs[Keys.CHANNEL_MIX_ENABLED]?.toBoolean() ?: false,
+            audioGaplessEnabled = prefs[Keys.AUDIO_GAPLESS_ENABLED]?.toBoolean() ?: true,
+            audioCrossfadeDurationMs = prefs[Keys.AUDIO_CROSSFADE_DURATION_MS]?.toLongOrNull() ?: 0L,
+            sleepTimerDurationMs = prefs[Keys.SLEEP_TIMER_DURATION_MS]?.toLongOrNull() ?: 0L,
+            sleepTimerEndOfEpisode = prefs[Keys.SLEEP_TIMER_END_OF_EPISODE]?.toBoolean() ?: false,
         )
     }
 
@@ -521,6 +529,22 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setChannelMixEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setGaplessEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setCrossfadeDurationMs(ms: Long) {
+        context.dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms.toString() }
+    }
+
+    suspend fun setSleepTimerDurationMs(ms: Long) {
+        context.dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms.toString() }
+    }
+
+    suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
