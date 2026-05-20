@@ -211,6 +211,16 @@ private fun MainContent(
 
     val context = LocalContext.current
 
+    LaunchedEffect(viewModel.navigationRequest) {
+        viewModel.navigationRequest.collect { route ->
+            if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
+                navigationState.topLevelRoute.value = route
+            } else {
+                navigator.navigate(route)
+            }
+        }
+    }
+
     val enterPip: () -> Unit = remember(context) {
         {
             (context as? MainActivity)?.enterPipMode()

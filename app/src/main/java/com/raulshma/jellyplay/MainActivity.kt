@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay
 
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -33,17 +34,17 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
 
+    private val viewModel: MainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        val viewModel: MainViewModel by viewModels()
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // Observe shouldAutoEnterPip and update the system-level PiP params.
-        // On Android 12+, setAutoEnterEnabled is a sticky system flag — we must
-        // explicitly toggle it when the engine type changes (ExoPlayer vs MPV/LibVLC).
+        handleIncomingIntent(intent)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {
@@ -97,6 +98,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action ?: return
+        val isShortcutAction = action.startsWith("com.raulshma.jellyplay.action.")
+        if (isShortcutAction) {
+            viewModel.handleShortcutIntent(intent)
+        }
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (playerLifecycleManager.shouldAutoEnterPip.value) {
@@ -127,10 +143,6 @@ class MainActivity : ComponentActivity() {
         }
         playerLifecycleManager.setPipMode(isInPictureInPictureMode)
     }
-
-    // ── Activity lifecycle → direct engine delegation ──
-    // No StateFlow indirection: calls go straight to the engine's
-    // onActivityPause/Resume via PlayerLifecycleManager.
 
     override fun onPause() {
         super.onPause()
