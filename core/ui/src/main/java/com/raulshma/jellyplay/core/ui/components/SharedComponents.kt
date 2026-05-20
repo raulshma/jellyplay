@@ -454,7 +454,7 @@ fun PosterCard(
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -464,7 +464,7 @@ fun PosterCard(
                     Text(
                         text = item.year.toString(),
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
@@ -486,12 +486,12 @@ fun PosterCard(
                     Text(
                         text = "•",
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

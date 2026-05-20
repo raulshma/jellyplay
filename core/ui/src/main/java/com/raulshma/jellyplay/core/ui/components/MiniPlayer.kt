@@ -96,6 +96,17 @@ fun MiniPlayer(
             label = "miniPlayerColor",
         )
 
+        val isDarkSurface = pixelTint.let { c ->
+            (c.red * 0.299f + c.green * 0.587f + c.blue * 0.114f) < 0.45f
+        }
+        val contentTextColor = if (isDarkSurface) Color.White else Color.Black
+        val contentTextColorSecondary = if (isDarkSurface) Color.White.copy(alpha = 0.65f) else Color.Black.copy(alpha = 0.6f)
+        val contentIconTint = if (isDarkSurface) Color.White else Color.Black.copy(alpha = 0.7f)
+        val iconButtonContainer = if (isDarkSurface) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.08f)
+        val iconButtonContent = if (isDarkSurface) Color.White else Color.Black.copy(alpha = 0.8f)
+        val fallbackIconBg = if (isDarkSurface) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f)
+        val fallbackIconTint = if (isDarkSurface) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.4f)
+
         Surface(
             shape = ShapeCache.smoothPill,
             color = animatedColor,
@@ -128,13 +139,13 @@ fun MiniPlayer(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.15f)),
+                            .background(fallbackIconBg),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             Icons.Default.MusicNote,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.7f),
+                            tint = fallbackIconTint,
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -150,7 +161,7 @@ fun MiniPlayer(
                         text = title,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = contentTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 14.sp,
@@ -158,7 +169,7 @@ fun MiniPlayer(
                     Text(
                         text = artist,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = contentTextColorSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 12.sp,
@@ -168,8 +179,8 @@ fun MiniPlayer(
                 AnimatedIconButton(
                     onClick = onPlayPause,
                     size = 40.dp,
-                    containerColor = Color.White.copy(alpha = 0.2f),
-                    contentColor = Color.White,
+                    containerColor = iconButtonContainer,
+                    contentColor = iconButtonContent,
                     iconVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     iconDescription = if (isPlaying) "Pause" else "Play",
                     iconSize = 22.dp,
@@ -178,7 +189,7 @@ fun MiniPlayer(
                 AnimatedIconButton(
                     onClick = onSkipNext,
                     size = 36.dp,
-                    contentColor = Color.White.copy(alpha = 0.8f),
+                    contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
                     iconVector = Icons.Default.SkipNext,
                     iconDescription = "Skip Next",
                     iconSize = 20.dp,

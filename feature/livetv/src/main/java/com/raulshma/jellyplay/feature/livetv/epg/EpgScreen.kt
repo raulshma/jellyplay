@@ -77,11 +77,16 @@ fun EpgScreen(
         networkStatus = networkStatus,
     )
 
-    val backgroundColor = lerp(
-        MaterialTheme.colorScheme.background,
-        Color.Black,
-        0.70f,
-    )
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val backgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(
+            MaterialTheme.colorScheme.background,
+            Color.Black,
+            0.70f,
+        )
+    }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -141,14 +146,14 @@ fun EpgScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                         .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = Color.White.copy(alpha = 0.8f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -158,7 +163,7 @@ fun EpgScreen(
                                     style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                                     status = headerStatus,
@@ -176,7 +181,7 @@ fun EpgScreen(
                         Text(
                             text = "${viewModel.programs.size} programs",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             modifier = Modifier.padding(
                                 start = contentPad,
                                 end = contentPad,
@@ -203,12 +208,12 @@ fun EpgScreen(
                                 Icons.Default.CalendarViewWeek,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
-                                tint = Color.White.copy(alpha = 0.3f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                             )
                             Text(
                                 text = "No program guide available",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                         }
                     }
@@ -251,7 +256,7 @@ private fun ProgramCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -262,14 +267,14 @@ private fun ProgramCard(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             if (program.startDate != null && program.endDate != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${program.startDate} - ${program.endDate}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
             }
             val overview = program.overview
@@ -278,7 +283,7 @@ private fun ProgramCard(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -289,13 +294,13 @@ private fun ProgramCard(
                 Box(
                     modifier = Modifier
                         .clip(ShapeCache.smooth4)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
                         text = officialRating,
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -307,7 +312,7 @@ private fun ProgramCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                     .tvFocusable().clickable(onClick = onRecordClick),
                 contentAlignment = Alignment.Center,
             ) {

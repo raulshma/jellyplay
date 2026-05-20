@@ -77,11 +77,16 @@ fun DvrScreen(
         networkStatus = networkStatus,
     )
 
-    val backgroundColor = lerp(
-        MaterialTheme.colorScheme.background,
-        Color.Black,
-        0.70f,
-    )
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val backgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(
+            MaterialTheme.colorScheme.background,
+            Color.Black,
+            0.70f,
+        )
+    }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -141,14 +146,14 @@ fun DvrScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                         .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = Color.White.copy(alpha = 0.8f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -158,7 +163,7 @@ fun DvrScreen(
                                     style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                                     status = headerStatus,
@@ -187,12 +192,12 @@ fun DvrScreen(
                                 Icons.Default.FiberManualRecord,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
-                                tint = Color.White.copy(alpha = 0.3f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                             )
                             Text(
                                 text = "No scheduled recordings",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                         }
                     }
@@ -212,7 +217,7 @@ fun DvrScreen(
                                 Text(
                                     text = "Series Recordings",
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                 )
                             }
@@ -229,7 +234,7 @@ fun DvrScreen(
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp)
                                         .height(1.dp)
-                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 )
                             }
                         }
@@ -239,7 +244,7 @@ fun DvrScreen(
                                 Text(
                                     text = "Scheduled Recordings",
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                 )
                             }
@@ -267,7 +272,7 @@ private fun TimerCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .tvFocusable().clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -280,7 +285,7 @@ private fun TimerCard(
                     when (timer.status) {
                         DvrTimerStatus.RECORDING -> MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
                         DvrTimerStatus.SCHEDULED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        else -> Color.White.copy(alpha = 0.08f)
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                     }
                 ),
             contentAlignment = Alignment.Center,
@@ -294,7 +299,7 @@ private fun TimerCard(
                 tint = when (timer.status) {
                     DvrTimerStatus.RECORDING -> MaterialTheme.colorScheme.error
                     DvrTimerStatus.SCHEDULED -> MaterialTheme.colorScheme.primary
-                    else -> Color.White.copy(alpha = 0.5f)
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 },
                 modifier = Modifier.size(18.dp),
             )
@@ -308,12 +313,12 @@ private fun TimerCard(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = timer.channelName,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
             val timeText = buildString {
                 timer.startDate?.let { append(it.substringBefore('T')) }
@@ -327,7 +332,7 @@ private fun TimerCard(
                 Text(
                     text = timeText,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                 )
             }
             Spacer(Modifier.height(2.dp))
@@ -342,14 +347,14 @@ private fun TimerCard(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 .tvFocusable().clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = "Cancel recording",
-                tint = Color.White.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -365,7 +370,7 @@ private fun SeriesTimerCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .tvFocusable().clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -393,7 +398,7 @@ private fun SeriesTimerCard(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             val channelName = timer.channelName
             if (channelName != null) {
@@ -401,14 +406,14 @@ private fun SeriesTimerCard(
                 Text(
                     text = channelName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
             }
             Spacer(Modifier.height(2.dp))
             Text(
                 text = if (timer.recordAnyChannel) "Any channel" else channelName ?: "",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
             )
         }
 
@@ -416,14 +421,14 @@ private fun SeriesTimerCard(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 .tvFocusable().clickable { onCancel(timer.id) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = "Cancel series recording",
-                tint = Color.White.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(18.dp),
             )
         }

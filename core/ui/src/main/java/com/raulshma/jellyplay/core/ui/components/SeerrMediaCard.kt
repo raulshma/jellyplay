@@ -397,13 +397,13 @@ fun SeerrMediaCard(
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White.copy(alpha = if (isLoading) 0.5f else 0.9f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLoading) 0.5f else 0.9f),
             )
             if (item.year != null) {
                 Text(
                     text = item.year.toString(),
                     style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = if (isLoading) 0.3f else 0.55f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isLoading) 0.3f else 0.55f),
                 )
             }
         }

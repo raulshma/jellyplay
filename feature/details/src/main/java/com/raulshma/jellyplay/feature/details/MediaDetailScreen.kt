@@ -367,11 +367,17 @@ private fun DetailContent(
         }
     }
 
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
 
-    val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+    val targetBackgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(baseOverlayColor, Color.Black, 0.65f)
+    }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
         animationSpec = tween(600, easing = FancyTransitionEasing),
@@ -774,7 +780,7 @@ private fun DetailContent(
                         text = item?.name ?: "",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color.White.copy(alpha = animatedTitleAlpha),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = animatedTitleAlpha),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
                 },
@@ -796,7 +802,7 @@ private fun DetailContent(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(8.dp),
                             )
                         }
@@ -813,7 +819,7 @@ private fun DetailContent(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -1073,7 +1079,7 @@ private fun MediaInfoSection(
                                     .clip(ShapeCache.smooth12)
                                     .background(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                        else Color.White.copy(alpha = 0.08f)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                     )
                                     .graphicsLayer {
                                         scaleX = optionScale
@@ -1098,14 +1104,14 @@ private fun MediaInfoSection(
                                 Text(
                                     text = option.label,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f),
                                 )
                                 if (option.isDefault && option.index != null) {
                                     Text(
                                         text = "DEFAULT",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White.copy(alpha = 0.65f),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                                         modifier = Modifier.padding(end = 8.dp),
                                     )
                                 }
@@ -1113,7 +1119,7 @@ private fun MediaInfoSection(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -1167,13 +1173,13 @@ private fun QuickInfoPill(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(18.dp),
         )
         Text(
             text = text,
             style = MaterialTheme.typography.titleSmall,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
@@ -1182,7 +1188,7 @@ private fun QuickInfoPill(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
             )
         }
@@ -1199,14 +1205,14 @@ private fun InfoBadge(
             .clip(ShapeCache.smooth4)
             .background(
                 if (highlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                else Color.White.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
             )
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = if (highlight) MaterialTheme.colorScheme.primary else Color.White,
+            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1220,12 +1226,12 @@ private fun SubtitleChip(
 ) {
     val bgColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-        else Color.White.copy(alpha = 0.15f),
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
         animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "subtitleChipBg",
     )
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
         animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "subtitleChipContent",
     )
@@ -1392,13 +1398,13 @@ private fun DetailActionButtons(
                         .fillMaxHeight()
                         .fillMaxWidth(progress)
                         .align(Alignment.CenterStart)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = Color.White)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.size(6.dp))
-                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -1428,7 +1434,7 @@ private fun DetailActionButtons(
                         .weight(1f)
                         .height(48.dp)
                         .clip(ShapeCache.smooth12)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .then(
                             if (isTv) markTvFocusState.focusModifier else Modifier
                         )
@@ -1443,7 +1449,7 @@ private fun DetailActionButtons(
                     Icon(
                         if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 IconButton(
@@ -1452,7 +1458,7 @@ private fun DetailActionButtons(
                         .weight(1f)
                         .height(48.dp)
                         .clip(ShapeCache.smooth12)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .then(
                             if (isTv) favoriteTvFocusState.focusModifier else Modifier
                         )
@@ -1465,7 +1471,7 @@ private fun DetailActionButtons(
                     Icon(
                         if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
+                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 if (!isAudio && detail.mediaSources.isNotEmpty()) {
@@ -1476,7 +1482,7 @@ private fun DetailActionButtons(
                             .weight(1f)
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
-                            .background(Color.White.copy(alpha = 0.15f))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                             .then(
                                 if (isTv) downloadTvFocusState.focusModifier else Modifier
                             )
@@ -1495,7 +1501,7 @@ private fun DetailActionButtons(
                         } else if (isDownloadCompleted) {
                             Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -1548,13 +1554,13 @@ private fun DetailActionButtons(
                             .fillMaxHeight()
                             .fillMaxWidth(progress)
                             .align(Alignment.CenterStart)
-                            .background(Color.White.copy(alpha = 0.15f))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = Color.White)
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.size(8.dp))
-                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -1566,7 +1572,7 @@ private fun DetailActionButtons(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth16)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = markScale; scaleY = markScale }
                     .then(if (isTv) markHFocusState.focusModifier else Modifier)
                     .then(if (isTv) Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16) else Modifier)
@@ -1577,7 +1583,7 @@ private fun DetailActionButtons(
                 Icon(
                     if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                     contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                    tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else Color.White,
+                    tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -1586,7 +1592,7 @@ private fun DetailActionButtons(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth16)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                     .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
                     .then(if (isTv) favoriteHFocusState.focusModifier else Modifier)
                     .then(if (isTv) Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16) else Modifier)
@@ -1595,7 +1601,7 @@ private fun DetailActionButtons(
                 Icon(
                     if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Favorite",
-                    tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
+                    tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -1617,7 +1623,7 @@ private fun DetailActionButtons(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(ShapeCache.smooth16)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                         .then(if (isTv) downloadHFocusState.focusModifier else Modifier)
                         .then(if (isTv) Modifier.tvFocusIndicator(downloadHFocusState, ShapeCache.smooth16) else Modifier)
@@ -1632,7 +1638,7 @@ private fun DetailActionButtons(
                     } else if (dlCompleted) {
                         Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     } else {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
@@ -1718,7 +1724,7 @@ private fun DetailContentBody(
                         Text(
                             text = item.seriesName ?: "Series",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Color.White.copy(alpha = 0.95f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1727,12 +1733,12 @@ private fun DetailContentBody(
                             Text(
                                 text = " › ",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                             Text(
                                 text = season,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color.White.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -1758,7 +1764,7 @@ private fun DetailContentBody(
                         Text(
                             text = episodeContext,
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.88f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(6.dp))
@@ -1770,7 +1776,7 @@ private fun DetailContentBody(
                     style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 item.originalTitle
@@ -1780,7 +1786,7 @@ private fun DetailContentBody(
                         Text(
                             text = originalTitle,
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1795,7 +1801,7 @@ private fun DetailContentBody(
                         Text(
                             text = it.toString(),
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
                     }
                     item.runTimeTicks?.let { ticks ->
@@ -1803,20 +1809,20 @@ private fun DetailContentBody(
                         Text(
                             text = "${minutes}m",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
                     }
                     item.officialRating?.let {
                         Box(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth4)
-                                .background(Color.White.copy(alpha = 0.15f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -1832,7 +1838,7 @@ private fun DetailContentBody(
                             Text(
                                 text = String.format("%.1f", rating),
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
                         }
                     }
@@ -1850,13 +1856,13 @@ private fun DetailContentBody(
                             Box(
                                 modifier = Modifier
                                     .clip(ShapeCache.smooth16)
-                                    .background(Color.White.copy(alpha = 0.18f))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
                                     .padding(horizontal = 14.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = genre,
                                     style = MaterialTheme.typography.titleSmall,
-                                    color = Color.White.copy(alpha = 0.95f),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                                 )
                             }
                         }
@@ -1908,7 +1914,7 @@ private fun DetailContentBody(
                     Text(
                         text = overview,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
                     )
                 }
@@ -1918,7 +1924,7 @@ private fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 5) {
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
             if (showSeasons) {
-                CompositionLocalProvider(LocalContentColor provides Color.White) {
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                     SeasonsSection(
                         seriesItem = item,
                         seasons = seasons,
@@ -1949,10 +1955,10 @@ private fun DetailContentBody(
                         text = "Cast & Crew",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(16.dp))
-                        CompositionLocalProvider(LocalContentColor provides Color.White) {
+                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1981,7 +1987,7 @@ private fun DetailContentBody(
                         text = "More Like This",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(16.dp))
                     LazyRow(
@@ -2064,7 +2070,7 @@ private fun SeerrItemsRow(
             text = title,
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             modifier = Modifier.padding(horizontal = 24.dp),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(16.dp))
         LazyRow(
@@ -2141,7 +2147,7 @@ private fun SeasonsSection(
             text = "Seasons",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             modifier = Modifier.padding(horizontal = 24.dp),
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(Modifier.height(16.dp))
@@ -2155,8 +2161,8 @@ private fun SeasonsSection(
         ) {
             itemsIndexed(seasons, key = { _, it -> it.id }, contentType = { _, _ -> "season" }) { index, season ->
                 val isSelected = index == selectedSeasonIndex
-                val targetColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f)
-                val targetContentColor = if (isSelected) Color.Black else Color.White
+                val targetColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+                val targetContentColor = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface
                 val surfaceColor by animateColorAsState(
                     targetValue = targetColor,
                     animationSpec = tween(250, easing = FancyTransitionEasing),
@@ -2254,7 +2260,7 @@ private fun SeasonsSection(
                             .padding(vertical = 24.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No episodes available", color = Color.White.copy(alpha = 0.6f))
+                        Text("No episodes available", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
             }
@@ -2275,13 +2281,13 @@ private fun EpisodeCardSkeleton() {
         label = "shimmerAlpha",
     )
 
-    val shimmerColor = Color.White.copy(alpha = shimmerAlpha)
+    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)
 
     Column(
         modifier = Modifier
             .width(280.dp)
             .clip(ShapeCache.smooth16)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
     ) {
         Box(
             modifier = Modifier
@@ -2365,7 +2371,7 @@ private fun EpisodeCard(
             .clip(ShapeCache.smooth16)
             .background(
                 if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else Color.White.copy(alpha = 0.05f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
             )
             .then(
                 if (isCurrentEpisode) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
@@ -2399,7 +2405,7 @@ private fun EpisodeCard(
             Icon(
                 Icons.Default.PlayArrow,
                 contentDescription = "Play",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .size(48.dp)
                     .graphicsLayer { scaleX = playScale; scaleY = playScale }
@@ -2436,7 +2442,7 @@ private fun EpisodeCard(
                 },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -2462,19 +2468,19 @@ private fun EpisodeCard(
                     Text(
                         text = "•",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     )
                     Text(
                         text = totalTime,
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     )
                 }
             } else if (totalTime != null) {
                 Text(
                     text = totalTime,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -2483,7 +2489,7 @@ private fun EpisodeCard(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)
@@ -2554,10 +2560,10 @@ private fun PersonItem(
 fun SkeletonDetailBody() {
     Column(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
         Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(ShapeCache.smooth8).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
         Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(ShapeCache.smooth4).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(ShapeCache.smooth4).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
         Spacer(modifier = Modifier.height(24.dp))
-        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(ShapeCache.smooth8).background(Color.White.copy(alpha = 0.1f)))
+        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
     }
 }

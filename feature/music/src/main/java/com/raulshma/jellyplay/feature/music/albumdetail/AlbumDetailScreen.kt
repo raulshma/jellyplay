@@ -131,6 +131,7 @@ private fun AlbumDetailContent(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
+                            Color.Black.copy(alpha = 0.3f),
                             Color.Transparent,
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                             MaterialTheme.colorScheme.surface,

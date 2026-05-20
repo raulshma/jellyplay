@@ -80,7 +80,7 @@ fun SmartPlaylistsScreen(
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
 
-    val backgroundColor = Color.Black.copy(alpha = 0.95f)
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     Box(
         modifier = Modifier
@@ -110,7 +110,7 @@ fun SmartPlaylistsScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                     com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -164,7 +164,7 @@ private fun PlaylistCard(
             .fillMaxWidth()
             .tvFocusable().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.1f),
+            containerColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
         ),
     ) {
         Row(
@@ -176,7 +176,7 @@ private fun PlaylistCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                 modifier = Modifier.size(40.dp),
             )
             Spacer(Modifier.width(16.dp))
@@ -184,13 +184,13 @@ private fun PlaylistCard(
                 Text(
                     text = playlist.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 if (playlist.criteria.isNotEmpty()) {
                     Text(
                         text = playlist.criteria.joinToString { it.type.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     )
                 }
             }

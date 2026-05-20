@@ -285,13 +285,18 @@ fun HomeScreen(
                 }
         }
 
+        val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
         val artworkColors = if (viewModel.dynamicTheming && !backdropUrl.isNullOrBlank()) {
             com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(backdropUrl)
         } else null
         val baseOverlayColor = artworkColors?.darkMuted
             ?: artworkColors?.dominant
-            ?: Color(0xFF1A1A2E)
-        val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+            ?: if (isLightTheme) MaterialTheme.colorScheme.background else Color(0xFF1A1A2E)
+        val targetBackgroundColor = if (isLightTheme) {
+            MaterialTheme.colorScheme.background
+        } else {
+            lerp(baseOverlayColor, Color.Black, 0.65f)
+        }
         val backgroundColor by animateColorAsState(
             targetValue = targetBackgroundColor,
             animationSpec = tween(600, easing = FancyTransitionEasing),
@@ -393,7 +398,7 @@ fun HomeScreen(
                             Text(
                                 if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             )
                         }
                     } else {
@@ -423,7 +428,7 @@ fun HomeScreen(
                                     ArtworkThemeWrapper(
                                         imageUrl = backdropUrl,
                                         dynamicTheming = viewModel.dynamicTheming,
-                                        darkTheme = true,
+                                        darkTheme = !isLightTheme,
                                         oledMode = viewModel.oledMode,
                                     ) {
                                         AnimatedHeroHeader(
@@ -606,6 +611,12 @@ fun HomeScreen(
                 animationSpec = tween(400, easing = FancyTransitionEasing),
                 label = "borderAlpha",
             )
+            val appBarIconColor by animateColorAsState(
+                targetValue = if (appBarCollapsed) MaterialTheme.colorScheme.onSurface else Color.White,
+                animationSpec = tween(400, easing = FancyTransitionEasing),
+                label = "appBarIconColor",
+            )
+            val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
 
             Box(
                 modifier = Modifier
@@ -654,7 +665,7 @@ fun HomeScreen(
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = "Surprise Me",
-                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
+                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else appBarIconColorFaded,
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -667,7 +678,7 @@ fun HomeScreen(
                                 Icon(
                                     Icons.Default.Group,
                                     contentDescription = "SyncPlay",
-                                    tint = Color.White.copy(alpha = 0.9f),
+                                    tint = appBarIconColorFaded,
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -689,7 +700,7 @@ fun HomeScreen(
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Downloads",
-                                        tint = Color.White.copy(alpha = 0.9f),
+                                        tint = appBarIconColorFaded,
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
@@ -703,7 +714,7 @@ fun HomeScreen(
                                 Icon(
                                     Icons.Default.Settings,
                                     contentDescription = "Settings",
-                                    tint = Color.White.copy(alpha = 0.9f),
+                                    tint = appBarIconColorFaded,
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -720,9 +731,9 @@ fun HomeScreen(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.White.copy(alpha = borderAlpha),
-                                    Color.White.copy(alpha = borderAlpha * 1.5f),
-                                    Color.White.copy(alpha = borderAlpha),
+                                    appBarIconColor.copy(alpha = borderAlpha),
+                                    appBarIconColor.copy(alpha = borderAlpha * 1.5f),
+                                    appBarIconColor.copy(alpha = borderAlpha),
                                     Color.Transparent,
                                 ),
                             )
@@ -915,7 +926,7 @@ private fun HeroHeader(
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -930,7 +941,7 @@ private fun HeroHeader(
                     Text(
                         text = it.toString(),
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     )
                 }
                 item.runTimeTicks?.let { ticks ->
@@ -938,20 +949,20 @@ private fun HeroHeader(
                     Text(
                         text = "${minutes}m",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     )
                 }
                 item.officialRating?.let {
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smooth4)
-                            .background(Color.White.copy(alpha = 0.2f))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
                             text = it,
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -967,7 +978,7 @@ private fun HeroHeader(
                         Text(
                             text = String.format("%.1f", rating),
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         )
                     }
                 }
@@ -983,13 +994,13 @@ private fun HeroHeader(
                         Box(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth16)
-                                .background(Color.White.copy(alpha = 0.15f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                         ) {
                             Text(
                                 text = genre,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.9f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                             )
                         }
                     }
@@ -1001,7 +1012,7 @@ private fun HeroHeader(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1055,7 +1066,7 @@ private fun HeroHeader(
                         .height(48.dp)
                         .tvFocusIndicator(heroTvFocusState, ShapeCache.smooth24)
                         .clip(ShapeCache.smooth24)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                         .focusRequester(heroDetailsFocusRequester)
                         .onFocusChanged { focusState ->
                             onFocusChange(focusState.isFocused || focusState.hasFocus)
@@ -1072,7 +1083,7 @@ private fun HeroHeader(
                     Text(
                         "Details",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -1105,7 +1116,7 @@ private fun ContinueWatchingRow(
             text = title,
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
                    else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         LazyRow(
@@ -1215,7 +1226,7 @@ private fun WideMediaCard(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.White.copy(alpha = brightnessOverlay))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
                     )
                 }
 
@@ -1257,7 +1268,7 @@ private fun WideMediaCard(
                             Text(
                                 text = "%.1f".format(item.communityRating),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -1287,7 +1298,7 @@ private fun WideMediaCard(
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1295,7 +1306,7 @@ private fun WideMediaCard(
                 Text(
                     text = item.seriesName!!,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1308,7 +1319,7 @@ private fun WideMediaCard(
                         Text(
                             text = item.year.toString(),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.55f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                         )
                     }
                     val isSeries = item.mediaType == MediaType.SERIES
@@ -1326,12 +1337,12 @@ private fun WideMediaCard(
                         Text(
                             text = "•",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.4f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         )
                         Text(
                             text = if (remainingTime != null) "$timeText left" else timeText,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (remainingTime != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                            color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                         )
                     }
                 }
@@ -1361,7 +1372,7 @@ private fun HomeMediaRow(
             text = title,
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
                    else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
         LazyRow(
