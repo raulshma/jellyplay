@@ -37,17 +37,19 @@ class SeerrApiClientImpl @Inject constructor(
         return this.header("X-Api-Key", apiKey)
     }
 
-    private suspend fun executeRequest(request: Request): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext Result.failure(
-                Exception("Empty response body (HTTP ${response.code})")
-            )
-            if (!response.isSuccessful) {
-                val errorMsg = parseErrorMessage(response.code, body)
-                return@withContext Result.failure(Exception(errorMsg))
+    private suspend fun executeRequest(request: Request): Result<String> {
+        return try {
+            withContext(Dispatchers.IO) {
+                val response = okHttpClient.newCall(request).execute()
+                val body = response.body?.string() ?: return@withContext Result.failure<String>(
+                    Exception("Empty response body (HTTP ${response.code})")
+                )
+                if (!response.isSuccessful) {
+                    val errorMsg = parseErrorMessage(response.code, body)
+                    return@withContext Result.failure(Exception(errorMsg))
+                }
+                Result.success(body)
             }
-            Result.success(body)
         } catch (e: Exception) {
             Result.failure(Exception(formatNetworkError(e)))
         }

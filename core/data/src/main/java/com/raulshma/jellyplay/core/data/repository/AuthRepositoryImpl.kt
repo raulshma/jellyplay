@@ -105,14 +105,11 @@ class AuthRepositoryImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> {
-        val serverFromDb = serverDao.getAllServers().first()
-            .firstOrNull { server ->
-                val normalizedAddress = serverAddress.trim().trimEnd('/').let {
-                    if (it.startsWith("http://") || it.startsWith("https://")) it
-                    else "https://$it"
-                }
-                server.address == normalizedAddress
-            }
+        val normalizedAddress = serverAddress.trim().trimEnd('/').let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it
+            else "https://$it"
+        }
+        val serverFromDb = serverDao.getServerByAddress(normalizedAddress)
 
         val existingServerInfo = serverFromDb?.toServerInfo()
 
@@ -180,15 +177,11 @@ class AuthRepositoryImpl @Inject constructor(
         serverAddress: String,
         secret: String,
     ): Result<UserInfo> {
-        val serverFromDb = serverDao.getAllServers().first()
-            .firstOrNull { server ->
-                val serverAddr = server.address.trim().trimEnd('/')
-                val normalizedAddress = serverAddress.trim().trimEnd('/').let {
-                    if (it.startsWith("http://") || it.startsWith("https://")) it
-                    else "https://$it"
-                }
-                serverAddr == normalizedAddress
-            }
+        val normalizedAddress = serverAddress.trim().trimEnd('/').let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it
+            else "https://$it"
+        }
+        val serverFromDb = serverDao.getServerByAddress(normalizedAddress)
 
         val existingServerInfo = serverFromDb?.toServerInfo()
 

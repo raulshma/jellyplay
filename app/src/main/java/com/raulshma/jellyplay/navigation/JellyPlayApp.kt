@@ -48,7 +48,6 @@ import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -195,19 +194,19 @@ private fun MainContent(
     var lastNavigatedAt by remember { mutableStateOf(0L) }
 
     val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
-    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsState()
-    val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsState()
-    val audioTitle by audioPlaybackManager.title.collectAsState()
-    val audioArtist by audioPlaybackManager.artist.collectAsState()
-    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsState()
+    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+    val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
+    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     val showMiniPlayer = isAudioPlaying && !isAudioPlayerScreen && !isPlayerScreen
 
     val videoMiniPlayerState = viewModel.videoMiniPlayerState
-    val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsState()
-    val videoMiniTitle by videoMiniPlayerState.title.collectAsState()
-    val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsState()
-    val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsState()
-    val videoMiniItemId by videoMiniPlayerState.itemId.collectAsState()
+    val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsStateWithLifecycle()
+    val videoMiniTitle by videoMiniPlayerState.title.collectAsStateWithLifecycle()
+    val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsStateWithLifecycle()
+    val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsStateWithLifecycle()
+    val videoMiniItemId by videoMiniPlayerState.itemId.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 

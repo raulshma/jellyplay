@@ -48,10 +48,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -338,7 +337,7 @@ private fun DetailContent(
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 ) {
     val item = detail?.item
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
@@ -356,8 +355,11 @@ private fun DetailContent(
     }
     val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
+    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
     val scrollOffset by remember {
-        derivedStateOf { scrollState.value.toFloat() }
+        derivedStateOf {
+            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
+        }
     }
     val scrollFraction by remember {
         derivedStateOf {
@@ -487,14 +489,15 @@ private fun DetailContent(
             )
         }
 
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
-                .verticalScroll(scrollState),
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
         ) {
-            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
+            item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
+            item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -756,6 +759,7 @@ private fun DetailContent(
                         }
                     }
                 }
+            }
             }
         }
 

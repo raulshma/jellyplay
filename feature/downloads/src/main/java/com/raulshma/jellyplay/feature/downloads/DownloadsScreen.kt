@@ -141,10 +141,10 @@ fun DownloadsScreen(
                     AnimatedVisibility(
                         visible = visible.value,
                         enter = fadeIn(
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 50, easing = AlphaEasing)
+                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = AlphaEasing)
                         ) + slideInVertically(
                             initialOffsetY = { it / 10 },
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 50, easing = FancyTransitionEasing),
+                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = FancyTransitionEasing),
                         ),
                     ) {
                         DownloadItemRow(

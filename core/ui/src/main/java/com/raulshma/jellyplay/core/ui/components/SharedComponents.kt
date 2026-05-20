@@ -112,7 +112,7 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)
             try {
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
-                    .size(CoilSize(128, 128))
+                    .size(CoilSize(64, 64))
                     .allowHardware(false)
                     .build()
                 val result = loader.execute(request)

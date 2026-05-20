@@ -242,11 +242,19 @@ class AudioPlayerViewModel @Inject constructor(
         fetchBlurHash(itemId)
     }
 
+    private val blurHashCache = mutableMapOf<String, String?>()
+
     private fun fetchBlurHash(itemId: String) {
+        if (blurHashCache.containsKey(itemId)) {
+            albumArtBlurHash = blurHashCache[itemId]
+            return
+        }
         viewModelScope.launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    albumArtBlurHash = detail.item.blurHashes.primary
+                    val hash = detail.item.blurHashes.primary
+                    blurHashCache[itemId] = hash
+                    albumArtBlurHash = hash
                 }
         }
     }

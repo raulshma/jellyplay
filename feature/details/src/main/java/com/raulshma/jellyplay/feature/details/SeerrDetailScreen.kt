@@ -13,12 +13,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -232,7 +233,7 @@ private fun SeerrDetailContent(
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
 ) {
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
@@ -251,7 +252,12 @@ private fun SeerrDetailContent(
     }
     val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
-    val scrollOffset by remember { derivedStateOf { scrollState.value.toFloat() } }
+    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
+    val scrollOffset by remember {
+        derivedStateOf {
+            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
+        }
+    }
     val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
 
     val baseOverlayColor = artworkColors?.darkMuted
@@ -338,14 +344,15 @@ private fun SeerrDetailContent(
             )
         }
 
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
-                .verticalScroll(scrollState),
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
         ) {
-            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
+            item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
+            item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -527,6 +534,7 @@ private fun SeerrDetailContent(
                         )
                     }
                 }
+            }
             }
         }
 

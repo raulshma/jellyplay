@@ -136,42 +136,40 @@ class JellyfinApiClientImpl @Inject constructor(
         password: String,
     ): Result<UserInfo> = apiResult {
         _currentServer.value = serverInfo
-        withContext(Dispatchers.IO) {
-            val client = jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateUserByName(
-                org.jellyfin.sdk.model.api.AuthenticateUserByName(
-                    username = username,
-                    pw = password,
-                )
-            ).content
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val authenticatedClient = jellyfin.createApi(
-                baseUrl = serverInfo.address,
-                accessToken = accessTokenValue,
+        val client = jellyfin.createApi(serverInfo.address)
+        val authResult = client.userApi.authenticateUserByName(
+            org.jellyfin.sdk.model.api.AuthenticateUserByName(
+                username = username,
+                pw = password,
             )
-            api = authenticatedClient
-            val userDto = authResult.user ?: throw Exception("Authentication failed")
-            val policy = userDto.policy
-            val userInfo = UserInfo(
-                id = userDto.id.toString(),
-                name = userDto.name ?: username,
-                serverAddress = serverInfo.address,
-                accessToken = accessTokenValue,
-                isAdmin = policy?.isAdministrator ?: false,
-                maxParentalAgeRating = policy?.maxParentalRating,
-                primaryImageTag = userDto.primaryImageTag,
-                enabledFolderIds = if (policy?.enableAllFolders == false) {
-                    policy.enabledFolders?.map { it.toString() } ?: emptyList()
-                } else emptyList(),
-            )
-            _currentUser.value = userInfo
-            _currentServer.value = serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            )
-            userInfo
-        }
+        ).content
+        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+        val authenticatedClient = jellyfin.createApi(
+            baseUrl = serverInfo.address,
+            accessToken = accessTokenValue,
+        )
+        api = authenticatedClient
+        val userDto = authResult.user ?: throw Exception("Authentication failed")
+        val policy = userDto.policy
+        val userInfo = UserInfo(
+            id = userDto.id.toString(),
+            name = userDto.name ?: username,
+            serverAddress = serverInfo.address,
+            accessToken = accessTokenValue,
+            isAdmin = policy?.isAdministrator ?: false,
+            maxParentalAgeRating = policy?.maxParentalRating,
+            primaryImageTag = userDto.primaryImageTag,
+            enabledFolderIds = if (policy?.enableAllFolders == false) {
+                policy.enabledFolders?.map { it.toString() } ?: emptyList()
+            } else emptyList(),
+        )
+        _currentUser.value = userInfo
+        _currentServer.value = serverInfo.copy(
+            userId = userInfo.id,
+            accessToken = userInfo.accessToken,
+            isConnected = true,
+        )
+        userInfo
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
@@ -194,35 +192,29 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            client.quickConnectApi.getQuickConnectEnabled().content
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        client.quickConnectApi.getQuickConnectEnabled().content
     }
 
     override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            val result = client.quickConnectApi.initiateQuickConnect().content
-            QuickConnectInfo(
-                secret = result.secret,
-                code = result.code,
-            )
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        val result = client.quickConnectApi.initiateQuickConnect().content
+        QuickConnectInfo(
+            secret = result.secret,
+            code = result.code,
+        )
     }
 
     override suspend fun getQuickConnectState(secret: String): Result<QuickConnectState> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            val result = client.quickConnectApi.getQuickConnectState(secret).content
-            QuickConnectState(
-                authenticated = result.authenticated,
-                secret = result.secret,
-            )
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        val result = client.quickConnectApi.getQuickConnectState(secret).content
+        QuickConnectState(
+            authenticated = result.authenticated,
+            secret = result.secret,
+        )
     }
 
     override suspend fun authenticateWithQuickConnect(
@@ -230,39 +222,37 @@ class JellyfinApiClientImpl @Inject constructor(
         secret: String,
     ): Result<UserInfo> = apiResult {
         _currentServer.value = serverInfo
-        withContext(Dispatchers.IO) {
-            val client = jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateWithQuickConnect(
-                org.jellyfin.sdk.model.api.QuickConnectDto(secret = secret)
-            ).content
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val authenticatedClient = jellyfin.createApi(
-                baseUrl = serverInfo.address,
-                accessToken = accessTokenValue,
-            )
-            api = authenticatedClient
-            val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-            val policy = userDto.policy
-            val userInfo = UserInfo(
-                id = userDto.id.toString(),
-                name = userDto.name ?: "",
-                serverAddress = serverInfo.address,
-                accessToken = accessTokenValue,
-                isAdmin = policy?.isAdministrator ?: false,
-                maxParentalAgeRating = policy?.maxParentalRating,
-                primaryImageTag = userDto.primaryImageTag,
-                enabledFolderIds = if (policy?.enableAllFolders == false) {
-                    policy.enabledFolders?.map { it.toString() } ?: emptyList()
-                } else emptyList(),
-            )
-            _currentUser.value = userInfo
-            _currentServer.value = serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            )
-            userInfo
-        }
+        val client = jellyfin.createApi(serverInfo.address)
+        val authResult = client.userApi.authenticateWithQuickConnect(
+            org.jellyfin.sdk.model.api.QuickConnectDto(secret = secret)
+        ).content
+        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+        val authenticatedClient = jellyfin.createApi(
+            baseUrl = serverInfo.address,
+            accessToken = accessTokenValue,
+        )
+        api = authenticatedClient
+        val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
+        val policy = userDto.policy
+        val userInfo = UserInfo(
+            id = userDto.id.toString(),
+            name = userDto.name ?: "",
+            serverAddress = serverInfo.address,
+            accessToken = accessTokenValue,
+            isAdmin = policy?.isAdministrator ?: false,
+            maxParentalAgeRating = policy?.maxParentalRating,
+            primaryImageTag = userDto.primaryImageTag,
+            enabledFolderIds = if (policy?.enableAllFolders == false) {
+                policy.enabledFolders?.map { it.toString() } ?: emptyList()
+            } else emptyList(),
+        )
+        _currentUser.value = userInfo
+        _currentServer.value = serverInfo.copy(
+            userId = userInfo.id,
+            accessToken = userInfo.accessToken,
+            isConnected = true,
+        )
+        userInfo
     }
 
     override suspend fun getHomeSections(): Result<List<HomeSection>> = apiResult {

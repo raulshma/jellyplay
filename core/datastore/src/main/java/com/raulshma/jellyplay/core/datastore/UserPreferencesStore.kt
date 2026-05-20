@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -295,7 +296,7 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
             dreamShowTitle = prefs[Keys.DREAM_SHOW_TITLE]?.toBoolean() ?: true,
         )
-    }
+    }.distinctUntilChanged()
 
     val activeServerId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_SERVER_ID] }
     val activeUserId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_USER_ID] }

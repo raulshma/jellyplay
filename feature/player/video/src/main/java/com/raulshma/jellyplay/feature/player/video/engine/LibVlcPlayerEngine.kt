@@ -575,7 +575,7 @@ class LibVlcPlayerEngine(
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch {
+        val ticker = engineScope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(500)
                 trySend(currentPositionMs)

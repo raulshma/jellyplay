@@ -34,7 +34,7 @@ fun MediaImage(
     fallbackUrls: List<String> = emptyList(),
     blurHash: String? = null,
     crossfade: Boolean = true,
-    size: CoilSize = CoilSize(1024, 1024),
+    size: CoilSize = CoilSize(512, 512),
 ) {
     val context = LocalContext.current
     val imageRequest = remember(url, size, crossfade) {
