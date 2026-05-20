@@ -72,6 +72,8 @@ class HomeViewModel @Inject constructor(
         private set
     var dynamicTheming by mutableStateOf(true)
         private set
+    var oledMode by mutableStateOf(false)
+        private set
 
     // Seerr Discover state
     var discoverSections by mutableStateOf<Map<DiscoverSectionType, List<SeerrSearchItem>>>(emptyMap())
@@ -123,6 +125,7 @@ class HomeViewModel @Inject constructor(
                 kidsModeEnabled = prefs.kidsModeEnabled
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
+                oledMode = prefs.oledMode
             }
         }
 

@@ -419,6 +419,7 @@ fun HomeScreen(
                                         imageUrl = backdropUrl,
                                         dynamicTheming = viewModel.dynamicTheming,
                                         darkTheme = true,
+                                        oledMode = viewModel.oledMode,
                                     ) {
                                         AnimatedHeroHeader(
                                             featuredItem = featuredItem,

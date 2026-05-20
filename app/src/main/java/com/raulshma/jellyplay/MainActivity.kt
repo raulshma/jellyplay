@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.components.PinLockScreen
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
@@ -69,8 +71,16 @@ class MainActivity : ComponentActivity() {
                 preferences.pinHash != null &&
                 !isPinUnlocked
 
+            val darkTheme = when (preferences.themeMode) {
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+
             JellyPlayTheme(
+                darkTheme = darkTheme,
                 dynamicColor = preferences.dynamicTheming && !preferences.kidsModeEnabled,
+                oledMode = preferences.oledMode,
                 kidsMode = preferences.kidsModeEnabled,
                 isTv = isTv(),
             ) {

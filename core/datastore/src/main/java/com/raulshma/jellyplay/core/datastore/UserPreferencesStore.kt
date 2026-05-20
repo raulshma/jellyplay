@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,8 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val OLED_MODE = stringPreferencesKey("oled_mode")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val MAX_CACHE_SIZE_MB = stringPreferencesKey("max_cache_size_mb")
@@ -198,6 +201,10 @@ class UserPreferencesStore @Inject constructor(
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = readMediaStreamSelections(prefs),
             dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,
+            themeMode = try {
+                ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
+            } catch (_: Exception) { ThemeMode.SYSTEM },
+            oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
             maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 500,
@@ -333,6 +340,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDynamicTheming(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled.toString() }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setOledMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.OLED_MODE] = enabled.toString() }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {

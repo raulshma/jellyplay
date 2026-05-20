@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -87,6 +88,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setDynamicTheming(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setDynamicTheming(enabled) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { preferencesStore.setThemeMode(mode) }
+    }
+
+    fun setOledMode(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setOledMode(enabled) }
     }
 
     fun setPreferredPlayer(playerType: PlayerType) {
