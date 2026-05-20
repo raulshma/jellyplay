@@ -178,6 +178,7 @@ fun MediaDetailScreen(
     ArtworkThemeWrapper(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
+        darkTheme = true,
     ) {
         val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
 

@@ -197,383 +197,390 @@ fun SeerrRequestDialog(
         shape = ShapeCache.smooth20,
         containerColor = Color(0xFF1A1A2E).copy(alpha = 0.95f),
     ) {
-        LazyColumn(
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        val colorScheme = MaterialTheme.colorScheme
+        val typography = MaterialTheme.typography
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
         ) {
-            // ── Header ──
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        imageVector = if (isTv) Icons.Default.Tv else Icons.Default.Movie,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+            LazyColumn(
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // ── Header ──
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = if (isTv) Icons.Default.Tv else Icons.Default.Movie,
+                            contentDescription = null,
+                            tint = colorScheme.primary,
+                            modifier = Modifier.size(24.dp),
                         )
-                        item.year?.let {
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = it.toString(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.5f),
+                                text = item.displayName,
+                                style = typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
+                            item.year?.let {
+                                Text(
+                                    text = it.toString(),
+                                    style = typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // ── Success state ──
-            item {
-                AnimatedVisibility(
-                    visible = requestSuccess == true,
-                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
+                // ── Success state ──
+                item {
+                    AnimatedVisibility(
+                        visible = requestSuccess == true,
+                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
+                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
                     ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = "Request submitted successfully!",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF4CAF50),
-                        )
-                    }
-                }
-            }
-
-            // ── Error state ──
-            item {
-                AnimatedVisibility(
-                    visible = requestError != null,
-                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = requestError ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-
-            // ── Loading progress bar ──
-            item {
-                AnimatedVisibility(
-                    visible = isRequesting,
-                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
-                ) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            // ── Request options (only show when not in success/error state) ──
-            if (requestSuccess == null && requestError == null) {
-                // Show loading indicator while service details are being fetched
-                if (isLoadingServices) {
-                    item {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
                         ) {
-                            CircularProgressIndicator(
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
                                 modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Loading options…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.6f),
+                                text = "Request submitted successfully!",
+                                style = typography.bodyMedium,
+                                color = Color(0xFF4CAF50),
                             )
                         }
                     }
                 }
 
-                // Destination Server
-                val serverNames = if (isTv) {
-                    sonarrServers.map { server -> server.server?.name ?: server.name }
-                } else {
-                    radarrServers.map { server -> server.server?.name ?: server.name }
-                }
-                if (serverNames.isNotEmpty()) {
-                    item {
-                        LabeledDropdown(
-                            label = if (isTv) "Destination Server (Sonarr)" else "Destination Server (Radarr)",
-                            options = serverNames,
-                            selectedIndex = selectedServerIndex,
-                            onSelected = {
-                                selectedServerIndex = it
-                                selectedTags.clear()
-                            },
-                        )
-                    }
-                }
-
-                // Quality Profile
-                if (!currentProfiles.isNullOrEmpty()) {
-                    item {
-                        LabeledDropdown(
-                            label = "Quality Profile",
-                            options = currentProfiles.map { it.name },
-                            selectedIndex = selectedProfileIndex.coerceAtMost(currentProfiles.size - 1),
-                            onSelected = { selectedProfileIndex = it },
-                        )
-                    }
-                }
-
-                // Root Folder
-                if (!currentRootFolders.isNullOrEmpty()) {
-                    item {
-                        LabeledDropdown(
-                            label = "Root Folder",
-                            options = currentRootFolders.map { it.path },
-                            selectedIndex = selectedRootFolderIndex.coerceAtMost(currentRootFolders.size - 1),
-                            onSelected = { selectedRootFolderIndex = it },
-                        )
-                    }
-                }
-
-                // Tags
-                if (!currentTags.isNullOrEmpty()) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ── Error state ──
+                item {
+                    AnimatedVisibility(
+                        visible = requestError != null,
+                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
+                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = null,
+                                tint = colorScheme.error,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Tags",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White.copy(alpha = 0.7f),
+                                text = requestError ?: "",
+                                style = typography.bodySmall,
+                                color = colorScheme.error,
                             )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                currentTags.forEach { tag ->
-                                    val isSelected = tag.id in selectedTags
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = {
-                                            if (isSelected) selectedTags.remove(tag.id)
-                                            else selectedTags.add(tag.id)
-                                        },
-                                        label = {
-                                            Text(
-                                                text = tag.label,
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                                            containerColor = Color.White.copy(alpha = 0.08f),
-                                            labelColor = Color.White.copy(alpha = 0.6f),
-                                        ),
-                                        border = null,
-                                    )
-                                }
-                            }
                         }
                     }
                 }
 
-                // Season Selection (TV only)
-                if (isTv) {
-                    if (seasons.isNotEmpty()) {
+                // ── Loading progress bar ──
+                item {
+                    AnimatedVisibility(
+                        visible = isRequesting,
+                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
+                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                    ) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = colorScheme.primary,
+                        )
+                    }
+                }
+
+                // ── Request options (only show when not in success/error state) ──
+                if (requestSuccess == null && requestError == null) {
+                    // Show loading indicator while service details are being fetched
+                    if (isLoadingServices) {
                         item {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectAllSeasons = !selectAllSeasons
-                                        selectedSeasonNumbers.clear()
-                                        if (!selectAllSeasons) {
-                                            selectedSeasonNumbers.addAll(availableSeasonNumbers)
-                                        }
-                                    },
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
                             ) {
-                                Switch(
-                                    checked = selectAllSeasons,
-                                    onCheckedChange = {
-                                        selectAllSeasons = it
-                                        selectedSeasonNumbers.clear()
-                                        if (!it) {
-                                            selectedSeasonNumbers.addAll(availableSeasonNumbers)
-                                        }
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                    modifier = Modifier.height(24.dp),
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = colorScheme.primary,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
-                                    text = "All Seasons",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium,
+                                    text = "Loading options…",
+                                    style = typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.6f),
                                 )
                             }
                         }
-                        items(seasons.sortedBy { it.seasonNumber }, key = { it.seasonNumber }, contentType = { "season" }) { season ->
-                            val seasonNumber = season.seasonNumber
-                            val isSelected = selectAllSeasons || seasonNumber in selectedSeasonNumbers
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (selectAllSeasons) {
-                                            selectAllSeasons = false
-                                            selectedSeasonNumbers.clear()
-                                            selectedSeasonNumbers.addAll(availableSeasonNumbers)
-                                        }
-                                        if (isSelected) selectedSeasonNumbers.remove(seasonNumber)
-                                        else selectedSeasonNumbers.add(seasonNumber)
-                                    }
-                                    .padding(vertical = 4.dp),
-                            ) {
-                                Checkbox(
-                                    checked = isSelected,
-                                    onCheckedChange = {
-                                        if (selectAllSeasons) {
-                                            selectAllSeasons = false
-                                            selectedSeasonNumbers.clear()
-                                            selectedSeasonNumbers.addAll(availableSeasonNumbers)
-                                        }
-                                        if (it == true) selectedSeasonNumbers.add(seasonNumber)
-                                        else selectedSeasonNumbers.remove(seasonNumber)
-                                    },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = season.name.ifBlank { "Season ${season.seasonNumber}" },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White,
-                                    )
-                                    Text(
-                                        text = "${season.episodeCount} episodes",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.5f),
-                                    )
-                                }
-                            }
-                        }
-                    } else if (isLoadingServices) {
-                        // Show loading while services/seasons are being fetched
+                    }
+
+                    // Destination Server
+                    val serverNames = if (isTv) {
+                        sonarrServers.map { server -> server.server?.name ?: server.name }
+                    } else {
+                        radarrServers.map { server -> server.server?.name ?: server.name }
+                    }
+                    if (serverNames.isNotEmpty()) {
                         item {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Loading seasons…",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.5f),
+                            LabeledDropdown(
+                                label = if (isTv) "Destination Server (Sonarr)" else "Destination Server (Radarr)",
+                                options = serverNames,
+                                selectedIndex = selectedServerIndex,
+                                onSelected = {
+                                    selectedServerIndex = it
+                                    selectedTags.clear()
+                                },
                             )
                         }
                     }
-                }
-            }
 
-            // ── Action Buttons ──
-            item {
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (requestSuccess == true || requestError != null) {
-                        TextButton(onClick = onDismiss) {
-                            Text(
-                                if (requestSuccess == true) "Done" else "Close",
-                                color = Color.White,
+                    // Quality Profile
+                    if (!currentProfiles.isNullOrEmpty()) {
+                        item {
+                            LabeledDropdown(
+                                label = "Quality Profile",
+                                options = currentProfiles.map { it.name },
+                                selectedIndex = selectedProfileIndex.coerceAtMost(currentProfiles.size - 1),
+                                onSelected = { selectedProfileIndex = it },
                             )
                         }
-                    } else {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            enabled = !isRequesting,
-                            shape = ShapeCache.smooth12,
-                        ) {
-                            Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    }
+
+                    // Root Folder
+                    if (!currentRootFolders.isNullOrEmpty()) {
+                        item {
+                            LabeledDropdown(
+                                label = "Root Folder",
+                                options = currentRootFolders.map { it.path },
+                                selectedIndex = selectedRootFolderIndex.coerceAtMost(currentRootFolders.size - 1),
+                                onSelected = { selectedRootFolderIndex = it },
+                            )
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Button(
-                            onClick = {
-                                val serverId = if (isTv) currentSonarrServer?.id else currentRadarrServer?.id
-                                val profileId = currentProfiles?.getOrNull(selectedProfileIndex)?.id
-                                val rootFolder = currentRootFolders?.getOrNull(selectedRootFolderIndex)?.path
-                                val tags = selectedTags.toList().ifEmpty { null }
+                    }
 
-                                val resolvedSeasons = if (isTv) {
-                                    if (selectAllSeasons) null // null = all seasons
-                                    else selectedSeasonNumbers.toList().ifEmpty { null }
-                                } else null
-
-                                onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
-                            },
-                            enabled = !isRequesting && (!isTv || selectAllSeasons || selectedSeasonNumbers.isNotEmpty()),
-                            shape = ShapeCache.smooth12,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                        ) {
-                            if (isRequesting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                    // Tags
+                    if (!currentTags.isNullOrEmpty()) {
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Tags",
+                                    style = typography.labelLarge,
+                                    color = Color.White.copy(alpha = 0.7f),
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    currentTags.forEach { tag ->
+                                        val isSelected = tag.id in selectedTags
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = {
+                                                if (isSelected) selectedTags.remove(tag.id)
+                                                else selectedTags.add(tag.id)
+                                            },
+                                            label = {
+                                                Text(
+                                                    text = tag.label,
+                                                    style = typography.bodySmall,
+                                                )
+                                            },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = colorScheme.primary.copy(alpha = 0.2f),
+                                                selectedLabelColor = colorScheme.primary,
+                                                containerColor = Color.White.copy(alpha = 0.08f),
+                                                labelColor = Color.White.copy(alpha = 0.6f),
+                                            ),
+                                            border = null,
+                                        )
+                                    }
+                                }
                             }
-                            Text(
-                                "Request",
-                                fontWeight = FontWeight.Bold,
-                            )
+                        }
+                    }
+
+                    // Season Selection (TV only)
+                    if (isTv) {
+                        if (seasons.isNotEmpty()) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectAllSeasons = !selectAllSeasons
+                                            selectedSeasonNumbers.clear()
+                                            if (!selectAllSeasons) {
+                                                selectedSeasonNumbers.addAll(availableSeasonNumbers)
+                                            }
+                                        },
+                                ) {
+                                    Switch(
+                                        checked = selectAllSeasons,
+                                        onCheckedChange = {
+                                            selectAllSeasons = it
+                                            selectedSeasonNumbers.clear()
+                                            if (!it) {
+                                                selectedSeasonNumbers.addAll(availableSeasonNumbers)
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedTrackColor = colorScheme.primary,
+                                        ),
+                                        modifier = Modifier.height(24.dp),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = "All Seasons",
+                                        style = typography.labelLarge,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+                            items(seasons.sortedBy { it.seasonNumber }, key = { it.seasonNumber }, contentType = { "season" }) { season ->
+                                val seasonNumber = season.seasonNumber
+                                val isSelected = selectAllSeasons || seasonNumber in selectedSeasonNumbers
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (selectAllSeasons) {
+                                                selectAllSeasons = false
+                                                selectedSeasonNumbers.clear()
+                                                selectedSeasonNumbers.addAll(availableSeasonNumbers)
+                                            }
+                                            if (isSelected) selectedSeasonNumbers.remove(seasonNumber)
+                                            else selectedSeasonNumbers.add(seasonNumber)
+                                        }
+                                        .padding(vertical = 4.dp),
+                                ) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = {
+                                            if (selectAllSeasons) {
+                                                selectAllSeasons = false
+                                                selectedSeasonNumbers.clear()
+                                                selectedSeasonNumbers.addAll(availableSeasonNumbers)
+                                            }
+                                            if (it == true) selectedSeasonNumbers.add(seasonNumber)
+                                            else selectedSeasonNumbers.remove(seasonNumber)
+                                        },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = colorScheme.primary,
+                                        ),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = season.name.ifBlank { "Season ${season.seasonNumber}" },
+                                            style = typography.bodyMedium,
+                                            color = Color.White,
+                                        )
+                                        Text(
+                                            text = "${season.episodeCount} episodes",
+                                            style = typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.5f),
+                                        )
+                                    }
+                                }
+                            }
+                        } else if (isLoadingServices) {
+                            // Show loading while services/seasons are being fetched
+                            item {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = colorScheme.primary,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Loading seasons…",
+                                    style = typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Action Buttons ──
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (requestSuccess == true || requestError != null) {
+                            TextButton(onClick = onDismiss) {
+                                Text(
+                                    if (requestSuccess == true) "Done" else "Close",
+                                    color = Color.White,
+                                )
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                enabled = !isRequesting,
+                                shape = ShapeCache.smooth12,
+                            ) {
+                                Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Button(
+                                onClick = {
+                                    val serverId = if (isTv) currentSonarrServer?.id else currentRadarrServer?.id
+                                    val profileId = currentProfiles?.getOrNull(selectedProfileIndex)?.id
+                                    val rootFolder = currentRootFolders?.getOrNull(selectedRootFolderIndex)?.path
+                                    val tags = selectedTags.toList().ifEmpty { null }
+
+                                    val resolvedSeasons = if (isTv) {
+                                        if (selectAllSeasons) null // null = all seasons
+                                        else selectedSeasonNumbers.toList().ifEmpty { null }
+                                    } else null
+
+                                    onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
+                                },
+                                enabled = !isRequesting && (!isTv || selectAllSeasons || selectedSeasonNumbers.isNotEmpty()),
+                                shape = ShapeCache.smooth12,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colorScheme.primary,
+                                    contentColor = colorScheme.onPrimary,
+                                ),
+                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                            ) {
+                                if (isRequesting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = colorScheme.onPrimary,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(
+                                    "Request",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     }
                 }

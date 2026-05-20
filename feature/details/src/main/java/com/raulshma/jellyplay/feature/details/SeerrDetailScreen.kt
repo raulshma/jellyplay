@@ -106,6 +106,7 @@ fun SeerrDetailScreen(
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
         dynamicTheming = preferences.dynamicTheming,
+        darkTheme = true,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()

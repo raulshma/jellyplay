@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -36,10 +37,15 @@ fun PlayerModalBottomSheet(
             content()
         }
     } else {
+        val colorScheme = MaterialTheme.colorScheme
+        val typography = MaterialTheme.typography
+
         ModalBottomSheet(
             onDismissRequest = onDismissRequest,
             modifier = modifier,
             sheetState = sheetState,
+            containerColor = colorScheme.surfaceContainer,
+            contentColor = colorScheme.onSurface,
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             val view = LocalView.current
@@ -52,12 +58,17 @@ fun PlayerModalBottomSheet(
                     controller.hide(WindowInsetsCompat.Type.systemBars())
                 }
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false),
-                content = content,
-            )
+            MaterialTheme(
+                colorScheme = colorScheme,
+                typography = typography,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    content = content,
+                )
+            }
         }
     }
 }

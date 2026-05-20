@@ -68,6 +68,8 @@ private fun TvSheetDialog(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val initialFocus = remember { FocusRequester() }
+    val colorScheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
 
     Dialog(
         onDismissRequest = onDismissRequest,
@@ -88,29 +90,34 @@ private fun TvSheetDialog(
             }
         }
 
-        Surface(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 48.dp, vertical = 48.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shape = ShapeCache.smooth20,
-            tonalElevation = 6.dp,
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
         ) {
-            Column(
-                modifier = Modifier
+            Surface(
+                modifier = modifier
                     .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(horizontal = 48.dp, vertical = 48.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shape = ShapeCache.smooth20,
+                tonalElevation = 6.dp,
             ) {
-                if (title != null) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.focusRequester(initialFocus),
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.focusRequester(initialFocus),
+                        )
+                    }
+                    ColumnContent(initialFocus = if (title == null) initialFocus else null, content = content)
                 }
-                ColumnContent(initialFocus = if (title == null) initialFocus else null, content = content)
             }
         }
     }
@@ -141,10 +148,15 @@ private fun MobileBottomSheet(
     sheetState: SheetState = rememberModalBottomSheetState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
+        containerColor = colorScheme.surfaceContainer,
+        contentColor = colorScheme.onSurface,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
         val view = LocalView.current
@@ -157,6 +169,11 @@ private fun MobileBottomSheet(
                 controller.hide(WindowInsetsCompat.Type.systemBars())
             }
         }
-        content()
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+        ) {
+            content()
+        }
     }
 }
