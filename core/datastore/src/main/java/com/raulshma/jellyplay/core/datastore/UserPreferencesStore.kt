@@ -9,6 +9,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DreamImageCategory
+import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -106,6 +108,11 @@ class UserPreferencesStore @Inject constructor(
         val AUDIO_CROSSFADE_DURATION_MS = stringPreferencesKey("audio_crossfade_duration_ms")
         val SLEEP_TIMER_DURATION_MS = stringPreferencesKey("sleep_timer_duration_ms")
         val SLEEP_TIMER_END_OF_EPISODE = stringPreferencesKey("sleep_timer_end_of_episode")
+        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
+        val DREAM_SLIDESHOW_INTERVAL_MS = stringPreferencesKey("dream_slideshow_interval_ms")
+        val DREAM_KEN_BURNS_ENABLED = stringPreferencesKey("dream_ken_burns_enabled")
+        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
+        val DREAM_SHOW_TITLE = stringPreferencesKey("dream_show_title")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -264,6 +271,17 @@ class UserPreferencesStore @Inject constructor(
             audioCrossfadeDurationMs = prefs[Keys.AUDIO_CROSSFADE_DURATION_MS]?.toLongOrNull() ?: 0L,
             sleepTimerDurationMs = prefs[Keys.SLEEP_TIMER_DURATION_MS]?.toLongOrNull() ?: 0L,
             sleepTimerEndOfEpisode = prefs[Keys.SLEEP_TIMER_END_OF_EPISODE]?.toBoolean() ?: false,
+            dreamImageCategories = try {
+                prefs[Keys.DREAM_IMAGE_CATEGORIES]?.let {
+                    json.decodeFromString<Set<DreamImageCategory>>(it)
+                } ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
+            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) },
+            dreamSlideshowIntervalMs = prefs[Keys.DREAM_SLIDESHOW_INTERVAL_MS]?.toLongOrNull() ?: 15_000L,
+            dreamKenBurnsEnabled = prefs[Keys.DREAM_KEN_BURNS_ENABLED]?.toBoolean() ?: true,
+            dreamTransitionStyle = try {
+                DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
+            } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
+            dreamShowTitle = prefs[Keys.DREAM_SHOW_TITLE]?.toBoolean() ?: true,
         )
     }
 
@@ -570,6 +588,26 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled.toString() }
+    }
+
+    suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
+        context.dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
+    }
+
+    suspend fun setDreamSlideshowIntervalMs(ms: Long) {
+        context.dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms.toString() }
+    }
+
+    suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
+        context.dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
+    }
+
+    suspend fun setDreamShowTitle(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

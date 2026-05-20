@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cached
@@ -68,8 +69,8 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +111,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DreamImageCategory
+import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -997,8 +1000,93 @@ fun SettingsScreen(
                 }
             }
 
+            if (isTv) {
+                item {
+                    AnimatedSettingsEntrance(12) {
+                        SettingsGroup(
+                            icon = Icons.Default.Nightlight,
+                            title = "Screensaver",
+                            summary = {
+                                val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
+                                cats.joinToString(", ")
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        ) {
+                            val dreamTotal = 5
+                            SettingToggleItem(
+                                icon = Icons.Default.TextFields,
+                                title = "Show Title",
+                                subtitle = if (preferences.dreamShowTitle) "Display media title" else "Hide media title",
+                                checked = preferences.dreamShowTitle,
+                                index = 0, count = dreamTotal,
+                                onCheckedChange = { viewModel.setDreamShowTitle(it) },
+                            )
+                            SettingListItem(
+                                icon = Icons.Default.Movie,
+                                title = "Categories",
+                                subtitle = "Choose which library types appear",
+                                trailingText = preferences.dreamImageCategories.joinToString(", ") {
+                                    when (it) {
+                                        DreamImageCategory.MOVIES -> "Movies"
+                                        DreamImageCategory.SERIES -> "TV"
+                                        DreamImageCategory.MUSIC -> "Music"
+                                    }
+                                },
+                                index = 1, count = dreamTotal,
+                                onClick = {
+                                    val allCats = DreamImageCategory.entries.toSet()
+                                    val current = preferences.dreamImageCategories
+                                    val next = if (current.size == allCats.size) {
+                                        setOf(DreamImageCategory.MOVIES)
+                                    } else {
+                                        val cycle = allCats.toList()
+                                        val nextIndex = current.size
+                                        cycle.take(nextIndex + 1).toSet()
+                                    }
+                                    viewModel.setDreamImageCategories(next)
+                                },
+                            )
+                            SettingListItem(
+                                icon = Icons.Default.Timer,
+                                title = "Slideshow Interval",
+                                subtitle = "Time between image transitions",
+                                trailingText = "${(preferences.dreamSlideshowIntervalMs / 1000)}s",
+                                index = 2, count = dreamTotal,
+                                onClick = {
+                                    val intervals = listOf(10_000L, 15_000L, 20_000L, 30_000L, 45_000L, 60_000L)
+                                    val current = intervals.indexOf(preferences.dreamSlideshowIntervalMs)
+                                    val next = intervals[(current + 1) % intervals.size]
+                                    viewModel.setDreamSlideshowIntervalMs(next)
+                                },
+                            )
+                            SettingToggleItem(
+                                icon = Icons.Default.Swipe,
+                                title = "Ken Burns Effect",
+                                subtitle = if (preferences.dreamKenBurnsEnabled) "Gentle pan and zoom" else "Static images",
+                                checked = preferences.dreamKenBurnsEnabled,
+                                index = 3, count = dreamTotal,
+                                onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
+                            )
+                            SettingListItem(
+                                icon = Icons.AutoMirrored.Filled.NavigateNext,
+                                title = "Transition Style",
+                                subtitle = "How images transition between each other",
+                                trailingText = preferences.dreamTransitionStyle.name,
+                                index = 4, count = dreamTotal,
+                                onClick = {
+                                    val styles = DreamTransitionStyle.entries
+                                    val current = styles.indexOf(preferences.dreamTransitionStyle)
+                                    val next = styles[(current + 1) % styles.size]
+                                    viewModel.setDreamTransitionStyle(next)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
-                AnimatedSettingsEntrance(12) {
+                AnimatedSettingsEntrance(if (isTv) 13 else 12) {
                     SettingsGroup(
                         icon = Icons.Default.Lock,
                         title = "Security",
@@ -1039,7 +1127,7 @@ fun SettingsScreen(
             }
 
             item {
-                AnimatedSettingsEntrance(13) {
+                AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         SettingInfoItem(
                             icon = Icons.Default.OndemandVideo,
