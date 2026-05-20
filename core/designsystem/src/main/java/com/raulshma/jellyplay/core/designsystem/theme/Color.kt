@@ -52,6 +52,40 @@ val md_theme_dark_onSurfaceVariant = Color(0xFFCAC4D0)
 val md_theme_dark_outline = Color(0xFF938F99)
 val md_theme_dark_outlineVariant = Color(0xFF49454F)
 
+// ─── OLED Color Scheme ──────────────────────────────────────────────────────
+// Pure black surfaces with slightly elevated containers for AMOLED optimization.
+// Maintains visual hierarchy through subtle surface container elevation.
+
+val oled_theme_primary = Color(0xFFD0BCFF)
+val oled_theme_onPrimary = Color(0xFF381E72)
+val oled_theme_primaryContainer = Color(0xFF4F378B)
+val oled_theme_onPrimaryContainer = Color(0xFFEADDFF)
+val oled_theme_secondary = Color(0xFFCCC2DC)
+val oled_theme_onSecondary = Color(0xFF332D41)
+val oled_theme_secondaryContainer = Color(0xFF4A4458)
+val oled_theme_onSecondaryContainer = Color(0xFFE8DEF8)
+val oled_theme_tertiary = Color(0xFFEFB8C8)
+val oled_theme_onTertiary = Color(0xFF492532)
+val oled_theme_tertiaryContainer = Color(0xFF633B48)
+val oled_theme_onTertiaryContainer = Color(0xFFFFD8E4)
+val oled_theme_error = Color(0xFFF2B8B5)
+val oled_theme_onError = Color(0xFF601410)
+val oled_theme_errorContainer = Color(0xFF8C1D18)
+val oled_theme_onErrorContainer = Color(0xFFF9DEDC)
+val oled_theme_background = Color(0xFF000000)
+val oled_theme_onBackground = Color(0xFFE6E1E5)
+val oled_theme_surface = Color(0xFF000000)
+val oled_theme_onSurface = Color(0xFFE6E1E5)
+val oled_theme_surfaceVariant = Color(0xFF49454F)
+val oled_theme_onSurfaceVariant = Color(0xFFCAC4D0)
+val oled_theme_outline = Color(0xFF938F99)
+val oled_theme_outlineVariant = Color(0xFF49454F)
+val oled_theme_surfaceContainerLowest = Color(0xFF000000)
+val oled_theme_surfaceContainerLow = Color(0xFF0A0A0A)
+val oled_theme_surfaceContainer = Color(0xFF111111)
+val oled_theme_surfaceContainerHigh = Color(0xFF1A1A1A)
+val oled_theme_surfaceContainerHighest = Color(0xFF222222)
+
 // ─── Expressive Surface Container Colors ────────────────────────────────────
 // Richer tonal surface layers for MD3 Expressive depth and hierarchy.
 
@@ -92,6 +126,18 @@ val kids_theme_light_surfaceVariant = Color(0xFFFFECB3)
 val kids_theme_light_onSurfaceVariant = Color(0xFF5D4037)
 val kids_theme_light_outline = Color(0xFF8D6E63)
 val kids_theme_light_outlineVariant = Color(0xFFD7CCC8)
+
+val kids_theme_light_surfaceContainerLowest = Color(0xFFFFFFFF)
+val kids_theme_light_surfaceContainerLow = Color(0xFFFFF3E0)
+val kids_theme_light_surfaceContainer = Color(0xFFFFECB3)
+val kids_theme_light_surfaceContainerHigh = Color(0xFFFFE0B2)
+val kids_theme_light_surfaceContainerHighest = Color(0xFFFFD54F)
+
+val kids_theme_dark_surfaceContainerLowest = Color(0xFF1B0F07)
+val kids_theme_dark_surfaceContainerLow = Color(0xFF2E1A0F)
+val kids_theme_dark_surfaceContainer = Color(0xFF352015)
+val kids_theme_dark_surfaceContainerHigh = Color(0xFF402A1E)
+val kids_theme_dark_surfaceContainerHighest = Color(0xFF4E342E)
 
 val kids_theme_dark_primary = Color(0xFFFFB74D)
 val kids_theme_dark_onPrimary = Color(0xFF3E2723)

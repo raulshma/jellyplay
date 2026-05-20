@@ -336,7 +336,7 @@ private fun MainContent(
                                     },
                                 )
                                 NavigationBar(
-                                    containerColor = Color(0xFF111111),
+                                    containerColor = MaterialTheme.colorScheme.surface,
                                     tonalElevation = 0.dp,
                                 ) {
                                     activeTopLevelRoutes.forEach { (route, label) ->

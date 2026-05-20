@@ -40,6 +40,8 @@ data class UserPreferences(
     val preferredAudioLanguage: String? = null,
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val dynamicTheming: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val oledMode: Boolean = false,
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
@@ -119,6 +121,14 @@ data class MediaStreamSelection(
 enum class HomeMode {
     VIDEO,
     MUSIC,
+}
+
+@Immutable
+@Serializable
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
 }
 
 @Immutable

@@ -119,6 +119,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -986,29 +987,93 @@ fun SettingsScreen(
                 SettingsGroup(
                     icon = Icons.Default.Palette,
                     title = "Appearance",
-                    summary = { if (preferences.dynamicTheming) "Dynamic theming: On" else "Default theme" },
+                    summary = {
+                        val parts = mutableListOf<String>()
+                        if (preferences.dynamicTheming) parts.add("Dynamic theming")
+                        parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
+                        if (preferences.oledMode) parts.add("OLED")
+                        parts.joinToString(", ")
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    val appearTotal = 2
-                    SettingToggleItem(
-                        icon = Icons.Default.OndemandVideo,
-                        title = "Dynamic Theming",
-                        subtitle = "Colors extracted from artwork",
-                        checked = preferences.dynamicTheming,
-                        index = 0, count = appearTotal,
-                        onCheckedChange = { viewModel.setDynamicTheming(it) },
-                    )
-                    SettingListItem(
-                        icon = Icons.Default.Home,
-                        title = "Home Mode",
-                        subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
-                        trailingText = preferences.homeMode.name,
-                        index = 1, count = appearTotal,
-                        onClick = {
-                            val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                            viewModel.setHomeMode(next)
-                        },
-                    )
+                    val isAndroid12 = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                    val isDarkActive = when (preferences.themeMode) {
+                        ThemeMode.DARK -> true
+                        ThemeMode.LIGHT -> false
+                        ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                    }
+
+                    if (isAndroid12) {
+                        val baseCount = if (isDarkActive) 4 else 3
+                        SettingListItem(
+                            icon = Icons.Default.Nightlight,
+                            title = "Theme Mode",
+                            subtitle = when (preferences.themeMode) {
+                                ThemeMode.SYSTEM -> "Follow system setting"
+                                ThemeMode.LIGHT -> "Always light"
+                                ThemeMode.DARK -> "Always dark"
+                            },
+                            trailingText = preferences.themeMode.name,
+                            index = 0, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.themeMode) {
+                                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                                    ThemeMode.LIGHT -> ThemeMode.DARK
+                                    ThemeMode.DARK -> ThemeMode.SYSTEM
+                                }
+                                viewModel.setThemeMode(next)
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.OndemandVideo,
+                            title = "Dynamic Theming",
+                            subtitle = "Colors extracted from artwork",
+                            checked = preferences.dynamicTheming,
+                            index = 1, count = baseCount,
+                            onCheckedChange = { viewModel.setDynamicTheming(it) },
+                        )
+                        if (isDarkActive) {
+                            SettingToggleItem(
+                                icon = Icons.Default.Brightness6,
+                                title = "OLED Mode",
+                                subtitle = "Pure black backgrounds for AMOLED displays",
+                                checked = preferences.oledMode,
+                                index = 2, count = baseCount,
+                                onCheckedChange = { viewModel.setOledMode(it) },
+                            )
+                        }
+                        SettingListItem(
+                            icon = Icons.Default.Home,
+                            title = "Home Mode",
+                            subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                            trailingText = preferences.homeMode.name,
+                            index = if (isDarkActive) 3 else 2, count = baseCount,
+                            onClick = {
+                                val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                                viewModel.setHomeMode(next)
+                            },
+                        )
+                    } else {
+                        SettingToggleItem(
+                            icon = Icons.Default.OndemandVideo,
+                            title = "Dynamic Theming",
+                            subtitle = "Colors extracted from artwork",
+                            checked = preferences.dynamicTheming,
+                            index = 0, count = 2,
+                            onCheckedChange = { viewModel.setDynamicTheming(it) },
+                        )
+                        SettingListItem(
+                            icon = Icons.Default.Home,
+                            title = "Home Mode",
+                            subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                            trailingText = preferences.homeMode.name,
+                            index = 1, count = 2,
+                            onClick = {
+                                val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                                viewModel.setHomeMode(next)
+                            },
+                        )
+                    }
                 }
             }
 

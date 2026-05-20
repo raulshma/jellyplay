@@ -183,6 +183,7 @@ fun AudioPlayerScreen(
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
+        oledMode = preferences.oledMode,
     ) {
         Box(
             modifier = Modifier

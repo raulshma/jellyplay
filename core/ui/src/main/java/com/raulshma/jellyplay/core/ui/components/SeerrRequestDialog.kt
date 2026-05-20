@@ -191,14 +191,15 @@ fun SeerrRequestDialog(
         }
     }
 
+    val colorScheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+
     ModalBottomSheet(
         onDismissRequest = { if (!isRequesting) onDismiss() },
         sheetState = sheetState,
         shape = ShapeCache.smooth20,
-        containerColor = Color(0xFF1A1A2E).copy(alpha = 0.95f),
+        containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
     ) {
-        val colorScheme = MaterialTheme.colorScheme
-        val typography = MaterialTheme.typography
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,
@@ -232,7 +233,7 @@ fun SeerrRequestDialog(
                                 Text(
                                     text = it.toString(),
                                     style = typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    color = colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -326,7 +327,7 @@ fun SeerrRequestDialog(
                                 Text(
                                     text = "Loading options…",
                                     style = typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.6f),
+                                    color = colorScheme.onSurface.copy(alpha = 0.6f),
                                 )
                             }
                         }
@@ -383,7 +384,7 @@ fun SeerrRequestDialog(
                                 Text(
                                     text = "Tags",
                                     style = typography.labelLarge,
-                                    color = Color.White.copy(alpha = 0.7f),
+                                    color = colorScheme.onSurfaceVariant,
                                 )
                                 FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -406,8 +407,8 @@ fun SeerrRequestDialog(
                                             colors = FilterChipDefaults.filterChipColors(
                                                 selectedContainerColor = colorScheme.primary.copy(alpha = 0.2f),
                                                 selectedLabelColor = colorScheme.primary,
-                                                containerColor = Color.White.copy(alpha = 0.08f),
-                                                labelColor = Color.White.copy(alpha = 0.6f),
+                                                containerColor = colorScheme.onSurface.copy(alpha = 0.08f),
+                                                labelColor = colorScheme.onSurfaceVariant,
                                             ),
                                             border = null,
                                         )
@@ -451,7 +452,7 @@ fun SeerrRequestDialog(
                                     Text(
                                         text = "All Seasons",
                                         style = typography.labelLarge,
-                                        color = Color.White,
+                                        color = colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium,
                                     )
                                 }
@@ -494,12 +495,12 @@ fun SeerrRequestDialog(
                                         Text(
                                             text = season.name.ifBlank { "Season ${season.seasonNumber}" },
                                             style = typography.bodyMedium,
-                                            color = Color.White,
+                                            color = colorScheme.onSurface,
                                         )
                                         Text(
                                             text = "${season.episodeCount} episodes",
                                             style = typography.bodySmall,
-                                            color = Color.White.copy(alpha = 0.5f),
+                                            color = colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
@@ -515,7 +516,7 @@ fun SeerrRequestDialog(
                                 Text(
                                     text = "Loading seasons…",
                                     style = typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    color = colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -534,7 +535,7 @@ fun SeerrRequestDialog(
                             TextButton(onClick = onDismiss) {
                                 Text(
                                     if (requestSuccess == true) "Done" else "Close",
-                                    color = Color.White,
+                                    color = colorScheme.onSurface,
                                 )
                             }
                         } else {
@@ -543,7 +544,7 @@ fun SeerrRequestDialog(
                                 enabled = !isRequesting,
                                 shape = ShapeCache.smooth12,
                             ) {
-                                Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                                Text("Cancel", color = colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.width(12.dp))
                             Button(
@@ -599,11 +600,13 @@ private fun LabeledDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    val colorScheme = MaterialTheme.colorScheme
+
     Column {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
         ExposedDropdownMenuBox(
@@ -622,8 +625,8 @@ private fun LabeledDropdown(
                     )
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color.White.copy(alpha = 0.1f),
-                    labelColor = Color.White,
+                    containerColor = colorScheme.onSurface.copy(alpha = 0.1f),
+                    labelColor = colorScheme.onSurface,
                 ),
                 border = null,
                 modifier = Modifier
@@ -633,14 +636,14 @@ private fun LabeledDropdown(
             ExposedDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                containerColor = Color(0xFF2A2A3E),
+                containerColor = colorScheme.surfaceContainerHigh,
             ) {
                 options.forEachIndexed { index, option ->
                     DropdownMenuItem(
                         text = {
                             Text(
                                 text = option,
-                                color = if (index == selectedIndex) MaterialTheme.colorScheme.primary else Color.White,
+                                color = if (index == selectedIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         },
                         onClick = {

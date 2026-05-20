@@ -179,6 +179,7 @@ fun MediaDetailScreen(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
         darkTheme = true,
+        oledMode = preferences.oledMode,
     ) {
         val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
 

@@ -107,6 +107,7 @@ fun SeerrDetailScreen(
         imageUrl = backdropUrl ?: "",
         dynamicTheming = preferences.dynamicTheming,
         darkTheme = true,
+        oledMode = preferences.oledMode,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
