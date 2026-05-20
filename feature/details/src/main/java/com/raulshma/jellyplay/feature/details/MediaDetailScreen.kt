@@ -174,10 +174,12 @@ fun MediaDetailScreen(
     }
     val backdropUrl = viewModel.getBackdropUrl(targetBackdropId)
 
+    val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+
     ArtworkThemeWrapper(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
-        darkTheme = true,
+        darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
     ) {
         val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
@@ -787,6 +789,7 @@ private fun DetailContent(
                 navigationIcon = {
                     if (isTv) {
                         val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
                         Box(
                             modifier = Modifier
                                 .padding(8.dp)
@@ -802,11 +805,12 @@ private fun DetailContent(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = backIconColor,
                                 modifier = Modifier.padding(8.dp),
                             )
                         }
                     } else {
+                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
                         IconButton(
                             onClick = onBack,
                             modifier = Modifier
@@ -819,7 +823,7 @@ private fun DetailContent(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = backIconColor,
                             )
                         }
                     }
@@ -2162,7 +2166,7 @@ private fun SeasonsSection(
             itemsIndexed(seasons, key = { _, it -> it.id }, contentType = { _, _ -> "season" }) { index, season ->
                 val isSelected = index == selectedSeasonIndex
                 val targetColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-                val targetContentColor = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface
+                val targetContentColor = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
                 val surfaceColor by animateColorAsState(
                     targetValue = targetColor,
                     animationSpec = tween(250, easing = FancyTransitionEasing),

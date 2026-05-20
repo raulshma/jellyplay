@@ -104,10 +104,12 @@ fun SeerrDetailScreen(
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
 
+    val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
         dynamicTheming = preferences.dynamicTheming,
-        darkTheme = true,
+        darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
@@ -568,6 +570,8 @@ private fun SeerrDetailContent(
                 }
             },
             navigationIcon = {
+                val backOverHero = appBarColor < 0.5f
+                val backIconColor = if (backOverHero) Color.White else MaterialTheme.colorScheme.onSurface
                 if (isTv) {
                     val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
                     Box(
@@ -583,7 +587,7 @@ private fun SeerrDetailContent(
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = Color.White,
                             modifier = Modifier.padding(8.dp),
                         )
                     }
@@ -592,7 +596,7 @@ private fun SeerrDetailContent(
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = backIconColor
                         )
                     }
                 }
@@ -1110,10 +1114,10 @@ private fun VideosSection(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.DarkGray),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         
@@ -1122,7 +1126,10 @@ private fun VideosSection(
                                 .fillMaxSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                        ),
                                         startY = 100f
                                     )
                                 )
