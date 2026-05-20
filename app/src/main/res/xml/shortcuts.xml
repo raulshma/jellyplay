@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="continue_watching"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_continue_watching"
+        android:shortcutShortLabel="@string/shortcut_continue_watching_short"
+        android:shortcutLongLabel="@string/shortcut_continue_watching_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.CONTINUE_WATCHING"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search_short"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.SEARCH"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="play_music"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_play_music"
+        android:shortcutShortLabel="@string/shortcut_play_music_short"
+        android:shortcutLongLabel="@string/shortcut_play_music_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.PLAY_MUSIC"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="downloads"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_downloads"
+        android:shortcutShortLabel="@string/shortcut_downloads_short"
+        android:shortcutLongLabel="@string/shortcut_downloads_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.DOWNLOADS"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
+</shortcuts>
