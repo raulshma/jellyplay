@@ -102,6 +102,7 @@ class UserPreferencesStore @Inject constructor(
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
         val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
+        val REPLAYGAIN_PRE_AMP_DB = stringPreferencesKey("replaygain_pre_amp_db")
         val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
         val CHANNEL_MIX_ENABLED = stringPreferencesKey("channel_mix_enabled")
         val AUDIO_GAPLESS_ENABLED = stringPreferencesKey("audio_gapless_enabled")
@@ -260,9 +261,13 @@ class UserPreferencesStore @Inject constructor(
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
             audioNormalizationMode = try {
-                AudioNormalizationMode.valueOf(prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name)
+                when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
+                    "REPLAYGAIN" -> AudioNormalizationMode.TRACK
+                    else -> AudioNormalizationMode.valueOf(stored)
+                }
             } catch (_: Exception) { AudioNormalizationMode.NONE },
             audioNormalizationEnabled = prefs[Keys.AUDIO_NORMALIZATION_ENABLED]?.toBoolean() ?: false,
+            replayGainPreAmpDb = prefs[Keys.REPLAYGAIN_PRE_AMP_DB]?.toFloatOrNull() ?: 0f,
             channelMixMode = try {
                 ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
             } catch (_: Exception) { ChannelMixMode.AUTO },
@@ -564,6 +569,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setReplayGainPreAmpDb(db: Float) {
+        context.dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db.toString() }
     }
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) {

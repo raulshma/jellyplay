@@ -63,6 +63,7 @@ data class MediaItem(
     val container: String? = null,
     val videoType: String? = null,
     val blurHashes: ImageBlurHashes = ImageBlurHashes(),
+    val normalizationGain: Float? = null,
 )
 
 @Immutable

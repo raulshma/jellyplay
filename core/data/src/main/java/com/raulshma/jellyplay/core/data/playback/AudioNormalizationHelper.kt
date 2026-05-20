@@ -18,7 +18,6 @@ class AudioNormalizationHelper {
 
     private val targetGainMbh: Int
         get() = when (mode) {
-            AudioNormalizationMode.REPLAYGAIN -> 2300
             AudioNormalizationMode.DYNAMIC -> 1500
             else -> 0
         }

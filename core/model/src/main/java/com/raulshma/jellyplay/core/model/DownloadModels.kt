@@ -93,6 +93,7 @@ data class UserPreferences(
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,
+    val replayGainPreAmpDb: Float = 0f,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
     val audioGaplessEnabled: Boolean = true,

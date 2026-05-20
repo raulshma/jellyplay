@@ -246,7 +246,7 @@ class MpvPlayerEngine(
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
                     }
-                    AudioNormalizationMode.REPLAYGAIN -> {
+                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
                         afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
                     }
                     AudioNormalizationMode.NONE -> {}
@@ -376,7 +376,7 @@ class MpvPlayerEngine(
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
                     }
-                    AudioNormalizationMode.REPLAYGAIN -> {
+                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
                         afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
                     }
                     AudioNormalizationMode.NONE -> {}
