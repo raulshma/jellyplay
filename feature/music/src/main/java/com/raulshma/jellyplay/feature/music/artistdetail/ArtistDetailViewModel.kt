@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,19 +36,17 @@ class ArtistDetailViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
-            mediaRepository.getMediaDetail(artistId)
-                .onSuccess { detail ->
-                    artistName = detail.item.name
-                }
-                .onFailure {
-                    error = it.message ?: "Failed to load artist"
-                    isLoading = false
-                    return@launch
-                }
-            mediaRepository.getArtistAlbums(artistId)
-                .onSuccess { albumList ->
-                    albums = albumList
-                }
+            coroutineScope {
+                val detailDeferred = async { mediaRepository.getMediaDetail(artistId) }
+                val albumsDeferred = async { mediaRepository.getArtistAlbums(artistId) }
+                detailDeferred.await()
+                    .onSuccess { detail -> artistName = detail.item.name }
+                    .onFailure {
+                        error = it.message ?: "Failed to load artist"
+                    }
+                albumsDeferred.await()
+                    .onSuccess { albumList -> albums = albumList }
+            }
             isLoading = false
         }
     }

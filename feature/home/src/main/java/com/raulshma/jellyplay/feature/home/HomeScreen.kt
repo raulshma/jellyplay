@@ -93,7 +93,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -247,6 +249,8 @@ fun HomeScreen(
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
 
+        val lifecycleOwner = LocalLifecycleOwner.current
+
         val headerHeight = when {
             isTv -> com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight.Tv
             adaptiveInfo.isLandscape && adaptiveInfo.windowSizeClass != WindowSizeClass.Compact ->
@@ -269,6 +273,7 @@ fun HomeScreen(
 
             snapshotFlow { listState.isScrollInProgress }
                 .collectLatest { isScrolling ->
+                    if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
                     if (!isScrolling) {
                         delay(8000)
                         if (autoRotateEnabled && focusInHero) {
@@ -542,14 +547,22 @@ fun HomeScreen(
                                         LocalSeerrCardLoadingState provides seerrCardLoadingState,
                                         LocalSeerrPrefetch provides seerrPrefetch,
                                     ) {
-                                        Row(
+                                        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+                                        val rowWidth = screenWidth - contentPad * 2
+                                        val itemWidth = (rowWidth - spacing * (targetSize - 1)) / targetSize.toFloat()
+                                        LazyRow(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(backgroundColor)
                                                 .padding(horizontal = contentPad, vertical = spacing / 2),
-                                            horizontalArrangement = Arrangement.spacedBy(spacing)
+                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                            userScrollEnabled = false,
                                         ) {
-                                            rowItems.forEach { item ->
+                                            items(
+                                                count = rowItems.size,
+                                                key = { index -> rowItems[index].id }
+                                            ) { index ->
+                                                val item = rowItems[index]
                                                 SeerrMediaCard(
                                                     item = item,
                                                     imageUrl = item.posterUrl,
@@ -571,15 +584,8 @@ fun HomeScreen(
                                                         }
                                                     },
                                                     onRequestClick = { seerrRequestItem = item },
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier.width(itemWidth),
                                                 )
-                                            }
-                                            
-                                            // Fill remaining space if last row is incomplete
-                                            if (rowItems.size < targetSize) {
-                                                repeat(targetSize - rowItems.size) {
-                                                    Spacer(Modifier.weight(1f))
-                                                }
                                             }
                                         }
                                     }

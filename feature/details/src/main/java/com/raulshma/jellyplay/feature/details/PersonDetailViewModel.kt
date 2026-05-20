@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,15 +33,15 @@ class PersonDetailViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
-            mediaRepository.getMediaDetail(personId)
-                .onSuccess { detail ->
-                    name = detail.item.name
-                }
-            mediaRepository.getItemsByPerson(personId)
-                .onSuccess { items ->
-                    filmography = items
-                }
-                .onFailure { error = it.message ?: "Failed to load" }
+            coroutineScope {
+                val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
+                val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
+                detailDeferred.await()
+                    .onSuccess { detail -> name = detail.item.name }
+                itemsDeferred.await()
+                    .onSuccess { items -> filmography = items }
+                    .onFailure { error = it.message ?: "Failed to load" }
+            }
             isLoading = false
         }
     }

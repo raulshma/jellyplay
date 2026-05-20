@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.network
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -15,7 +17,14 @@ internal object LyricsApi {
     private val json = Json { ignoreUnknownKeys = true }
     private val lyricsRegex = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""")
 
-    fun fetchLyrics(
+    private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
+        withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { response ->
+                response.body?.string() ?: ""
+            }
+        }
+
+    suspend fun fetchLyrics(
         okHttpClient: OkHttpClient,
         serverAddress: String,
         itemId: String,
@@ -25,9 +34,7 @@ internal object LyricsApi {
         val request = Request.Builder()
             .url(url)
             .build()
-        val body = okHttpClient.newCall(request).execute().use { response ->
-            response.body?.string() ?: ""
-        }
+        val body = executeAndReadBody(okHttpClient, request)
 
         val lines = try {
             val array = json.parseToJsonElement(body).jsonArray

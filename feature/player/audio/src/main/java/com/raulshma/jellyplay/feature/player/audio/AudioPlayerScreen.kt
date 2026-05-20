@@ -843,6 +843,7 @@ private fun LyricsOverlay(
                             else -> 0.15f
                         }
                         val targetScale = if (isCurrent) 1.08f else 1f
+                        val isNearActive = distance <= 3
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
                             animationSpec = tween(
@@ -859,6 +860,8 @@ private fun LyricsOverlay(
                             ),
                             label = "lyricScale$index",
                         )
+                        val finalAlpha = if (isNearActive) animatedAlpha else targetAlpha
+                        val finalScale = if (isNearActive) animatedScale else targetScale
                         Text(
                             text = lyrics[index].text.ifBlank { "\u266A" },
                             style = if (isCurrent) {
@@ -868,13 +871,13 @@ private fun LyricsOverlay(
                             } else {
                                 MaterialTheme.typography.bodyMedium
                             },
-                            color = Color.White.copy(alpha = animatedAlpha),
+                            color = Color.White.copy(alpha = finalAlpha),
                             modifier = Modifier
                                 .animateContentSize(animationSpec = tween(AnimationTokens.MediumDuration))
                                 .graphicsLayer {
-                                    scaleX = animatedScale
-                                    scaleY = animatedScale
-                                    this.alpha = animatedAlpha
+                                    scaleX = finalScale
+                                    scaleY = finalScale
+                                    this.alpha = finalAlpha
                                 }
                                 .padding(vertical = 6.dp, horizontal = 20.dp),
                             textAlign = TextAlign.Center,

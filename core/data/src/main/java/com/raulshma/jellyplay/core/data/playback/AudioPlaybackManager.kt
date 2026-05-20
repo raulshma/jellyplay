@@ -65,7 +65,7 @@ class AudioPlaybackManager @Inject constructor(
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private val mediaItemCache = mutableMapOf<String, MediaItem>()
+    private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
 
@@ -367,16 +367,16 @@ class AudioPlaybackManager @Inject constructor(
                             val startMs = startPositionMs
                             buildMediaItemForQueueItem(qi, startMs)?.let { mediaItem ->
                                 mediaItems.add(mediaItem)
-                                mediaItemCache[qi.id] = mediaItem
+                                mediaItemCache.put(qi.id, mediaItem)
                             }
                         } else {
-                            val cached = mediaItemCache[qi.id]
+                            val cached = mediaItemCache.get(qi.id)
                             if (cached != null) {
                                 mediaItems.add(cached)
                             } else {
                                 buildMediaItemForQueueItem(qi)?.let { mediaItem ->
                                     mediaItems.add(mediaItem)
-                                    mediaItemCache[qi.id] = mediaItem
+                                    mediaItemCache.put(qi.id, mediaItem)
                                 }
                             }
                         }
@@ -447,7 +447,18 @@ class AudioPlaybackManager @Inject constructor(
         if (q.isEmpty()) return
         cancelCrossfade()
         val next = when {
-            _shuffleMode.value -> q.indices.filter { it != _currentIndex.value }.randomOrNull() ?: return
+            _shuffleMode.value -> {
+                val excluded = _currentIndex.value
+                if (q.size <= 1) return
+                var candidate = (0 until q.size).random()
+                var attempts = 0
+                while (candidate == excluded && attempts < 10) {
+                    candidate = (0 until q.size).random()
+                    attempts++
+                }
+                if (candidate == excluded) return
+                candidate
+            }
             _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
             _repeatMode.value >= 1 -> 0
             else -> return
@@ -466,7 +477,18 @@ class AudioPlaybackManager @Inject constructor(
             return
         }
         val prev = when {
-            _shuffleMode.value -> q.indices.filter { it != _currentIndex.value }.randomOrNull() ?: return
+            _shuffleMode.value -> {
+                val excluded = _currentIndex.value
+                if (q.size <= 1) return
+                var candidate = (0 until q.size).random()
+                var attempts = 0
+                while (candidate == excluded && attempts < 10) {
+                    candidate = (0 until q.size).random()
+                    attempts++
+                }
+                if (candidate == excluded) return
+                candidate
+            }
             _currentIndex.value > 0 -> _currentIndex.value - 1
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return

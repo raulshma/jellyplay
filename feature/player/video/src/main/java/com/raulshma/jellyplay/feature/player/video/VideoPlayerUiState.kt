@@ -93,6 +93,7 @@ data class VideoPlayerUiState(
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerLastUsedDurationMs: Long = 0L,
+    val activeSegment: MediaSegment? = null,
 ) {
 
     companion object {
@@ -114,19 +115,18 @@ data class VideoPlayerUiState(
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         segmentBehaviors[type] ?: SegmentBehavior.IGNORE
 
-    val activeSegment: MediaSegment?
-        get() {
-            val posTicks = currentPosition * 10_000
-            val apiMatches = segments.filter { seg ->
-                seg.hasSegment && posTicks >= seg.startTicks && posTicks < seg.endTicks
-            }
-            if (apiMatches.isNotEmpty()) {
-                return MediaSegmentType.SEGMENT_PRIORITY.firstNotNullOfOrNull { priority ->
-                    apiMatches.firstOrNull { it.type == priority }
-                } ?: apiMatches.first()
-            }
-            return detectChapterSegment()
+    fun computeActiveSegment(): MediaSegment? {
+        val posTicks = currentPosition * 10_000
+        val apiMatches = segments.filter { seg ->
+            seg.hasSegment && posTicks >= seg.startTicks && posTicks < seg.endTicks
         }
+        if (apiMatches.isNotEmpty()) {
+            return MediaSegmentType.SEGMENT_PRIORITY.firstNotNullOfOrNull { priority ->
+                apiMatches.firstOrNull { it.type == priority }
+            } ?: apiMatches.first()
+        }
+        return detectChapterSegment()
+    }
 
     private fun detectChapterSegment(): MediaSegment? {
         if (chapters.isEmpty()) return null

@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +25,8 @@ class SleepTimerManager @Inject constructor() {
     private val _isEndOfEpisodeMode = MutableStateFlow(false)
     val isEndOfEpisodeMode: StateFlow<Boolean> = _isEndOfEpisodeMode.asStateFlow()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     private var timerJob: Job? = null
 
     private var onTimerExpired: (() -> Unit)? = null
@@ -36,7 +41,7 @@ class SleepTimerManager @Inject constructor() {
         _isEndOfEpisodeMode.value = false
         _remainingMs.value = durationMs
 
-        timerJob = kotlinx.coroutines.MainScope().launch {
+        timerJob = scope.launch {
             var remaining = durationMs
             val step = 1000L
             while (isActive && remaining > 0) {

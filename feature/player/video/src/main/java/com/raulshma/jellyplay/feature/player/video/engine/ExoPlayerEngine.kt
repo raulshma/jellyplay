@@ -445,7 +445,7 @@ class ExoPlayerEngine(
         val pv = playerView ?: return null
         if (pv.width <= 0 || pv.height <= 0) return null
         return try {
-            Bitmap.createBitmap(pv.width, pv.height, Bitmap.Config.ARGB_8888).also {
+            Bitmap.createBitmap(pv.width, pv.height, Bitmap.Config.RGB_565).also {
                 pv.draw(Canvas(it))
             }
         } catch (_: Exception) { null }

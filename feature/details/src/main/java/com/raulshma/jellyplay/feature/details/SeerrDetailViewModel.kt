@@ -250,7 +250,7 @@ class SeerrDetailViewModel @Inject constructor(
     
     fun getSeerrBackdropUrl(path: String?): String? {
         if (path == null) return null
-        return "https://image.tmdb.org/t/p/original$path"
+        return "https://image.tmdb.org/t/p/w1280$path"
     }
 
     /**

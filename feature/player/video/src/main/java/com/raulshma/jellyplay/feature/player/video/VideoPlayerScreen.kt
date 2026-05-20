@@ -149,6 +149,7 @@ fun VideoPlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
+    var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
 
     val isTv = LocalTvMode.current
 
@@ -523,11 +524,16 @@ fun VideoPlayerScreen(
                 factory = { ctx ->
                     engine.createSurfaceView(ctx).also { view ->
                         playerViewRef = view
+                        lastAppliedSubtitleStyle = uiState.subtitleStyle
                         viewModel.applySubtitleStyleToView(view)
                     }
                 },
                 update = { view ->
-                    viewModel.applySubtitleStyleToView(view)
+                    val currentStyle = uiState.subtitleStyle
+                    if (lastAppliedSubtitleStyle != currentStyle) {
+                        lastAppliedSubtitleStyle = currentStyle
+                        viewModel.applySubtitleStyleToView(view)
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
