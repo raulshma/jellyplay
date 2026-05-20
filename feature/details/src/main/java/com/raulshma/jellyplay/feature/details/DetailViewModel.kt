@@ -32,6 +32,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +40,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -145,14 +145,6 @@ class DetailViewModel @Inject constructor(
         val startPositionTicks: Long,
     )
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val activeDownload: Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
-        _detail.let { detailState ->
-            detailState.value?.item?.id?.let { itemId ->
-                downloadRepository.getDownloadByMediaItemIdFlow(itemId)
-            } ?: flowOf(null)
-        }
-
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
@@ -167,6 +159,9 @@ class DetailViewModel @Inject constructor(
             smartPlayTarget = null
             selectedSubtitleIndex = null
             selectedAudioIndex = null
+            seerrDataLoaded = false
+            _seerrRecommendations.value = emptyList()
+            _seerrSimilar.value = emptyList()
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
@@ -574,15 +569,19 @@ class DetailViewModel @Inject constructor(
             try {
                 if (mediaType == "movie") {
                     seerrRepository.getServiceRadarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
+                        val details = coroutineScope {
+                            servers.map { server ->
+                                async { seerrRepository.getServiceRadarrDetail(server.id).getOrNull() }
+                            }.awaitAll().filterNotNull()
                         }
                         _radarrServers.value = details
                     }
                 } else {
                     seerrRepository.getServiceSonarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
+                        val details = coroutineScope {
+                            servers.map { server ->
+                                async { seerrRepository.getServiceSonarrDetail(server.id).getOrNull() }
+                            }.awaitAll().filterNotNull()
                         }
                         _sonarrServers.value = details
                     }

@@ -31,7 +31,7 @@ fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
             artworkColors = it
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             try {
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)

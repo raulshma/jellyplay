@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,37 +70,41 @@ class PlaybackRepositoryImpl @Inject constructor(
         val segments = segmentsResult.getOrDefault(emptyList())
         if (segments.isNotEmpty()) return Result.success(segments)
 
-        val introResult = apiClient.getIntroTimestamps(itemId).getOrNull()
-        val creditResult = apiClient.getCreditTimestamps(itemId).getOrNull()
+        return coroutineScope {
+            val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
+            val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
+            val introResult = introDeferred.await()
+            val creditResult = creditDeferred.await()
 
-        val fallbackSegments = mutableListOf<MediaSegment>()
-        introResult?.let { ts ->
-            if (ts.hasIntro) {
-                fallbackSegments.add(
-                    MediaSegment(
-                        id = "legacy-intro-${ts.itemId}",
-                        itemId = ts.itemId,
-                        type = MediaSegmentType.INTRO,
-                        startTicks = ts.introStartTicks,
-                        endTicks = ts.introEndTicks,
+            val fallbackSegments = mutableListOf<MediaSegment>()
+            introResult?.let { ts ->
+                if (ts.hasIntro) {
+                    fallbackSegments.add(
+                        MediaSegment(
+                            id = "legacy-intro-${ts.itemId}",
+                            itemId = ts.itemId,
+                            type = MediaSegmentType.INTRO,
+                            startTicks = ts.introStartTicks,
+                            endTicks = ts.introEndTicks,
+                        )
                     )
-                )
+                }
             }
-        }
-        creditResult?.let { ts ->
-            if (ts.hasCredits) {
-                fallbackSegments.add(
-                    MediaSegment(
-                        id = "legacy-outro-${ts.itemId}",
-                        itemId = ts.itemId,
-                        type = MediaSegmentType.OUTRO,
-                        startTicks = ts.creditStartTicks,
-                        endTicks = ts.creditEndTicks,
+            creditResult?.let { ts ->
+                if (ts.hasCredits) {
+                    fallbackSegments.add(
+                        MediaSegment(
+                            id = "legacy-outro-${ts.itemId}",
+                            itemId = ts.itemId,
+                            type = MediaSegmentType.OUTRO,
+                            startTicks = ts.creditStartTicks,
+                            endTicks = ts.creditEndTicks,
+                        )
                     )
-                )
+                }
             }
+            Result.success(fallbackSegments)
         }
-        return Result.success(fallbackSegments)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

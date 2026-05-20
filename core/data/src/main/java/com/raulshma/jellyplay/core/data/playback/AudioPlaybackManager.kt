@@ -65,6 +65,7 @@ class AudioPlaybackManager @Inject constructor(
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private val mediaItemCache = mutableMapOf<String, MediaItem>()
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
 
@@ -362,8 +363,23 @@ class AudioPlaybackManager @Inject constructor(
                     val mediaItems = mutableListOf<MediaItem>()
                     for (i in queueItems.indices) {
                         val qi = queueItems[i]
-                        val startMs = if (i == playIndex) startPositionMs else 0L
-                        buildMediaItemForQueueItem(qi, startMs)?.let { mediaItems.add(it) }
+                        if (i == playIndex) {
+                            val startMs = startPositionMs
+                            buildMediaItemForQueueItem(qi, startMs)?.let { mediaItem ->
+                                mediaItems.add(mediaItem)
+                                mediaItemCache[qi.id] = mediaItem
+                            }
+                        } else {
+                            val cached = mediaItemCache[qi.id]
+                            if (cached != null) {
+                                mediaItems.add(cached)
+                            } else {
+                                buildMediaItemForQueueItem(qi)?.let { mediaItem ->
+                                    mediaItems.add(mediaItem)
+                                    mediaItemCache[qi.id] = mediaItem
+                                }
+                            }
+                        }
                     }
 
                     player.setMediaItems(mediaItems, playIndex, startPositionMs)
@@ -871,10 +887,20 @@ class AudioPlaybackManager @Inject constructor(
     private fun startPositionTracking() {
         positionJob?.cancel()
         positionJob = scope.launch {
+            var lastPosition = 0L
+            var lastDuration = 0L
             while (true) {
                 exoPlayer?.let { player ->
-                    _currentPosition.value = player.currentPosition
-                    _duration.value = player.duration.coerceAtLeast(0L)
+                    val pos = player.currentPosition
+                    val dur = player.duration.coerceAtLeast(0L)
+                    if (pos != lastPosition) {
+                        _currentPosition.value = pos
+                        lastPosition = pos
+                    }
+                    if (dur != lastDuration) {
+                        _duration.value = dur
+                        lastDuration = dur
+                    }
                     if (_lyrics.value.isNotEmpty()) {
                         _currentLyricIndex.value = findCurrentLyricLine(
                             _lyrics.value, _currentPosition.value

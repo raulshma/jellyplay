@@ -26,9 +26,11 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -126,8 +128,10 @@ class SettingsViewModel @Inject constructor(
 
     private fun calculateCacheSize() {
         viewModelScope.launch {
-            val cacheSize = getDirSize(context.cacheDir)
-            val externalCacheSize = context.externalCacheDir?.let { getDirSize(it) } ?: 0L
+            val cacheSize = withContext(Dispatchers.IO) { getDirSize(context.cacheDir) }
+            val externalCacheSize = withContext(Dispatchers.IO) {
+                context.externalCacheDir?.let { getDirSize(it) } ?: 0L
+            }
             cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
         }
     }

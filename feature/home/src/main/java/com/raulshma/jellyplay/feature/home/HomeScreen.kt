@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -60,6 +61,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -93,7 +95,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
-import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -279,134 +280,146 @@ fun HomeScreen(
                 }
         }
 
-        ArtworkThemeWrapper(
-            imageUrl = backdropUrl,
-            dynamicTheming = viewModel.dynamicTheming,
-            darkTheme = true,
-        ) {
-            val artworkColors = LocalArtworkColors.current
-            val baseOverlayColor = artworkColors?.darkMuted
-                ?: artworkColors?.dominant
-                ?: Color(0xFF1A1A2E)
-            val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
-            val backgroundColor by animateColorAsState(
-                targetValue = targetBackgroundColor,
-                animationSpec = tween(600, easing = FancyTransitionEasing),
-                label = "backgroundColor",
-            )
+        val artworkColors = if (viewModel.dynamicTheming && !backdropUrl.isNullOrBlank()) {
+            com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(backdropUrl)
+        } else null
+        val baseOverlayColor = artworkColors?.darkMuted
+            ?: artworkColors?.dominant
+            ?: Color(0xFF1A1A2E)
+        val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+        val backgroundColor by animateColorAsState(
+            targetValue = targetBackgroundColor,
+            animationSpec = tween(600, easing = FancyTransitionEasing),
+            label = "backgroundColor",
+        )
 
-            val navBarColor = LocalNavigationBarColor.current
+        val navBarColor = LocalNavigationBarColor.current
+        LaunchedEffect(backgroundColor) {
             navBarColor.value = backgroundColor
+        }
 
-            val appBarCollapsed by remember {
-                derivedStateOf {
-                    listState.firstVisibleItemIndex > 0 ||
-                            listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
-                }
+        val appBarCollapsed by remember {
+            derivedStateOf {
+                listState.firstVisibleItemIndex > 0 ||
+                        listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
             }
-            val appBarColor by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 1f else 0f,
-                animationSpec = tween(300, easing = AlphaEasing),
-                label = "appBarColor",
+        }
+        val appBarColor by animateFloatAsState(
+        targetValue = if (appBarCollapsed) 1f else 0f,
+            animationSpec = tween(300, easing = AlphaEasing),
+            label = "appBarColor",
+        )
+
+        val contentPad = adaptiveInfo.contentPadding(isTv)
+
+        val currentOnItemClick by rememberUpdatedState(onItemClick)
+        val currentViewModel by rememberUpdatedState(viewModel)
+        val mediaImageUrlBuilder = remember {
+            { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
+        }
+        val mediaBackdropUrlBuilder = remember {
+            { item: MediaItem -> currentViewModel.getBackdropUrl(item.id) }
+        }
+        val mediaOnItemClick = remember {
+            { item: MediaItem ->
+                currentOnItemClick(item.id)
+            }
+        }
+        val currentOnPlayClick by rememberUpdatedState(onPlayClick)
+        val mediaOnPlayClick = remember {
+            { item: MediaItem ->
+                val startPos = item.playbackPositionTicks ?: 0L
+                currentOnPlayClick(item.id, null, startPos)
+            }
+        }
+
+        val discoverSectionOrder = remember {
+            listOf(
+                com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
+                com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
+                com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
+                com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
+                com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
             )
+        }
 
-            val contentPad = adaptiveInfo.contentPadding(isTv)
+        val allDiscoverItems = remember(viewModel.discoverSections) {
+            discoverSectionOrder.flatMap {
+                viewModel.discoverSections[it] ?: emptyList()
+            }.distinctBy { it.id }
+        }
 
-            val animatedContainerColor = lerp(
-                Color.Transparent,
-                backgroundColor.copy(alpha = 0.95f),
-                appBarColor,
-            )
-
-            val currentOnItemClick by rememberUpdatedState(onItemClick)
-            val currentViewModel by rememberUpdatedState(viewModel)
-            val mediaImageUrlBuilder = remember {
-                { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
+        val discoverRows = remember(allDiscoverItems, adaptiveInfo.windowSizeClass) {
+            val result = mutableListOf<List<SeerrSearchItem>>()
+            var i = 0
+            val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+                listOf(3, 2, 3)
+            } else {
+                listOf(5, 4, 6, 5)
             }
-            val mediaBackdropUrlBuilder = remember {
-                { item: MediaItem -> currentViewModel.getBackdropUrl(item.id) }
+            var patternIdx = 0
+            while (i < allDiscoverItems.size) {
+                val targetSize = pattern[patternIdx % pattern.size]
+                val rowSize = targetSize.coerceAtMost(allDiscoverItems.size - i)
+                result.add(allDiscoverItems.subList(i, i + rowSize))
+                i += rowSize
+                patternIdx++
             }
-            val mediaOnItemClick = remember {
-                { item: MediaItem ->
-                    currentOnItemClick(item.id)
+            result
+        }
+
+        Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
+            when {
+                error != null && sections.isEmpty() -> {
+                    val contentPad = adaptiveInfo.contentPadding(isTv)
+                    ErrorScreen(
+                        message = error!!,
+                        onRetry = { viewModel.refresh() },
+                        modifier = Modifier.padding(horizontal = contentPad)
+                    )
                 }
-            }
-            val currentOnPlayClick by rememberUpdatedState(onPlayClick)
-            val mediaOnPlayClick = remember {
-                { item: MediaItem ->
-                    val startPos = item.playbackPositionTicks ?: 0L
-                    currentOnPlayClick(item.id, null, startPos)
-                }
-            }
-
-            val discoverSectionOrder = remember {
-                listOf(
-                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.TRENDING,
-                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_MOVIES,
-                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.POPULAR_TV,
-                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_MOVIES,
-                    com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType.UPCOMING_TV,
-                )
-            }
-
-            val allDiscoverItems = remember(viewModel.discoverSections) {
-                discoverSectionOrder.flatMap {
-                    viewModel.discoverSections[it] ?: emptyList()
-                }.distinctBy { it.id }
-            }
-
-            val discoverRows = remember(allDiscoverItems, adaptiveInfo.windowSizeClass) {
-                val result = mutableListOf<List<SeerrSearchItem>>()
-                var i = 0
-                val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
-                    listOf(3, 2, 3)
-                } else {
-                    listOf(5, 4, 6, 5)
-                }
-                var patternIdx = 0
-                while (i < allDiscoverItems.size) {
-                    val targetSize = pattern[patternIdx % pattern.size]
-                    val rowSize = targetSize.coerceAtMost(allDiscoverItems.size - i)
-                    result.add(allDiscoverItems.subList(i, i + rowSize))
-                    i += rowSize
-                    patternIdx++
-                }
-                result
-            }
-
-            Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
-                when {
-                    error != null && sections.isEmpty() -> {
+                else -> {
+                    if (sections.isEmpty()) {
                         val contentPad = adaptiveInfo.contentPadding(isTv)
-                        ErrorScreen(
-                            message = error!!,
-                            onRetry = { viewModel.refresh() },
-                            modifier = Modifier.padding(horizontal = contentPad)
-                        )
-                    }
-                    else -> {
-                        if (sections.isEmpty()) {
-                            val contentPad = adaptiveInfo.contentPadding(isTv)
-                            Box(
-                                Modifier.fillMaxSize().padding(horizontal = contentPad),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White.copy(alpha = 0.6f),
-                                )
+                        Box(
+                            Modifier.fillMaxSize().padding(horizontal = contentPad),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (isLoading) "" else "No content available. Check your Jellyfin libraries.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White.copy(alpha = 0.6f),
+                            )
+                        }
+                    } else {
+                        val visibleItemRange by remember {
+                            derivedStateOf {
+                                val info = listState.layoutInfo
+                                if (info.visibleItemsInfo.isEmpty()) {
+                                    IntRange(0, 0)
+                                } else {
+                                    IntRange(
+                                        info.visibleItemsInfo.first().index,
+                                        info.visibleItemsInfo.last().index,
+                                    )
+                                }
                             }
-                        } else {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    bottom = adaptiveInfo.bottomPadding(isTv),
-                                ),
-                            ) {
-                                if (featuredItem != null) {
-                                    item {
+                        }
+
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                bottom = adaptiveInfo.bottomPadding(isTv),
+                            ),
+                        ) {
+                            if (featuredItem != null) {
+                                item {
+                                    ArtworkThemeWrapper(
+                                        imageUrl = backdropUrl,
+                                        dynamicTheming = viewModel.dynamicTheming,
+                                        darkTheme = true,
+                                    ) {
                                         AnimatedHeroHeader(
                                             featuredItem = featuredItem,
                                             getBackdropUrl = { viewModel.getBackdropUrl(it) },
@@ -424,25 +437,22 @@ fun HomeScreen(
                                             },
                                         )
                                     }
-                                } else {
-                                    item { Spacer(Modifier.height(100.dp)) }
                                 }
+                            } else {
+                                item { Spacer(Modifier.height(100.dp)) }
+                            }
 
-                                items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
-                                    val section = sections[index]
-                                    val isFirstAfterHero = index == 0 && featuredItem != null
-                                    val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
-                                    
-                                    val isCurrentlyVisible by remember {
-                                        derivedStateOf {
-                                            listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
-                                        }
-                                    }
-                                    
-                                    var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
-                                    if (isCurrentlyVisible && !hasBeenVisible) {
-                                        hasBeenVisible = true
-                                    }
+                            items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
+                                val section = sections[index]
+                                val isFirstAfterHero = index == 0 && featuredItem != null
+                                val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
+                                
+                                val isCurrentlyVisible = sectionIndexInList in visibleItemRange
+                                
+                                var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
+                                if (isCurrentlyVisible && !hasBeenVisible) {
+                                    hasBeenVisible = true
+                                }
 
                                     val sectionAlpha by animateFloatAsState(
                                         targetValue = if (hasBeenVisible) 1f else 0f,
@@ -450,7 +460,7 @@ fun HomeScreen(
                                         label = "sectionAlpha",
                                     )
                                     val sectionSlideOffset by animateDpAsState(
-                                        targetValue = if (hasBeenVisible) 0.dp else (16.dp),
+                                        targetValue = if (hasBeenVisible) 0.dp else 16.dp,
                                         animationSpec = tween(400, easing = FancyTransitionEasing),
                                         label = "sectionSlide",
                                     )
@@ -460,123 +470,122 @@ fun HomeScreen(
                                         label = "sectionScale",
                                     )
 
-                                    val sectionModifier = Modifier
-                                        .fillMaxWidth()
-                                        .then(
-                                            if (isFirstAfterHero) {
-                                                Modifier.background(
-                                                    Brush.verticalGradient(
-                                                        colors = listOf(Color.Transparent, backgroundColor),
-                                                        startY = 0f,
-                                                        endY = with(density) { 10.dp.toPx() },
-                                                    )
+                                val sectionModifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isFirstAfterHero) {
+                                            Modifier.background(
+                                                Brush.verticalGradient(
+                                                    colors = listOf(Color.Transparent, backgroundColor),
+                                                    startY = 0f,
+                                                    endY = with(density) { 10.dp.toPx() },
                                                 )
-                                            } else {
-                                                Modifier.background(backgroundColor)
-                                            }
-                                        )
-                                        .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
-                                        .graphicsLayer {
-                                            alpha = sectionAlpha
-                                            scaleX = sectionScale
-                                            scaleY = sectionScale
+                                            )
+                                        } else {
+                                            Modifier.background(backgroundColor)
                                         }
-                                        .offset(y = sectionSlideOffset)
-
-                                    if (section.type == HomeSectionType.CONTINUE_WATCHING ||
-                                        section.type == HomeSectionType.NEXT_UP
-                                    ) {
-                                        ContinueWatchingRow(
-                                            title = section.title,
-                                            items = section.items,
-                                            imageUrlBuilder = mediaImageUrlBuilder,
-                                            backdropUrlBuilder = mediaBackdropUrlBuilder,
-                                            onItemClick = mediaOnItemClick,
-                                            onPlayClick = mediaOnPlayClick,
-                                            modifier = sectionModifier,
-                                        )
-                                    } else {
-                                        HomeMediaRow(
-                                            title = section.title,
-                                            items = section.items,
-                                            imageUrlBuilder = mediaImageUrlBuilder,
-                                            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                            onItemClick = mediaOnItemClick,
-                                            onPlayClick = mediaOnPlayClick,
-                                            modifier = sectionModifier,
-                                        )
+                                    )
+                                    .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
+                                    .graphicsLayer {
+                                        alpha = sectionAlpha
+                                        scaleX = sectionScale
+                                        scaleY = sectionScale
                                     }
+                                    .offset(y = sectionSlideOffset)
+
+                                if (section.type == HomeSectionType.CONTINUE_WATCHING ||
+                                    section.type == HomeSectionType.NEXT_UP
+                                ) {
+                                    ContinueWatchingRow(
+                                        title = section.title,
+                                        items = section.items,
+                                        imageUrlBuilder = mediaImageUrlBuilder,
+                                        backdropUrlBuilder = mediaBackdropUrlBuilder,
+                                        onItemClick = mediaOnItemClick,
+                                        onPlayClick = mediaOnPlayClick,
+                                        modifier = sectionModifier,
+                                    )
+                                } else {
+                                    HomeMediaRow(
+                                        title = section.title,
+                                        items = section.items,
+                                        imageUrlBuilder = mediaImageUrlBuilder,
+                                        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                        onItemClick = mediaOnItemClick,
+                                        onPlayClick = mediaOnPlayClick,
+                                        modifier = sectionModifier,
+                                    )
+                                }
+                            }
+
+                            // Seerr Discover Section
+                            if (viewModel.discoverEnabled && allDiscoverItems.isNotEmpty()) {
+                                val contentPad = adaptiveInfo.contentPadding(isTv)
+                                val spacing = 8.dp
+
+                                item(key = "seerr_discover_header") {
+                                    Text(
+                                        text = "Discover",
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(backgroundColor)
+                                            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
+                                    )
                                 }
 
-                                // Seerr Discover Section
-                                if (viewModel.discoverEnabled && allDiscoverItems.isNotEmpty()) {
-                                    val contentPad = adaptiveInfo.contentPadding(isTv)
-                                    val spacing = 8.dp
+                                items(
+                                    count = discoverRows.size,
+                                    key = { rowIndex -> "seerr_row_${discoverRows[rowIndex].firstOrNull()?.id ?: 0}" }
+                                ) { rowIndex ->
+                                    val rowItems = discoverRows[rowIndex]
+                                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)
+                                    val targetSize = pattern[rowIndex % pattern.size]
 
-                                    item(key = "seerr_discover_header") {
-                                        Text(
-                                            text = "Discover",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurface,
+                                    androidx.compose.runtime.CompositionLocalProvider(
+                                        LocalSeerrCardLoadingState provides seerrCardLoadingState,
+                                        LocalSeerrPrefetch provides seerrPrefetch,
+                                    ) {
+                                        Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(backgroundColor)
-                                                .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
-                                        )
-                                    }
-
-                                    items(
-                                        items = discoverRows,
-                                        key = { row -> "seerr_row_${row.firstOrNull()?.id ?: 0}" }
-                                    ) { rowItems ->
-                                        val rowIndex = discoverRows.indexOf(rowItems)
-                                        val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)
-                                        val targetSize = pattern[rowIndex % pattern.size]
-
-                                        androidx.compose.runtime.CompositionLocalProvider(
-                                            LocalSeerrCardLoadingState provides seerrCardLoadingState,
-                                            LocalSeerrPrefetch provides seerrPrefetch,
+                                                .padding(horizontal = contentPad, vertical = spacing / 2),
+                                            horizontalArrangement = Arrangement.spacedBy(spacing)
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(backgroundColor)
-                                                    .padding(horizontal = contentPad, vertical = spacing / 2),
-                                                horizontalArrangement = Arrangement.spacedBy(spacing)
-                                            ) {
-                                                rowItems.forEach { item ->
-                                                    SeerrMediaCard(
-                                                        item = item,
-                                                        imageUrl = item.posterUrl,
-                                                        isLoading = seerrCardLoadingState.isLoading(item.id),
-                                                        onClick = {
-                                                            val mediaType = when {
-                                                                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
-                                                                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
-                                                                else -> item.mediaType
-                                                            }
-                                                            if (seerrCardLoadingState != null && seerrPrefetch != null) {
-                                                                seerrCardLoadingState.startLoading(item.id)
-                                                                seerrPrefetch(item.id, mediaType) {
-                                                                    seerrCardLoadingState.stopLoading(item.id)
-                                                                    onSeerrItemClick(item.id, mediaType)
-                                                                }
-                                                            } else {
+                                            rowItems.forEach { item ->
+                                                SeerrMediaCard(
+                                                    item = item,
+                                                    imageUrl = item.posterUrl,
+                                                    isLoading = seerrCardLoadingState.isLoading(item.id),
+                                                    onClick = {
+                                                        val mediaType = when {
+                                                            item.mediaType.equals("movie", ignoreCase = true) -> "movie"
+                                                            item.mediaType.equals("tv", ignoreCase = true) -> "tv"
+                                                            else -> item.mediaType
+                                                        }
+                                                        if (seerrCardLoadingState != null && seerrPrefetch != null) {
+                                                            seerrCardLoadingState.startLoading(item.id)
+                                                            seerrPrefetch(item.id, mediaType) {
+                                                                seerrCardLoadingState.stopLoading(item.id)
                                                                 onSeerrItemClick(item.id, mediaType)
                                                             }
-                                                        },
-                                                        onRequestClick = { seerrRequestItem = item },
-                                                        modifier = Modifier.weight(1f),
-                                                    )
-                                                }
-                                                
-                                                // Fill remaining space if last row is incomplete
-                                                if (rowItems.size < targetSize) {
-                                                    repeat(targetSize - rowItems.size) {
-                                                        Spacer(Modifier.weight(1f))
-                                                    }
+                                                        } else {
+                                                            onSeerrItemClick(item.id, mediaType)
+                                                        }
+                                                    },
+                                                    onRequestClick = { seerrRequestItem = item },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
+                                            
+                                            // Fill remaining space if last row is incomplete
+                                            if (rowItems.size < targetSize) {
+                                                repeat(targetSize - rowItems.size) {
+                                                    Spacer(Modifier.weight(1f))
                                                 }
                                             }
                                         }
@@ -586,145 +595,140 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
 
-                val scrimAlpha by animateFloatAsState(
-                    targetValue = if (appBarCollapsed) 0.85f else 0f,
-                    animationSpec = tween(400, easing = FancyTransitionEasing),
-                    label = "scrimAlpha",
-                )
-                val borderAlpha by animateFloatAsState(
-                    targetValue = if (appBarCollapsed) 0.12f else 0f,
-                    animationSpec = tween(400, easing = FancyTransitionEasing),
-                    label = "borderAlpha",
-                )
-                val iconContainerAlpha by animateFloatAsState(
-                    targetValue = if (appBarCollapsed) 0.15f else 0f,
-                    animationSpec = tween(300, easing = AlphaEasing),
-                    label = "iconContainerAlpha",
-                )
+            val scrimAlpha by animateFloatAsState(
+                targetValue = if (appBarCollapsed) 0.85f else 0f,
+                animationSpec = tween(400, easing = FancyTransitionEasing),
+                label = "scrimAlpha",
+            )
+            val borderAlpha by animateFloatAsState(
+                targetValue = if (appBarCollapsed) 0.12f else 0f,
+                animationSpec = tween(400, easing = FancyTransitionEasing),
+                label = "borderAlpha",
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                backgroundColor.copy(alpha = scrimAlpha * 0.95f),
+                                backgroundColor.copy(alpha = scrimAlpha),
+                            ),
+                        )
+                    )
+            ) {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .statusBarsPadding()
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HeaderStatusIndicator(
+                        status = headerStatus,
+                        modifier = Modifier.padding(start = contentPad),
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth20)
+                            .padding(horizontal = 4.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ModeSwitch(
+                                currentMode = viewModel.homeMode,
+                                onModeChange = onModeChange,
+                            )
+                            IconButton(
+                                onClick = {
+                                    showSurprise = !showSurprise
+                                    if (!showSurprise) autoRotateEnabled = true
+                                },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = "Surprise Me",
+                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    onSyncPlayClick()
+                                },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Group,
+                                    contentDescription = "SyncPlay",
+                                    tint = Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            BadgedBox(
+                                badge = {
+                                    if (activeDownloadCount > 0) {
+                                        Badge {
+                                            Text(activeDownloadCount.toString())
+                                        }
+                                    }
+                                }
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        onDownloadsClick()
+                                    },
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Downloads",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    onSettingsClick()
+                                },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Box(
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .height(1.dp)
                         .background(
-                            Brush.verticalGradient(
+                            Brush.horizontalGradient(
                                 colors = listOf(
-                                    backgroundColor.copy(alpha = scrimAlpha * 0.95f),
-                                    backgroundColor.copy(alpha = scrimAlpha),
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = borderAlpha),
+                                    Color.White.copy(alpha = borderAlpha * 1.5f),
+                                    Color.White.copy(alpha = borderAlpha),
+                                    Color.Transparent,
                                 ),
                             )
                         )
-                ) {
-                    androidx.compose.foundation.layout.Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .statusBarsPadding()
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = contentPad),
-                        )
-
-                        Spacer(Modifier.weight(1f))
-
-                        androidx.compose.foundation.layout.Box(
-                            modifier = Modifier
-                                .clip(ShapeCache.smooth20)
-                                .padding(horizontal = 4.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ModeSwitch(
-                                    currentMode = viewModel.homeMode,
-                                    onModeChange = onModeChange,
-                                )
-                                IconButton(
-                                    onClick = {
-                                        showSurprise = !showSurprise
-                                        if (!showSurprise) autoRotateEnabled = true
-                                    },
-                                    modifier = Modifier.size(40.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = "Surprise Me",
-                                        tint = if (showSurprise) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        onSyncPlayClick()
-                                    },
-                                    modifier = Modifier.size(40.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Default.Group,
-                                        contentDescription = "SyncPlay",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                                BadgedBox(
-                                    badge = {
-                                        if (activeDownloadCount > 0) {
-                                            Badge {
-                                                Text(activeDownloadCount.toString())
-                                            }
-                                        }
-                                    }
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            onDownloadsClick()
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Download,
-                                            contentDescription = "Downloads",
-                                            tint = Color.White.copy(alpha = 0.9f),
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = {
-                                        onSettingsClick()
-                                    },
-                                    modifier = Modifier.size(40.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = borderAlpha),
-                                        Color.White.copy(alpha = borderAlpha * 1.5f),
-                                        Color.White.copy(alpha = borderAlpha),
-                                        Color.Transparent,
-                                    ),
-                                )
-                            )
-                    )
-                }
+                )
             }
         }
     }
@@ -972,10 +976,11 @@ private fun HeroHeader(
 
             if (item.genres.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                LazyRow(
+                Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) {
-                    items(item.genres, contentType = { "genre" }) { genre ->
+                    item.genres.forEach { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(ShapeCache.smooth16)
