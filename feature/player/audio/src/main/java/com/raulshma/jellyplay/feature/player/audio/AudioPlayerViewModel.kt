@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -88,6 +89,12 @@ class AudioPlayerViewModel @Inject constructor(
         private set
 
     var equalizerSettings by mutableStateOf(com.raulshma.jellyplay.core.model.EqualizerSettings())
+        private set
+
+    var normalizationMode by mutableStateOf(AudioNormalizationMode.NONE)
+        private set
+
+    var preAmpDb by mutableFloatStateOf(0f)
         private set
 
     var lyrics by mutableStateOf<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
@@ -182,6 +189,12 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.crossfadeDurationMs.collect { crossfadeDurationMs = it }
         }
         viewModelScope.launch {
+            audioPlaybackManager.replayGainMode.collect { normalizationMode = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.replayGainPreAmpDb.collect { preAmpDb = it }
+        }
+        viewModelScope.launch {
             sleepTimerManager.remainingMs.collect { remaining ->
                 sleepTimerRemainingMs = remaining
             }
@@ -222,6 +235,8 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
             audioPlaybackManager.setCrossfadeDurationMs(prefs.audioCrossfadeDurationMs)
             audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
+            audioPlaybackManager.setReplayGainMode(prefs.audioNormalizationMode)
+            audioPlaybackManager.setReplayGainPreAmpDb(prefs.replayGainPreAmpDb)
         }
 
         fetchBlurHash(itemId)
@@ -307,6 +322,20 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.setNightModeStrength(strength)
         viewModelScope.launch {
             preferencesStore.setNightModeStrength(strength)
+        }
+    }
+
+    fun setReplayGainMode(mode: AudioNormalizationMode) {
+        audioPlaybackManager.setReplayGainMode(mode)
+        viewModelScope.launch {
+            preferencesStore.setAudioNormalizationMode(mode)
+        }
+    }
+
+    fun setReplayGainPreAmpDb(db: Float) {
+        audioPlaybackManager.setReplayGainPreAmpDb(db)
+        viewModelScope.launch {
+            preferencesStore.setReplayGainPreAmpDb(db)
         }
     }
 

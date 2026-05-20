@@ -225,7 +225,7 @@ class LibVlcPlayerEngine(
                     options.add("--compressor-ratio=3")
                     options.add("--compressor-threshold=-18")
                 }
-                AudioNormalizationMode.REPLAYGAIN -> {
+                AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
                     options.add("--audio-filter=normvol")
                     options.add("--norm-max-level=0.8")
                 }

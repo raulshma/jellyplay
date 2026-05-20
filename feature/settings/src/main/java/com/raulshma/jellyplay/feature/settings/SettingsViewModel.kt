@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
@@ -368,6 +369,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfadeDurationMs(ms: Long) {
         viewModelScope.launch { preferencesStore.setCrossfadeDurationMs(ms) }
+    }
+
+    fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
+        viewModelScope.launch { preferencesStore.setAudioNormalizationMode(mode) }
+    }
+
+    fun setReplayGainPreAmpDb(db: Float) {
+        viewModelScope.launch { preferencesStore.setReplayGainPreAmpDb(db) }
     }
 
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) {

@@ -110,6 +110,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
@@ -182,6 +183,8 @@ fun SettingsScreen(
     var showSubtitleOffsetPicker by remember { mutableStateOf(false) }
     var showSubtitlePositionPicker by remember { mutableStateOf(false) }
     var showEqualizerEditor by remember { mutableStateOf(false) }
+    var showNormalizationModePicker by remember { mutableStateOf(false) }
+    var showPreAmpPicker by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -713,6 +716,7 @@ fun SettingsScreen(
                             if (preferences.equalizerEnabled) c++
                             if (preferences.dialogueBoostEnabled) c++
                             if (preferences.nightModeEnabled) c++
+                            if (preferences.audioNormalizationMode != AudioNormalizationMode.NONE) c++
                             c
                         }
 
@@ -772,6 +776,36 @@ fun SettingsScreen(
                             index = idx++, count = total,
                             onClick = { showCrossfadePicker = true },
                         )
+                        SettingListItem(
+                            icon = Icons.Default.Tune,
+                            title = "Volume Normalization",
+                            subtitle = when (preferences.audioNormalizationMode) {
+                                AudioNormalizationMode.NONE -> "Off"
+                                AudioNormalizationMode.DYNAMIC -> "Dynamic compression"
+                                AudioNormalizationMode.TRACK -> "Per-track ReplayGain"
+                                AudioNormalizationMode.ALBUM -> "Album-aware ReplayGain"
+                            },
+                            trailingText = when (preferences.audioNormalizationMode) {
+                                AudioNormalizationMode.NONE -> "Off"
+                                AudioNormalizationMode.DYNAMIC -> "Dynamic"
+                                AudioNormalizationMode.TRACK -> "Track"
+                                AudioNormalizationMode.ALBUM -> "Album"
+                            },
+                            index = idx++, count = total,
+                            onClick = { showNormalizationModePicker = true },
+                        )
+                        if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+                            preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
+                        ) {
+                            SettingListItem(
+                                icon = Icons.Default.Tune,
+                                title = "ReplayGain Pre-Amp",
+                                subtitle = "Fine-tune target loudness",
+                                trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
+                                index = idx++, count = total,
+                                onClick = { showPreAmpPicker = true },
+                            )
+                        }
                         SettingToggleItem(
                             icon = Icons.Default.Tune,
                             title = "Equalizer",
@@ -1409,6 +1443,37 @@ fun SettingsScreen(
             onSelect = { index ->
                 viewModel.setCrossfadeDurationMs(durations[index])
                 showCrossfadePicker = false
+            },
+        )
+    }
+
+    if (showNormalizationModePicker) {
+        val modes = AudioNormalizationMode.entries
+        SettingsChipPickerSheet(
+            title = "Volume Normalization",
+            options = modes.map { it.displayName },
+            selectedIndex = modes.indexOf(preferences.audioNormalizationMode),
+            onDismiss = { showNormalizationModePicker = false },
+            onSelect = { index ->
+                viewModel.setAudioNormalizationMode(modes[index])
+                showNormalizationModePicker = false
+            },
+        )
+    }
+
+    if (showPreAmpPicker) {
+        SettingsSliderSheet(
+            title = "ReplayGain Pre-Amp",
+            value = preferences.replayGainPreAmpDb,
+            valueRange = -15f..15f,
+            steps = 59,
+            valueLabel = { "${if (it >= 0) "+" else ""}${String.format("%.1f", it)} dB" },
+            rangeStartLabel = "-15 dB",
+            rangeEndLabel = "+15 dB",
+            onDismiss = { showPreAmpPicker = false },
+            onConfirm = {
+                viewModel.setReplayGainPreAmpDb(it)
+                showPreAmpPicker = false
             },
         )
     }

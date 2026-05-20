@@ -1395,6 +1395,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 ?.get(org.jellyfin.sdk.model.api.ImageType.BACKDROP)
                 ?.values?.firstOrNull(),
         ),
+        normalizationGain = normalizationGain,
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {
