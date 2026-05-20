@@ -9,6 +9,7 @@ import android.net.NetworkRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,8 @@ class NetworkMonitor @Inject constructor(
 ) {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * A [StateFlow] that always reflects the current [NetworkStatus].
@@ -76,7 +79,7 @@ class NetworkMonitor @Inject constructor(
         .distinctUntilChanged()
         .conflate()
         .stateIn(
-            scope = CoroutineScope(Dispatchers.IO),
+            scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = NetworkStatus.Online,
         )

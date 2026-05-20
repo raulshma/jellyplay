@@ -907,11 +907,11 @@ class AudioPlaybackManager @Inject constructor(
                         )
                     }
 
-                    if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
-                        startCrossfadeIfNeeded()
-                    }
+                if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
+                    startCrossfadeIfNeeded()
                 }
-                delay(100)
+            }
+            delay(500)
             }
         }
     }

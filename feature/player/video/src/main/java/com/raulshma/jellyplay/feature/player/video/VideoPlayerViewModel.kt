@@ -1189,7 +1189,7 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
                 }

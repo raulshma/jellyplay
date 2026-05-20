@@ -39,6 +39,8 @@ import kotlinx.serialization.json.Json
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -52,6 +54,7 @@ import javax.inject.Singleton
 class JellyfinApiClientImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val jellyfin: Jellyfin,
+    private val okHttpClient: OkHttpClient,
 ) : JellyfinApiClient {
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -688,7 +691,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getLyrics(itemId: String): Result<com.raulshma.jellyplay.core.model.LyricsResult> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        LyricsApi.fetchLyrics(server.address, itemId, user.accessToken)
+        LyricsApi.fetchLyrics(okHttpClient, server.address, itemId, user.accessToken)
     }
 
     override suspend fun getPlaylists(limit: Int): Result<List<com.raulshma.jellyplay.core.model.Playlist>> = apiResult {
@@ -1187,59 +1190,52 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/IntroSkipTimestamps")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
+        val url = "${server.address}/Items/$itemId/IntroSkipTimestamps"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
                 IntroTimestamps(itemId)
             } else {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val body = response.body?.string() ?: return@apiResult IntroTimestamps(itemId)
                 sharedJson.decodeFromString<IntroTimestamps>(body)
             }
-        } finally {
-            conn.disconnect()
         }
     }
 
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/CreditTimestamps")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
+        val url = "${server.address}/Items/$itemId/CreditTimestamps"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
                 CreditTimestamps(itemId)
             } else {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val body = response.body?.string() ?: return@apiResult CreditTimestamps(itemId)
                 sharedJson.decodeFromString<CreditTimestamps>(body)
             }
-        } finally {
-            conn.disconnect()
         }
     }
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/MediaSegments/$itemId")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
+        val url = "${server.address}/MediaSegments/$itemId"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
                 emptyList()
             } else {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val body = response.body?.string() ?: return@apiResult emptyList<MediaSegment>()
                 val response = sharedJson.decodeFromString<MediaSegmentsResponse>(body)
                 response.Items.map { dto ->
                     MediaSegment(
@@ -1251,46 +1247,37 @@ class JellyfinApiClientImpl @Inject constructor(
                     )
                 }
             }
-        } finally {
-            conn.disconnect()
         }
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) return@apiResult emptyList<RemoteSubtitleInfo>()
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
+        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@apiResult emptyList<RemoteSubtitleInfo>()
+            val body = response.body?.string() ?: return@apiResult emptyList<RemoteSubtitleInfo>()
             sharedJson.decodeFromString<List<RemoteSubtitleInfo>>(body)
-        } finally {
-            conn.disconnect()
         }
     }
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.doOutput = true
-        conn.outputStream.use { it.write(byteArrayOf()) }
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
-                throw Exception("Failed to download subtitle: ${conn.responseCode}")
+        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .post(okhttp3.RequestBody.create(null, ByteArray(0)))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Failed to download subtitle: ${response.code}")
             }
-        } finally {
-            conn.disconnect()
         }
     }
 

@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,14 +16,21 @@ class SeerrRepositoryImpl @Inject constructor(
     private val seerrPreferencesStore: SeerrPreferencesStore,
 ) : SeerrRepository {
 
-    private val cachedCredentials = AtomicReference<Pair<String, String>?>(null)
+    @Volatile
+    private var cachedCredentials: Pair<String, String>? = null
+    @Volatile
+    private var lastPrefsHash: Int = 0
 
     private suspend fun getCredentials(): Pair<String, String>? {
-        cachedCredentials.get()?.let { return it }
         val prefs = seerrPreferencesStore.preferences.first()
+        val prefsHash = listOf(prefs.serverUrl, prefs.apiKey).hashCode()
+        if (prefsHash == lastPrefsHash) {
+            cachedCredentials?.let { return it }
+        }
         if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) return null
         val creds = Pair(prefs.serverUrl, prefs.apiKey)
-        cachedCredentials.set(creds)
+        cachedCredentials = creds
+        lastPrefsHash = prefsHash
         return creds
     }
 

@@ -470,12 +470,16 @@ fun PosterCard(
                 val isSeries = item.mediaType == MediaType.SERIES
                 val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
                 val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                val remainingTime = if (hasWatchProgress && hasValidDuration) {
-                    formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                } else null
-                val totalTime = if (hasValidDuration && !hasWatchProgress) {
-                    formatDurationFromTicks(item.runTimeTicks!!)
-                } else null
+                val remainingTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
+                    if (hasWatchProgress && hasValidDuration) {
+                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                    } else null
+                }
+                val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
+                    if (hasValidDuration && !hasWatchProgress) {
+                        formatDurationFromTicks(item.runTimeTicks!!)
+                    } else null
+                }
                 
                 val timeText = remainingTime ?: totalTime
                 if (timeText != null) {

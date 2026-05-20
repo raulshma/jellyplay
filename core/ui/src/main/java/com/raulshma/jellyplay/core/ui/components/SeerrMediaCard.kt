@@ -101,32 +101,29 @@ fun SeerrMediaCard(
         label = "seerrCardBrightness",
     )
 
-    val shimmerAndGlow = if (isLoading) {
-        val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
-        val shimmerOffset by infiniteTransition.animateFloat(
-            initialValue = -500f,
-            targetValue = 1500f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-            label = "seerrShimmerOffset",
-        )
+    val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = -500f,
+        targetValue = 1500f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "seerrShimmerOffset",
+    )
 
-        val glowAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 0.8f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = FancyTransitionEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "seerrGlowAlpha",
-        )
-        shimmerOffset to glowAlpha
-    } else {
-        remember { 0f to 0f }
-    }
-    val (shimmerOffset, glowAlpha) = shimmerAndGlow
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FancyTransitionEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "seerrGlowAlpha",
+    )
+
+    val effectiveShimmerOffset = if (isLoading) shimmerOffset else 0f
+    val effectiveGlowAlpha = if (isLoading) glowAlpha else 0f
 
     val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
         val dateStr = item.releaseDate ?: item.firstAirDate
@@ -172,9 +169,9 @@ fun SeerrMediaCard(
                             width = (1.5).dp,
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    glowColor.copy(alpha = glowAlpha * 0.6f),
-                                    glowColor.copy(alpha = glowAlpha),
-                                    glowColor.copy(alpha = glowAlpha * 0.6f),
+                                    glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
+                                    glowColor.copy(alpha = effectiveGlowAlpha),
+                                    glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
                                 ),
                                 start = Offset.Zero,
                                 end = Offset(1000f, 1500f),
@@ -237,8 +234,8 @@ fun SeerrMediaCard(
                             Color.White.copy(alpha = 0.18f),
                             Color.White.copy(alpha = 0.0f),
                         ),
-                        start = Offset(shimmerOffset, 0f),
-                        end = Offset(shimmerOffset + 400f, 400f),
+                        start = Offset(effectiveShimmerOffset, 0f),
+                        end = Offset(effectiveShimmerOffset + 400f, 400f),
                     )
                     Box(
                         modifier = Modifier

@@ -34,8 +34,17 @@ fun MediaImage(
     fallbackUrls: List<String> = emptyList(),
     blurHash: String? = null,
     crossfade: Boolean = true,
-    size: CoilSize = CoilSize.ORIGINAL,
+    size: CoilSize = CoilSize(1024, 1024),
 ) {
+    val context = LocalContext.current
+    val imageRequest = remember(url, size, crossfade) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .crossfade(crossfade)
+            .size(size)
+            .build()
+    }
+
     val allUrls = remember(url, fallbackUrls) { listOf(url) + fallbackUrls }
     var currentIndex by remember(url, fallbackUrls) { mutableIntStateOf(0) }
     var isError by remember(url, fallbackUrls) { mutableStateOf(false) }
@@ -50,12 +59,19 @@ fun MediaImage(
         }
 
         if (!isError && currentIndex < allUrls.size) {
+            val currentRequest = if (currentIndex == 0) {
+                imageRequest
+            } else {
+                remember(allUrls[currentIndex], size, crossfade) {
+                    ImageRequest.Builder(context)
+                        .data(allUrls[currentIndex])
+                        .crossfade(crossfade)
+                        .size(size)
+                        .build()
+                }
+            }
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(allUrls[currentIndex])
-                    .crossfade(crossfade)
-                    .size(size)
-                    .build(),
+                model = currentRequest,
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
