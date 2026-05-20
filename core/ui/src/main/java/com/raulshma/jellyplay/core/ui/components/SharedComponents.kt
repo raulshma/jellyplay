@@ -108,7 +108,7 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)
             color = it
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             try {
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
@@ -536,7 +536,7 @@ fun MediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = blurHashBuilder(item),
-                    onPlayClick = onPlayClick?.let { { it(item) } },
+                    onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
                 )
             }
         }

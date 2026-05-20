@@ -35,13 +35,22 @@ internal class PlaybackProgressReporter(
         autoSkippedSegments.clear()
         val engine = getMediaEngine() ?: return
         positionJob = viewModel.viewModelScope.launch {
+            var lastPos = Long.MIN_VALUE
+            var lastDur = Long.MIN_VALUE
             engine.positionFlow.collect { pos ->
-                uiState.update { it.copy(
-                    currentPosition = pos,
-                    duration = engine.durationMs.coerceAtLeast(0L),
-                    bufferedPosition = engine.bufferedPositionMs.value,
-                    videoStats = engine.videoStats.value,
-                ) }
+                val dur = engine.durationMs.coerceAtLeast(0L)
+                val buffered = engine.bufferedPositionMs.value
+                val stats = engine.videoStats.value
+                if (pos != lastPos || dur != lastDur) {
+                    lastPos = pos
+                    lastDur = dur
+                    uiState.update { it.copy(
+                        currentPosition = pos,
+                        duration = dur,
+                        bufferedPosition = buffered,
+                        videoStats = stats,
+                    ) }
+                }
                 checkAutoSkip(pos)
             }
         }

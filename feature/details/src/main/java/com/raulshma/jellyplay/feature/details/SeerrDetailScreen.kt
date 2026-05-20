@@ -159,26 +159,28 @@ fun SeerrDetailScreen(
             }
 
             if (showRequestDialog) {
-                val item = movieDetail?.let {
-                    SeerrSearchItem(
-                        id = it.id,
-                        mediaType = "movie",
-                        title = it.title,
-                        overview = it.overview,
-                        posterPath = it.posterPath,
-                        releaseDate = it.releaseDate,
-                        mediaInfo = it.mediaInfo
-                    )
-                } ?: tvDetail?.let {
-                    SeerrSearchItem(
-                        id = it.id,
-                        mediaType = "tv",
-                        name = it.name,
-                        overview = it.overview,
-                        posterPath = it.posterPath,
-                        firstAirDate = it.firstAirDate,
-                        mediaInfo = it.mediaInfo
-                    )
+                val item = remember(movieDetail, tvDetail) {
+                    movieDetail?.let {
+                        SeerrSearchItem(
+                            id = it.id,
+                            mediaType = "movie",
+                            title = it.title,
+                            overview = it.overview,
+                            posterPath = it.posterPath,
+                            releaseDate = it.releaseDate,
+                            mediaInfo = it.mediaInfo
+                        )
+                    } ?: tvDetail?.let {
+                        SeerrSearchItem(
+                            id = it.id,
+                            mediaType = "tv",
+                            name = it.name,
+                            overview = it.overview,
+                            posterPath = it.posterPath,
+                            firstAirDate = it.firstAirDate,
+                            mediaInfo = it.mediaInfo
+                        )
+                    }
                 }
 
                 item?.let {
@@ -262,7 +264,7 @@ private fun SeerrDetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    navBarColor.value = backgroundColor
+    SideEffect { navBarColor.value = backgroundColor }
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
@@ -1307,7 +1309,7 @@ private fun MediaInformationSection(
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
 ) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.US)
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.US) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(

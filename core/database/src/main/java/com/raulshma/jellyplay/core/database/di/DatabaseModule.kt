@@ -64,6 +64,13 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId_lastConnected ON users(serverId, lastConnected)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_createdAt ON downloads(createdAt)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(
@@ -73,7 +80,7 @@ object DatabaseModule {
         JellyPlayDatabase::class.java,
         "jellyplay.db",
     )
-        .addMigrations(MIGRATION_2_3, MIGRATION_4_5, MIGRATION_7_8)
+        .addMigrations(MIGRATION_2_3, MIGRATION_4_5, MIGRATION_7_8, MIGRATION_8_9)
         .fallbackToDestructiveMigration(true)
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()

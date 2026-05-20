@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import android.util.Log
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +33,10 @@ class AuthRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
 ) : AuthRepository {
+
+    private companion object {
+        val json = Json { ignoreUnknownKeys = true }
+    }
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->
         entities.map { it.toServerInfo() }
@@ -135,7 +140,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = user.accessToken,
                     primaryImageTag = user.primaryImageTag,
                     maxParentalAgeRating = user.maxParentalAgeRating,
-                    enabledFolderIds = kotlinx.serialization.json.Json.encodeToString(
+                    enabledFolderIds = json.encodeToString(
                         user.enabledFolderIds
                     ),
                     lastConnected = System.currentTimeMillis(),
@@ -211,7 +216,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = user.accessToken,
                     primaryImageTag = user.primaryImageTag,
                     maxParentalAgeRating = user.maxParentalAgeRating,
-                    enabledFolderIds = kotlinx.serialization.json.Json.encodeToString(
+                    enabledFolderIds = json.encodeToString(
                         user.enabledFolderIds
                     ),
                     lastConnected = System.currentTimeMillis(),
@@ -268,7 +273,7 @@ class AuthRepositoryImpl @Inject constructor(
                         primaryImageTag = userEntity.primaryImageTag,
                         enabledFolderIds = userEntity.enabledFolderIds?.let {
                             try {
-                                kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
+                                json.decodeFromString<List<String>>(it)
                             } catch (_: Exception) { emptyList() }
                         } ?: emptyList(),
                     )
@@ -338,7 +343,7 @@ class AuthRepositoryImpl @Inject constructor(
         primaryImageTag = primaryImageTag,
         enabledFolderIds = enabledFolderIds?.let {
             try {
-                kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
+                json.decodeFromString<List<String>>(it)
             } catch (_: Exception) { emptyList() }
         } ?: emptyList(),
     )

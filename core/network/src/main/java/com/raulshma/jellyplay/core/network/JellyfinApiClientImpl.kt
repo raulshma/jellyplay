@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -67,6 +68,10 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
+
+    private companion object {
+        val sharedJson = Json { ignoreUnknownKeys = true }
+    }
 
     private val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
@@ -417,9 +422,10 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = apiResult {
-        val client = requireApi()
-        val uuid = itemId.toUUID()
-        val item = client.userLibraryApi.getItem(itemId = uuid).content
+        coroutineScope {
+            val client = requireApi()
+            val uuid = itemId.toUUID()
+            val item = client.userLibraryApi.getItem(itemId = uuid).content
         val people = (item.people?.map { person ->
             PersonInfo(
                 id = person.id.toString(),
@@ -429,16 +435,19 @@ class JellyfinApiClientImpl @Inject constructor(
                 primaryImageTag = person.primaryImageTag,
             )
         } ?: emptyList()).distinctBy { it.id }
-        val relatedItems = try {
-            client.libraryApi.getSimilarItems(
-                itemId = uuid,
-                limit = 12,
-            ).content.items.map { it.toMediaItem() }
-                .distinctBy { it.id }
-                .filter { it.id != itemId }
-        } catch (_: Exception) {
-            emptyList()
+        val relatedItemsDeferred = async {
+            try {
+                client.libraryApi.getSimilarItems(
+                    itemId = uuid,
+                    limit = 12,
+                ).content.items.map { it.toMediaItem() }
+                    .distinctBy { it.id }
+                    .filter { it.id != itemId }
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
+        val relatedItems = relatedItemsDeferred.await()
         val chapters = item.chapters?.map { chapter ->
             ChapterInfo(
                 name = chapter.name ?: "",
@@ -510,6 +519,7 @@ class JellyfinApiClientImpl @Inject constructor(
             externalUrls = externalUrls,
             providerIds = providerIds,
         )
+        }
     }
 
     override suspend fun getSearchHints(
@@ -908,21 +918,25 @@ class JellyfinApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<EpgGuide> = apiResult {
-        val client = requireApi()
-        val channels = client.itemsApi.getItems(
-            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
-            startIndex = startIndex,
-            limit = limit,
-            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
-        ).content.items.map { it.toLiveTvChannel() }
-
-        val programs = client.itemsApi.getItems(
-            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
-            limit = 500,
-            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
-        ).content.items.map { it.toLiveTvProgram() }
-
-        EpgGuide(channels = channels, programs = programs)
+        coroutineScope {
+            val client = requireApi()
+            val channelsDeferred = async {
+                client.itemsApi.getItems(
+                    includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
+                    startIndex = startIndex,
+                    limit = limit,
+                    fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+                ).content.items.map { it.toLiveTvChannel() }
+            }
+            val programsDeferred = async {
+                client.itemsApi.getItems(
+                    includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
+                    limit = 500,
+                    fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+                ).content.items.map { it.toLiveTvProgram() }
+            }
+            EpgGuide(channels = channelsDeferred.await(), programs = programsDeferred.await())
+        }
     }
 
     override suspend fun getTimers(): Result<List<DvrTimer>> = apiResult {
@@ -1184,8 +1198,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 IntroTimestamps(itemId)
             } else {
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                json.decodeFromString<IntroTimestamps>(body)
+                sharedJson.decodeFromString<IntroTimestamps>(body)
             }
         } finally {
             conn.disconnect()
@@ -1206,8 +1219,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 CreditTimestamps(itemId)
             } else {
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                json.decodeFromString<CreditTimestamps>(body)
+                sharedJson.decodeFromString<CreditTimestamps>(body)
             }
         } finally {
             conn.disconnect()
@@ -1228,8 +1240,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 emptyList()
             } else {
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                val response = json.decodeFromString<MediaSegmentsResponse>(body)
+                val response = sharedJson.decodeFromString<MediaSegmentsResponse>(body)
                 response.Items.map { dto ->
                     MediaSegment(
                         id = dto.Id,
@@ -1257,8 +1268,7 @@ class JellyfinApiClientImpl @Inject constructor(
         try {
             if (conn.responseCode !in 200..299) return@apiResult emptyList<RemoteSubtitleInfo>()
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-            json.decodeFromString<List<RemoteSubtitleInfo>>(body)
+            sharedJson.decodeFromString<List<RemoteSubtitleInfo>>(body)
         } finally {
             conn.disconnect()
         }

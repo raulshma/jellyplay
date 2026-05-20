@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -10,6 +11,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 internal object LyricsApi {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun fetchLyrics(serverAddress: String, itemId: String, accessToken: String): LyricsResult {
         val url = URL("$serverAddress/Items/$itemId/Lyrics?api_key=$accessToken")
@@ -24,7 +27,6 @@ internal object LyricsApi {
         }
 
         val lines = try {
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             val array = json.parseToJsonElement(body).jsonArray
             array.map { element ->
                 val obj = element.jsonObject

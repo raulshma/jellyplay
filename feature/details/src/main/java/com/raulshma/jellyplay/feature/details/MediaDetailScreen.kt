@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,6 +86,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -373,7 +375,7 @@ private fun DetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    navBarColor.value = backgroundColor
+    SideEffect { navBarColor.value = backgroundColor }
 
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(
@@ -882,13 +884,8 @@ private fun StaggeredDetailSection(
     delayIndex: Int,
     content: @Composable () -> Unit,
 ) {
-    var shouldShow by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        shouldShow = visible
-    }
-
     AnimatedVisibility(
-        visible = visible && shouldShow,
+        visible = visible,
         enter = fadeIn(
             animationSpec = tween(300, delayMillis = delayIndex * 40, easing = AlphaEasing),
         ) + slideInVertically(
@@ -2014,109 +2011,89 @@ private fun DetailContentBody(
         
         if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 8) {
-                Column {
-                    Text(
-                        text = "Seerr Recommendations",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .tvFocusRestorer()
-                            .tvFocusExitHandler(),
-                    ) {
-                        items(
-                            count = seerrRecommendations.size,
-                            key = { index -> "seerr_rec_${seerrRecommendations[index].id}" },
-                            contentType = { "seerrRecItem" },
-                        ) { index ->
-                            val seerrItem = seerrRecommendations[index]
-                            val adaptiveInfo = LocalAdaptiveInfo.current
-                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
-                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
-                            SeerrMediaCard(
-                                item = seerrItem,
-                                imageUrl = seerrItem.posterUrl,
-                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
-                                onClick = {
-                                    if (loadingState != null && prefetch != null) {
-                                        loadingState.startLoading(seerrItem.id)
-                                        prefetch(seerrItem.id, seerrItem.mediaType) {
-                                            loadingState.stopLoading(seerrItem.id)
-                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                        }
-                                    } else {
-                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                    }
-                                },
-                                onRequestClick = { onSeerrRequest(seerrItem) },
-                                modifier = Modifier.width(
-                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
-                                ),
-                            )
-                        }
-                    }
-                }
+                SeerrItemsRow(
+                    title = "Seerr Recommendations",
+                    keyPrefix = "seerr_rec",
+                    contentType = "seerrRecItem",
+                    items = seerrRecommendations,
+                    onSeerrRequest = onSeerrRequest,
+                    onNavigate = onNavigate,
+                )
             }
         }
 
         // ── Seerr Similar Section ──
         if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrSimilar.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 9) {
-                Column {
-                    Text(
-                        text = "Seerr Similar",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .tvFocusRestorer()
-                            .tvFocusExitHandler(),
-                    ) {
-                        items(
-                            count = seerrSimilar.size,
-                            key = { index -> "seerr_sim_${seerrSimilar[index].id}" },
-                            contentType = { "seerrSimItem" },
-                        ) { index ->
-                            val seerrItem = seerrSimilar[index]
-                            val adaptiveInfo = LocalAdaptiveInfo.current
-                            val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
-                            val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
-                            SeerrMediaCard(
-                                item = seerrItem,
-                                imageUrl = seerrItem.posterUrl,
-                                isLoading = loadingState?.isLoading(seerrItem.id) == true,
-                                onClick = {
-                                    if (loadingState != null && prefetch != null) {
-                                        loadingState.startLoading(seerrItem.id)
-                                        prefetch(seerrItem.id, seerrItem.mediaType) {
-                                            loadingState.stopLoading(seerrItem.id)
-                                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                        }
-                                    } else {
-                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                    }
-                                },
-                                onRequestClick = { onSeerrRequest(seerrItem) },
-                                modifier = Modifier.width(
-                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
-                                ),
-                            )
-                        }
-                    }
-                }
+                SeerrItemsRow(
+                    title = "Seerr Similar",
+                    keyPrefix = "seerr_sim",
+                    contentType = "seerrSimItem",
+                    items = seerrSimilar,
+                    onSeerrRequest = onSeerrRequest,
+                    onNavigate = onNavigate,
+                )
             }
         }
     }
+    }
+}
+
+@Composable
+private fun SeerrItemsRow(
+    title: String,
+    keyPrefix: String,
+    contentType: String,
+    items: List<SeerrSearchItem>,
+    onSeerrRequest: (SeerrSearchItem) -> Unit,
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
+) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
+    val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+    val cardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = Color.White,
+        )
+        Spacer(Modifier.height(16.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
+        ) {
+            items(
+                count = items.size,
+                key = { index -> "${keyPrefix}_${items[index].id}" },
+                contentType = { contentType },
+            ) { index ->
+                val seerrItem = items[index]
+                SeerrMediaCard(
+                    item = seerrItem,
+                    imageUrl = seerrItem.posterUrl,
+                    isLoading = loadingState?.isLoading(seerrItem.id) == true,
+                    onClick = {
+                        if (loadingState != null && prefetch != null) {
+                            loadingState.startLoading(seerrItem.id)
+                            prefetch(seerrItem.id, seerrItem.mediaType) {
+                                loadingState.stopLoading(seerrItem.id)
+                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                            }
+                        } else {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                        }
+                    },
+                    onRequestClick = { onSeerrRequest(seerrItem) },
+                    modifier = Modifier.width(cardWidth),
+                )
+            }
+        }
     }
 }
 
@@ -2170,8 +2147,7 @@ private fun SeasonsSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
-                val index = seasons.indexOf(season)
+            itemsIndexed(seasons, key = { _, it -> it.id }, contentType = { _, _ -> "season" }) { index, season ->
                 val isSelected = index == selectedSeasonIndex
                 val targetColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f)
                 val targetContentColor = if (isSelected) Color.Black else Color.White

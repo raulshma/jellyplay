@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -80,21 +81,20 @@ class SearchViewModel @Inject constructor(
     // Track the current seerr search job so we can cancel it when the query changes
     private var seerrSearchJob: Job? = null
 
-    val pagedResults: Flow<PagingData<MediaItem>> = queryFlow
-        .debounce(400)
-        .distinctUntilChanged()
-        .flatMapLatest { currentQuery ->
-            // Cancel previous seerr search when query changes
+    val pagedResults: Flow<PagingData<MediaItem>> = combine(
+        queryFlow.debounce(400).distinctUntilChanged(),
+        _filters,
+    ) { q, f -> q to f }
+        .flatMapLatest { (currentQuery, filters) ->
             seerrSearchJob?.cancel()
             if (currentQuery.isBlank()) {
                 _seerrResults.value = emptyList()
                 flowOf(PagingData.empty())
             } else {
-                // Launch seerr search in parallel — does not block library search
                 seerrSearchJob = viewModelScope.launch { searchSeerr(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
-                    mediaTypes = _filters.value.mediaTypes.ifEmpty { null },
+                    mediaTypes = filters.mediaTypes.ifEmpty { null },
                 )
             }
         }
@@ -111,9 +111,6 @@ class SearchViewModel @Inject constructor(
 
     fun updateFilters(newFilters: SearchFilters) {
         _filters.update { newFilters }
-        if (query.isNotBlank()) {
-            queryFlow.value = query
-        }
     }
 
     fun toggleMediaType(mediaType: MediaType) {
@@ -123,9 +120,6 @@ class SearchViewModel @Inject constructor(
                 mediaTypes = if (mediaType in types) types - mediaType else types + mediaType,
             )
         }
-        if (query.isNotBlank()) {
-            queryFlow.value = query
-        }
     }
 
     fun toggleShowFilters() {
@@ -134,9 +128,6 @@ class SearchViewModel @Inject constructor(
 
     fun clearFilters() {
         _filters.update { SearchFilters() }
-        if (query.isNotBlank()) {
-            queryFlow.value = query
-        }
     }
 
     private fun loadGenres() {
