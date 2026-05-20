@@ -740,26 +740,17 @@ private fun AnimatedSearchItem(
         visible = true
     }
 
-    val alpha by animateFloatAsState(
+    val animationProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30),
-        label = "searchItemAlpha",
-    )
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 20f,
         animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
-        label = "searchItemOffsetY",
-    )
-    val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.95f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
-        label = "searchItemScale",
+        label = "searchItemAnimation",
     )
 
     Box(
         modifier = Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
+            this.alpha = animationProgress
+            translationY = (1f - animationProgress) * 20f
+            val scale = 0.95f + (0.05f * animationProgress)
             scaleX = scale
             scaleY = scale
         },

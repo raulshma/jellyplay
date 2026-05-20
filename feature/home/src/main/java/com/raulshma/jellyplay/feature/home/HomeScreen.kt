@@ -454,21 +454,11 @@ fun HomeScreen(
                                     hasBeenVisible = true
                                 }
 
-                                    val sectionAlpha by animateFloatAsState(
-                                        targetValue = if (hasBeenVisible) 1f else 0f,
-                                        animationSpec = tween(350, easing = AlphaEasing),
-                                        label = "sectionAlpha",
-                                    )
-                                    val sectionSlideOffset by animateDpAsState(
-                                        targetValue = if (hasBeenVisible) 0.dp else 16.dp,
-                                        animationSpec = tween(400, easing = FancyTransitionEasing),
-                                        label = "sectionSlide",
-                                    )
-                                    val sectionScale by animateFloatAsState(
-                                        targetValue = if (hasBeenVisible) 1f else 0.97f,
-                                        animationSpec = tween(400, easing = PointToPointEasing),
-                                        label = "sectionScale",
-                                    )
+                                val sectionAnimation by animateFloatAsState(
+                                    targetValue = if (hasBeenVisible) 1f else 0f,
+                                    animationSpec = tween(350, easing = AlphaEasing),
+                                    label = "sectionAnimation",
+                                )
 
                                 val sectionModifier = Modifier
                                     .fillMaxWidth()
@@ -487,11 +477,12 @@ fun HomeScreen(
                                     )
                                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
                                     .graphicsLayer {
-                                        alpha = sectionAlpha
-                                        scaleX = sectionScale
-                                        scaleY = sectionScale
+                                        alpha = sectionAnimation
+                                        val scale = 0.97f + (0.03f * sectionAnimation)
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationY = (1f - sectionAnimation) * 16.dp.toPx()
                                     }
-                                    .offset(y = sectionSlideOffset)
 
                                 if (section.type == HomeSectionType.CONTINUE_WATCHING ||
                                     section.type == HomeSectionType.NEXT_UP
@@ -539,7 +530,8 @@ fun HomeScreen(
 
                                 items(
                                     count = discoverRows.size,
-                                    key = { rowIndex -> "seerr_row_${discoverRows[rowIndex].firstOrNull()?.id ?: 0}" }
+                                    key = { rowIndex -> "seerr_row_${discoverRows[rowIndex].firstOrNull()?.id ?: 0}" },
+                                    contentType = { "seerrRow" }
                                 ) { rowIndex ->
                                     val rowItems = discoverRows[rowIndex]
                                     val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)

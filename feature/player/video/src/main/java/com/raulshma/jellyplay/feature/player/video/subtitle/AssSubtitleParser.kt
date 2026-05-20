@@ -8,6 +8,10 @@ import androidx.media3.extractor.text.SubtitleParser
 
 class AssSubtitleParser : SubtitleParser {
 
+    companion object {
+        private val ASS_TAG_REGEX = Regex("\\{[^}]*}")
+    }
+
     override fun getCueReplacementBehavior(): Int = androidx.media3.common.Format.CUE_REPLACEMENT_BEHAVIOR_REPLACE
 
     override fun parse(
@@ -77,7 +81,7 @@ class AssSubtitleParser : SubtitleParser {
                     .replace("\\N", "\n")
                     .replace("\\n", "\n")
                     .replace("\\h", " ")
-                    .replace(Regex("\\{[^}]*}"), "")
+                    .replace(ASS_TAG_REGEX, "")
 
                 if (rawText.isBlank()) continue
 
