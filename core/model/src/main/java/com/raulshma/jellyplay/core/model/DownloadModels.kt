@@ -99,6 +99,11 @@ data class UserPreferences(
     val audioCrossfadeDurationMs: Long = 0L,
     val sleepTimerDurationMs: Long = 0L,
     val sleepTimerEndOfEpisode: Boolean = false,
+    val dreamImageCategories: Set<DreamImageCategory> = setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES),
+    val dreamSlideshowIntervalMs: Long = 15_000L,
+    val dreamKenBurnsEnabled: Boolean = true,
+    val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
+    val dreamShowTitle: Boolean = true,
 )
 
 @Immutable

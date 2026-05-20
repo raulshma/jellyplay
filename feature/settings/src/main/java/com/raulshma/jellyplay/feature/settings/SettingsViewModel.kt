@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DreamImageCategory
+import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -366,5 +368,25 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfadeDurationMs(ms: Long) {
         viewModelScope.launch { preferencesStore.setCrossfadeDurationMs(ms) }
+    }
+
+    fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
+        viewModelScope.launch { preferencesStore.setDreamImageCategories(categories) }
+    }
+
+    fun setDreamSlideshowIntervalMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setDreamSlideshowIntervalMs(ms) }
+    }
+
+    fun setDreamKenBurnsEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setDreamKenBurnsEnabled(enabled) }
+    }
+
+    fun setDreamTransitionStyle(style: DreamTransitionStyle) {
+        viewModelScope.launch { preferencesStore.setDreamTransitionStyle(style) }
+    }
+
+    fun setDreamShowTitle(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setDreamShowTitle(enabled) }
     }
 }
