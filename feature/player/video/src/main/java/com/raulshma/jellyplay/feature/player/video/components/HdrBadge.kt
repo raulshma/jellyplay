@@ -37,13 +37,13 @@ fun HdrBadge(
     val isDolby = hdrType.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi")
 
     val bgColor = if (isDolby) {
-        Color(0xFF1A1A2E).copy(alpha = 0.85f)
+        Color(0xFF1A1A1A).copy(alpha = 0.85f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
     }
 
     val borderColor = if (isDolby) {
-        Color(0xFFB8860B).copy(alpha = 0.4f)
+        Color(0xFFB8860B).copy(alpha = 0.6f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     }

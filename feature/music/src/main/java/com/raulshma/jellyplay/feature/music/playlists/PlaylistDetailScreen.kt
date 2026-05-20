@@ -78,7 +78,7 @@ fun PlaylistDetailScreen(
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
 
-    val backgroundColor = Color.Black.copy(alpha = 0.95f)
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     Box(
         modifier = Modifier
@@ -104,7 +104,7 @@ fun PlaylistDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                     Text(
@@ -112,7 +112,7 @@ fun PlaylistDetailScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                     com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -128,7 +128,7 @@ fun PlaylistDetailScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        CircularProgressIndicator(color = Color.White)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onBackground)
                     }
                 }
                 viewModel.error != null && viewModel.items.isEmpty() -> {
@@ -185,7 +185,7 @@ private fun PlaylistTrackRow(
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -194,7 +194,7 @@ private fun PlaylistTrackRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -204,7 +204,7 @@ private fun PlaylistTrackRow(
             Icon(
                 Icons.Default.PlayArrow,
                 contentDescription = "Play",
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }
     }

@@ -111,12 +111,18 @@ fun LibraryScreen(
         filters.genres.isNotEmpty() ||
         filters.playedStatus != PlayedStatus.ALL
 
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+
     // ── Cinematic background color (same approach as MediaDetailScreen) ──
     val artworkColors = LocalArtworkColors.current
     val baseColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
-    val backgroundColor = lerp(baseColor, Color.Black, 0.70f)
+    val backgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(baseColor, Color.Black, 0.70f)
+    }
 
     // Entrance animation for header
     var headerVisible by remember { mutableStateOf(true) }
@@ -186,7 +192,7 @@ fun LibraryScreen(
                                     style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                     ),
-                                    color = Color.White,
+                                    color = if (isLightTheme) MaterialTheme.colorScheme.onBackground else Color.White,
                                 )
                                 com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                                     status = headerStatus,
@@ -337,7 +343,7 @@ fun LibraryScreen(
                         Text(
                             text = "${pagedItems.itemCount} items",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.5f),
                             modifier = Modifier.padding(
                                 horizontal = 24.dp,
                                 vertical = 8.dp,
@@ -380,18 +386,18 @@ fun LibraryScreen(
                                             Icons.Default.Search,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
-                                            tint = Color.White.copy(alpha = 0.3f),
+                                            tint = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.3f),
                                         )
                                         Text(
                                             text = "No items found",
                                             style = MaterialTheme.typography.bodyLarge,
-                                            color = Color.White.copy(alpha = 0.5f),
+                                            color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.5f),
                                         )
                                         if (hasActiveFilters) {
                                             Text(
                                                 text = "Try adjusting your filters",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = Color.White.copy(alpha = 0.3f),
+                                                color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.3f),
                                             )
                                         }
                                     }
@@ -453,7 +459,7 @@ fun LibraryScreen(
                                     .fillMaxWidth(0.4f)
                                     .clip(ShapeCache.smooth4),
                                 color = MaterialTheme.colorScheme.primary,
-                                trackColor = Color.White.copy(alpha = 0.1f),
+                                trackColor = if (isLightTheme) MaterialTheme.colorScheme.surfaceVariant else Color.White.copy(alpha = 0.1f),
                             )
                         }
                     }
@@ -507,11 +513,18 @@ private fun GlassIconButton(
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val glassBg = if (isLight) Color.Black.copy(alpha = if (highlighted) 0.10f else 0.05f)
+                  else Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f)
+    val iconTint = if (highlighted) MaterialTheme.colorScheme.primary
+                   else if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.8f)
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
+            .background(glassBg)
             .tvFocusable().clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -519,14 +532,14 @@ private fun GlassIconButton(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
+            tint = iconTint,
         )
     }
 }
 
 /**
  * Glass pill selector matching the detail screen's season badge style.
- * Selected = solid white bg + black text. Unselected = translucent white bg + white text.
+ * Theme-aware: adapts glass tint and content color to light/dark themes.
  */
 @Composable
 private fun GlassPill(
@@ -534,13 +547,24 @@ private fun GlassPill(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val surfaceColor = when {
+        selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
+        else -> if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
+    }
+    val contentColor = when {
+        selected -> if (isLight) Color.White else Color.Black
+        else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
+    }
     Surface(
         modifier = Modifier
             .clip(ShapeCache.smooth16)
             .tvFocusable().clickable(onClick = onClick)
             .animateContentSizeNoClip(spring(stiffness = Spring.StiffnessMediumLow)),
-        color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
-        contentColor = if (selected) Color.Black else Color.White,
+        color = surfaceColor,
+        contentColor = contentColor,
     ) {
         Text(
             text = label,
@@ -555,17 +579,23 @@ private fun GlassPill(
 
 /**
  * Small dismissible filter tag with a glass background and close icon.
- * Matches the genre pill style from the detail screen.
+ * Theme-aware: adapts glass tint and text color to light/dark themes.
  */
 @Composable
 private fun GlassDismissTag(
     label: String,
     onDismiss: () -> Unit,
 ) {
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
+    val textColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
+    val iconTint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)
     Row(
         modifier = Modifier
             .clip(ShapeCache.smooth12)
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(glassBg)
             .tvFocusable().clickable(onClick = onDismiss)
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -574,14 +604,14 @@ private fun GlassDismissTag(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.85f),
+            color = textColor,
             fontWeight = FontWeight.Medium,
         )
         Icon(
             Icons.Default.Close,
             contentDescription = "Remove",
             modifier = Modifier.size(14.dp),
-            tint = Color.White.copy(alpha = 0.5f),
+            tint = iconTint,
         )
     }
 }

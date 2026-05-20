@@ -82,11 +82,16 @@ fun ChannelsScreen(
         networkStatus = networkStatus,
     )
 
-    val backgroundColor = lerp(
-        MaterialTheme.colorScheme.background,
-        Color.Black,
-        0.70f,
-    )
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val backgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(
+            MaterialTheme.colorScheme.background,
+            Color.Black,
+            0.70f,
+        )
+    }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -147,7 +152,7 @@ fun ChannelsScreen(
                                     style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                                     status = headerStatus,
@@ -181,7 +186,7 @@ fun ChannelsScreen(
                         Text(
                             text = "${viewModel.channels.size} channels",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             modifier = Modifier.padding(
                                 horizontal = contentPad,
                                 vertical = 8.dp,
@@ -206,12 +211,12 @@ fun ChannelsScreen(
                                 Icons.Default.LiveTv,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
-                                tint = Color.White.copy(alpha = 0.3f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                             )
                             Text(
                                 text = "No channels available",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                         }
                     }
@@ -254,7 +259,7 @@ private fun ChannelCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +269,7 @@ private fun ChannelCard(
             modifier = Modifier
                 .size(64.dp, 48.dp)
                 .clip(ShapeCache.smooth8)
-                .background(Color.White.copy(alpha = 0.08f)),
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center,
         ) {
             if (imageUrl.isNotBlank()) {
@@ -279,7 +284,7 @@ private fun ChannelCard(
                     Icons.Default.LiveTv,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
-                    tint = Color.White.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
             }
         }
@@ -293,7 +298,7 @@ private fun ChannelCard(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             val currentProgram = channel.currentProgram
             if (currentProgram != null) {
@@ -301,7 +306,7 @@ private fun ChannelCard(
                 Text(
                     text = currentProgram.name,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -322,14 +327,14 @@ private fun ChannelCard(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.12f))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                 .tvFocusable().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Default.PlayArrow,
                 contentDescription = "Watch",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),
             )
         }
@@ -352,7 +357,7 @@ private fun GlassIconButton(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
             .tvFocusable().clickable(onClick = onClick),
          contentAlignment = Alignment.Center,
     ) {
@@ -360,7 +365,7 @@ private fun GlassIconButton(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
+            tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         )
     }
 }

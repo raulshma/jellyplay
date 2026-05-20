@@ -1628,7 +1628,7 @@ fun SettingsScreen(
                                 .clip(shape)
                                 .background(
                                     if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.White.copy(alpha = 0.04f),
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                 )
                                 .then(tvFocusState.focusModifier)
                                 .tvFocusIndicator(tvFocusState, shape)
