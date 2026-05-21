@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,17 +106,35 @@ fun LibraryFilterSheet(
                     fontWeight = FontWeight.Bold,
                     color = contentColor,
                 )
+                val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                val resetInteractionSource = remember { MutableInteractionSource() }
+                val isResetPressed by resetInteractionSource.collectIsPressedAsState()
+                val resetScale by animateFloatAsState(
+                    targetValue = if (isResetPressed) 0.95f else 1f,
+                    label = "resetPressedScale"
+                )
+                val resetShape = ShapeCache.smooth12
                 Box(
                     modifier = Modifier
-                        .clip(ShapeCache.smooth12)
-                        .background(glassBg)
-                        .tvFocusable().clickable {
-                            selectedMediaTypes = emptyList()
-                            selectedGenres = emptyList()
-                            selectedYears = emptyList()
-                            selectedSort = SortOption.SORT_NAME
-                            selectedPlayedStatus = PlayedStatus.ALL
+                        .graphicsLayer {
+                            scaleX = resetScale * resetFocusState.scale
+                            scaleY = resetScale * resetFocusState.scale
                         }
+                        .clip(resetShape)
+                        .background(glassBg)
+                        .then(resetFocusState.focusModifier)
+                        .tvFocusIndicator(resetFocusState, resetShape)
+                        .clickable(
+                            interactionSource = resetInteractionSource,
+                            indication = null,
+                            onClick = {
+                                selectedMediaTypes = emptyList()
+                                selectedGenres = emptyList()
+                                selectedYears = emptyList()
+                                selectedSort = SortOption.SORT_NAME
+                                selectedPlayedStatus = PlayedStatus.ALL
+                            }
+                        )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Text(
@@ -205,31 +229,48 @@ fun LibraryFilterSheet(
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Apply button ──
-            Button(
-                onClick = {
-                    onApply(
-                        LibraryFilters(
-                            mediaTypes = selectedMediaTypes,
-                            genres = selectedGenres,
-                            years = selectedYears,
-                            sortBy = selectedSort,
-                            playedStatus = selectedPlayedStatus,
-                        )
-                    )
-                },
+            val applyFocusState = rememberTvFocusState(focusedScale = 1.05f)
+            val applyInteractionSource = remember { MutableInteractionSource() }
+            val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
+            val applyScale by animateFloatAsState(
+                targetValue = if (isApplyPressed) 0.95f else 1f,
+                label = "applyPressedScale"
+            )
+            val applyShape = ShapeCache.smooth16
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = ShapeCache.smooth16,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
+                    .height(52.dp)
+                    .graphicsLayer {
+                        scaleX = applyScale * applyFocusState.scale
+                        scaleY = applyScale * applyFocusState.scale
+                    }
+                    .clip(applyShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .then(applyFocusState.focusModifier)
+                    .tvFocusIndicator(applyFocusState, applyShape)
+                    .clickable(
+                        interactionSource = applyInteractionSource,
+                        indication = null,
+                        onClick = {
+                            onApply(
+                                LibraryFilters(
+                                    mediaTypes = selectedMediaTypes,
+                                    genres = selectedGenres,
+                                    years = selectedYears,
+                                    sortBy = selectedSort,
+                                    playedStatus = selectedPlayedStatus,
+                                )
+                            )
+                        }
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     "Apply Filters",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         }
@@ -260,6 +301,16 @@ private fun GlassFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        label = "chipPressedScale"
+    )
+    val scale = baseScale * focusState.scale
+
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
@@ -272,11 +323,23 @@ private fun GlassFilterChip(
         else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
     }
     val checkTint = if (isLight) Color.White else Color.Black
+    val chipShape = ShapeCache.smooth16
+
     Box(
         modifier = Modifier
-            .clip(ShapeCache.smooth16)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(chipShape)
             .background(bgColor)
-            .tvFocusable().clickable(onClick = onClick)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, chipShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Row(
