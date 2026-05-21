@@ -193,7 +193,7 @@ fun MusicHomeScreen(
                             )
                         }
 
-                        itemsIndexed(sections, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
+                        itemsIndexed(sections, key = { _, section -> section.title }, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
                             val visible = remember { mutableStateOf(false) }
                             androidx.compose.runtime.LaunchedEffect(Unit) { visible.value = true }
                             AnimatedVisibility(

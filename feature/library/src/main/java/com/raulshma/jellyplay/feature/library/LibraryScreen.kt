@@ -47,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,11 +108,18 @@ fun LibraryScreen(
     )
 
     val gridState = rememberLazyGridState()
-    val hasActiveFilters = filters.mediaTypes.isNotEmpty() ||
-        filters.genres.isNotEmpty() ||
-        filters.playedStatus != PlayedStatus.ALL
+    val hasActiveFilters by remember {
+        derivedStateOf {
+            filters.mediaTypes.isNotEmpty() ||
+                filters.genres.isNotEmpty() ||
+                filters.playedStatus != PlayedStatus.ALL
+        }
+    }
 
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val bgColor = MaterialTheme.colorScheme.background
+    val isLightTheme = remember(bgColor) {
+        (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
+    }
 
     // ── Cinematic background color (same approach as MediaDetailScreen) ──
     val artworkColors = LocalArtworkColors.current

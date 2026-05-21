@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Immutable
 data class LibraryFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),

@@ -372,8 +372,10 @@ class VideoPlayerViewModel @Inject constructor(
             progressReporter.startProgressReporting()
             fetchMediaSegments(itemId)
             if (detail != null) {
-                fetchNextEpisode(detail)
-                loadSeriesEpisodes(detail)
+                kotlinx.coroutines.coroutineScope {
+                    launch { fetchNextEpisode(detail) }
+                    launch { loadSeriesEpisodes(detail) }
+                }
             }
         }
     }

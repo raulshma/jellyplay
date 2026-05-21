@@ -287,15 +287,16 @@ class LibVlcPlayerEngine(
         nightMode.detach()
         audioNormalization.detach()
         channelMix.detach()
-        val mp = mediaPlayer ?: return
+        mediaPlayer?.let { mp ->
+            mediaPlayer = null
+            mp.setEventListener(null)
+            try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
+            try { mp.detachViews() } catch (_: Exception) {}
+            try { mp.release() } catch (_: Exception) {}
+        }
         mediaPlayer = null
-        mp.setEventListener(null)
-        try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
-        try { mp.detachViews() } catch (_: Exception) {}
-        try { mp.release() } catch (_: Exception) {}
-        
         if (releaseVlc) {
-            try { libVLC?.release() } catch (_: Exception) {}
+            libVLC?.let { try { it.release() } catch (_: Exception) {} }
             libVLC = null
             videoLayout = null
         }

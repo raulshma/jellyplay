@@ -231,8 +231,19 @@ class SeerrDetailViewModel @Inject constructor(
                 tags = tags,
             ).onSuccess {
                 _requestResult.value = SeerrRequestResult(isLoading = false, success = true)
-                // Reload details to update status
-                loadDetails(item.id, item.mediaType)
+                val currentMovie = _movieDetails.value
+                val currentTv = _tvDetails.value
+                val movieMediaInfo = currentMovie?.mediaInfo
+                val tvMediaInfo = currentTv?.mediaInfo
+                if (movieMediaInfo?.tmdbId == item.id) {
+                    _movieDetails.value = currentMovie.copy(
+                        mediaInfo = movieMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
+                    )
+                } else if (tvMediaInfo?.tmdbId == item.id) {
+                    _tvDetails.value = currentTv.copy(
+                        mediaInfo = tvMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
+                    )
+                }
             }.onFailure {
                 _requestResult.value = SeerrRequestResult(isLoading = false, success = false, error = it.message)
             }
