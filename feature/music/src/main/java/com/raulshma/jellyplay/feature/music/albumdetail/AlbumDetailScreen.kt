@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,18 +20,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -96,6 +93,7 @@ fun AlbumDetailScreen(
                             onTrackClick(firstTrack.id)
                         }
                     },
+                    onAddToQueue = { track -> viewModel.addToQueue(track) },
                     onArtistClick = onArtistClick,
                     onBack = onBack,
                 )
@@ -113,6 +111,7 @@ private fun AlbumDetailContent(
     getBackdropUrl: (String) -> String,
     onTrackClick: (String) -> Unit,
     onPlayAlbum: (List<MediaItem>, Int) -> Unit,
+    onAddToQueue: (MediaItem) -> Unit,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -242,6 +241,7 @@ private fun AlbumDetailContent(
                     index = index + 1,
                     imageUrl = getImageUrl(track.id),
                     onClick = { onTrackClick(track.id) },
+                    onAddToQueue = { onAddToQueue(track) },
                 )
             }
 
@@ -258,6 +258,7 @@ private fun TrackItem(
     index: Int,
     imageUrl: String,
     onClick: () -> Unit,
+    onAddToQueue: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -303,6 +304,16 @@ private fun TrackItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (onAddToQueue != null) {
+            IconButton(onClick = { onAddToQueue() }) {
+                Icon(
+                    Icons.Default.QueueMusic,
+                    contentDescription = "Add to Queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

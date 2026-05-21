@@ -166,6 +166,7 @@ fun TracksScreen(
                                             },
                                             imageUrl = viewModel.getImageUrl(track.id),
                                             onClick = { onItemClick(track.id) },
+                                            onAddToQueue = { viewModel.addToQueue(track) },
                                             blurHash = track.blurHashes.primary,
                                         )
                                     }

@@ -103,6 +103,7 @@ fun MusicHomeScreen(
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     onItemClick: (String) -> Unit,
+    onAlbumClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit = {},
@@ -207,7 +208,13 @@ fun MusicHomeScreen(
                                 MusicSectionRow(
                                     section = section,
                                     imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                    onItemClick = { onItemClick(it.id) },
+                                    onItemClick = { item ->
+                                        if (item.mediaType == MediaType.ALBUM) {
+                                            onAlbumClick(item.id)
+                                        } else {
+                                            onItemClick(item.id)
+                                        }
+                                    },
                                     modifier = Modifier.padding(top = if (index == 0) 8.dp else 16.dp),
                                 )
                             }
