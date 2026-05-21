@@ -93,7 +93,6 @@ data class VideoPlayerUiState(
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerLastUsedDurationMs: Long = 0L,
-    val activeSegment: MediaSegment? = null,
 ) {
 
     companion object {
@@ -158,6 +157,9 @@ data class VideoPlayerUiState(
         }
         return null
     }
+
+    val activeSegment: MediaSegment?
+        get() = computeActiveSegment()
 
     val isInIntro: Boolean
         get() = isInSegmentType(MediaSegmentType.INTRO)
