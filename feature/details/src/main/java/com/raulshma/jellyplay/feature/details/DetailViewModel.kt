@@ -53,6 +53,7 @@ class DetailViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
+    private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
 ) : ViewModel() {
 
     val preferences = preferencesStore.preferences
@@ -99,6 +100,8 @@ class DetailViewModel @Inject constructor(
     var seasons by mutableStateOf<List<MediaItem>>(emptyList())
         private set
     var episodes by mutableStateOf<Map<String, List<MediaItem>>>(emptyMap())
+        private set
+    var albumTracks by mutableStateOf<List<MediaItem>>(emptyList())
         private set
     // Tracks season IDs where a fetch was attempted (success or failure)
     // so the UI knows when to stop showing the loading skeleton.
@@ -192,6 +195,8 @@ class DetailViewModel @Inject constructor(
                         loadSeasons(itemId)
                     } else if (detail.item.mediaType == MediaType.EPISODE && detail.item.seriesId != null) {
                         loadSeasons(detail.item.seriesId!!)
+                    } else if (detail.item.mediaType == MediaType.ALBUM) {
+                        loadAlbumTracks(itemId)
                     } else {
                         smartPlayTarget = null
                     }
@@ -265,6 +270,30 @@ class DetailViewModel @Inject constructor(
                 }
             fetchedSeasonIds = fetchedSeasonIds + seasonId
         }
+    }
+
+    private fun loadAlbumTracks(albumId: String) {
+        viewModelScope.launch {
+            mediaRepository.getAlbumTracks(albumId)
+                .onSuccess { albumTracks = it }
+        }
+    }
+
+    fun playAlbum(startIndex: Int = 0) {
+        if (albumTracks.isEmpty()) return
+        val queueItems = albumTracks.map { track ->
+            com.raulshma.jellyplay.core.data.playback.AudioQueueItem(
+                id = track.id,
+                name = track.name,
+                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                album = track.album ?: _detail.value?.item?.name,
+                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                mediaSourceId = null,
+                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                normalizationGain = track.normalizationGain,
+            )
+        }
+        audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     private fun maybeComputeSmartPlayTarget() {
