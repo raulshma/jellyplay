@@ -573,8 +573,15 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun retryWithEngine(playerType: PlayerType) {
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
-        _uiState.update { it.copy(showPlaybackErrorDialog = false, playerError = null) }
+        _uiState.update {
+            it.copy(
+                showPlaybackErrorDialog = false,
+                playerError = null,
+                preferredPlayerType = playerType,
+            )
+        }
         viewModelScope.launch {
+            preferencesStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos)
         }
     }

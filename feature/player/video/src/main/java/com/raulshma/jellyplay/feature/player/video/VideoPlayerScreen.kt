@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -520,23 +521,25 @@ fun VideoPlayerScreen(
             },
     ) {
         if (engine != null) {
-            AndroidView(
-                factory = { ctx ->
-                    engine.createSurfaceView(ctx).also { view ->
-                        playerViewRef = view
-                        lastAppliedSubtitleStyle = uiState.subtitleStyle
-                        viewModel.applySubtitleStyleToView(view)
-                    }
-                },
-                update = { view ->
-                    val currentStyle = uiState.subtitleStyle
-                    if (lastAppliedSubtitleStyle != currentStyle) {
-                        lastAppliedSubtitleStyle = currentStyle
-                        viewModel.applySubtitleStyleToView(view)
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            key(engine) {
+                AndroidView(
+                    factory = { ctx ->
+                        engine.createSurfaceView(ctx).also { view ->
+                            playerViewRef = view
+                            lastAppliedSubtitleStyle = uiState.subtitleStyle
+                            viewModel.applySubtitleStyleToView(view)
+                        }
+                    },
+                    update = { view ->
+                        val currentStyle = uiState.subtitleStyle
+                        if (lastAppliedSubtitleStyle != currentStyle) {
+                            lastAppliedSubtitleStyle = currentStyle
+                            viewModel.applySubtitleStyleToView(view)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         MpvSubtitleOverlay(

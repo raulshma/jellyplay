@@ -38,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,12 +106,14 @@ fun VideoMiniPlayer(
                         .tvFocusable().clickable(onClick = onClick),
                 ) {
                     if (engine != null) {
-                        AndroidView(
-                            factory = { ctx ->
-                                engine.createSurfaceView(ctx)
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        key(engine) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    engine.createSurfaceView(ctx)
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
 
                     IconButtonWithPressAnimation(
