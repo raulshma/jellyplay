@@ -73,7 +73,13 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
@@ -126,11 +132,16 @@ fun LibraryScreen(
     val baseColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
-    val backgroundColor = if (isLightTheme) {
+    val targetBackgroundColor = if (isLightTheme) {
         MaterialTheme.colorScheme.background
     } else {
         lerp(baseColor, Color.Black, 0.70f)
     }
+    val backgroundColor by animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = tween(600, easing = FancyTransitionEasing),
+        label = "backgroundColor",
+    )
 
     // Entrance animation for header
     var headerVisible by remember { mutableStateOf(true) }
@@ -327,10 +338,28 @@ fun LibraryScreen(
                                 )
                             }
                             // Clear all link
+                            val clearAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                            val clearAllInteractionSource = remember { MutableInteractionSource() }
+                            val isClearAllPressed by clearAllInteractionSource.collectIsPressedAsState()
+                            val clearAllScale by animateFloatAsState(
+                                targetValue = if (isClearAllPressed) 0.95f else 1f,
+                                label = "clearAllPressedScale"
+                            )
+                            val clearAllShape = ShapeCache.smooth8
                             Box(
                                 modifier = Modifier
-                                    .clip(ShapeCache.smooth8)
-                                    .tvFocusable().clickable { viewModel.clearFilters() }
+                                    .graphicsLayer {
+                                        scaleX = clearAllScale * clearAllFocusState.scale
+                                        scaleY = clearAllScale * clearAllFocusState.scale
+                                    }
+                                    .clip(clearAllShape)
+                                    .then(clearAllFocusState.focusModifier)
+                                    .tvFocusIndicator(clearAllFocusState, clearAllShape)
+                                    .clickable(
+                                        interactionSource = clearAllInteractionSource,
+                                        indication = null,
+                                        onClick = { viewModel.clearFilters() }
+                                    )
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                             ) {
                                 Text(
@@ -521,6 +550,16 @@ private fun GlassIconButton(
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
+    val isTv = LocalTvMode.current
+    val focusState = rememberTvFocusState(focusedScale = 1.15f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f,
+        label = "iconBtnPressedScale"
+    )
+    val scale = baseScale * focusState.scale
+
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
@@ -528,12 +567,24 @@ private fun GlassIconButton(
                   else Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f)
     val iconTint = if (highlighted) MaterialTheme.colorScheme.primary
                    else if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.8f)
+    val shape = RoundedCornerShape(10.dp)
+
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
             .background(glassBg)
-            .tvFocusable().clickable(onClick = onClick),
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -555,6 +606,16 @@ private fun GlassPill(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        label = "pillPressedScale"
+    )
+    val scale = baseScale * focusState.scale
+
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
@@ -566,10 +627,22 @@ private fun GlassPill(
         selected -> if (isLight) Color.White else Color.Black
         else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
     }
+    val shape = ShapeCache.smooth16
+
     Surface(
         modifier = Modifier
-            .clip(ShapeCache.smooth16)
-            .tvFocusable().clickable(onClick = onClick)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .animateContentSizeNoClip(spring(stiffness = Spring.StiffnessMediumLow)),
         color = surfaceColor,
         contentColor = contentColor,
@@ -594,17 +667,39 @@ private fun GlassDismissTag(
     label: String,
     onDismiss: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        label = "tagPressedScale"
+    )
+    val scale = baseScale * focusState.scale
+
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
     val textColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
     val iconTint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)
+    val shape = ShapeCache.smooth12
+
     Row(
         modifier = Modifier
-            .clip(ShapeCache.smooth12)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
             .background(glassBg)
-            .tvFocusable().clickable(onClick = onDismiss)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDismiss
+            )
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
