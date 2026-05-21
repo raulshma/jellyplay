@@ -40,6 +40,8 @@ data class UserPreferences(
     val preferredAudioLanguage: String? = null,
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val dynamicTheming: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val oledMode: Boolean = false,
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
@@ -77,10 +79,7 @@ data class UserPreferences(
     val audioAutoplayNext: Boolean = true,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
-    val skipIntroEnabled: Boolean = true,
-    val skipOutroEnabled: Boolean = true,
-    val autoSkipIntro: Boolean = false,
-    val autoSkipOutro: Boolean = false,
+    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val syncPlayProgressReportingMode: String = "SUPPRESS_DURING",
     val syncPlayAutoJoinLastGroup: Boolean = false,
@@ -96,12 +95,18 @@ data class UserPreferences(
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,
+    val replayGainPreAmpDb: Float = 0f,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
     val audioGaplessEnabled: Boolean = true,
     val audioCrossfadeDurationMs: Long = 0L,
     val sleepTimerDurationMs: Long = 0L,
     val sleepTimerEndOfEpisode: Boolean = false,
+    val dreamImageCategories: Set<DreamImageCategory> = setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES),
+    val dreamSlideshowIntervalMs: Long = 15_000L,
+    val dreamKenBurnsEnabled: Boolean = true,
+    val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
+    val dreamShowTitle: Boolean = true,
 )
 
 @Immutable
@@ -116,6 +121,14 @@ data class MediaStreamSelection(
 enum class HomeMode {
     VIDEO,
     MUSIC,
+}
+
+@Immutable
+@Serializable
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
 }
 
 @Immutable

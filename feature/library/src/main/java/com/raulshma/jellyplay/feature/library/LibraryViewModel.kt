@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -16,10 +17,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Immutable
 data class LibraryFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),
@@ -70,17 +73,18 @@ class LibraryViewModel @Inject constructor(
     val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = _selectedFolder
-        .flatMapLatest { folder ->
-            mediaRepository.getMediaItemsPaged(
-                parentId = folder?.id,
-                mediaTypes = _filters.value.mediaTypes.ifEmpty { null },
-                genres = _filters.value.genres.ifEmpty { null },
-                years = _filters.value.years.ifEmpty { null },
-                sortBy = _filters.value.sortBy.apiValue,
-            )
-        }
-        .cachedIn(viewModelScope)
+    val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder, _filters) { folder, filters ->
+        folder to filters
+    }.flatMapLatest { (folder, filters) ->
+        mediaRepository.getMediaItemsPaged(
+            parentId = folder?.id,
+            mediaTypes = filters.mediaTypes.ifEmpty { null },
+            genres = filters.genres.ifEmpty { null },
+            years = filters.years.ifEmpty { null },
+            sortBy = filters.sortBy.apiValue,
+        )
+    }
+    .cachedIn(viewModelScope)
 
     init {
         loadFolders()

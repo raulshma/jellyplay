@@ -49,6 +49,9 @@ class MpvPlayerEngine(
         private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
+        private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
+        private val REDACT_API_KEY_ENCODED = Regex("(?i)(api_key%3D)[^&\\s]+")
+        private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
     }
 
     private val isLowRamDevice by lazy { detectLowRamDevice() }
@@ -175,7 +178,6 @@ class MpvPlayerEngine(
                         addPendingSubtitles(mpv)
                         _playbackState.value = EnginePlaybackState.READY
                         refreshTracks("file-loaded")
-                        refreshTracks("file-loaded-delayed", delayMs = 750)
                     }
                     MPV.mpvEvent.MPV_EVENT_END_FILE -> {
                         Log.d(TAG, "MPV end file")
@@ -246,7 +248,7 @@ class MpvPlayerEngine(
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
                     }
-                    AudioNormalizationMode.REPLAYGAIN -> {
+                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
                         afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
                     }
                     AudioNormalizationMode.NONE -> {}
@@ -376,7 +378,7 @@ class MpvPlayerEngine(
                     AudioNormalizationMode.DYNAMIC -> {
                         afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
                     }
-                    AudioNormalizationMode.REPLAYGAIN -> {
+                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
                         afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
                     }
                     AudioNormalizationMode.NONE -> {}
@@ -528,7 +530,7 @@ class MpvPlayerEngine(
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch {
+        val ticker = engineScope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(500)
                 trySend(currentPositionMs)
@@ -886,7 +888,7 @@ class MpvPlayerEngine(
             val sid = m.getPropertyString("sid")
             val visible = m.getPropertyBoolean("sub-visibility")
             val subText = try { m.getPropertyString("sub-text") } catch (_: Exception) { null }
-            val selected = buildTracks().firstOrNull { it.type == TrackType.SUBTITLE && it.isSelected }
+            val selected = _availableTracks.value.firstOrNull { it.type == TrackType.SUBTITLE && it.isSelected }
             Log.d(
                 TAG,
                 "MPV subtitle render state ($reason): sid=$sid, visible=$visible, " +
@@ -926,9 +928,9 @@ class MpvPlayerEngine(
 
     private fun redactSensitive(value: String): String =
         value
-            .replace(Regex("(?i)(api_key=)[^&\\s]+"), "\$1***")
-            .replace(Regex("(?i)(api_key%3D)[^&\\s]+"), "\$1***")
-            .replace(Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+"), "\$1***")
+            .replace(REDACT_API_KEY, "\$1***")
+            .replace(REDACT_API_KEY_ENCODED, "\$1***")
+            .replace(REDACT_EMBY_TOKEN, "\$1***")
 
     private fun gcd(a: Int, b: Int): Int {
         var x = a

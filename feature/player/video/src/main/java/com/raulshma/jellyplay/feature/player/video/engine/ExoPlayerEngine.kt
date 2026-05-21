@@ -113,6 +113,8 @@ class ExoPlayerEngine(
     private val channelMixHelper = ChannelMixHelper()
 
     private var lastVideoStats: EngineVideoStats? = null
+    private var audioEffectsAttached = false
+    private var lastAudioEffectsConfig: AudioEffectsConfig? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -126,9 +128,6 @@ class ExoPlayerEngine(
                 Player.STATE_READY -> EnginePlaybackState.READY
                 Player.STATE_ENDED -> EnginePlaybackState.ENDED
                 else -> EnginePlaybackState.IDLE
-            }
-            if (state == Player.STATE_READY) {
-                applyAudioEffects()
             }
         }
 
@@ -446,7 +445,7 @@ class ExoPlayerEngine(
         val pv = playerView ?: return null
         if (pv.width <= 0 || pv.height <= 0) return null
         return try {
-            Bitmap.createBitmap(pv.width, pv.height, Bitmap.Config.ARGB_8888).also {
+            Bitmap.createBitmap(pv.width, pv.height, Bitmap.Config.RGB_565).also {
                 pv.draw(Canvas(it))
             }
         } catch (_: Exception) { null }
@@ -475,10 +474,13 @@ class ExoPlayerEngine(
             while (isActive) {
                 delay(500)
                 val currentlyPlaying = p.isPlaying
-                trySend(p.currentPosition)
-                _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
+                if (currentlyPlaying) {
+                    trySend(p.currentPosition)
+                    _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
                     updateVideoStats()
+                } else if (currentlyPlaying != lastPlayingState) {
+                    trySend(p.currentPosition)
+                    _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
                 }
                 lastPlayingState = currentlyPlaying
             }
@@ -546,25 +548,34 @@ class ExoPlayerEngine(
         val sid = audioSessionId
         if (sid == C.AUDIO_SESSION_ID_UNSET) return
         
-        dialogueBoost.attach(sid)
-        dialogueBoost.setStrength(currentConfig.audioEffects.dialogueBoostStrength)
-        dialogueBoost.setEnabled(currentConfig.audioEffects.dialogueBoostEnabled)
+        val config = currentConfig.audioEffects
+        if (lastAudioEffectsConfig == config && audioEffectsAttached) return
         
-        nightMode.attach(sid)
-        nightMode.setStrength(currentConfig.audioEffects.nightModeStrength)
-        nightMode.setEnabled(currentConfig.audioEffects.nightModeEnabled)
+        if (!audioEffectsAttached) {
+            dialogueBoost.attach(sid)
+            nightMode.attach(sid)
+            equalizerHelper.attach(sid)
+            audioNormalizationHelper.attach(sid)
+            channelMixHelper.attach(sid)
+            audioEffectsAttached = true
+        }
         
-        equalizerHelper.attach(sid)
-        equalizerHelper.setSettings(currentConfig.audioEffects.equalizerSettings)
-        equalizerHelper.setEnabled(currentConfig.audioEffects.equalizerEnabled)
+        dialogueBoost.setStrength(config.dialogueBoostStrength)
+        dialogueBoost.setEnabled(config.dialogueBoostEnabled)
+        
+        nightMode.setStrength(config.nightModeStrength)
+        nightMode.setEnabled(config.nightModeEnabled)
+        
+        equalizerHelper.setSettings(config.equalizerSettings)
+        equalizerHelper.setEnabled(config.equalizerEnabled)
 
-        audioNormalizationHelper.attach(sid)
-        audioNormalizationHelper.setMode(currentConfig.audioEffects.audioNormalizationMode)
-        audioNormalizationHelper.setEnabled(currentConfig.audioEffects.audioNormalizationEnabled)
+        audioNormalizationHelper.setMode(config.audioNormalizationMode)
+        audioNormalizationHelper.setEnabled(config.audioNormalizationEnabled)
 
-        channelMixHelper.attach(sid)
-        channelMixHelper.setMode(currentConfig.audioEffects.channelMixMode)
-        channelMixHelper.setEnabled(currentConfig.audioEffects.channelMixEnabled)
+        channelMixHelper.setMode(config.channelMixMode)
+        channelMixHelper.setEnabled(config.channelMixEnabled)
+        
+        lastAudioEffectsConfig = config
     }
 
     private fun releaseAudioEffects() {
@@ -573,6 +584,8 @@ class ExoPlayerEngine(
         equalizerHelper.detach()
         audioNormalizationHelper.detach()
         channelMixHelper.detach()
+        audioEffectsAttached = false
+        lastAudioEffectsConfig = null
     }
 
     private fun buildTracks(): List<MediaTrack> {

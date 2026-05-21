@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 enum class AudioNormalizationMode(val displayName: String) {
     NONE("None"),
     DYNAMIC("Dynamic Compression"),
-    REPLAYGAIN("Loudness Normalization"),
+    TRACK("Track Normalization"),
+    ALBUM("Album Normalization"),
 }
 
 @Immutable

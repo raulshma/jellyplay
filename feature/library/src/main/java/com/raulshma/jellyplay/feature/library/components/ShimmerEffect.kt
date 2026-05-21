@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -45,12 +46,17 @@ fun ShimmerLoadingGrid(
         label = "shimmerOffset",
     )
 
-    // Dark cinematic shimmer matching the library screen background
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val shimmerBase = if (isLight) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.04f)
+    val shimmerMid = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.10f)
+
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            Color.White.copy(alpha = 0.04f),
-            Color.White.copy(alpha = 0.10f),
-            Color.White.copy(alpha = 0.04f),
+            shimmerBase,
+            shimmerMid,
+            shimmerBase,
         ),
         start = Offset(shimmerOffset.value, 0f),
         end = Offset(shimmerOffset.value + 400f, 400f),
@@ -65,17 +71,17 @@ fun ShimmerLoadingGrid(
         userScrollEnabled = false,
     ) {
         items(12, contentType = { "shimmer" }) {
-            ShimmerCard(shimmerBrush)
+            ShimmerCard(shimmerBrush, isLight)
         }
     }
 }
 
 @Composable
-private fun ShimmerCard(brush: Brush) {
+private fun ShimmerCard(brush: Brush, isLight: Boolean) {
     Column(
         modifier = Modifier
             .clip(ShapeCache.smooth12)
-            .background(Color.White.copy(alpha = 0.05f)),
+            .background(if (isLight) Color.Black.copy(alpha = 0.03f) else Color.White.copy(alpha = 0.05f)),
     ) {
         Box(
             modifier = Modifier

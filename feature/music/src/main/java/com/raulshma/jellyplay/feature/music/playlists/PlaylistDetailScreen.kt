@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +66,7 @@ fun PlaylistDetailScreen(
     playlistId: String,
     onBack: () -> Unit,
     onPlayItem: (String) -> Unit,
+    onAddToQueue: ((com.raulshma.jellyplay.core.model.PlaylistItem) -> Unit)? = null,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val playlistName = viewModel.playlistName
@@ -78,7 +84,7 @@ fun PlaylistDetailScreen(
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
 
-    val backgroundColor = Color.Black.copy(alpha = 0.95f)
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     Box(
         modifier = Modifier
@@ -104,7 +110,7 @@ fun PlaylistDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                     Text(
@@ -112,7 +118,7 @@ fun PlaylistDetailScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                     com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -128,7 +134,7 @@ fun PlaylistDetailScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        CircularProgressIndicator(color = Color.White)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onBackground)
                     }
                 }
                 viewModel.error != null && viewModel.items.isEmpty() -> {
@@ -151,6 +157,7 @@ fun PlaylistDetailScreen(
                             PlaylistTrackRow(
                                 item = item,
                                 onClick = { onPlayItem(item.id) },
+                                onAddToQueue = onAddToQueue?.let { { it(item) } },
                             )
                         }
                     }
@@ -162,8 +169,9 @@ fun PlaylistDetailScreen(
 
 @Composable
 private fun PlaylistTrackRow(
-    item: PlaylistItem,
+    item: com.raulshma.jellyplay.core.model.PlaylistItem,
     onClick: () -> Unit,
+    onAddToQueue: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -173,11 +181,22 @@ private fun PlaylistTrackRow(
         label = "trackScale",
     )
 
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .tvFocusable().clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .tvFocusable().combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = {
+                    if (onAddToQueue != null) {
+                        showMenu = true
+                    }
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -185,7 +204,7 @@ private fun PlaylistTrackRow(
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -194,9 +213,37 @@ private fun PlaylistTrackRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (onAddToQueue != null) {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                )
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Add to Queue") },
+                    onClick = {
+                        onAddToQueue()
+                        showMenu = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.QueueMusic,
+                            contentDescription = null,
+                        )
+                    },
                 )
             }
         }
@@ -204,7 +251,7 @@ private fun PlaylistTrackRow(
             Icon(
                 Icons.Default.PlayArrow,
                 contentDescription = "Play",
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }
     }

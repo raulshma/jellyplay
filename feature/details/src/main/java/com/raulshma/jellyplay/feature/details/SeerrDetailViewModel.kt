@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -172,12 +173,16 @@ class SeerrDetailViewModel @Inject constructor(
                 if (mediaType == "movie") {
                     seerrRepository.getServiceRadarrServers().onSuccess { servers ->
                         Log.d(TAG, "Found ${servers.size} Radarr servers via /service/")
-                        val details = servers.mapNotNull { server ->
-                            val result = seerrRepository.getServiceRadarrDetail(server.id)
-                            if (result.isFailure) {
-                                Log.e(TAG, "Failed to get Radarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
-                            }
-                            result.getOrNull()
+                        val details = coroutineScope {
+                            servers.map { server ->
+                                async {
+                                    val result = seerrRepository.getServiceRadarrDetail(server.id)
+                                    if (result.isFailure) {
+                                        Log.e(TAG, "Failed to get Radarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
+                                    }
+                                    result.getOrNull()
+                                }
+                            }.awaitAll().filterNotNull()
                         }
                         Log.d(TAG, "Loaded ${details.size} Radarr service details")
                         _radarrServers.value = details
@@ -185,12 +190,16 @@ class SeerrDetailViewModel @Inject constructor(
                 } else {
                     seerrRepository.getServiceSonarrServers().onSuccess { servers ->
                         Log.d(TAG, "Found ${servers.size} Sonarr servers via /service/")
-                        val details = servers.mapNotNull { server ->
-                            val result = seerrRepository.getServiceSonarrDetail(server.id)
-                            if (result.isFailure) {
-                                Log.e(TAG, "Failed to get Sonarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
-                            }
-                            result.getOrNull()
+                        val details = coroutineScope {
+                            servers.map { server ->
+                                async {
+                                    val result = seerrRepository.getServiceSonarrDetail(server.id)
+                                    if (result.isFailure) {
+                                        Log.e(TAG, "Failed to get Sonarr service detail for server ${server.id}: ${result.exceptionOrNull()?.message}")
+                                    }
+                                    result.getOrNull()
+                                }
+                            }.awaitAll().filterNotNull()
                         }
                         Log.d(TAG, "Loaded ${details.size} Sonarr service details")
                         _sonarrServers.value = details
@@ -222,8 +231,19 @@ class SeerrDetailViewModel @Inject constructor(
                 tags = tags,
             ).onSuccess {
                 _requestResult.value = SeerrRequestResult(isLoading = false, success = true)
-                // Reload details to update status
-                loadDetails(item.id, item.mediaType)
+                val currentMovie = _movieDetails.value
+                val currentTv = _tvDetails.value
+                val movieMediaInfo = currentMovie?.mediaInfo
+                val tvMediaInfo = currentTv?.mediaInfo
+                if (movieMediaInfo?.tmdbId == item.id) {
+                    _movieDetails.value = currentMovie.copy(
+                        mediaInfo = movieMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
+                    )
+                } else if (tvMediaInfo?.tmdbId == item.id) {
+                    _tvDetails.value = currentTv.copy(
+                        mediaInfo = tvMediaInfo.copy(status = com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus.PENDING.value)
+                    )
+                }
             }.onFailure {
                 _requestResult.value = SeerrRequestResult(isLoading = false, success = false, error = it.message)
             }
@@ -241,7 +261,7 @@ class SeerrDetailViewModel @Inject constructor(
     
     fun getSeerrBackdropUrl(path: String?): String? {
         if (path == null) return null
-        return "https://image.tmdb.org/t/p/original$path"
+        return "https://image.tmdb.org/t/p/w1280$path"
     }
 
     /**

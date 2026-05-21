@@ -174,15 +174,16 @@ fun AudioPlayerScreen(
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
 
     val artworkColors = rememberArtworkColors(viewModel.albumArtUrl.ifBlank { null })
-    val tintedBg = artworkColors?.tintedBackground ?: Color(0xFF2D1F2D)
-    val tintedBgLight = artworkColors?.tintedBackgroundLight ?: Color(0xFF3D2F3D)
-    val accentColor = artworkColors?.accentColor ?: Color(0xFFE8B4C8)
-    val pillSurface = artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f)
-    val pillSurfaceDark = artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f)
+    val tintedBg = remember(artworkColors) { artworkColors?.tintedBackground ?: Color(0xFF2D1F2D) }
+    val tintedBgLight = remember(artworkColors) { artworkColors?.tintedBackgroundLight ?: Color(0xFF3D2F3D) }
+    val accentColor = remember(artworkColors) { artworkColors?.accentColor ?: Color(0xFFE8B4C8) }
+    val pillSurface = remember(artworkColors) { artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f) }
+    val pillSurfaceDark = remember(artworkColors) { artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f) }
 
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
+        oledMode = preferences.oledMode,
     ) {
         Box(
             modifier = Modifier
@@ -842,6 +843,7 @@ private fun LyricsOverlay(
                             else -> 0.15f
                         }
                         val targetScale = if (isCurrent) 1.08f else 1f
+                        val isNearActive = distance <= 3
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
                             animationSpec = tween(
@@ -858,6 +860,8 @@ private fun LyricsOverlay(
                             ),
                             label = "lyricScale$index",
                         )
+                        val finalAlpha = if (isNearActive) animatedAlpha else targetAlpha
+                        val finalScale = if (isNearActive) animatedScale else targetScale
                         Text(
                             text = lyrics[index].text.ifBlank { "\u266A" },
                             style = if (isCurrent) {
@@ -867,13 +871,13 @@ private fun LyricsOverlay(
                             } else {
                                 MaterialTheme.typography.bodyMedium
                             },
-                            color = Color.White.copy(alpha = animatedAlpha),
+                            color = Color.White.copy(alpha = finalAlpha),
                             modifier = Modifier
                                 .animateContentSize(animationSpec = tween(AnimationTokens.MediumDuration))
                                 .graphicsLayer {
-                                    scaleX = animatedScale
-                                    scaleY = animatedScale
-                                    this.alpha = animatedAlpha
+                                    scaleX = finalScale
+                                    scaleY = finalScale
+                                    this.alpha = finalAlpha
                                 }
                                 .padding(vertical = 6.dp, horizontal = 20.dp),
                             textAlign = TextAlign.Center,

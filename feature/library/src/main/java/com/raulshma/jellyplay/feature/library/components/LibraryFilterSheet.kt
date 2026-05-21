@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.foundation.background
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,13 +68,25 @@ fun LibraryFilterSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Dark cinematic sheet matching the detail screen's palette
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else Color(0xFF1A1A1A)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF1A1A1A),
+        containerColor = sheetContainerColor,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
+        val contentColor = if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
+        val contentColorMedium = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
+        val contentColorFaint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
+        val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
+        val glassBgSolid = if (isLight) MaterialTheme.colorScheme.surfaceContainerHighest else Color.White
+        val glassBgSolidContent = if (isLight) MaterialTheme.colorScheme.onSurface else Color.Black
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -86,25 +104,43 @@ fun LibraryFilterSheet(
                     text = "Filters",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = contentColor,
                 )
+                val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                val resetInteractionSource = remember { MutableInteractionSource() }
+                val isResetPressed by resetInteractionSource.collectIsPressedAsState()
+                val resetScale by animateFloatAsState(
+                    targetValue = if (isResetPressed) 0.95f else 1f,
+                    label = "resetPressedScale"
+                )
+                val resetShape = ShapeCache.smooth12
                 Box(
                     modifier = Modifier
-                        .clip(ShapeCache.smooth12)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .tvFocusable().clickable {
-                            selectedMediaTypes = emptyList()
-                            selectedGenres = emptyList()
-                            selectedYears = emptyList()
-                            selectedSort = SortOption.SORT_NAME
-                            selectedPlayedStatus = PlayedStatus.ALL
+                        .graphicsLayer {
+                            scaleX = resetScale * resetFocusState.scale
+                            scaleY = resetScale * resetFocusState.scale
                         }
+                        .clip(resetShape)
+                        .background(glassBg)
+                        .then(resetFocusState.focusModifier)
+                        .tvFocusIndicator(resetFocusState, resetShape)
+                        .clickable(
+                            interactionSource = resetInteractionSource,
+                            indication = null,
+                            onClick = {
+                                selectedMediaTypes = emptyList()
+                                selectedGenres = emptyList()
+                                selectedYears = emptyList()
+                                selectedSort = SortOption.SORT_NAME
+                                selectedPlayedStatus = PlayedStatus.ALL
+                            }
+                        )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     Text(
                         "Reset",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = contentColorMedium,
                     )
                 }
             }
@@ -193,31 +229,48 @@ fun LibraryFilterSheet(
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Apply button ──
-            Button(
-                onClick = {
-                    onApply(
-                        LibraryFilters(
-                            mediaTypes = selectedMediaTypes,
-                            genres = selectedGenres,
-                            years = selectedYears,
-                            sortBy = selectedSort,
-                            playedStatus = selectedPlayedStatus,
-                        )
-                    )
-                },
+            val applyFocusState = rememberTvFocusState(focusedScale = 1.05f)
+            val applyInteractionSource = remember { MutableInteractionSource() }
+            val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
+            val applyScale by animateFloatAsState(
+                targetValue = if (isApplyPressed) 0.95f else 1f,
+                label = "applyPressedScale"
+            )
+            val applyShape = ShapeCache.smooth16
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = ShapeCache.smooth16,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ),
+                    .height(52.dp)
+                    .graphicsLayer {
+                        scaleX = applyScale * applyFocusState.scale
+                        scaleY = applyScale * applyFocusState.scale
+                    }
+                    .clip(applyShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .then(applyFocusState.focusModifier)
+                    .tvFocusIndicator(applyFocusState, applyShape)
+                    .clickable(
+                        interactionSource = applyInteractionSource,
+                        indication = null,
+                        onClick = {
+                            onApply(
+                                LibraryFilters(
+                                    mediaTypes = selectedMediaTypes,
+                                    genres = selectedGenres,
+                                    years = selectedYears,
+                                    sortBy = selectedSort,
+                                    playedStatus = selectedPlayedStatus,
+                                )
+                            )
+                        }
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     "Apply Filters",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         }
@@ -226,10 +279,13 @@ fun LibraryFilterSheet(
 
 @Composable
 private fun SectionLabel(text: String) {
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = Color.White.copy(alpha = 0.5f),
+        color = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.5f),
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 10.dp),
     )
@@ -237,7 +293,7 @@ private fun SectionLabel(text: String) {
 
 /**
  * Glass filter chip matching the MediaDetailScreen genre pill style.
- * Selected = solid white surface. Unselected = translucent glass.
+ * Theme-aware: adapts colors for both light and dark themes.
  */
 @Composable
 private fun GlassFilterChip(
@@ -245,14 +301,45 @@ private fun GlassFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isTv = LocalTvMode.current
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val baseScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        label = "chipPressedScale"
+    )
+    val scale = baseScale * focusState.scale
+
+    val isLight = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val bgColor = when {
+        selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
+        else -> if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
+    }
+    val textColor = when {
+        selected -> if (isLight) Color.White else Color.Black
+        else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
+    }
+    val checkTint = if (isLight) Color.White else Color.Black
+    val chipShape = ShapeCache.smooth16
+
     Box(
         modifier = Modifier
-            .clip(ShapeCache.smooth16)
-            .background(
-                if (selected) Color.White
-                else Color.White.copy(alpha = 0.12f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(chipShape)
+            .background(bgColor)
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, chipShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
             )
-            .tvFocusable().clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Row(
@@ -264,13 +351,13 @@ private fun GlassFilterChip(
                     Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
-                    tint = Color.Black,
+                    tint = checkTint,
                 )
             }
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = if (selected) Color.Black else Color.White,
+                color = textColor,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             )
         }

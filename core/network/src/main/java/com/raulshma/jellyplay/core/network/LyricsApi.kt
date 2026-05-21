@@ -3,28 +3,40 @@ package com.raulshma.jellyplay.core.network
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 internal object LyricsApi {
 
-    fun fetchLyrics(serverAddress: String, itemId: String, accessToken: String): LyricsResult {
-        val url = URL("$serverAddress/Items/$itemId/Lyrics?api_key=$accessToken")
-        val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 5000
-        connection.readTimeout = 5000
-        val body = try {
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
+    private val json = Json { ignoreUnknownKeys = true }
+    private val lyricsRegex = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""")
+
+    private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
+        withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { response ->
+                response.body?.string() ?: ""
+            }
         }
 
+    suspend fun fetchLyrics(
+        okHttpClient: OkHttpClient,
+        serverAddress: String,
+        itemId: String,
+        accessToken: String,
+    ): LyricsResult {
+        val url = "$serverAddress/Items/$itemId/Lyrics?api_key=$accessToken"
+        val request = Request.Builder()
+            .url(url)
+            .build()
+        val body = executeAndReadBody(okHttpClient, request)
+
         val lines = try {
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             val array = json.parseToJsonElement(body).jsonArray
             array.map { element ->
                 val obj = element.jsonObject
@@ -35,7 +47,7 @@ internal object LyricsApi {
             }
         } catch (e: Exception) {
             body.lineSequence().mapNotNull { line: String ->
-                val match = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""").find(line.trim())
+                val match = lyricsRegex.find(line.trim())
                 match?.let { m ->
                     val min = m.groupValues[1].toLong()
                     val sec = m.groupValues[2].toDouble()

@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -17,17 +18,22 @@ class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
 ) {
 
-    private val thumbnailCache = LruCache<Int, Bitmap>(MAX_THUMBNAIL_CACHE_SIZE)
-    private val spriteSheetCache = LruCache<Int, Bitmap>(MAX_SPRITE_SHEET_CACHE_SIZE)
+    private val thumbnailCache = object : LruCache<Int, Bitmap>((MAX_THUMBNAIL_CACHE_BYTES / 1024).toInt()) {
+        override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
+    }
+    private val spriteSheetCache = object : LruCache<Int, Bitmap>((MAX_SPRITE_SHEET_CACHE_BYTES / 1024).toInt()) {
+        override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
+    }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
 
     fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
     }
@@ -147,11 +153,12 @@ class TrickplayManager(
         info = null
         itemId = null
         sheetMutexes.clear()
+        scope.cancel()
     }
 
     companion object {
-        private const val MAX_THUMBNAIL_CACHE_SIZE = 100
-        private const val MAX_SPRITE_SHEET_CACHE_SIZE = 10
+        private const val MAX_THUMBNAIL_CACHE_BYTES = 16 * 1024 * 1024L
+        private const val MAX_SPRITE_SHEET_CACHE_BYTES = 64 * 1024 * 1024L
         private const val PRELOAD_NEIGHBOR_COUNT = 3
     }
 }

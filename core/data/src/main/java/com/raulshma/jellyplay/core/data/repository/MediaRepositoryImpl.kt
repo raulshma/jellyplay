@@ -75,7 +75,8 @@ class MediaRepositoryImpl @Inject constructor(
         query: String,
         mediaTypes: List<MediaType>?,
         limit: Int,
-    ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit)
+        startIndex: Int,
+    ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
 
     override fun getMediaItemsPaged(
         parentId: String?,
@@ -126,6 +127,9 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
+
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> =
+        apiClient.getAlbumTracks(albumId)
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getSimilarItems(itemId, limit)

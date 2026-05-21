@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -16,11 +17,12 @@ class SkipOverlayTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun introSkipOverlay_visible_showsText() {
+    fun segmentSkipOverlay_intro_visible_showsText() {
         composeTestRule.setContent {
             MaterialTheme {
-                IntroSkipOverlay(
+                SegmentSkipOverlay(
                     isVisible = true,
+                    segmentType = MediaSegmentType.INTRO,
                     onSkip = {},
                 )
             }
@@ -29,11 +31,12 @@ class SkipOverlayTest {
     }
 
     @Test
-    fun introSkipOverlay_hidden_doesNotShowText() {
+    fun segmentSkipOverlay_intro_hidden_doesNotShowText() {
         composeTestRule.setContent {
             MaterialTheme {
-                IntroSkipOverlay(
+                SegmentSkipOverlay(
                     isVisible = false,
+                    segmentType = MediaSegmentType.INTRO,
                     onSkip = {},
                 )
             }
@@ -42,12 +45,13 @@ class SkipOverlayTest {
     }
 
     @Test
-    fun introSkipOverlay_click_callsOnSkip() {
+    fun segmentSkipOverlay_intro_click_callsOnSkip() {
         var skipped = false
         composeTestRule.setContent {
             MaterialTheme {
-                IntroSkipOverlay(
+                SegmentSkipOverlay(
                     isVisible = true,
+                    segmentType = MediaSegmentType.INTRO,
                     onSkip = { skipped = true },
                 )
             }
@@ -57,11 +61,12 @@ class SkipOverlayTest {
     }
 
     @Test
-    fun creditsSkipOverlay_visible_showsText() {
+    fun segmentSkipOverlay_outro_visible_showsText() {
         composeTestRule.setContent {
             MaterialTheme {
-                CreditsSkipOverlay(
+                SegmentSkipOverlay(
                     isVisible = true,
+                    segmentType = MediaSegmentType.OUTRO,
                     onSkip = {},
                 )
             }
@@ -70,11 +75,54 @@ class SkipOverlayTest {
     }
 
     @Test
-    fun creditsSkipOverlay_hidden_doesNotShowText() {
+    fun segmentSkipOverlay_commercial_visible_showsText() {
         composeTestRule.setContent {
             MaterialTheme {
-                CreditsSkipOverlay(
+                SegmentSkipOverlay(
+                    isVisible = true,
+                    segmentType = MediaSegmentType.COMMERCIAL,
+                    onSkip = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Skip Commercial").assertIsDisplayed()
+    }
+
+    @Test
+    fun segmentSkipOverlay_recap_visible_showsText() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SegmentSkipOverlay(
+                    isVisible = true,
+                    segmentType = MediaSegmentType.RECAP,
+                    onSkip = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Skip Recap").assertIsDisplayed()
+    }
+
+    @Test
+    fun segmentSkipOverlay_preview_visible_showsText() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SegmentSkipOverlay(
+                    isVisible = true,
+                    segmentType = MediaSegmentType.PREVIEW,
+                    onSkip = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Skip Preview").assertIsDisplayed()
+    }
+
+    @Test
+    fun segmentSkipOverlay_outro_hidden_doesNotShowText() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SegmentSkipOverlay(
                     isVisible = false,
+                    segmentType = MediaSegmentType.OUTRO,
                     onSkip = {},
                 )
             }
@@ -83,12 +131,13 @@ class SkipOverlayTest {
     }
 
     @Test
-    fun creditsSkipOverlay_click_callsOnSkip() {
+    fun segmentSkipOverlay_outro_click_callsOnSkip() {
         var skipped = false
         composeTestRule.setContent {
             MaterialTheme {
-                CreditsSkipOverlay(
+                SegmentSkipOverlay(
                     isVisible = true,
+                    segmentType = MediaSegmentType.OUTRO,
                     onSkip = { skipped = true },
                 )
             }

@@ -36,6 +36,7 @@ class SearchPagingSource(
                 query = query,
                 mediaTypes = mediaTypes,
                 limit = pageSize,
+                startIndex = startIndex,
             )
 
             result.fold(

@@ -140,11 +140,16 @@ fun SearchScreen(
         }
     }
 
-    val backgroundColor = lerp(
-        MaterialTheme.colorScheme.background,
-        Color.Black,
-        0.70f,
-    )
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val backgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(
+            MaterialTheme.colorScheme.background,
+            Color.Black,
+            0.70f,
+        )
+    }
 
     var headerVisible by remember { mutableStateOf(true) }
 
@@ -211,7 +216,7 @@ fun SearchScreen(
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                 ),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                                 status = headerStatus,
@@ -261,7 +266,7 @@ fun SearchScreen(
                         placeholder = {
                             Text(
                                 "Search movies, shows, music...",
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             )
                         },
                         modifier = Modifier
@@ -271,11 +276,11 @@ fun SearchScreen(
                         singleLine = true,
                         shape = ShapeCache.smooth16,
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
                             cursorColor = MaterialTheme.colorScheme.primary,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                         ),
@@ -283,7 +288,7 @@ fun SearchScreen(
                             Icon(
                                 Icons.Default.Search,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.5f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                 modifier = Modifier.size(20.dp),
                             )
                         },
@@ -293,14 +298,14 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .size(32.dp)
                                         .clip(ShapeCache.smooth8)
-                                        .background(Color.White.copy(alpha = 0.12f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                                         .tvFocusable().clickable { viewModel.search("") },
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Close,
                                         contentDescription = "Clear search",
-                                        tint = Color.White.copy(alpha = 0.7f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -309,7 +314,7 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .size(32.dp)
                                         .clip(ShapeCache.smooth8)
-                                        .background(Color.White.copy(alpha = 0.12f))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                                         .tvFocusable().clickable {
                                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                                 putExtra(
@@ -326,7 +331,7 @@ fun SearchScreen(
                                     Icon(
                                         imageVector = Icons.Default.Mic,
                                         contentDescription = "Voice search",
-                                        tint = Color.White.copy(alpha = 0.7f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -389,7 +394,7 @@ fun SearchScreen(
                     Text(
                         text = "${pagedResults.itemCount} results",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(
                             horizontal = 24.dp,
                             vertical = 8.dp,
@@ -418,7 +423,7 @@ fun SearchScreen(
                         Text(
                             text = "Request via Seerr",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
@@ -467,18 +472,18 @@ fun SearchScreen(
                                         Icons.Default.Search,
                                         contentDescription = null,
                                         modifier = Modifier.size(48.dp),
-                                        tint = Color.White.copy(alpha = 0.3f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                     )
                                     Text(
                                         text = "No results found",
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = Color.White.copy(alpha = 0.5f),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                     )
                                     if (hasActiveFilters) {
                                         Text(
                                             text = "Try adjusting your filters",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color.White.copy(alpha = 0.3f),
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                         )
                                     }
                                 }
@@ -498,17 +503,17 @@ fun SearchScreen(
                                         Icons.Default.Search,
                                         contentDescription = null,
                                         modifier = Modifier.size(64.dp),
-                                        tint = Color.White.copy(alpha = 0.15f),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
                                     )
                                     Text(
                                         text = "Search your library",
                                         style = MaterialTheme.typography.titleLarge,
-                                        color = Color.White.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                                     )
                                     Text(
                                         text = "Movies, shows, music, and more",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.25f),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
                                     )
                                 }
                             }
@@ -567,7 +572,7 @@ fun SearchScreen(
                                             .fillMaxWidth(0.4f)
                                             .clip(ShapeCache.smooth4),
                                         color = MaterialTheme.colorScheme.primary,
-                                        trackColor = Color.White.copy(alpha = 0.1f),
+                                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     )
                                 }
                             }
@@ -598,7 +603,7 @@ fun SearchScreen(
                                                 .fillMaxWidth(0.4f)
                                                 .clip(ShapeCache.smooth4),
                                             color = MaterialTheme.colorScheme.primary,
-                                            trackColor = Color.White.copy(alpha = 0.1f),
+                                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                         )
                                     }
                                 }
@@ -675,7 +680,7 @@ private fun GlassIconButton(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
             .tvFocusable().clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -683,7 +688,7 @@ private fun GlassIconButton(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
+            tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         )
     }
 }
@@ -704,7 +709,7 @@ private fun GlassDismissTag(
     Row(
         modifier = Modifier
             .clip(ShapeCache.smooth12)
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
@@ -718,14 +723,14 @@ private fun GlassDismissTag(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             fontWeight = FontWeight.Medium,
         )
         Icon(
             Icons.Default.Close,
             contentDescription = "Remove",
             modifier = Modifier.size(14.dp),
-            tint = Color.White.copy(alpha = 0.5f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
         )
     }
 }
@@ -740,26 +745,17 @@ private fun AnimatedSearchItem(
         visible = true
     }
 
-    val alpha by animateFloatAsState(
+    val animationProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30),
-        label = "searchItemAlpha",
-    )
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 20f,
         animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
-        label = "searchItemOffsetY",
-    )
-    val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.95f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
-        label = "searchItemScale",
+        label = "searchItemAnimation",
     )
 
     Box(
         modifier = Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
+            this.alpha = animationProgress
+            translationY = (1f - animationProgress) * 20f
+            val scale = 0.95f + (0.05f * animationProgress)
             scaleX = scale
             scaleY = scale
         },

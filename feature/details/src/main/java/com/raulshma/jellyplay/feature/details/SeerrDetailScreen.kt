@@ -13,12 +13,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -103,9 +104,13 @@ fun SeerrDetailScreen(
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
 
+    val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
         dynamicTheming = preferences.dynamicTheming,
+        darkTheme = !outerIsLightTheme,
+        oledMode = preferences.oledMode,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
@@ -159,26 +164,28 @@ fun SeerrDetailScreen(
             }
 
             if (showRequestDialog) {
-                val item = movieDetail?.let {
-                    SeerrSearchItem(
-                        id = it.id,
-                        mediaType = "movie",
-                        title = it.title,
-                        overview = it.overview,
-                        posterPath = it.posterPath,
-                        releaseDate = it.releaseDate,
-                        mediaInfo = it.mediaInfo
-                    )
-                } ?: tvDetail?.let {
-                    SeerrSearchItem(
-                        id = it.id,
-                        mediaType = "tv",
-                        name = it.name,
-                        overview = it.overview,
-                        posterPath = it.posterPath,
-                        firstAirDate = it.firstAirDate,
-                        mediaInfo = it.mediaInfo
-                    )
+                val item = remember(movieDetail, tvDetail) {
+                    movieDetail?.let {
+                        SeerrSearchItem(
+                            id = it.id,
+                            mediaType = "movie",
+                            title = it.title,
+                            overview = it.overview,
+                            posterPath = it.posterPath,
+                            releaseDate = it.releaseDate,
+                            mediaInfo = it.mediaInfo
+                        )
+                    } ?: tvDetail?.let {
+                        SeerrSearchItem(
+                            id = it.id,
+                            mediaType = "tv",
+                            name = it.name,
+                            overview = it.overview,
+                            posterPath = it.posterPath,
+                            firstAirDate = it.firstAirDate,
+                            mediaInfo = it.mediaInfo
+                        )
+                    }
                 }
 
                 item?.let {
@@ -228,7 +235,7 @@ private fun SeerrDetailContent(
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
 ) {
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
@@ -247,14 +254,25 @@ private fun SeerrDetailContent(
     }
     val baseBackdropHeight = with(density) { (backdropHeight.toPx() / 1.2f).toDp() }
     val collapsedHeight = with(density) { backdropHeight.toPx() }
-    val scrollOffset by remember { derivedStateOf { scrollState.value.toFloat() } }
+    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
+    val scrollOffset by remember {
+        derivedStateOf {
+            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
+        }
+    }
     val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
+
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
 
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
 
-    val targetBackgroundColor = lerp(baseOverlayColor, Color.Black, 0.65f)
+    val targetBackgroundColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.background
+    } else {
+        lerp(baseOverlayColor, Color.Black, 0.65f)
+    }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
         animationSpec = tween(600, easing = FancyTransitionEasing),
@@ -262,7 +280,7 @@ private fun SeerrDetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    navBarColor.value = backgroundColor
+    SideEffect { navBarColor.value = backgroundColor }
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
@@ -334,14 +352,15 @@ private fun SeerrDetailContent(
             )
         }
 
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier)
-                .verticalScroll(scrollState),
+                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
         ) {
-            Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp))
+            item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
+            item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -456,7 +475,7 @@ private fun SeerrDetailContent(
                                         text = title,
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
                                     
@@ -465,13 +484,13 @@ private fun SeerrDetailContent(
                                         Spacer(Modifier.width(8.dp))
                                         Surface(
                                             color = Color.Transparent,
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)),
                                             shape = ShapeCache.smooth4
                                         ) {
                                             Text(
                                                 text = contentRating,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = Color.White.copy(alpha = 0.8f),
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                             )
                                         }
@@ -482,7 +501,7 @@ private fun SeerrDetailContent(
                                     Text(
                                         text = it,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.7f)
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                     )
                                 }
                             }
@@ -524,6 +543,7 @@ private fun SeerrDetailContent(
                     }
                 }
             }
+            }
         }
 
         // Top Bar
@@ -544,12 +564,14 @@ private fun SeerrDetailContent(
                         text = title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
             },
             navigationIcon = {
+                val backOverHero = appBarColor < 0.5f
+                val backIconColor = if (backOverHero) Color.White else MaterialTheme.colorScheme.onSurface
                 if (isTv) {
                     val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
                     Box(
@@ -574,15 +596,15 @@ private fun SeerrDetailContent(
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = backIconColor
                         )
                     }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = animatedContainerColor,
-                navigationIconContentColor = Color.White,
-                titleContentColor = Color.White
+                navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface
             )
         )
     }
@@ -639,8 +661,8 @@ private fun SeerrActionButtons(
                     .then(if (isTv) Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12) else Modifier),
                 shape = ShapeCache.smooth12,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.1f),
-                    contentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 contentPadding = PaddingValues(vertical = 12.dp),
                 enabled = false
@@ -689,12 +711,12 @@ private fun SeerrDetailBody(
                         text = "Overview",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = overview,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = 24.sp
                     )
                 }
@@ -711,8 +733,8 @@ private fun SeerrDetailBody(
                                 onClick = { },
                                 label = { Text(keyword.name, fontSize = 12.sp) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = Color.White.copy(alpha = 0.1f),
-                                    labelColor = Color.White.copy(alpha = 0.7f)
+                                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 ),
                                 border = null
                             )
@@ -826,7 +848,7 @@ private fun SeerrHorizontalSection(
             text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -835,7 +857,7 @@ private fun SeerrHorizontalSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(items, contentType = { "seerrSearchItem" }) { item ->
+            items(items, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
                     imageUrl = item.posterUrl,
@@ -920,7 +942,7 @@ private fun CastSection(
             text = "Cast",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -929,7 +951,7 @@ private fun CastSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(cast, contentType = { "castMember" }) { member ->
+            items(cast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> 0 } }, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
                 val profileUrl: String?
@@ -952,7 +974,7 @@ private fun CastSection(
                         modifier = Modifier
                             .size(80.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     ) {
                         MediaImage(
                             url = profileUrl ?: "",
@@ -966,7 +988,7 @@ private fun CastSection(
                         text = name,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
@@ -974,7 +996,7 @@ private fun CastSection(
                     Text(
                         text = character,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
@@ -994,8 +1016,9 @@ private fun SeasonsSection(
             text = "Seasons",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
+        val sortedSeasons = remember(seasons) { seasons.sortedByDescending { it.seasonNumber } }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
@@ -1003,7 +1026,7 @@ private fun SeasonsSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(seasons.sortedByDescending { it.seasonNumber }, contentType = { "season" }) { season ->
+            items(sortedSeasons, key = { it.id }, contentType = { "season" }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
                     Card(
                         modifier = Modifier
@@ -1024,14 +1047,14 @@ private fun SeasonsSection(
                         text = season.name,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "${season.episodeCount} Episodes",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
             }
@@ -1050,7 +1073,7 @@ private fun VideosSection(
             text = "Videos",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1059,7 +1082,7 @@ private fun VideosSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(videos, contentType = { "video" }) { video ->
+            items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null
@@ -1092,10 +1115,10 @@ private fun VideosSection(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.DarkGray),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         
@@ -1104,7 +1127,10 @@ private fun VideosSection(
                                 .fillMaxSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                        ),
                                         startY = 100f
                                     )
                                 )
@@ -1113,7 +1139,7 @@ private fun VideosSection(
                         Text(
                             text = video.name ?: "Video",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(8.dp),
@@ -1125,7 +1151,7 @@ private fun VideosSection(
                             Icons.Default.PlayCircleOutline,
                             contentDescription = null,
                             modifier = Modifier.align(Alignment.Center).size(48.dp),
-                            tint = Color.White.copy(alpha = 0.8f)
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                     }
                 }
@@ -1150,7 +1176,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     text = "$score%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -1165,7 +1191,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     text = "$score%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -1195,7 +1221,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                         text = String.format(Locale.US, "%.1f", imdbScore),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -1223,7 +1249,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     text = "${(rating * 10).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -1265,7 +1291,7 @@ private fun MediaInfoCondensed(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1273,13 +1299,13 @@ private fun MediaInfoCondensed(
             val runtime = movieDetail?.runtime ?: tvDetail?.episodeRunTime?.firstOrNull()
             if (runtime != null && runtime > 0) {
                 Surface(
-                    color = Color.White.copy(alpha = 0.1f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                     shape = ShapeCache.smooth4
                 ) {
                     Text(
                         text = "${runtime}m",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -1290,7 +1316,7 @@ private fun MediaInfoCondensed(
                 Text(
                     text = genres.take(2).joinToString(", ") { it.name },
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1307,14 +1333,14 @@ private fun MediaInformationSection(
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
 ) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.US)
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.US) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = "Information",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Column(
@@ -1390,13 +1416,13 @@ private fun ReleaseDateRow(
             imageVector = Icons.Default.Event,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = Color.White.copy(alpha = 0.4f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
         )
         Column {
             Text(
                 text = "Release Date",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 fontWeight = FontWeight.Medium
             )
             Row(
@@ -1406,7 +1432,7 @@ private fun ReleaseDateRow(
                 Text(
                     text = releaseDate ?: "Unknown",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                     lineHeight = 20.sp
                 )
                 if (filteredReleases.isNotEmpty()) {
@@ -1427,19 +1453,19 @@ private fun ReleaseTypeIcon(type: Int) {
             imageVector = Icons.Default.LocalActivity,
             contentDescription = "Theatrical Release",
             modifier = Modifier.size(16.dp),
-            tint = Color.White.copy(alpha = 0.7f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         4 -> Icon(
             imageVector = Icons.Default.CloudDownload,
             contentDescription = "Digital Release",
             modifier = Modifier.size(16.dp),
-            tint = Color.White.copy(alpha = 0.7f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         5 -> Icon(
             imageVector = Icons.Default.FiberManualRecord,
             contentDescription = "Physical Release",
             modifier = Modifier.size(16.dp),
-            tint = Color.White.copy(alpha = 0.7f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
     }
 }
@@ -1459,13 +1485,13 @@ private fun StreamingProvidersRow(
             imageVector = Icons.Default.PlayCircle,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = Color.White.copy(alpha = 0.4f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
         )
         Column {
             Text(
                 text = "Currently Streaming On",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 fontWeight = FontWeight.Medium
             )
             Spacer(Modifier.height(6.dp))
@@ -1487,7 +1513,7 @@ private fun StreamingProvidersRow(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(ShapeCache.smooth8)
-                                .background(Color.White.copy(alpha = 0.1f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         ) {
                             MediaImage(
                                 url = logoUrl,
@@ -1518,19 +1544,19 @@ private fun MediaInfoRow(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = Color.White.copy(alpha = 0.4f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
         )
         Column {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 fontWeight = FontWeight.Medium
             )
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 lineHeight = 20.sp
             )
         }

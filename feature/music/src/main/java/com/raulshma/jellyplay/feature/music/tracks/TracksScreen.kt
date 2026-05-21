@@ -70,7 +70,7 @@ fun TracksScreen(
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
 
-    val backgroundColor = Color.Black.copy(alpha = 0.95f)
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     Box(
         modifier = Modifier
@@ -96,7 +96,7 @@ fun TracksScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                     Text(
@@ -104,7 +104,7 @@ fun TracksScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                     com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -136,7 +136,7 @@ fun TracksScreen(
                                 Text(
                                     "No tracks found",
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                 )
                             }
                         } else {
@@ -166,6 +166,7 @@ fun TracksScreen(
                                             },
                                             imageUrl = viewModel.getImageUrl(track.id),
                                             onClick = { onItemClick(track.id) },
+                                            onAddToQueue = { viewModel.addToQueue(track) },
                                             blurHash = track.blurHashes.primary,
                                         )
                                     }

@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import androidx.lifecycle.ViewModel
@@ -22,27 +24,35 @@ internal class PlaybackProgressReporter(
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,
     private val getMediaEngine: () -> MediaEngine?,
-    private val onAutoSkipIntro: () -> Unit,
-    private val onAutoSkipOutro: () -> Unit,
+    private val onAutoSkip: (MediaSegment) -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
-    private var lastIntroSkipPosition: Long = -1
-    private var lastOutroSkipPosition: Long = -1
+    private val autoSkippedSegments = mutableSetOf<String>()
 
     fun startPositionTracking() {
         positionJob?.cancel()
-        lastIntroSkipPosition = -1
-        lastOutroSkipPosition = -1
+        autoSkippedSegments.clear()
         val engine = getMediaEngine() ?: return
         positionJob = viewModel.viewModelScope.launch {
+            var lastPos = Long.MIN_VALUE
+            var lastDur = Long.MIN_VALUE
             engine.positionFlow.collect { pos ->
-                uiState.update { it.copy(
-                    currentPosition = pos,
-                    duration = engine.durationMs.coerceAtLeast(0L),
-                    bufferedPosition = engine.bufferedPositionMs.value,
-                    videoStats = engine.videoStats.value,
-                ) }
+                val dur = engine.durationMs.coerceAtLeast(0L)
+                val buffered = engine.bufferedPositionMs.value
+                val stats = engine.videoStats.value
+                if (pos != lastPos || dur != lastDur) {
+                    lastPos = pos
+                    lastDur = dur
+                    uiState.update { state ->
+                        state.copy(
+                            currentPosition = pos,
+                            duration = dur,
+                            bufferedPosition = buffered,
+                            videoStats = stats,
+                        )
+                    }
+                }
                 checkAutoSkip(pos)
             }
         }
@@ -50,24 +60,12 @@ internal class PlaybackProgressReporter(
 
     private fun checkAutoSkip(currentPositionMs: Long) {
         val state = uiState.value
-
-        // Auto-skip intro
-        if (state.autoSkipIntro && state.isInIntro) {
-            val endTicks = state.introSegmentEndTicks
-            if (endTicks != null && lastIntroSkipPosition != endTicks) {
-                lastIntroSkipPosition = endTicks
-                onAutoSkipIntro()
-            }
-        }
-
-        // Auto-skip outro/credits
-        if (state.autoSkipOutro && state.isInCredits) {
-            val endTicks = state.creditSegmentEndTicks
-            if (endTicks != null && lastOutroSkipPosition != endTicks) {
-                lastOutroSkipPosition = endTicks
-                onAutoSkipOutro()
-            }
-        }
+        val seg = state.activeSegment ?: return
+        val behavior = state.behaviorForType(seg.type)
+        if (behavior != SegmentBehavior.AUTO_SKIP) return
+        if (seg.id in autoSkippedSegments) return
+        autoSkippedSegments.add(seg.id)
+        onAutoSkip(seg)
     }
 
     fun startProgressReporting() {

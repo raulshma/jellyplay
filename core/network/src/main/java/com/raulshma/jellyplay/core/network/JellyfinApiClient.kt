@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -87,6 +88,7 @@ interface JellyfinApiClient {
         query: String,
         mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
+        startIndex: Int = 0,
     ): Result<SearchResult>
 
     suspend fun getGenres(
@@ -103,6 +105,8 @@ interface JellyfinApiClient {
     ): Result<SearchResult>
 
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
+
+    suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
@@ -297,6 +301,8 @@ interface JellyfinApiClient {
     suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
 
     suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
+
+    suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>>
 
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 

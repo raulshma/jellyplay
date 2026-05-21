@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -71,6 +73,8 @@ class HomeViewModel @Inject constructor(
     var homeMode by mutableStateOf(HomeMode.VIDEO)
         private set
     var dynamicTheming by mutableStateOf(true)
+        private set
+    var oledMode by mutableStateOf(false)
         private set
 
     // Seerr Discover state
@@ -123,6 +127,7 @@ class HomeViewModel @Inject constructor(
                 kidsModeEnabled = prefs.kidsModeEnabled
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
+                oledMode = prefs.oledMode
             }
         }
 
@@ -175,9 +180,11 @@ class HomeViewModel @Inject constructor(
             mediaRepository.getHomeSections()
                 .onSuccess { fetchedSections ->
                     val filteredSections = if (prefs.kidsModeEnabled) {
-                        fetchedSections.map { section ->
-                            section.copy(items = section.items.filter { isAllowedForKids(it, prefs.kidsModeMaxRating) })
-                        }.filter { it.items.isNotEmpty() }
+                        withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            fetchedSections.map { section ->
+                                section.copy(items = section.items.filter { isAllowedForKids(it, prefs.kidsModeMaxRating) })
+                            }.filter { it.items.isNotEmpty() }
+                        }
                     } else fetchedSections
 
                     if (this@HomeViewModel.sections != filteredSections) {
@@ -436,16 +443,19 @@ class HomeViewModel @Inject constructor(
     }
 }
 
+@Immutable
 data class HomeScrollPosition(
     val firstVisibleItemIndex: Int = 0,
     val firstVisibleItemScrollOffset: Int = 0,
 )
 
+@Immutable
 data class HomeFocusPosition(
     val sectionIndex: Int = 0,
     val itemIndex: Int = 0,
 )
 
+@Immutable
 data class DiscoverRequestResult(
     val isLoading: Boolean = false,
     val success: Boolean? = null,

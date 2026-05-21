@@ -16,7 +16,10 @@ data class ServerEntity(
 
 @Entity(
     tableName = "users",
-    indices = [androidx.room.Index(value = ["serverId"])]
+    indices = [
+        androidx.room.Index(value = ["serverId"]),
+        androidx.room.Index(value = ["serverId", "lastConnected"]),
+    ]
 )
 data class UserEntity(
     @PrimaryKey val userId: String,
@@ -34,6 +37,7 @@ data class UserEntity(
     indices = [
         Index(value = ["mediaItemId"]),
         Index(value = ["status"]),
+        Index(value = ["createdAt"]),
     ],
 )
 data class DownloadEntity(

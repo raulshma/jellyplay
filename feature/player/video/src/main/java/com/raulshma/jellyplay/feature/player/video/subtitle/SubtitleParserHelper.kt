@@ -50,8 +50,17 @@ object SubtitleParserHelper {
 
     fun findActiveCue(cues: List<TimedCue>, positionUs: Long, offsetUs: Long): TimedCue? {
         val adjustedPosition = positionUs + offsetUs
-        return cues.find { cue ->
-            adjustedPosition >= cue.startTimeUs && adjustedPosition < cue.endTimeUs
+        var low = 0
+        var high = cues.lastIndex
+        while (low <= high) {
+            val mid = (low + high).ushr(1)
+            val cue = cues[mid]
+            when {
+                adjustedPosition < cue.startTimeUs -> high = mid - 1
+                adjustedPosition >= cue.endTimeUs -> low = mid + 1
+                else -> return cue
+            }
         }
+        return null
     }
 }

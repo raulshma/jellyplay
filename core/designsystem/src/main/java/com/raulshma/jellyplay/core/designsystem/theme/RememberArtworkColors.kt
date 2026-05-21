@@ -31,11 +31,11 @@ fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
             artworkColors = it
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             try {
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
-                    .size(Size(256, 256))
+                    .size(Size(64, 64))
                     .allowHardware(false)
                     .build()
                 val result = loader.execute(request)

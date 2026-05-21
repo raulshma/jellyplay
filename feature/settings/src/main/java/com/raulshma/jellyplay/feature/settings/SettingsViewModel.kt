@@ -9,10 +9,14 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DreamImageCategory
+import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -23,9 +27,11 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -84,6 +90,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setDynamicTheming(enabled) }
     }
 
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { preferencesStore.setThemeMode(mode) }
+    }
+
+    fun setOledMode(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setOledMode(enabled) }
+    }
+
     fun setPreferredPlayer(playerType: PlayerType) {
         viewModelScope.launch { preferencesStore.setPreferredPlayer(playerType) }
     }
@@ -123,8 +137,10 @@ class SettingsViewModel @Inject constructor(
 
     private fun calculateCacheSize() {
         viewModelScope.launch {
-            val cacheSize = getDirSize(context.cacheDir)
-            val externalCacheSize = context.externalCacheDir?.let { getDirSize(it) } ?: 0L
+            val cacheSize = withContext(Dispatchers.IO) { getDirSize(context.cacheDir) }
+            val externalCacheSize = withContext(Dispatchers.IO) {
+                context.externalCacheDir?.let { getDirSize(it) } ?: 0L
+            }
             cacheSizeMb = (cacheSize + externalCacheSize) / (1024 * 1024)
         }
     }
@@ -305,20 +321,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setVideoPreloadBufferSize(size) }
     }
 
-    fun setSkipIntroEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSkipIntroEnabled(enabled) }
-    }
-
-    fun setSkipOutroEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSkipOutroEnabled(enabled) }
-    }
-
-    fun setAutoSkipIntro(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAutoSkipIntro(enabled) }
-    }
-
-    fun setAutoSkipOutro(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAutoSkipOutro(enabled) }
+    fun setSegmentBehavior(
+        type: com.raulshma.jellyplay.core.model.MediaSegmentType,
+        behavior: com.raulshma.jellyplay.core.model.SegmentBehavior,
+    ) {
+        viewModelScope.launch { preferencesStore.setSegmentBehavior(type, behavior) }
     }
 
     fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
@@ -375,5 +382,33 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfadeDurationMs(ms: Long) {
         viewModelScope.launch { preferencesStore.setCrossfadeDurationMs(ms) }
+    }
+
+    fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
+        viewModelScope.launch { preferencesStore.setAudioNormalizationMode(mode) }
+    }
+
+    fun setReplayGainPreAmpDb(db: Float) {
+        viewModelScope.launch { preferencesStore.setReplayGainPreAmpDb(db) }
+    }
+
+    fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
+        viewModelScope.launch { preferencesStore.setDreamImageCategories(categories) }
+    }
+
+    fun setDreamSlideshowIntervalMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setDreamSlideshowIntervalMs(ms) }
+    }
+
+    fun setDreamKenBurnsEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setDreamKenBurnsEnabled(enabled) }
+    }
+
+    fun setDreamTransitionStyle(style: DreamTransitionStyle) {
+        viewModelScope.launch { preferencesStore.setDreamTransitionStyle(style) }
+    }
+
+    fun setDreamShowTitle(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setDreamShowTitle(enabled) }
     }
 }

@@ -76,7 +76,7 @@ fun PlaylistsScreen(
     var headerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { headerVisible = true }
 
-    val backgroundColor = Color.Black.copy(alpha = 0.95f)
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     Box(
         modifier = Modifier
@@ -106,7 +106,7 @@ fun PlaylistsScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                     com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -162,14 +162,14 @@ private fun PlaylistItemRow(
             imageVector = Icons.Default.MusicNote,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = Color.White.copy(alpha = 0.8f),
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
         )
         Spacer(Modifier.size(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = playlist.name,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -177,7 +177,7 @@ private fun PlaylistItemRow(
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -185,14 +185,14 @@ private fun PlaylistItemRow(
             Text(
                 text = "${playlist.itemCount} tracks",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
             )
         }
         IconButton(onClick = onClick) {
             Icon(
                 Icons.Default.PlayArrow,
                 contentDescription = "Open",
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }
     }
