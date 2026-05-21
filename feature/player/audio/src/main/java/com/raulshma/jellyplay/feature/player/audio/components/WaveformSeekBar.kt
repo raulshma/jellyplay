@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.sin
 
-private const val WAVE_FREQUENCY = 3.5f
+private const val WAVE_FREQUENCY = 6.0f
 
 @Composable
 fun WaveformSeekBar(
@@ -60,7 +60,7 @@ fun WaveformSeekBar(
     val currentPhase = if (isPlaying) phaseShift else 0f
 
     val density = LocalDensity.current
-    val strokeWidthPx = remember(density) { with(density) { 3.dp.toPx() } }
+    val strokeWidthPx = remember(density) { with(density) { 4.dp.toPx() } }
     val waveStroke = remember(strokeWidthPx) {
         Stroke(
             width = strokeWidthPx,
@@ -94,7 +94,7 @@ fun WaveformSeekBar(
                 val wavePath = Path()
 
                 onDrawBehind {
-                    val amplitude = (height * 0.28f) * currentAmplitudeRatio
+                    val amplitude = (height * 0.15f) * currentAmplitudeRatio
                     val progressX = width * progress.coerceIn(0f, 1f)
 
                     wavePath.reset()
