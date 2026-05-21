@@ -45,13 +45,12 @@ internal class PlaybackProgressReporter(
                     lastPos = pos
                     lastDur = dur
                     uiState.update { state ->
-                        val updated = state.copy(
+                        state.copy(
                             currentPosition = pos,
                             duration = dur,
                             bufferedPosition = buffered,
                             videoStats = stats,
                         )
-                        updated.copy(activeSegment = updated.computeActiveSegment())
                     }
                 }
                 checkAutoSkip(pos)

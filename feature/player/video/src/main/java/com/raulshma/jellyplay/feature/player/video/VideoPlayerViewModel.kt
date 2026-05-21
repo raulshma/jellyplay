@@ -418,10 +418,15 @@ class VideoPlayerViewModel @Inject constructor(
     fun selectAudioTrack(option: TrackOption) {
         val engine = playerSessionManager.engine ?: return
         engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, option.index, option.trackGroup)
+        if (option.index < 0) {
+            selectedAudioTrackId = null
+        } else {
+            selectedAudioTrackId = option.index to option.trackGroup
+        }
         _uiState.update { state ->
             val isDefault = option.index < 0
             state.copy(audioTracks = state.audioTracks.map { track ->
-                val matches = track.index == option.index
+                val matches = track.index == option.index && track.trackGroup == option.trackGroup
                 val isDefaultTrack = track.index < 0
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
@@ -573,6 +578,9 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun retryWithEngine(playerType: PlayerType) {
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
+        val currentSpeed = _uiState.value.playbackSpeed
+        val currentQuality = _uiState.value.streamingQuality
+        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(currentQuality)?.toInt()
         _uiState.update {
             it.copy(
                 showPlaybackErrorDialog = false,
@@ -582,7 +590,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             preferencesStore.setPreferredPlayer(playerType)
-            playerSessionManager.reloadWithEngine(playerType, currentPos)
+            playerSessionManager.reloadWithEngine(playerType, currentPos, currentSpeed, maxBitrate)
         }
     }
 
@@ -826,7 +834,7 @@ class VideoPlayerViewModel @Inject constructor(
             isForced = false,
             id = "local:${System.currentTimeMillis()}",
         )
-        engine.addExternalSubtitle(source)
+        playerSessionManager.addExternalSubtitle(source)
     }
 
     fun joinSyncPlay(groupId: String) {
@@ -953,20 +961,61 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private var selectedSubtitleTrackId: Pair<Int, Any?>? = null
+    private var selectedAudioTrackId: Pair<Int, Any?>? = null
 
     private fun updateTracksFromEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
         val streams = _uiState.value.mediaStreams
-        val audioOptions = engine.availableTracks.value.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO }.map { t ->
+        val rawTracks = engine.availableTracks.value
+
+        // Restore previous manual audio selection if new engine doesn't have it selected yet
+        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO }
+        val prevAudioSel = selectedAudioTrackId
+        if (prevAudioSel != null) {
+            val targetTrack = rawAudioTracks.find { it.index == prevAudioSel.first && it.trackGroup == prevAudioSel.second }
+            if (targetTrack != null && !targetTrack.isSelected) {
+                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
+                return
+            }
+        }
+
+        // Restore previous manual subtitle selection if new engine doesn't have it selected yet
+        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE }
+        val prevSubSel = selectedSubtitleTrackId
+        if (prevSubSel != null) {
+            val targetTrack = rawSubTracks.find { it.index == prevSubSel.first && it.trackGroup == prevSubSel.second }
+            if (targetTrack != null && !targetTrack.isSelected) {
+                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
+                return
+            }
+        }
+
+        val audioOptions = rawAudioTracks.map { t ->
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
         val audioTracks = if (audioOptions.isEmpty()) {
             listOf(TrackOption(-1, "Default", null, true))
         } else {
-            listOf(TrackOption(-1, "Default", null, true)) + audioOptions
+            val sel = selectedAudioTrackId
+            val hasSelectionMatch = audioOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
+            val resolvedSel = if (hasSelectionMatch) sel else {
+                val engineAutoSelected = audioOptions.find { it.isSelected }
+                if (engineAutoSelected != null) {
+                    selectedAudioTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
+                    selectedAudioTrackId
+                } else null
+            }
+            listOf(TrackOption(-1, "Default", null, resolvedSel == null)) + audioOptions.map { t ->
+                val isSel = if (resolvedSel != null) {
+                    resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
+                } else {
+                    t.isSelected
+                }
+                t.copy(isSelected = isSel)
+            }
         }
 
-        val engineSubOptions = engine.availableTracks.value.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE }.map { t ->
+        val engineSubOptions = rawSubTracks.map { t ->
             TrackOption(t.index, t.label, t.language, t.isSelected, trackGroup = t.trackGroup as? androidx.media3.common.TrackGroup)
         }
 
@@ -974,13 +1023,14 @@ class VideoPlayerViewModel @Inject constructor(
             listOf(TrackOption(-1, "None", null, true))
         } else {
             val sel = selectedSubtitleTrackId
-            if (sel == null) {
+            val hasSelectionMatch = engineSubOptions.any { sel != null && sel.first == it.index && sel.second == it.trackGroup }
+            val resolvedSel = if (hasSelectionMatch) sel else {
                 val engineAutoSelected = engineSubOptions.find { it.isSelected }
                 if (engineAutoSelected != null) {
                     selectedSubtitleTrackId = engineAutoSelected.index to engineAutoSelected.trackGroup
-                }
+                    selectedSubtitleTrackId
+                } else null
             }
-            val resolvedSel = selectedSubtitleTrackId
             listOf(TrackOption(-1, "Off", null, resolvedSel == null)) + engineSubOptions.map { t ->
                 val isSel = if (resolvedSel != null) {
                     resolvedSel.first == t.index && resolvedSel.second == t.trackGroup
