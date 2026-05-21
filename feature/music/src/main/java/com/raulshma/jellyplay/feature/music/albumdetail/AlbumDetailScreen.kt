@@ -86,9 +86,16 @@ fun AlbumDetailScreen(
             AnimatedEntrance(visible = true) {
                 AlbumDetailContent(
                     detail = viewModel.detail!!,
+                    tracks = viewModel.tracks,
                     getImageUrl = { viewModel.getImageUrl(it) },
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onTrackClick = onTrackClick,
+                    onPlayAlbum = { tracks, startIndex ->
+                        viewModel.playAlbum(tracks, startIndex)
+                        tracks.getOrNull(startIndex)?.let { firstTrack ->
+                            onTrackClick(firstTrack.id)
+                        }
+                    },
                     onArtistClick = onArtistClick,
                     onBack = onBack,
                 )
@@ -101,9 +108,11 @@ fun AlbumDetailScreen(
 @Composable
 private fun AlbumDetailContent(
     detail: MediaDetail,
+    tracks: List<MediaItem>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     onTrackClick: (String) -> Unit,
+    onPlayAlbum: (List<MediaItem>, Int) -> Unit,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -195,9 +204,11 @@ private fun AlbumDetailContent(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = {
-                                val firstTrackId = detail.relatedItems.firstOrNull()?.id
-                                if (firstTrackId != null) onTrackClick(firstTrackId)
+                                if (tracks.isNotEmpty()) {
+                                    onPlayAlbum(tracks, 0)
+                                }
                             },
+                            enabled = tracks.isNotEmpty(),
                             modifier = Modifier.weight(1f),
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -225,7 +236,7 @@ private fun AlbumDetailContent(
                 }
             }
 
-            itemsIndexed(detail.relatedItems, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
+            itemsIndexed(tracks, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
                 TrackItem(
                     track = track,
                     index = index + 1,

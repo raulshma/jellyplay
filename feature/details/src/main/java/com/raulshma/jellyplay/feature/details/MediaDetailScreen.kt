@@ -262,6 +262,8 @@ fun MediaDetailScreen(
             getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
             onSeerrRequest = { seerrRequestItem = it },
             onNavigate = onNavigate,
+            albumTracks = viewModel.albumTracks,
+            onPlayAlbumTrack = { index -> viewModel.playAlbum(index) },
         )
 
         // Seerr request dialog
@@ -337,10 +339,12 @@ private fun DetailContent(
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    albumTracks: List<MediaItem> = emptyList(),
+    onPlayAlbumTrack: (Int) -> Unit = {},
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
-    val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC
+    val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC || item?.mediaType == MediaType.ALBUM
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
 
@@ -640,6 +644,8 @@ private fun DetailContent(
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
+                                    albumTracks = albumTracks,
+                                    onPlayAlbumTrack = onPlayAlbumTrack,
                                 )
                             }
                         } else if (isLoading) {
@@ -754,6 +760,8 @@ private fun DetailContent(
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
+                                    albumTracks = albumTracks,
+                                    onPlayAlbumTrack = onPlayAlbumTrack,
                                 )
                             }
                         } else if (isLoading) {
@@ -1216,7 +1224,7 @@ private fun InfoBadge(
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = if (highlight) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1235,7 +1243,7 @@ private fun SubtitleChip(
         label = "subtitleChipBg",
     )
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
         animationSpec = tween(200, easing = FancyTransitionEasing),
         label = "subtitleChipContent",
     )
@@ -1406,9 +1414,9 @@ private fun DetailActionButtons(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(Modifier.size(6.dp))
-                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -1562,9 +1570,9 @@ private fun DetailActionButtons(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     Spacer(Modifier.size(8.dp))
-                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
 
@@ -1689,6 +1697,8 @@ private fun DetailContentBody(
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    albumTracks: List<MediaItem> = emptyList(),
+    onPlayAlbumTrack: (Int) -> Unit = {},
 ) {
     val showContent = true
 
@@ -1925,7 +1935,34 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 5) {
+        StaggeredDetailSection(visible = showContent && isAudio && albumTracks.isNotEmpty(), delayIndex = 5) {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = "Tracks",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(12.dp))
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    albumTracks.forEachIndexed { index, track ->
+                        AlbumTrackItem(
+                            track = track,
+                            index = index + 1,
+                            imageUrl = getImageUrl(track.id),
+                            onClick = { onItemClick(track.id) },
+                            onPlayClick = {
+                                onPlayAlbumTrack(index)
+                                onItemClick(track.id)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        StaggeredDetailSection(visible = showContent, delayIndex = 6) {
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
@@ -1952,7 +1989,7 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 6) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 7) {
             if (detail.people.isNotEmpty()) {
                 Column {
                     Text(
@@ -1984,7 +2021,7 @@ private fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 7) {
+        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
             if (detail.relatedItems.isNotEmpty()) {
                 Column {
                     Text(
@@ -2554,6 +2591,95 @@ private fun PersonItem(
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumTrackItem(
+    track: MediaItem,
+    index: Int,
+    imageUrl: String,
+    onClick: () -> Unit,
+    onPlayClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(150),
+        label = "trackScale",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .tvFocusable().clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$index",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(24.dp),
+        )
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(ShapeCache.smooth4),
+        ) {
+            MediaImage(
+                url = imageUrl,
+                contentDescription = track.name,
+                blurHash = track.blurHashes.primary,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            track.albumArtist?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        IconButton(onClick = onPlayClick) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Play",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        track.runTimeTicks?.let { ticks ->
+            val minutes = (ticks / 600_000_000)
+            val seconds = ((ticks / 10_000_000) % 60)
+            Text(
+                text = String.format("%d:%02d", minutes, seconds),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

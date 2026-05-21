@@ -584,6 +584,21 @@ class JellyfinApiClientImpl @Inject constructor(
         response.items.map { it.toMediaItem() }.filterByParentalRating()
     }
 
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = apiResult {
+        val response = requireApi().itemsApi.getItems(
+            parentId = albumId.toUUID(),
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.AUDIO),
+            recursive = true,
+            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.PARENT_INDEX_NUMBER, org.jellyfin.sdk.model.api.ItemSortBy.INDEX_NUMBER),
+            sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { it.toMediaItem() }.filterByParentalRating()
+    }
+
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {
             requireApi().libraryApi.getSimilarItems(

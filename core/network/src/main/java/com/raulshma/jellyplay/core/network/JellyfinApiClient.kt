@@ -105,6 +105,8 @@ interface JellyfinApiClient {
 
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
 
+    suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
+
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
     suspend fun getItemsByPerson(
