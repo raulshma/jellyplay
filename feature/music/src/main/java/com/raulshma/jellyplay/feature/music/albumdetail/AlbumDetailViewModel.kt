@@ -62,6 +62,20 @@ class AlbumDetailViewModel @Inject constructor(
         audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
+    fun addToQueue(track: MediaItem) {
+        val queueItem = AudioQueueItem(
+            id = track.id,
+            name = track.name,
+            artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+            album = track.album ?: detail?.item?.name,
+            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+            mediaSourceId = null,
+            durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+            normalizationGain = track.normalizationGain,
+        )
+        audioPlaybackManager.addToQueue(queueItem)
+    }
+
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 

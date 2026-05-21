@@ -62,6 +62,7 @@ class AudioPlaybackManager @Inject constructor(
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
+    private var isLoadingItem = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
@@ -311,6 +312,7 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         if (currentItemId == itemId) {
+            if (isLoadingItem) return
             val state = exoPlayer?.playbackState
             if (state != null && state != Player.STATE_ENDED && state != Player.STATE_IDLE) {
                 return
@@ -319,13 +321,14 @@ class AudioPlaybackManager @Inject constructor(
 
         cancelCrossfade()
         reportCurrentItemStopped()
+        currentItemId = itemId
+        isLoadingItem = true
 
         val player = getOrCreatePlayer()
 
         scope.launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    currentItemId = itemId
                     _currentPlayingItemId.value = itemId
                     _title.value = detail.item.name
                     _artist.value = detail.item.albumArtist
@@ -405,6 +408,7 @@ class AudioPlaybackManager @Inject constructor(
                     startPositionTracking()
                     startProgressReporting()
                 }
+            isLoadingItem = false
         }
     }
 

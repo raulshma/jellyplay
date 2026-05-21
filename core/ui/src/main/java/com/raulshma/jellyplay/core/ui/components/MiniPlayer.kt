@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,9 +65,10 @@ fun MiniPlayer(
     artworkUri: String,
     isPlaying: Boolean,
     onClick: () -> Unit,
-    onStop: () -> Unit,
+    onClose: () -> Unit,
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
+    onAddToQueue: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -176,6 +179,17 @@ fun MiniPlayer(
                     )
                 }
 
+                if (onAddToQueue != null) {
+                    AnimatedIconButton(
+                        onClick = onAddToQueue,
+                        size = 36.dp,
+                        contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
+                        iconVector = Icons.Default.QueueMusic,
+                        iconDescription = "Add to Queue",
+                        iconSize = 20.dp,
+                    )
+                }
+
                 AnimatedIconButton(
                     onClick = onPlayPause,
                     size = 40.dp,
@@ -192,6 +206,15 @@ fun MiniPlayer(
                     contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
                     iconVector = Icons.Default.SkipNext,
                     iconDescription = "Skip Next",
+                    iconSize = 20.dp,
+                )
+
+                AnimatedIconButton(
+                    onClick = onClose,
+                    size = 36.dp,
+                    contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
+                    iconVector = Icons.Default.Close,
+                    iconDescription = "Close",
                     iconSize = 20.dp,
                 )
             }

@@ -345,6 +345,7 @@ private fun DetailContent(
     val item = detail?.item
     val listState = rememberLazyListState()
     val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC || item?.mediaType == MediaType.ALBUM
+    val isAlbum = item?.mediaType == MediaType.ALBUM
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
 
@@ -576,10 +577,14 @@ private fun DetailContent(
                                         fetchedSeasonIds = fetchedSeasonIds,
                                         smartPlayTarget = smartPlayTarget,
                                         isAudio = isAudio,
+                                        isAlbum = isAlbum,
+                                        albumTracks = albumTracks,
                                         isDownloading = isDownloading,
                                         activeDownload = activeDownload,
                                         onPlayClick = onPlayClick,
                                         onAudioClick = onAudioClick,
+                                        onPlayAlbumTrack = onPlayAlbumTrack,
+                                        onNavigate = onNavigate,
                                         onDownloadClick = { showDownloadDialog = true },
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
@@ -617,6 +622,8 @@ private fun DetailContent(
                                     selectedAudioIndex = selectedAudioIndex,
                                     getImageUrl = getImageUrl,
                                     isAudio = isAudio,
+                                    isAlbum = isAlbum,
+                                    albumTracks = albumTracks,
                                     isDownloading = isDownloading,
                                     activeDownload = activeDownload,
                                     onPlayClick = onPlayClick,
@@ -644,7 +651,6 @@ private fun DetailContent(
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
-                                    albumTracks = albumTracks,
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                 )
                             }
@@ -737,6 +743,8 @@ private fun DetailContent(
                                     selectedAudioIndex = selectedAudioIndex,
                                     getImageUrl = getImageUrl,
                                     isAudio = isAudio,
+                                    isAlbum = isAlbum,
+                                    albumTracks = albumTracks,
                                     isDownloading = isDownloading,
                                     activeDownload = activeDownload,
                                     onPlayClick = onPlayClick,
@@ -760,7 +768,6 @@ private fun DetailContent(
                                     getSeerrPosterUrl = getSeerrPosterUrl,
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
-                                    albumTracks = albumTracks,
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                 )
                             }
@@ -1285,10 +1292,14 @@ private fun DetailActionButtons(
     fetchedSeasonIds: Set<String>,
     smartPlayTarget: DetailViewModel.SmartPlayTarget?,
     isAudio: Boolean,
+    isAlbum: Boolean,
+    albumTracks: List<MediaItem>,
     isDownloading: Boolean,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
+    onPlayAlbumTrack: (Int) -> Unit,
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     onDownloadClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
@@ -1392,7 +1403,12 @@ private fun DetailActionButtons(
                     indication = null,
                     enabled = canPlayPrimary,
                 ) {
-                    if (isAudio) {
+                    if (isAlbum && albumTracks.isNotEmpty()) {
+                        onPlayAlbumTrack(0)
+                        albumTracks.firstOrNull()?.let { track ->
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.AudioPlayer(track.id))
+                        }
+                    } else if (isAudio) {
                         onAudioClick()
                     } else if (target != null) {
                         onPlayClick(target.episode.id, null, target.startPositionTicks)
@@ -1670,10 +1686,14 @@ private fun DetailContentBody(
     selectedAudioIndex: Int?,
     getImageUrl: (String) -> String,
     isAudio: Boolean,
+    isAlbum: Boolean,
+    albumTracks: List<MediaItem>,
     isDownloading: Boolean,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
+    onPlayAlbumTrack: (Int) -> Unit = {},
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onDownloadClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
@@ -1696,9 +1716,6 @@ private fun DetailContentBody(
     isSeerrRecommendationsEnabled: Boolean = false,
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
-    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
-    albumTracks: List<MediaItem> = emptyList(),
-    onPlayAlbumTrack: (Int) -> Unit = {},
 ) {
     val showContent = true
 
@@ -1894,10 +1911,14 @@ private fun DetailContentBody(
                 fetchedSeasonIds = fetchedSeasonIds,
                 smartPlayTarget = smartPlayTarget,
                 isAudio = isAudio,
+                isAlbum = isAlbum,
+                albumTracks = albumTracks,
                 isDownloading = isDownloading,
                 activeDownload = activeDownload,
                 onPlayClick = onPlayClick,
                 onAudioClick = onAudioClick,
+                onPlayAlbumTrack = onPlayAlbumTrack,
+                onNavigate = onNavigate,
                 onDownloadClick = onDownloadClick,
                 onToggleFavorite = onToggleFavorite,
                 onMarkPlayed = onMarkPlayed,

@@ -199,7 +199,14 @@ private fun MainContent(
     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
-    val showMiniPlayer = isAudioPlaying && !isAudioPlayerScreen && !isPlayerScreen
+    var isMiniPlayerDismissed by remember { mutableStateOf(false) }
+    val showMiniPlayer = audioItemId != null && !isAudioPlayerScreen && !isPlayerScreen && !isMiniPlayerDismissed
+
+    LaunchedEffect(audioItemId) {
+        if (audioItemId != null) {
+            isMiniPlayerDismissed = false
+        }
+    }
 
     val videoMiniPlayerState = viewModel.videoMiniPlayerState
     val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsStateWithLifecycle()
@@ -324,8 +331,8 @@ private fun MainContent(
                                         val itemId = audioItemId ?: return@MiniPlayer
                                         navigator.navigate(Route.AudioPlayer(itemId))
                                     },
-                                    onStop = {
-                                        audioPlaybackManager.stopAndRelease()
+                                    onClose = {
+                                        isMiniPlayerDismissed = true
                                     },
                                     onPlayPause = {
                                         audioPlaybackManager.togglePlayPause()
@@ -406,8 +413,8 @@ private fun MainContent(
                                             val itemId = audioItemId ?: return@MiniPlayer
                                             navigator.navigate(Route.AudioPlayer(itemId))
                                         },
-                                        onStop = {
-                                            audioPlaybackManager.stopAndRelease()
+                                        onClose = {
+                                            isMiniPlayerDismissed = true
                                         },
                                         onPlayPause = {
                                             audioPlaybackManager.togglePlayPause()
@@ -725,6 +732,7 @@ private fun MainNavDisplay(
                         homeMode = homeMode,
                         onModeChange = onModeChange,
                         onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
                         onSettingsClick = { navigator.navigate(Route.Settings) },
                         onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
                         onDownloadsClick = { navigator.navigate(Route.Downloads) },
