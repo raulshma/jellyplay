@@ -78,6 +78,8 @@ class SyncPlayViewModel @Inject constructor(
     private val _chatMessages = MutableStateFlow<List<ChatMessageEntry>>(emptyList())
     val chatMessages = _chatMessages.asStateFlow()
 
+    private val chatBuffer = ArrayDeque<ChatMessageEntry>(200)
+
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
     private var autoJoinGroupId: String? = null
@@ -143,6 +145,7 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = false
                     currentGroup = null
+                    chatBuffer.clear()
                     _chatMessages.value = emptyList()
                     commandJob?.cancel()
                     lastHandledPlayingItemId = null
@@ -219,11 +222,13 @@ class SyncPlayViewModel @Inject constructor(
                         }
                     }
                     is SyncPlayCommand.ChatMessage -> {
-                        _chatMessages.value = (_chatMessages.value + ChatMessageEntry(
+                        chatBuffer.addLast(ChatMessageEntry(
                             userId = command.userId,
                             userName = command.userName,
                             text = command.text,
-                        )).takeLast(200)
+                        ))
+                        if (chatBuffer.size > 200) chatBuffer.removeFirst()
+                        _chatMessages.value = chatBuffer.toList()
                     }
                     is SyncPlayCommand.Notification -> {
                         _notifications.tryEmit(command.message)

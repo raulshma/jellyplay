@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,23 +37,16 @@ class CollectionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading = true
             _error = null
-
-            mediaRepository.getMediaDetail(collectionId)
-                .onSuccess { detail ->
-                    _collectionDetail = detail
-                }
-                .onFailure { e ->
-                    _error = e.message ?: "Failed to load collection"
-                }
-
-            mediaRepository.getCollectionItems(collectionId, limit = 100)
-                .onSuccess { result ->
-                    _items = result.items
-                }
-                .onFailure { e ->
-                    _error = e.message ?: "Failed to load collection items"
-                }
-
+            coroutineScope {
+                val detailDeferred = async { mediaRepository.getMediaDetail(collectionId) }
+                val itemsDeferred = async { mediaRepository.getCollectionItems(collectionId, limit = 100) }
+                detailDeferred.await()
+                    .onSuccess { detail -> _collectionDetail = detail }
+                    .onFailure { e -> _error = e.message ?: "Failed to load collection" }
+                itemsDeferred.await()
+                    .onSuccess { result -> _items = result.items }
+                    .onFailure { e -> _error = e.message ?: "Failed to load collection items" }
+            }
             _isLoading = false
         }
     }

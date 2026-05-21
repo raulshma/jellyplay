@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -80,11 +81,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AudioDelaySheet
-import com.raulshma.jellyplay.feature.player.video.components.CreditsSkipOverlay
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
-import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
@@ -149,6 +150,7 @@ fun VideoPlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
+    var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
 
     val isTv = LocalTvMode.current
 
@@ -339,18 +341,16 @@ fun VideoPlayerScreen(
     val isInIntro = uiState.isInIntro
     val isInCredits = uiState.isInCredits
     val shouldShowUpNext = uiState.shouldShowUpNext
+    val activeSegment = uiState.activeSegment
+    val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
 
     val skipSegmentText: String? = when {
-        isInIntro -> "Skip Intro"
-        isInCredits -> "Skip Credits"
+        activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON -> activeSegment.type.skipLabel
         else -> null
     }
-    val onSkipSegment: () -> Unit = remember(isInIntro, isInCredits) {
-        when {
-            isInIntro -> { viewModel::skipIntro }
-            isInCredits -> { viewModel::skipCredits }
-            else -> { {} }
-        }
+    val onSkipSegment: () -> Unit = remember(activeSegment) {
+        if (activeSegment != null) {{ viewModel.skipSegment(activeSegment) }}
+        else {{}}
     }
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -521,18 +521,25 @@ fun VideoPlayerScreen(
             },
     ) {
         if (engine != null) {
-            AndroidView(
-                factory = { ctx ->
-                    engine.createSurfaceView(ctx).also { view ->
-                        playerViewRef = view
-                        viewModel.applySubtitleStyleToView(view)
-                    }
-                },
-                update = { view ->
-                    viewModel.applySubtitleStyleToView(view)
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            key(engine) {
+                AndroidView(
+                    factory = { ctx ->
+                        engine.createSurfaceView(ctx).also { view ->
+                            playerViewRef = view
+                            lastAppliedSubtitleStyle = uiState.subtitleStyle
+                            viewModel.applySubtitleStyleToView(view)
+                        }
+                    },
+                    update = { view ->
+                        val currentStyle = uiState.subtitleStyle
+                        if (lastAppliedSubtitleStyle != currentStyle) {
+                            lastAppliedSubtitleStyle = currentStyle
+                            viewModel.applySubtitleStyleToView(view)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         MpvSubtitleOverlay(
@@ -634,21 +641,19 @@ fun VideoPlayerScreen(
 
         
 
-        IntroSkipOverlay(
-            isVisible = isInIntro && !isInPipMode,
-            onSkip = { viewModel.skipIntro() },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 100.dp, end = 40.dp),
-        )
-
-        CreditsSkipOverlay(
-            isVisible = isInCredits && !shouldShowUpNext && !isInPipMode,
-            onSkip = { viewModel.skipCredits() },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 100.dp, end = 40.dp),
-        )
+        if (activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
+            val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
+            if (!hideForUpNext) {
+                SegmentSkipOverlay(
+                    isVisible = true,
+                    segmentType = activeSegment.type,
+                    onSkip = { viewModel.skipSegment(activeSegment) },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 100.dp, end = 40.dp),
+                )
+            }
+        }
 
         if (nextEpisode != null) {
             NextEpisodeOverlay(
@@ -746,8 +751,7 @@ fun VideoPlayerScreen(
             nightModeStrength = uiState.nightModeStrength,
             audioPassthrough = uiState.audioPassthrough,
             isOcrRunning = uiState.isOcrRunning,
-            introTimestamps = uiState.introTimestamps,
-            creditTimestamps = uiState.creditTimestamps,
+            segments = uiState.segments,
             skipSegmentText = skipSegmentText,
             onSkipSegment = onSkipSegment,
             currentAspectRatio = aspectRatio,

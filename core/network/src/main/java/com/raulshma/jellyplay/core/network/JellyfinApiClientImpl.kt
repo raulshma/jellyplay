@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -33,9 +35,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -49,6 +54,7 @@ import javax.inject.Singleton
 class JellyfinApiClientImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val jellyfin: Jellyfin,
+    private val okHttpClient: OkHttpClient,
 ) : JellyfinApiClient {
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -66,6 +72,53 @@ class JellyfinApiClientImpl @Inject constructor(
     private suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
 
+    private companion object {
+        val sharedJson = Json { ignoreUnknownKeys = true }
+        private val CACHED_CAPABILITIES by lazy {
+            org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
+                playableMediaTypes = listOf(
+                    org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                    org.jellyfin.sdk.model.api.MediaType.AUDIO,
+                ),
+                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.entries,
+                supportsMediaControl = true,
+                supportsPersistentIdentifier = true,
+                deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
+                    directPlayProfiles = emptyList(),
+                    transcodingProfiles = emptyList(),
+                    containerProfiles = emptyList(),
+                    codecProfiles = emptyList(),
+                    subtitleProfiles = listOf(
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "srt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ass",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ssa",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "subrip",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "vtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "webvtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                    ),
+                ),
+            )
+        }
+    }
+
     private val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
 
@@ -80,10 +133,10 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private fun List<MediaItem>.filterByParentalRating(): List<MediaItem> {
         val max = currentMaxParentalRating ?: return this
-        return filter { item ->
-            item.officialRating?.let { rating ->
+        return mapNotNull { item ->
+            if (item.officialRating?.let { rating ->
                 ratingToAge(rating)?.let { age -> age <= max }
-            } != false
+            } != false) item else null
         }
     }
 
@@ -126,42 +179,40 @@ class JellyfinApiClientImpl @Inject constructor(
         password: String,
     ): Result<UserInfo> = apiResult {
         _currentServer.value = serverInfo
-        withContext(Dispatchers.IO) {
-            val client = jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateUserByName(
-                org.jellyfin.sdk.model.api.AuthenticateUserByName(
-                    username = username,
-                    pw = password,
-                )
-            ).content
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val authenticatedClient = jellyfin.createApi(
-                baseUrl = serverInfo.address,
-                accessToken = accessTokenValue,
+        val client = jellyfin.createApi(serverInfo.address)
+        val authResult = client.userApi.authenticateUserByName(
+            org.jellyfin.sdk.model.api.AuthenticateUserByName(
+                username = username,
+                pw = password,
             )
-            api = authenticatedClient
-            val userDto = authResult.user ?: throw Exception("Authentication failed")
-            val policy = userDto.policy
-            val userInfo = UserInfo(
-                id = userDto.id.toString(),
-                name = userDto.name ?: username,
-                serverAddress = serverInfo.address,
-                accessToken = accessTokenValue,
-                isAdmin = policy?.isAdministrator ?: false,
-                maxParentalAgeRating = policy?.maxParentalRating,
-                primaryImageTag = userDto.primaryImageTag,
-                enabledFolderIds = if (policy?.enableAllFolders == false) {
-                    policy.enabledFolders?.map { it.toString() } ?: emptyList()
-                } else emptyList(),
-            )
-            _currentUser.value = userInfo
-            _currentServer.value = serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            )
-            userInfo
-        }
+        ).content
+        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+        val authenticatedClient = jellyfin.createApi(
+            baseUrl = serverInfo.address,
+            accessToken = accessTokenValue,
+        )
+        api = authenticatedClient
+        val userDto = authResult.user ?: throw Exception("Authentication failed")
+        val policy = userDto.policy
+        val userInfo = UserInfo(
+            id = userDto.id.toString(),
+            name = userDto.name ?: username,
+            serverAddress = serverInfo.address,
+            accessToken = accessTokenValue,
+            isAdmin = policy?.isAdministrator ?: false,
+            maxParentalAgeRating = policy?.maxParentalRating,
+            primaryImageTag = userDto.primaryImageTag,
+            enabledFolderIds = if (policy?.enableAllFolders == false) {
+                policy.enabledFolders?.map { it.toString() } ?: emptyList()
+            } else emptyList(),
+        )
+        _currentUser.value = userInfo
+        _currentServer.value = serverInfo.copy(
+            userId = userInfo.id,
+            accessToken = userInfo.accessToken,
+            isConnected = true,
+        )
+        userInfo
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
@@ -184,35 +235,29 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            client.quickConnectApi.getQuickConnectEnabled().content
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        client.quickConnectApi.getQuickConnectEnabled().content
     }
 
     override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            val result = client.quickConnectApi.initiateQuickConnect().content
-            QuickConnectInfo(
-                secret = result.secret,
-                code = result.code,
-            )
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        val result = client.quickConnectApi.initiateQuickConnect().content
+        QuickConnectInfo(
+            secret = result.secret,
+            code = result.code,
+        )
     }
 
     override suspend fun getQuickConnectState(secret: String): Result<QuickConnectState> = apiResult {
-        withContext(Dispatchers.IO) {
-            val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
-            val client = api ?: jellyfin.createApi(server.address)
-            val result = client.quickConnectApi.getQuickConnectState(secret).content
-            QuickConnectState(
-                authenticated = result.authenticated,
-                secret = result.secret,
-            )
-        }
+        val server = _currentServer.value ?: throw IllegalStateException("Not connected to server")
+        val client = api ?: jellyfin.createApi(server.address)
+        val result = client.quickConnectApi.getQuickConnectState(secret).content
+        QuickConnectState(
+            authenticated = result.authenticated,
+            secret = result.secret,
+        )
     }
 
     override suspend fun authenticateWithQuickConnect(
@@ -220,39 +265,37 @@ class JellyfinApiClientImpl @Inject constructor(
         secret: String,
     ): Result<UserInfo> = apiResult {
         _currentServer.value = serverInfo
-        withContext(Dispatchers.IO) {
-            val client = jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateWithQuickConnect(
-                org.jellyfin.sdk.model.api.QuickConnectDto(secret = secret)
-            ).content
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val authenticatedClient = jellyfin.createApi(
-                baseUrl = serverInfo.address,
-                accessToken = accessTokenValue,
-            )
-            api = authenticatedClient
-            val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-            val policy = userDto.policy
-            val userInfo = UserInfo(
-                id = userDto.id.toString(),
-                name = userDto.name ?: "",
-                serverAddress = serverInfo.address,
-                accessToken = accessTokenValue,
-                isAdmin = policy?.isAdministrator ?: false,
-                maxParentalAgeRating = policy?.maxParentalRating,
-                primaryImageTag = userDto.primaryImageTag,
-                enabledFolderIds = if (policy?.enableAllFolders == false) {
-                    policy.enabledFolders?.map { it.toString() } ?: emptyList()
-                } else emptyList(),
-            )
-            _currentUser.value = userInfo
-            _currentServer.value = serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            )
-            userInfo
-        }
+        val client = jellyfin.createApi(serverInfo.address)
+        val authResult = client.userApi.authenticateWithQuickConnect(
+            org.jellyfin.sdk.model.api.QuickConnectDto(secret = secret)
+        ).content
+        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+        val authenticatedClient = jellyfin.createApi(
+            baseUrl = serverInfo.address,
+            accessToken = accessTokenValue,
+        )
+        api = authenticatedClient
+        val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
+        val policy = userDto.policy
+        val userInfo = UserInfo(
+            id = userDto.id.toString(),
+            name = userDto.name ?: "",
+            serverAddress = serverInfo.address,
+            accessToken = accessTokenValue,
+            isAdmin = policy?.isAdministrator ?: false,
+            maxParentalAgeRating = policy?.maxParentalRating,
+            primaryImageTag = userDto.primaryImageTag,
+            enabledFolderIds = if (policy?.enableAllFolders == false) {
+                policy.enabledFolders?.map { it.toString() } ?: emptyList()
+            } else emptyList(),
+        )
+        _currentUser.value = userInfo
+        _currentServer.value = serverInfo.copy(
+            userId = userInfo.id,
+            accessToken = userInfo.accessToken,
+            isConnected = true,
+        )
+        userInfo
     }
 
     override suspend fun getHomeSections(): Result<List<HomeSection>> = apiResult {
@@ -415,9 +458,10 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = apiResult {
-        val client = requireApi()
-        val uuid = itemId.toUUID()
-        val item = client.userLibraryApi.getItem(itemId = uuid).content
+        coroutineScope {
+            val client = requireApi()
+            val uuid = itemId.toUUID()
+            val item = client.userLibraryApi.getItem(itemId = uuid).content
         val people = (item.people?.map { person ->
             PersonInfo(
                 id = person.id.toString(),
@@ -427,16 +471,19 @@ class JellyfinApiClientImpl @Inject constructor(
                 primaryImageTag = person.primaryImageTag,
             )
         } ?: emptyList()).distinctBy { it.id }
-        val relatedItems = try {
-            client.libraryApi.getSimilarItems(
-                itemId = uuid,
-                limit = 12,
-            ).content.items.map { it.toMediaItem() }
-                .distinctBy { it.id }
-                .filter { it.id != itemId }
-        } catch (_: Exception) {
-            emptyList()
+        val relatedItemsDeferred = async {
+            try {
+                client.libraryApi.getSimilarItems(
+                    itemId = uuid,
+                    limit = 12,
+                ).content.items.map { it.toMediaItem() }
+                    .distinctBy { it.id }
+                    .filter { it.id != itemId }
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
+        val relatedItems = relatedItemsDeferred.await()
         val chapters = item.chapters?.map { chapter ->
             ChapterInfo(
                 name = chapter.name ?: "",
@@ -508,17 +555,20 @@ class JellyfinApiClientImpl @Inject constructor(
             externalUrls = externalUrls,
             providerIds = providerIds,
         )
+        }
     }
 
     override suspend fun getSearchHints(
         query: String,
         mediaTypes: List<MediaType>?,
         limit: Int,
+        startIndex: Int,
     ): Result<SearchResult> = apiResult {
         val response = requireApi().itemsApi.getItems(
             searchTerm = query,
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             limit = limit,
+            startIndex = startIndex,
             recursive = true,
             fields = listOf(
                 org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
@@ -528,7 +578,7 @@ class JellyfinApiClientImpl @Inject constructor(
         SearchResult(
             items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
+            startIndex = startIndex,
         )
     }
 
@@ -571,6 +621,21 @@ class JellyfinApiClientImpl @Inject constructor(
             limit = limit,
             recursive = true,
             sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME),
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        response.items.map { it.toMediaItem() }.filterByParentalRating()
+    }
+
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = apiResult {
+        val response = requireApi().itemsApi.getItems(
+            parentId = albumId.toUUID(),
+            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.AUDIO),
+            recursive = true,
+            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.PARENT_INDEX_NUMBER, org.jellyfin.sdk.model.api.ItemSortBy.INDEX_NUMBER),
+            sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
             fields = listOf(
                 org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
                 org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
@@ -676,7 +741,7 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getLyrics(itemId: String): Result<com.raulshma.jellyplay.core.model.LyricsResult> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        LyricsApi.fetchLyrics(server.address, itemId, user.accessToken)
+        LyricsApi.fetchLyrics(okHttpClient, server.address, itemId, user.accessToken)
     }
 
     override suspend fun getPlaylists(limit: Int): Result<List<com.raulshma.jellyplay.core.model.Playlist>> = apiResult {
@@ -906,21 +971,25 @@ class JellyfinApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<EpgGuide> = apiResult {
-        val client = requireApi()
-        val channels = client.itemsApi.getItems(
-            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
-            startIndex = startIndex,
-            limit = limit,
-            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
-        ).content.items.map { it.toLiveTvChannel() }
-
-        val programs = client.itemsApi.getItems(
-            includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
-            limit = 500,
-            fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
-        ).content.items.map { it.toLiveTvProgram() }
-
-        EpgGuide(channels = channels, programs = programs)
+        coroutineScope {
+            val client = requireApi()
+            val channelsDeferred = async {
+                client.itemsApi.getItems(
+                    includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_CHANNEL),
+                    startIndex = startIndex,
+                    limit = limit,
+                    fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+                ).content.items.map { it.toLiveTvChannel() }
+            }
+            val programsDeferred = async {
+                client.itemsApi.getItems(
+                    includeItemTypes = listOf(org.jellyfin.sdk.model.api.BaseItemKind.LIVE_TV_PROGRAM),
+                    limit = 500,
+                    fields = listOf(org.jellyfin.sdk.model.api.ItemFields.OVERVIEW),
+                ).content.items.map { it.toLiveTvProgram() }
+            }
+            EpgGuide(channels = channelsDeferred.await(), programs = programsDeferred.await())
+        }
     }
 
     override suspend fun getTimers(): Result<List<DvrTimer>> = apiResult {
@@ -1171,83 +1240,94 @@ class JellyfinApiClientImpl @Inject constructor(
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/IntroSkipTimestamps")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
+        val url = "${server.address}/Items/$itemId/IntroSkipTimestamps"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
                 IntroTimestamps(itemId)
             } else {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                json.decodeFromString<IntroTimestamps>(body)
+                val body = response.body?.string() ?: return@apiResult IntroTimestamps(itemId)
+                sharedJson.decodeFromString<IntroTimestamps>(body)
             }
-        } finally {
-            conn.disconnect()
         }
     }
 
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/CreditTimestamps")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
+        val url = "${server.address}/Items/$itemId/CreditTimestamps"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
                 CreditTimestamps(itemId)
             } else {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                json.decodeFromString<CreditTimestamps>(body)
+                val body = response.body?.string() ?: return@apiResult CreditTimestamps(itemId)
+                sharedJson.decodeFromString<CreditTimestamps>(body)
             }
-        } finally {
-            conn.disconnect()
+        }
+    }
+
+    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = "${server.address}/MediaSegments/$itemId"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                emptyList()
+            } else {
+                val body = response.body?.string() ?: return@apiResult emptyList<MediaSegment>()
+                val response = sharedJson.decodeFromString<MediaSegmentsResponse>(body)
+                response.Items.map { dto ->
+                    MediaSegment(
+                        id = dto.Id,
+                        itemId = dto.ItemId,
+                        type = MediaSegmentType.fromApiName(dto.Type),
+                        startTicks = dto.StartTicks,
+                        endTicks = dto.EndTicks,
+                    )
+                }
+            }
         }
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) return@apiResult emptyList<RemoteSubtitleInfo>()
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-            json.decodeFromString<List<RemoteSubtitleInfo>>(body)
-        } finally {
-            conn.disconnect()
+        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@apiResult emptyList<RemoteSubtitleInfo>()
+            val body = response.body?.string() ?: return@apiResult emptyList<RemoteSubtitleInfo>()
+            sharedJson.decodeFromString<List<RemoteSubtitleInfo>>(body)
         }
     }
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = apiResult {
         val server = _currentServer.value ?: throw IllegalStateException("No server")
         val user = _currentUser.value ?: throw IllegalStateException("No user")
-        val url = java.net.URL("${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId")
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("X-Emby-Token", user.accessToken)
-        conn.doOutput = true
-        conn.outputStream.use { it.write(byteArrayOf()) }
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        try {
-            if (conn.responseCode !in 200..299) {
-                throw Exception("Failed to download subtitle: ${conn.responseCode}")
+        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .post(okhttp3.RequestBody.create(null, ByteArray(0)))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Failed to download subtitle: ${response.code}")
             }
-        } finally {
-            conn.disconnect()
         }
     }
 
@@ -1362,6 +1442,7 @@ class JellyfinApiClientImpl @Inject constructor(
                 ?.get(org.jellyfin.sdk.model.api.ImageType.BACKDROP)
                 ?.values?.firstOrNull(),
         ),
+        normalizationGain = normalizationGain,
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {
@@ -1423,48 +1504,21 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = apiResult {
-        requireApi().sessionApi.postFullCapabilities(
-            data = org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
-                playableMediaTypes = listOf(
-                    org.jellyfin.sdk.model.api.MediaType.VIDEO,
-                    org.jellyfin.sdk.model.api.MediaType.AUDIO,
-                ),
-                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
-                supportsMediaControl = true,
-                supportsPersistentIdentifier = true,
-                deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
-                    directPlayProfiles = emptyList(),
-                    transcodingProfiles = emptyList(),
-                    containerProfiles = emptyList(),
-                    codecProfiles = emptyList(),
-                    subtitleProfiles = listOf(
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "srt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "ass",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "ssa",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "subrip",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "vtt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "webvtt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                    ),
-                ),
-            )
-        )
+        requireApi().sessionApi.postFullCapabilities(data = CACHED_CAPABILITIES)
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class MediaSegmentDto(
+    val Id: String,
+    val ItemId: String,
+    val Type: String,
+    val StartTicks: Long,
+    val EndTicks: Long,
+)
+
+@kotlinx.serialization.Serializable
+private data class MediaSegmentsResponse(
+    val Items: List<MediaSegmentDto> = emptyList(),
+    val TotalRecordCount: Int = 0,
+)

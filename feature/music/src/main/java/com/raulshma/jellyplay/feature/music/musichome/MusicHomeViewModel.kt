@@ -11,6 +11,9 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -57,45 +60,61 @@ class MusicHomeViewModel @Inject constructor(
             try {
                 val sectionsList = mutableListOf<MusicHomeSection>()
 
-                mediaRepository.getFavorites(
-                    mediaTypes = listOf(MediaType.ARTIST),
-                    limit = 20,
-                ).getOrNull()?.items?.takeIf { it.isNotEmpty() }?.let {
-                    sectionsList.add(MusicHomeSection("Favorite Artists", it))
-                }
+                coroutineScope {
+                    val favArtists = async {
+                        mediaRepository.getFavorites(
+                            mediaTypes = listOf(MediaType.ARTIST),
+                            limit = 20,
+                        ).getOrNull()?.items
+                    }
+                    val latestAlbums = async {
+                        mediaRepository.getMediaItems(
+                            mediaTypes = listOf(MediaType.ALBUM),
+                            sortBy = "DateCreated",
+                            sortOrder = "Descending",
+                            limit = 20,
+                        ).getOrNull()?.items
+                    }
+                    val recentlyPlayed = async {
+                        mediaRepository.getMediaItems(
+                            mediaTypes = listOf(MediaType.AUDIO),
+                            sortBy = "DatePlayed",
+                            sortOrder = "Descending",
+                            limit = 20,
+                        ).getOrNull()?.items
+                    }
+                    val topRatedAlbums = async {
+                        mediaRepository.getMediaItems(
+                            mediaTypes = listOf(MediaType.ALBUM),
+                            sortBy = "CommunityRating",
+                            sortOrder = "Descending",
+                            limit = 20,
+                        ).getOrNull()?.items
+                    }
+                    val favTracks = async {
+                        mediaRepository.getFavorites(
+                            mediaTypes = listOf(MediaType.AUDIO),
+                            limit = 20,
+                        ).getOrNull()?.items
+                    }
 
-                mediaRepository.getMediaItems(
-                    mediaTypes = listOf(MediaType.ALBUM),
-                    sortBy = "DateCreated",
-                    sortOrder = "Descending",
-                    limit = 20,
-                ).getOrNull()?.items?.takeIf { it.isNotEmpty() }?.let {
-                    sectionsList.add(MusicHomeSection("Latest Albums", it))
-                }
+                    val results = awaitAll(favArtists, latestAlbums, recentlyPlayed, topRatedAlbums, favTracks)
 
-                mediaRepository.getMediaItems(
-                    mediaTypes = listOf(MediaType.AUDIO),
-                    sortBy = "DatePlayed",
-                    sortOrder = "Descending",
-                    limit = 20,
-                ).getOrNull()?.items?.takeIf { it.isNotEmpty() }?.let {
-                    sectionsList.add(MusicHomeSection("Recently Played", it))
-                }
-
-                mediaRepository.getMediaItems(
-                    mediaTypes = listOf(MediaType.ALBUM),
-                    sortBy = "CommunityRating",
-                    sortOrder = "Descending",
-                    limit = 20,
-                ).getOrNull()?.items?.takeIf { it.isNotEmpty() }?.let {
-                    sectionsList.add(MusicHomeSection("Top Rated Albums", it))
-                }
-
-                mediaRepository.getFavorites(
-                    mediaTypes = listOf(MediaType.AUDIO),
-                    limit = 20,
-                ).getOrNull()?.items?.takeIf { it.isNotEmpty() }?.let {
-                    sectionsList.add(MusicHomeSection("Favorite Tracks", it))
+                    results[0]?.takeIf { it.isNotEmpty() }?.let {
+                        sectionsList.add(MusicHomeSection("Favorite Artists", it))
+                    }
+                    results[1]?.takeIf { it.isNotEmpty() }?.let {
+                        sectionsList.add(MusicHomeSection("Latest Albums", it))
+                    }
+                    results[2]?.takeIf { it.isNotEmpty() }?.let {
+                        sectionsList.add(MusicHomeSection("Recently Played", it))
+                    }
+                    results[3]?.takeIf { it.isNotEmpty() }?.let {
+                        sectionsList.add(MusicHomeSection("Top Rated Albums", it))
+                    }
+                    results[4]?.takeIf { it.isNotEmpty() }?.let {
+                        sectionsList.add(MusicHomeSection("Favorite Tracks", it))
+                    }
                 }
 
                 sections = sectionsList

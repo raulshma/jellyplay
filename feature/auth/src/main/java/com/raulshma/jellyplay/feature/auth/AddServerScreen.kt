@@ -1,11 +1,19 @@
 package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
@@ -32,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -49,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DiscoveredServer
@@ -59,6 +68,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -221,99 +232,205 @@ private fun DiscoverySection(
     onStop: () -> Unit,
     onServerSelected: (DiscoveredServer) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        ),
+    val hasServers = uiState.discoveredServers.isNotEmpty()
+    val serverCount = uiState.discoveredServers.size
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = spring()),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header row
-            Row(
-                verticalAlignment = CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+        when {
+            uiState.discoveryFailed -> {
+                DiscoveryFailedRow(onRetry = onRetry)
+            }
+            uiState.isDiscovering && !hasServers -> {
+                ScanningRow(onStop = onStop)
+            }
+            hasServers -> {
+                ServerCountRow(
+                    serverCount = serverCount,
+                    isScanning = uiState.isDiscovering,
+                    servers = uiState.discoveredServers,
+                    isConnecting = uiState.isConnecting,
+                    onServerSelected = onServerSelected,
+                )
+            }
+            else -> {
+                NoServersRow(onRetry = onRetry)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanningRow(onStop: () -> Unit) {
+    Row(
+        verticalAlignment = CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = "Scanning for servers\u2026",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onStop, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+            Text("Stop")
+        }
+    }
+}
+
+@Composable
+private fun ServerCountRow(
+    serverCount: Int,
+    isScanning: Boolean,
+    servers: List<DiscoveredServer>,
+    isConnecting: Boolean,
+    onServerSelected: (DiscoveredServer) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(300, easing = FancyTransitionEasing),
+        label = "chevron",
+    )
+
+    Column {
+        Row(
+            verticalAlignment = CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(ShapeCache.smooth16)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .clickable { expanded = !expanded }
+                .tvFocusable()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            if (isScanning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            } else {
                 Icon(
-                    if (uiState.isDiscovering) Icons.Default.Wifi else Icons.Default.Cast,
+                    Icons.Default.Wifi,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (uiState.isDiscovering) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = when {
-                        uiState.isDiscovering -> "Scanning for servers\u2026"
-                        uiState.discoveredServers.isNotEmpty() -> "Found ${uiState.discoveredServers.size} server${if (uiState.discoveredServers.size != 1) "s" else ""}"
-                        uiState.discoveryFailed -> "Discovery unavailable"
-                        else -> "No servers found"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                when {
-                    uiState.isDiscovering -> {
-                        TextButton(onClick = onStop) {
-                            Text("Stop")
-                        }
-                    }
-                    uiState.discoveryFailed || uiState.discoveredServers.isEmpty() -> {
-                        TextButton(onClick = onRetry) {
-                            Text("Retry")
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.width(10.dp))
             }
+            Text(
+                text = if (isScanning) {
+                    "$serverCount server${if (serverCount != 1) "s" else ""} found\u2026"
+                } else {
+                    "$serverCount server${if (serverCount != 1) "s" else ""} found"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(chevronRotation),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
 
-            // Progress indicator while scanning
-            if (uiState.isDiscovering) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            // Discovery failure message
-            if (uiState.discoveryFailed) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = CenterVertically) {
-                    Icon(
-                        Icons.Default.WifiOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Could not scan for servers. Enter the address manually below.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(
+                animationSpec = spring(),
+                expandFrom = Alignment.Top,
+            ) + fadeIn(tween(200, easing = AlphaEasing)),
+            exit = shrinkVertically(animationSpec = spring()) + fadeOut(tween(150, easing = AlphaEasing)),
+        ) {
+            Column(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                servers.forEachIndexed { index, server ->
+                    DiscoveredServerItem(
+                        server = server,
+                        onClick = { onServerSelected(server) },
+                        isConnecting = isConnecting,
+                        shape = expressiveListShape(
+                            index = index,
+                            count = servers.size,
+                            outerRadius = 16.dp,
+                            innerRadius = 10.dp,
+                        ),
                     )
                 }
             }
+        }
+    }
+}
 
-            // Discovered servers list
-            if (uiState.discoveredServers.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    uiState.discoveredServers.forEach { server ->
-                        DiscoveredServerItem(
-                            server = server,
-                            onClick = { onServerSelected(server) },
-                            isConnecting = uiState.isConnecting,
-                        )
-                    }
-                }
-            } else if (!uiState.isDiscovering && !uiState.discoveryFailed) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Make sure your server is on the same network and try again.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+@Composable
+private fun DiscoveryFailedRow(onRetry: () -> Unit) {
+    Row(
+        verticalAlignment = CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Icon(
+            Icons.Default.WifiOff,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.error,
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "Discovery unavailable",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+            Text("Retry")
+        }
+    }
+}
+
+@Composable
+private fun NoServersRow(onRetry: () -> Unit) {
+    Row(
+        verticalAlignment = CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = "No servers found on your network",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry, contentPadding = androidx.compose.foundation.layout.PaddingValues()) {
+            Text("Retry")
         }
     }
 }
@@ -323,48 +440,51 @@ private fun DiscoveredServerItem(
     server: DiscoveredServer,
     onClick: () -> Unit,
     isConnecting: Boolean,
+    shape: androidx.compose.ui.graphics.Shape = ShapeCache.smooth12,
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .tvFocusable()
-            .clickable(onClick = onClick, enabled = !isConnecting),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+            .clickable(onClick = onClick, enabled = !isConnecting)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = CenterVertically,
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = CenterVertically,
+                .size(40.dp)
+                .clip(ShapeCache.smooth12)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Default.Dns,
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(22.dp),
                 tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = server.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = server.address,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = "Connect",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
             )
         }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = server.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = server.address,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.Default.CheckCircle,
+            contentDescription = "Connect",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

@@ -13,6 +13,7 @@ fun ArtworkThemeWrapper(
     imageUrl: String?,
     dynamicTheming: Boolean = true,
     darkTheme: Boolean = false,
+    oledMode: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     if (!dynamicTheming || imageUrl.isNullOrBlank()) {
@@ -23,8 +24,8 @@ fun ArtworkThemeWrapper(
     }
 
     val colors = rememberArtworkColors(imageUrl)
-    val colorScheme: androidx.compose.material3.ColorScheme? = remember(colors, darkTheme) {
-        colors?.let { ArtworkColorExtractor.generateColorScheme(it, darkTheme) }
+    val colorScheme: androidx.compose.material3.ColorScheme? = remember(colors, darkTheme, oledMode) {
+        colors?.let { ArtworkColorExtractor.generateColorScheme(it, darkTheme, oledMode) }
     }
 
     CompositionLocalProvider(LocalArtworkColors provides colors) {

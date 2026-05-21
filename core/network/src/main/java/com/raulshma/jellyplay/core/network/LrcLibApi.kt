@@ -20,66 +20,56 @@ class LrcLibApi @Inject constructor(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
+        withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("lrclib returned ${response.code}")
+                }
+                response.body?.string() ?: throw IllegalStateException("Empty response")
+            }
+        }
+
     suspend fun getBestMatch(
         artistName: String,
         trackName: String,
         duration: Double?,
-    ): Result<LrcLibTrack> = withContext(Dispatchers.IO) {
-        runCatching {
-            val urlBuilder = StringBuilder(BASE_URL)
-                .append("/api/get?artist_name=")
-                .append(java.net.URLEncoder.encode(artistName, "UTF-8"))
-                .append("&track_name=")
-                .append(java.net.URLEncoder.encode(trackName, "UTF-8"))
-            if (duration != null) {
-                urlBuilder.append("&duration=").append(duration.toLong())
-            }
-            val request = Request.Builder()
-                .url(urlBuilder.toString())
-                .header("User-Agent", "JellyPlay")
-                .get()
-                .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("lrclib returned ${response.code}")
-            }
-            val body = response.body?.string() ?: throw IllegalStateException("Empty response")
-            parseTrack(body)
+    ): Result<LrcLibTrack> = runCatching {
+        val urlBuilder = StringBuilder(BASE_URL)
+            .append("/api/get?artist_name=")
+            .append(java.net.URLEncoder.encode(artistName, "UTF-8"))
+            .append("&track_name=")
+            .append(java.net.URLEncoder.encode(trackName, "UTF-8"))
+        if (duration != null) {
+            urlBuilder.append("&duration=").append(duration.toLong())
         }
+        val request = Request.Builder()
+            .url(urlBuilder.toString())
+            .header("User-Agent", "JellyPlay")
+            .get()
+            .build()
+        parseTrack(executeAndReadBody(client, request))
     }
 
-    suspend fun search(query: String): Result<List<LrcLibTrack>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val url = "${BASE_URL}/api/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "JellyPlay")
-                .get()
-                .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("lrclib returned ${response.code}")
-            }
-            val body = response.body?.string() ?: throw IllegalStateException("Empty response")
-            val array = json.parseToJsonElement(body) as JsonArray
-            array.map { element -> parseTrackFromJson(element as JsonObject) }
-        }
+    suspend fun search(query: String): Result<List<LrcLibTrack>> = runCatching {
+        val url = "${BASE_URL}/api/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "JellyPlay")
+            .get()
+            .build()
+        val body = executeAndReadBody(client, request)
+        val array = json.parseToJsonElement(body) as JsonArray
+        array.map { element -> parseTrackFromJson(element as JsonObject) }
     }
 
-    suspend fun getById(id: Long): Result<LrcLibTrack> = withContext(Dispatchers.IO) {
-        runCatching {
-            val request = Request.Builder()
-                .url("$BASE_URL/api/get/$id")
-                .header("User-Agent", "JellyPlay")
-                .get()
-                .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("lrclib returned ${response.code}")
-            }
-            val body = response.body?.string() ?: throw IllegalStateException("Empty response")
-            parseTrack(body)
-        }
+    suspend fun getById(id: Long): Result<LrcLibTrack> = runCatching {
+        val request = Request.Builder()
+            .url("$BASE_URL/api/get/$id")
+            .header("User-Agent", "JellyPlay")
+            .get()
+            .build()
+        parseTrack(executeAndReadBody(client, request))
     }
 
     private fun parseTrack(body: String): LrcLibTrack {

@@ -19,14 +19,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var okHttpClient: OkHttpClient
 
-    override fun newImageLoader(context: Context): ImageLoader {
-        return ImageLoader.Builder(context)
+    private val imageLoader by lazy {
+        ImageLoader.Builder(this)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
             }
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.15)
+                    .maxSizePercent(this@JellyPlayApplication, 0.15)
                     .build()
             }
             .diskCache {
@@ -37,4 +37,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
             }
             .build()
     }
+
+    override fun newImageLoader(context: Context): ImageLoader = imageLoader
 }

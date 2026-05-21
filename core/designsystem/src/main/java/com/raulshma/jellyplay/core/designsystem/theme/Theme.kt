@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.designsystem.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -9,6 +10,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
@@ -101,6 +103,11 @@ private val KidsLightColorScheme = lightColorScheme(
     onSurfaceVariant = kids_theme_light_onSurfaceVariant,
     outline = kids_theme_light_outline,
     outlineVariant = kids_theme_light_outlineVariant,
+    surfaceContainerLowest = kids_theme_light_surfaceContainerLowest,
+    surfaceContainerLow = kids_theme_light_surfaceContainerLow,
+    surfaceContainer = kids_theme_light_surfaceContainer,
+    surfaceContainerHigh = kids_theme_light_surfaceContainerHigh,
+    surfaceContainerHighest = kids_theme_light_surfaceContainerHighest,
 )
 
 private val KidsDarkColorScheme = darkColorScheme(
@@ -128,6 +135,43 @@ private val KidsDarkColorScheme = darkColorScheme(
     onSurfaceVariant = kids_theme_dark_onSurfaceVariant,
     outline = kids_theme_dark_outline,
     outlineVariant = kids_theme_dark_outlineVariant,
+    surfaceContainerLowest = kids_theme_dark_surfaceContainerLowest,
+    surfaceContainerLow = kids_theme_dark_surfaceContainerLow,
+    surfaceContainer = kids_theme_dark_surfaceContainer,
+    surfaceContainerHigh = kids_theme_dark_surfaceContainerHigh,
+    surfaceContainerHighest = kids_theme_dark_surfaceContainerHighest,
+)
+
+private val OledColorScheme = darkColorScheme(
+    primary = oled_theme_primary,
+    onPrimary = oled_theme_onPrimary,
+    primaryContainer = oled_theme_primaryContainer,
+    onPrimaryContainer = oled_theme_onPrimaryContainer,
+    secondary = oled_theme_secondary,
+    onSecondary = oled_theme_onSecondary,
+    secondaryContainer = oled_theme_secondaryContainer,
+    onSecondaryContainer = oled_theme_onSecondaryContainer,
+    tertiary = oled_theme_tertiary,
+    onTertiary = oled_theme_onTertiary,
+    tertiaryContainer = oled_theme_tertiaryContainer,
+    onTertiaryContainer = oled_theme_onTertiaryContainer,
+    error = oled_theme_error,
+    onError = oled_theme_onError,
+    errorContainer = oled_theme_errorContainer,
+    onErrorContainer = oled_theme_onErrorContainer,
+    background = oled_theme_background,
+    onBackground = oled_theme_onBackground,
+    surface = oled_theme_surface,
+    onSurface = oled_theme_onSurface,
+    surfaceVariant = oled_theme_surfaceVariant,
+    onSurfaceVariant = oled_theme_onSurfaceVariant,
+    outline = oled_theme_outline,
+    outlineVariant = oled_theme_outlineVariant,
+    surfaceContainerLowest = oled_theme_surfaceContainerLowest,
+    surfaceContainerLow = oled_theme_surfaceContainerLow,
+    surfaceContainer = oled_theme_surfaceContainer,
+    surfaceContainerHigh = oled_theme_surfaceContainerHigh,
+    surfaceContainerHighest = oled_theme_surfaceContainerHighest,
 )
 
 private val DefaultShapes = Shapes(
@@ -150,18 +194,26 @@ private val KidsShapes = Shapes(
 fun JellyPlayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    oledMode: Boolean = false,
     kidsMode: Boolean = false,
     isTv: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val effectiveDarkTheme = darkTheme || isTv
+    val effectiveOledMode = oledMode && effectiveDarkTheme
 
     val colorScheme = when {
         kidsMode -> if (effectiveDarkTheme) KidsDarkColorScheme else KidsLightColorScheme
         dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (effectiveDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (effectiveDarkTheme) {
+                val dynamic = dynamicDarkColorScheme(context)
+                if (effectiveOledMode) dynamic.withOledSurfaces() else dynamic
+            } else {
+                dynamicLightColorScheme(context)
+            }
         }
+        effectiveOledMode -> OledColorScheme
         effectiveDarkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -182,3 +234,13 @@ fun JellyPlayTheme(
         content = content,
     )
 }
+
+private fun ColorScheme.withOledSurfaces(): ColorScheme = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceContainerLowest = Color(0xFF000000),
+    surfaceContainerLow = Color(0xFF0A0A0A),
+    surfaceContainer = Color(0xFF111111),
+    surfaceContainerHigh = Color(0xFF1A1A1A),
+    surfaceContainerHighest = Color(0xFF222222),
+)

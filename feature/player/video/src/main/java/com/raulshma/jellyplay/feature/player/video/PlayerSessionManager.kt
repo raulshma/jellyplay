@@ -175,7 +175,11 @@ class PlayerSessionManager(
                 nightModeStrength = prefs.nightModeStrength,
                 nightModeGain = prefs.audioNightModeGain,
                 equalizerEnabled = prefs.equalizerEnabled,
-                equalizerSettings = prefs.equalizerSettings
+                equalizerSettings = prefs.equalizerSettings,
+                audioNormalizationMode = prefs.audioNormalizationMode,
+                audioNormalizationEnabled = prefs.audioNormalizationEnabled,
+                channelMixMode = prefs.channelMixMode,
+                channelMixEnabled = prefs.channelMixEnabled,
             )
         )
         eng.updateConfig(config)
@@ -234,7 +238,12 @@ class PlayerSessionManager(
         eng.load(request)
     }
 
-    suspend fun reloadWithEngine(playerType: PlayerType, currentPositionMs: Long) {
+    suspend fun reloadWithEngine(
+        playerType: PlayerType,
+        currentPositionMs: Long,
+        playbackSpeed: Float = 1.0f,
+        maxVideoBitrate: Int? = null,
+    ) {
         val last = lastPlaybackRequest ?: return
         val prefs = preferencesStore.preferences.first()
 
@@ -261,15 +270,29 @@ class PlayerSessionManager(
                 nightModeStrength = prefs.nightModeStrength,
                 nightModeGain = prefs.audioNightModeGain,
                 equalizerEnabled = prefs.equalizerEnabled,
-                equalizerSettings = prefs.equalizerSettings
+                equalizerSettings = prefs.equalizerSettings,
+                audioNormalizationMode = prefs.audioNormalizationMode,
+                audioNormalizationEnabled = prefs.audioNormalizationEnabled,
+                channelMixMode = prefs.channelMixMode,
+                channelMixEnabled = prefs.channelMixEnabled,
             )
         )
         eng.updateConfig(config)
-        eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
+        eng.setPlaybackSpeed(playbackSpeed)
 
-        val request = last.copy(startPositionMs = currentPositionMs)
+        val request = last.copy(
+            startPositionMs = currentPositionMs,
+            maxVideoBitrate = maxVideoBitrate,
+        )
         lastPlaybackRequest = request
         eng.load(request)
+    }
+
+    fun addExternalSubtitle(source: SubtitleSource) {
+        val last = lastPlaybackRequest ?: return
+        val updatedSubtitles = last.externalSubtitles + source
+        lastPlaybackRequest = last.copy(externalSubtitles = updatedSubtitles)
+        _engine.value?.addExternalSubtitle(source)
     }
 
     fun release() {

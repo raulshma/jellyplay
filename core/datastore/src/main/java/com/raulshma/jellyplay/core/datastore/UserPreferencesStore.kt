@@ -9,18 +9,24 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DreamImageCategory
+import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -41,6 +47,8 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val OLED_MODE = stringPreferencesKey("oled_mode")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val MAX_CACHE_SIZE_MB = stringPreferencesKey("max_cache_size_mb")
@@ -82,6 +90,7 @@ class UserPreferencesStore @Inject constructor(
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
+        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
         val SYNCPLAY_PROGRESS_REPORTING_MODE = stringPreferencesKey("syncplay_progress_reporting_mode")
         val SYNCPLAY_AUTO_JOIN_LAST_GROUP = stringPreferencesKey("syncplay_auto_join_last_group")
@@ -97,12 +106,18 @@ class UserPreferencesStore @Inject constructor(
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
         val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
+        val REPLAYGAIN_PRE_AMP_DB = stringPreferencesKey("replaygain_pre_amp_db")
         val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
         val CHANNEL_MIX_ENABLED = stringPreferencesKey("channel_mix_enabled")
         val AUDIO_GAPLESS_ENABLED = stringPreferencesKey("audio_gapless_enabled")
         val AUDIO_CROSSFADE_DURATION_MS = stringPreferencesKey("audio_crossfade_duration_ms")
         val SLEEP_TIMER_DURATION_MS = stringPreferencesKey("sleep_timer_duration_ms")
         val SLEEP_TIMER_END_OF_EPISODE = stringPreferencesKey("sleep_timer_end_of_episode")
+        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
+        val DREAM_SLIDESHOW_INTERVAL_MS = stringPreferencesKey("dream_slideshow_interval_ms")
+        val DREAM_KEN_BURNS_ENABLED = stringPreferencesKey("dream_ken_burns_enabled")
+        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
+        val DREAM_SHOW_TITLE = stringPreferencesKey("dream_show_title")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -114,6 +129,37 @@ class UserPreferencesStore @Inject constructor(
         } catch (_: Exception) {
             emptyMap()
         }
+    }
+
+    private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {
+        val raw = prefs[Keys.SEGMENT_BEHAVIORS]
+        if (raw != null) {
+            return try {
+                val stored = json.decodeFromString<Map<String, String>>(raw)
+                stored.mapNotNull { (typeStr, behaviorStr) ->
+                    try {
+                        MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
+                    } catch (_: Exception) { null }
+                }.toMap()
+            } catch (_: Exception) { emptyMap() }
+        }
+
+        val migrated = mutableMapOf<MediaSegmentType, SegmentBehavior>()
+        val skipIntro = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true
+        val skipOutro = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true
+        val autoIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false
+        val autoOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false
+        migrated[MediaSegmentType.INTRO] = when {
+            autoIntro -> SegmentBehavior.AUTO_SKIP
+            skipIntro -> SegmentBehavior.SHOW_BUTTON
+            else -> SegmentBehavior.IGNORE
+        }
+        migrated[MediaSegmentType.OUTRO] = when {
+            autoOutro -> SegmentBehavior.AUTO_SKIP
+            skipOutro -> SegmentBehavior.SHOW_BUTTON
+            else -> SegmentBehavior.IGNORE
+        }
+        return SegmentBehavior.DEFAULT_BEHAVIORS + migrated
     }
 
     private suspend fun writeMediaStreamSelections(
@@ -156,6 +202,10 @@ class UserPreferencesStore @Inject constructor(
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = readMediaStreamSelections(prefs),
             dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,
+            themeMode = try {
+                ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
+            } catch (_: Exception) { ThemeMode.SYSTEM },
+            oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
             maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 500,
@@ -202,10 +252,7 @@ class UserPreferencesStore @Inject constructor(
             audioAutoplayNext = prefs[Keys.AUDIO_AUTOPLAY_NEXT]?.toBoolean() ?: true,
             trickplayEnabled = prefs[Keys.TRICKPLAY_ENABLED]?.toBoolean() ?: true,
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
-            skipIntroEnabled = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true,
-            skipOutroEnabled = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true,
-            autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false,
-            autoSkipOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false,
+            segmentBehaviors = readSegmentBehaviors(prefs),
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
             syncPlayProgressReportingMode = prefs[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] ?: "SUPPRESS_DURING",
             syncPlayAutoJoinLastGroup = prefs[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP]?.toBoolean() ?: false,
@@ -222,9 +269,13 @@ class UserPreferencesStore @Inject constructor(
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
             audioNormalizationMode = try {
-                AudioNormalizationMode.valueOf(prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name)
+                when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
+                    "REPLAYGAIN" -> AudioNormalizationMode.TRACK
+                    else -> AudioNormalizationMode.valueOf(stored)
+                }
             } catch (_: Exception) { AudioNormalizationMode.NONE },
             audioNormalizationEnabled = prefs[Keys.AUDIO_NORMALIZATION_ENABLED]?.toBoolean() ?: false,
+            replayGainPreAmpDb = prefs[Keys.REPLAYGAIN_PRE_AMP_DB]?.toFloatOrNull() ?: 0f,
             channelMixMode = try {
                 ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
             } catch (_: Exception) { ChannelMixMode.AUTO },
@@ -233,8 +284,19 @@ class UserPreferencesStore @Inject constructor(
             audioCrossfadeDurationMs = prefs[Keys.AUDIO_CROSSFADE_DURATION_MS]?.toLongOrNull() ?: 0L,
             sleepTimerDurationMs = prefs[Keys.SLEEP_TIMER_DURATION_MS]?.toLongOrNull() ?: 0L,
             sleepTimerEndOfEpisode = prefs[Keys.SLEEP_TIMER_END_OF_EPISODE]?.toBoolean() ?: false,
+            dreamImageCategories = try {
+                prefs[Keys.DREAM_IMAGE_CATEGORIES]?.let {
+                    json.decodeFromString<Set<DreamImageCategory>>(it)
+                } ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
+            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) },
+            dreamSlideshowIntervalMs = prefs[Keys.DREAM_SLIDESHOW_INTERVAL_MS]?.toLongOrNull() ?: 15_000L,
+            dreamKenBurnsEnabled = prefs[Keys.DREAM_KEN_BURNS_ENABLED]?.toBoolean() ?: true,
+            dreamTransitionStyle = try {
+                DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
+            } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
+            dreamShowTitle = prefs[Keys.DREAM_SHOW_TITLE]?.toBoolean() ?: true,
         )
-    }
+    }.distinctUntilChanged()
 
     val activeServerId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_SERVER_ID] }
     val activeUserId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_USER_ID] }
@@ -279,6 +341,14 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDynamicTheming(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled.toString() }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setOledMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.OLED_MODE] = enabled.toString() }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
@@ -447,20 +517,14 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled.toString() }
     }
 
-    suspend fun setSkipIntroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SKIP_INTRO_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setSkipOutroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SKIP_OUTRO_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setAutoSkipIntro(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_SKIP_INTRO] = enabled.toString() }
-    }
-
-    suspend fun setAutoSkipOutro(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_SKIP_OUTRO] = enabled.toString() }
+    suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
+        context.dataStore.edit { prefs ->
+            val current = readSegmentBehaviors(prefs).toMutableMap()
+            current[type] = behavior
+            prefs[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
+                current.mapKeys { it.key.name }.mapValues { it.value.name }
+            )
+        }
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
@@ -523,6 +587,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled.toString() }
     }
 
+    suspend fun setReplayGainPreAmpDb(db: Float) {
+        context.dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db.toString() }
+    }
+
     suspend fun setChannelMixMode(mode: ChannelMixMode) {
         context.dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
     }
@@ -545,6 +613,26 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled.toString() }
+    }
+
+    suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
+        context.dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
+    }
+
+    suspend fun setDreamSlideshowIntervalMs(ms: Long) {
+        context.dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms.toString() }
+    }
+
+    suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
+        context.dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
+    }
+
+    suspend fun setDreamShowTitle(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

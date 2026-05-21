@@ -83,7 +83,7 @@ internal fun SettingListItem(
                 this.alpha = pressAlpha
             }
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(
@@ -181,7 +181,7 @@ internal fun SettingToggleItem(
                 this.alpha = pressAlpha
             }
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(
@@ -238,7 +238,7 @@ internal fun SettingInfoItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.04f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

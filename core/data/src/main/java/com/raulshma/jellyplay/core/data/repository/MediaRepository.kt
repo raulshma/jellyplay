@@ -46,6 +46,7 @@ interface MediaRepository {
         query: String,
         mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
+        startIndex: Int = 0,
     ): Result<SearchResult>
 
     fun getMediaItemsPaged(
@@ -65,6 +66,8 @@ interface MediaRepository {
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
 
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
+
+    suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 

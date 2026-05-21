@@ -108,11 +108,11 @@ fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)
             color = it
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             try {
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
-                    .size(CoilSize(128, 128))
+                    .size(CoilSize(64, 64))
                     .allowHardware(false)
                     .build()
                 val result = loader.execute(request)
@@ -454,7 +454,7 @@ fun PosterCard(
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -464,30 +464,34 @@ fun PosterCard(
                     Text(
                         text = item.year.toString(),
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
                 val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
                 val hasWatchProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                val remainingTime = if (hasWatchProgress && hasValidDuration) {
-                    formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                } else null
-                val totalTime = if (hasValidDuration && !hasWatchProgress) {
-                    formatDurationFromTicks(item.runTimeTicks!!)
-                } else null
+                val remainingTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
+                    if (hasWatchProgress && hasValidDuration) {
+                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                    } else null
+                }
+                val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
+                    if (hasValidDuration && !hasWatchProgress) {
+                        formatDurationFromTicks(item.runTimeTicks!!)
+                    } else null
+                }
                 
                 val timeText = remainingTime ?: totalTime
                 if (timeText != null) {
                     Text(
                         text = "•",
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
                         style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -536,7 +540,7 @@ fun MediaRow(
                         (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                     } else 0f,
                     blurHash = blurHashBuilder(item),
-                    onPlayClick = onPlayClick?.let { { it(item) } },
+                    onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
                 )
             }
         }

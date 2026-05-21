@@ -8,11 +8,14 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -41,6 +44,7 @@ data class AudioQueueItem(
     val imageUrl: String?,
     val mediaSourceId: String?,
     val durationMs: Long = 0L,
+    val normalizationGain: Float? = null,
 )
 
 @Singleton
@@ -58,9 +62,11 @@ class AudioPlaybackManager @Inject constructor(
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
+    private var isLoadingItem = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
 
@@ -141,6 +147,13 @@ class AudioPlaybackManager @Inject constructor(
     private val _equalizerSettings = MutableStateFlow(com.raulshma.jellyplay.core.model.EqualizerSettings())
     val equalizerSettings: StateFlow<com.raulshma.jellyplay.core.model.EqualizerSettings> = _equalizerSettings.asStateFlow()
 
+    private val replayGainProcessor = ReplayGainAudioProcessor()
+    private val crossfadeReplayGainProcessor = ReplayGainAudioProcessor()
+    private val _replayGainMode = MutableStateFlow(AudioNormalizationMode.NONE)
+    val replayGainMode: StateFlow<AudioNormalizationMode> = _replayGainMode.asStateFlow()
+    private val _replayGainPreAmpDb = MutableStateFlow(0f)
+    val replayGainPreAmpDb: StateFlow<Float> = _replayGainPreAmpDb.asStateFlow()
+
     private val nightModeVolumeForStrength: Float
         get() = when (_nightModeStrength) {
             com.raulshma.jellyplay.core.model.EffectStrength.LOW -> 0.7f
@@ -208,7 +221,22 @@ class AudioPlaybackManager @Inject constructor(
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(replayGainProcessor))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
+
         val player = ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -232,7 +260,22 @@ class AudioPlaybackManager @Inject constructor(
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(crossfadeReplayGainProcessor))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
+
         return ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -269,6 +312,7 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         if (currentItemId == itemId) {
+            if (isLoadingItem) return
             val state = exoPlayer?.playbackState
             if (state != null && state != Player.STATE_ENDED && state != Player.STATE_IDLE) {
                 return
@@ -277,13 +321,14 @@ class AudioPlaybackManager @Inject constructor(
 
         cancelCrossfade()
         reportCurrentItemStopped()
+        currentItemId = itemId
+        isLoadingItem = true
 
         val player = getOrCreatePlayer()
 
         scope.launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    currentItemId = itemId
                     _currentPlayingItemId.value = itemId
                     _title.value = detail.item.name
                     _artist.value = detail.item.albumArtist
@@ -309,6 +354,7 @@ class AudioPlaybackManager @Inject constructor(
                             imageUrl = _albumArtUrl.value,
                             mediaSourceId = source?.id,
                             durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                            normalizationGain = detail.item.normalizationGain,
                         )
                         _queue.value = _queue.value + queueItem
                         _currentIndex.value = _queue.value.lastIndex
@@ -320,8 +366,23 @@ class AudioPlaybackManager @Inject constructor(
                     val mediaItems = mutableListOf<MediaItem>()
                     for (i in queueItems.indices) {
                         val qi = queueItems[i]
-                        val startMs = if (i == playIndex) startPositionMs else 0L
-                        buildMediaItemForQueueItem(qi, startMs)?.let { mediaItems.add(it) }
+                        if (i == playIndex) {
+                            val startMs = startPositionMs
+                            buildMediaItemForQueueItem(qi, startMs)?.let { mediaItem ->
+                                mediaItems.add(mediaItem)
+                                mediaItemCache.put(qi.id, mediaItem)
+                            }
+                        } else {
+                            val cached = mediaItemCache.get(qi.id)
+                            if (cached != null) {
+                                mediaItems.add(cached)
+                            } else {
+                                buildMediaItemForQueueItem(qi)?.let { mediaItem ->
+                                    mediaItems.add(mediaItem)
+                                    mediaItemCache.put(qi.id, mediaItem)
+                                }
+                            }
+                        }
                     }
 
                     player.setMediaItems(mediaItems, playIndex, startPositionMs)
@@ -343,9 +404,11 @@ class AudioPlaybackManager @Inject constructor(
                         trackName = detail.item.name,
                         durationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
                     )
+                    applyReplayGain(detail.item.normalizationGain)
                     startPositionTracking()
                     startProgressReporting()
                 }
+            isLoadingItem = false
         }
     }
 
@@ -388,7 +451,18 @@ class AudioPlaybackManager @Inject constructor(
         if (q.isEmpty()) return
         cancelCrossfade()
         val next = when {
-            _shuffleMode.value -> q.indices.filter { it != _currentIndex.value }.randomOrNull() ?: return
+            _shuffleMode.value -> {
+                val excluded = _currentIndex.value
+                if (q.size <= 1) return
+                var candidate = (0 until q.size).random()
+                var attempts = 0
+                while (candidate == excluded && attempts < 10) {
+                    candidate = (0 until q.size).random()
+                    attempts++
+                }
+                if (candidate == excluded) return
+                candidate
+            }
             _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
             _repeatMode.value >= 1 -> 0
             else -> return
@@ -407,7 +481,18 @@ class AudioPlaybackManager @Inject constructor(
             return
         }
         val prev = when {
-            _shuffleMode.value -> q.indices.filter { it != _currentIndex.value }.randomOrNull() ?: return
+            _shuffleMode.value -> {
+                val excluded = _currentIndex.value
+                if (q.size <= 1) return
+                var candidate = (0 until q.size).random()
+                var attempts = 0
+                while (candidate == excluded && attempts < 10) {
+                    candidate = (0 until q.size).random()
+                    attempts++
+                }
+                if (candidate == excluded) return
+                candidate
+            }
             _currentIndex.value > 0 -> _currentIndex.value - 1
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return
@@ -530,6 +615,46 @@ class AudioPlaybackManager @Inject constructor(
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
+    private fun applyReplayGain(trackGain: Float?) {
+        val mode = _replayGainMode.value
+        if (mode != AudioNormalizationMode.TRACK && mode != AudioNormalizationMode.ALBUM) {
+            replayGainProcessor.setGainDb(0f)
+            crossfadeReplayGainProcessor.setGainDb(0f)
+            return
+        }
+        if (mode == AudioNormalizationMode.ALBUM && _shuffleMode.value) {
+            replayGainProcessor.setGainDb(0f)
+            crossfadeReplayGainProcessor.setGainDb(0f)
+            return
+        }
+        val preAmp = _replayGainPreAmpDb.value
+        val gain = (trackGain ?: 0f) + preAmp
+        replayGainProcessor.setGainDb(gain)
+        crossfadeReplayGainProcessor.setGainDb(gain)
+    }
+
+    fun setReplayGainMode(mode: AudioNormalizationMode) {
+        _replayGainMode.value = mode
+        val currentIdx = _currentIndex.value
+        val q = _queue.value
+        if (currentIdx in q.indices) {
+            applyReplayGain(q[currentIdx].normalizationGain)
+        } else {
+            applyReplayGain(null)
+        }
+    }
+
+    fun setReplayGainPreAmpDb(db: Float) {
+        _replayGainPreAmpDb.value = db
+        val currentIdx = _currentIndex.value
+        val q = _queue.value
+        if (currentIdx in q.indices) {
+            applyReplayGain(q[currentIdx].normalizationGain)
+        } else {
+            applyReplayGain(null)
+        }
+    }
+
     private fun attachLoudnessEnhancer(audioSessionId: Int, gain: Int) {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         loudnessEnhancer?.release()
@@ -570,6 +695,8 @@ class AudioPlaybackManager @Inject constructor(
             _artist.value = nextItem.artist
             _album.value = nextItem.album ?: ""
             _albumArtUrl.value = nextItem.imageUrl ?: ""
+
+            applyReplayGain(nextItem.normalizationGain)
 
             scope.launch {
                 val detail = mediaRepository.getMediaDetail(nextItem.id)
@@ -786,21 +913,31 @@ class AudioPlaybackManager @Inject constructor(
     private fun startPositionTracking() {
         positionJob?.cancel()
         positionJob = scope.launch {
+            var lastPosition = 0L
+            var lastDuration = 0L
             while (true) {
                 exoPlayer?.let { player ->
-                    _currentPosition.value = player.currentPosition
-                    _duration.value = player.duration.coerceAtLeast(0L)
+                    val pos = player.currentPosition
+                    val dur = player.duration.coerceAtLeast(0L)
+                    if (pos != lastPosition) {
+                        _currentPosition.value = pos
+                        lastPosition = pos
+                    }
+                    if (dur != lastDuration) {
+                        _duration.value = dur
+                        lastDuration = dur
+                    }
                     if (_lyrics.value.isNotEmpty()) {
                         _currentLyricIndex.value = findCurrentLyricLine(
                             _lyrics.value, _currentPosition.value
                         )
                     }
 
-                    if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
-                        startCrossfadeIfNeeded()
-                    }
+                if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
+                    startCrossfadeIfNeeded()
                 }
-                delay(100)
+            }
+            delay(500)
             }
         }
     }

@@ -13,15 +13,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.lang.ref.SoftReference
-
 internal object BlurHashCache {
-    private val cache = android.util.LruCache<String, SoftReference<Bitmap>>(200)
+    private val cache = android.util.LruCache<String, Bitmap>(200)
 
     fun get(key: String): Bitmap? {
-        val ref = cache.get(key) ?: return null
-        val bitmap = ref.get()
-        if (bitmap == null || bitmap.isRecycled) {
+        val bitmap = cache.get(key) ?: return null
+        if (bitmap.isRecycled) {
             cache.remove(key)
             return null
         }
@@ -29,7 +26,7 @@ internal object BlurHashCache {
     }
 
     fun put(key: String, bitmap: Bitmap) {
-        cache.put(key, SoftReference(bitmap))
+        cache.put(key, bitmap)
     }
 }
 

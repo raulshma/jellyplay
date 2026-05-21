@@ -1,11 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,7 +40,7 @@ class VideoPlayerUiStateTest {
     }
 
     @Test
-    fun isInIntro_noTimestamps_returnsFalse() {
+    fun isInIntro_noSegments_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 30_000L,
         )
@@ -47,95 +48,80 @@ class VideoPlayerUiStateTest {
     }
 
     @Test
-    fun isInIntro_hasIntroFalse_returnsFalse() {
+    fun isInIntro_emptySegment_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 30_000L,
-            introTimestamps = IntroTimestamps(
-                itemId = "1",
-                introStartTicks = 0,
-                introEndTicks = 0,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 0, endTicks = 0,
+                )
             ),
         )
         assertFalse(state.isInIntro)
     }
 
     @Test
-    fun isInIntro_positionBeforePrompt_returnsFalse() {
+    fun isInIntro_positionBeforeSegment_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 0L,
-            introTimestamps = IntroTimestamps(
-                itemId = "1",
-                introStartTicks = 100_000_000,
-                introEndTicks = 300_000_000,
-                showSkipPromptAtTicks = 150_000_000,
-                hideSkipPromptAtTicks = 280_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 100_000_000, endTicks = 300_000_000,
+                )
             ),
         )
         assertFalse(state.isInIntro)
     }
 
     @Test
-    fun isInIntro_positionInPromptRange_returnsTrue() {
+    fun isInIntro_positionInSegmentRange_returnsTrue() {
         val state = VideoPlayerUiState(
             currentPosition = 20_000L,
-            introTimestamps = IntroTimestamps(
-                itemId = "1",
-                introStartTicks = 100_000_000,
-                introEndTicks = 300_000_000,
-                showSkipPromptAtTicks = 150_000_000,
-                hideSkipPromptAtTicks = 280_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 100_000_000, endTicks = 300_000_000,
+                )
             ),
         )
         assertTrue(state.isInIntro)
     }
 
     @Test
-    fun isInIntro_positionAfterPrompt_returnsFalse() {
+    fun isInIntro_positionAfterSegment_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 30_000L,
-            introTimestamps = IntroTimestamps(
-                itemId = "1",
-                introStartTicks = 100_000_000,
-                introEndTicks = 300_000_000,
-                showSkipPromptAtTicks = 150_000_000,
-                hideSkipPromptAtTicks = 280_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 100_000_000, endTicks = 300_000_000,
+                )
             ),
         )
         assertFalse(state.isInIntro)
     }
 
     @Test
-    fun isInIntro_withoutPromptTicks_usesStartEnd() {
+    fun isInIntro_behaviorIgnore_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 20_000L,
-            introTimestamps = IntroTimestamps(
-                itemId = "1",
-                introStartTicks = 100_000_000,
-                introEndTicks = 300_000_000,
-                showSkipPromptAtTicks = 0,
-                hideSkipPromptAtTicks = 0,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 100_000_000, endTicks = 300_000_000,
+                )
             ),
+            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
         )
-        assertTrue(state.isInIntro)
+        assertFalse(state.isInIntro)
     }
 
     @Test
-    fun isInCredits_noTimestamps_returnsFalse() {
+    fun isInCredits_noSegments_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 3_600_000L,
-        )
-        assertFalse(state.isInCredits)
-    }
-
-    @Test
-    fun isInCredits_hasCreditsFalse_returnsFalse() {
-        val state = VideoPlayerUiState(
-            currentPosition = 3_600_000L,
-            creditTimestamps = CreditTimestamps(
-                itemId = "1",
-                creditStartTicks = 0,
-                creditEndTicks = 0,
-            ),
         )
         assertFalse(state.isInCredits)
     }
@@ -144,25 +130,11 @@ class VideoPlayerUiStateTest {
     fun isInCredits_positionInRange_returnsTrue() {
         val state = VideoPlayerUiState(
             currentPosition = 3_600_000L,
-            creditTimestamps = CreditTimestamps(
-                itemId = "1",
-                creditStartTicks = 35_000_000_000,
-                creditEndTicks = 38_000_000_000,
-                showSkipPromptAtTicks = 35_500_000_000,
-                hideSkipPromptAtTicks = 37_500_000_000,
-            ),
-        )
-        assertTrue(state.isInCredits)
-    }
-
-    @Test
-    fun isInCredits_lastChapter_stillInRange_returnsTrue() {
-        val state = VideoPlayerUiState(
-            currentPosition = 3_700_000L,
-            creditTimestamps = CreditTimestamps(
-                itemId = "1",
-                creditStartTicks = 35_000_000_000,
-                creditEndTicks = 38_000_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.OUTRO,
+                    startTicks = 35_000_000_000, endTicks = 38_000_000_000,
+                )
             ),
         )
         assertTrue(state.isInCredits)
@@ -172,13 +144,52 @@ class VideoPlayerUiStateTest {
     fun isInCredits_positionBeforeRange_returnsFalse() {
         val state = VideoPlayerUiState(
             currentPosition = 3_400_000L,
-            creditTimestamps = CreditTimestamps(
-                itemId = "1",
-                creditStartTicks = 35_000_000_000,
-                creditEndTicks = 38_000_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.OUTRO,
+                    startTicks = 35_000_000_000, endTicks = 38_000_000_000,
+                )
             ),
         )
         assertFalse(state.isInCredits)
+    }
+
+    @Test
+    fun activeSegment_commercialTakesPriorityOverIntro() {
+        val state = VideoPlayerUiState(
+            currentPosition = 20_000L,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.INTRO,
+                    startTicks = 100_000_000, endTicks = 300_000_000,
+                ),
+                MediaSegment(
+                    id = "2", itemId = "1", type = MediaSegmentType.COMMERCIAL,
+                    startTicks = 150_000_000, endTicks = 250_000_000,
+                ),
+            ),
+        )
+        val seg = state.activeSegment
+        assertTrue(seg != null && seg.type == MediaSegmentType.COMMERCIAL)
+    }
+
+    @Test
+    fun activeSegment_recapTakesPriorityOverPreview() {
+        val state = VideoPlayerUiState(
+            currentPosition = 5_000L,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.PREVIEW,
+                    startTicks = 0, endTicks = 100_000_000,
+                ),
+                MediaSegment(
+                    id = "2", itemId = "1", type = MediaSegmentType.RECAP,
+                    startTicks = 0, endTicks = 80_000_000,
+                ),
+            ),
+        )
+        val seg = state.activeSegment
+        assertTrue(seg != null && seg.type == MediaSegmentType.RECAP)
     }
 
     @Test
@@ -197,15 +208,17 @@ class VideoPlayerUiStateTest {
     }
 
     @Test
-    fun shouldShowUpNext_inCredits_returnsTrue() {
+    fun shouldShowUpNext_inCreditsNearEnd_returnsTrue() {
         val state = VideoPlayerUiState(
             nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             seriesId = "series1",
-            creditTimestamps = CreditTimestamps(
-                itemId = "1",
-                creditStartTicks = 35_000_000_000,
-                creditEndTicks = 38_000_000_000,
+            segments = listOf(
+                MediaSegment(
+                    id = "1", itemId = "1", type = MediaSegmentType.OUTRO,
+                    startTicks = 35_000_000_000, endTicks = 38_000_000_000,
+                )
             ),
+            duration = 3_800_000L,
             currentPosition = 3_600_000L,
         )
         assertTrue(state.shouldShowUpNext)

@@ -65,6 +65,7 @@ class SyncPlayManager @Inject constructor(
     private val _commands = MutableSharedFlow<SyncPlayCommand>(extraBufferCapacity = 64)
     val commands: SharedFlow<SyncPlayCommand> = _commands.asSharedFlow()
 
+    @Volatile
     private var queuedCommand: SyncPlayCommand? = null
 
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()

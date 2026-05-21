@@ -1,4 +1,13 @@
 <resources>
     <string name="app_name">JellyPlay</string>
     <string name="open_app_description">Open %1$s</string>
+
+    <string name="shortcut_continue_watching_short">Continue</string>
+    <string name="shortcut_continue_watching_long">Continue Watching</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search Library</string>
+    <string name="shortcut_play_music_short">Music</string>
+    <string name="shortcut_play_music_long">Play Music</string>
+    <string name="shortcut_downloads_short">Downloads</string>
+    <string name="shortcut_downloads_long">Open Downloads</string>
 </resources>

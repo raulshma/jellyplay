@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,18 +20,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -86,9 +83,17 @@ fun AlbumDetailScreen(
             AnimatedEntrance(visible = true) {
                 AlbumDetailContent(
                     detail = viewModel.detail!!,
+                    tracks = viewModel.tracks,
                     getImageUrl = { viewModel.getImageUrl(it) },
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onTrackClick = onTrackClick,
+                    onPlayAlbum = { tracks, startIndex ->
+                        viewModel.playAlbum(tracks, startIndex)
+                        tracks.getOrNull(startIndex)?.let { firstTrack ->
+                            onTrackClick(firstTrack.id)
+                        }
+                    },
+                    onAddToQueue = { track -> viewModel.addToQueue(track) },
                     onArtistClick = onArtistClick,
                     onBack = onBack,
                 )
@@ -101,9 +106,12 @@ fun AlbumDetailScreen(
 @Composable
 private fun AlbumDetailContent(
     detail: MediaDetail,
+    tracks: List<MediaItem>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     onTrackClick: (String) -> Unit,
+    onPlayAlbum: (List<MediaItem>, Int) -> Unit,
+    onAddToQueue: (MediaItem) -> Unit,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -131,6 +139,7 @@ private fun AlbumDetailContent(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
+                            Color.Black.copy(alpha = 0.3f),
                             Color.Transparent,
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                             MaterialTheme.colorScheme.surface,
@@ -194,9 +203,11 @@ private fun AlbumDetailContent(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = {
-                                val firstTrackId = detail.relatedItems.firstOrNull()?.id
-                                if (firstTrackId != null) onTrackClick(firstTrackId)
+                                if (tracks.isNotEmpty()) {
+                                    onPlayAlbum(tracks, 0)
+                                }
                             },
+                            enabled = tracks.isNotEmpty(),
                             modifier = Modifier.weight(1f),
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -224,12 +235,13 @@ private fun AlbumDetailContent(
                 }
             }
 
-            itemsIndexed(detail.relatedItems, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
+            itemsIndexed(tracks, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
                 TrackItem(
                     track = track,
                     index = index + 1,
                     imageUrl = getImageUrl(track.id),
                     onClick = { onTrackClick(track.id) },
+                    onAddToQueue = { onAddToQueue(track) },
                 )
             }
 
@@ -246,6 +258,7 @@ private fun TrackItem(
     index: Int,
     imageUrl: String,
     onClick: () -> Unit,
+    onAddToQueue: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -291,6 +304,16 @@ private fun TrackItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (onAddToQueue != null) {
+            IconButton(onClick = { onAddToQueue() }) {
+                Icon(
+                    Icons.Default.QueueMusic,
+                    contentDescription = "Add to Queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

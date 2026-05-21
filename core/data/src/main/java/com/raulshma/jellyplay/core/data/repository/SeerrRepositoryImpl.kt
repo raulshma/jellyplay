@@ -4,10 +4,13 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
-import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,14 +20,24 @@ class SeerrRepositoryImpl @Inject constructor(
     private val seerrPreferencesStore: SeerrPreferencesStore,
 ) : SeerrRepository {
 
-    private val cachedCredentials = AtomicReference<Pair<String, String>?>(null)
+    @Volatile
+    private var cachedCredentials: Pair<String, String>? = null
+    @Volatile
+    private var lastPrefsHash: Int = 0
+
+    private val cachedPrefs = seerrPreferencesStore.preferences
+        .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.Eagerly, null)
 
     private suspend fun getCredentials(): Pair<String, String>? {
-        cachedCredentials.get()?.let { return it }
-        val prefs = seerrPreferencesStore.preferences.first()
+        val prefs = cachedPrefs.value ?: return null
+        val prefsHash = listOf(prefs.serverUrl, prefs.apiKey).hashCode()
+        if (prefsHash == lastPrefsHash) {
+            cachedCredentials?.let { return it }
+        }
         if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) return null
         val creds = Pair(prefs.serverUrl, prefs.apiKey)
-        cachedCredentials.set(creds)
+        cachedCredentials = creds
+        lastPrefsHash = prefsHash
         return creds
     }
 

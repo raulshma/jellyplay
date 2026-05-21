@@ -103,6 +103,7 @@ fun MusicHomeScreen(
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
     onItemClick: (String) -> Unit,
+    onAlbumClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
     onSyncPlayClick: () -> Unit,
     onDownloadsClick: () -> Unit = {},
@@ -192,7 +193,7 @@ fun MusicHomeScreen(
                             )
                         }
 
-                        itemsIndexed(sections, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
+                        itemsIndexed(sections, key = { _, section -> section.title }, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
                             val visible = remember { mutableStateOf(false) }
                             androidx.compose.runtime.LaunchedEffect(Unit) { visible.value = true }
                             AnimatedVisibility(
@@ -207,7 +208,13 @@ fun MusicHomeScreen(
                                 MusicSectionRow(
                                     section = section,
                                     imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-                                    onItemClick = { onItemClick(it.id) },
+                                    onItemClick = { item ->
+                                        if (item.mediaType == MediaType.ALBUM) {
+                                            onAlbumClick(item.id)
+                                        } else {
+                                            onItemClick(item.id)
+                                        }
+                                    },
                                     modifier = Modifier.padding(top = if (index == 0) 8.dp else 16.dp),
                                 )
                             }
@@ -371,6 +378,26 @@ private fun MusicHeroHeader(
                 } ?: Modifier
             ),
     ) {
+        val isLight = MaterialTheme.colorScheme.background.let { bg ->
+            (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+        }
+        val scrimColor = if (isLight) Color.White else Color.Black
+        val textColor = if (isLight) MaterialTheme.colorScheme.onBackground else Color.White
+        val textSecondaryColor = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.6f)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            scrimColor.copy(alpha = 0.55f),
+                            scrimColor.copy(alpha = 0.20f),
+                            Color.Transparent,
+                        ),
+                    )
+                ),
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -389,13 +416,13 @@ private fun MusicHeroHeader(
                         style = MaterialTheme.typography.displayLarge.copy(
                             fontWeight = FontWeight.Bold,
                         ),
-                        color = Color.White,
+                        color = textColor,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Today's Mix for you",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = textSecondaryColor,
                     )
                 }
 
@@ -410,7 +437,7 @@ private fun MusicHeroHeader(
                     Icon(
                         Icons.Default.PlayArrow,
                         contentDescription = "Play Mix",
-                        tint = Color.White,
+                        tint = textColor,
                         modifier = Modifier.size(32.dp),
                     )
                 }
