@@ -75,7 +75,8 @@ class MediaRepositoryImpl @Inject constructor(
         query: String,
         mediaTypes: List<MediaType>?,
         limit: Int,
-    ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit)
+        startIndex: Int,
+    ): Result<SearchResult> = apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
 
     override fun getMediaItemsPaged(
         parentId: String?,

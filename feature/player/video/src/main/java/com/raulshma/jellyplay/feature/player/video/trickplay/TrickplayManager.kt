@@ -26,13 +26,14 @@ class TrickplayManager(
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
 
     fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
     }

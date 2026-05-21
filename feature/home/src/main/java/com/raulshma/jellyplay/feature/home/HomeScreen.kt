@@ -285,7 +285,10 @@ fun HomeScreen(
                 }
         }
 
-        val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+        val bgColor = MaterialTheme.colorScheme.background
+        val isLightTheme = remember(bgColor) {
+            (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
+        }
         val artworkColors = if (viewModel.dynamicTheming && !backdropUrl.isNullOrBlank()) {
             com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(backdropUrl)
         } else null

@@ -43,7 +43,7 @@ class DownloadsViewModel @Inject constructor(
             downloadRepository.getAllDownloads().collectLatest { items ->
                 downloads = items
                 isLoading = false
-                totalStorageBytes = downloadRepository.getTotalDownloadedBytes()
+                totalStorageBytes = items.sumOf { it.downloadedBytes }
             }
         }
     }
@@ -73,7 +73,6 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
             downloadRepository.deleteDownload(item.id)
-            totalStorageBytes = downloadRepository.getTotalDownloadedBytes()
         }
     }
 

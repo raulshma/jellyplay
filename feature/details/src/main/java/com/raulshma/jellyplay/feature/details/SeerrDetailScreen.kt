@@ -857,7 +857,7 @@ private fun SeerrHorizontalSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(items, contentType = { "seerrSearchItem" }) { item ->
+            items(items, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
                 SeerrMediaCard(
                     item = item,
                     imageUrl = item.posterUrl,
@@ -951,7 +951,7 @@ private fun CastSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(cast, contentType = { "castMember" }) { member ->
+            items(cast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> 0 } }, contentType = { "castMember" }) { member ->
                 val name: String
                 val character: String
                 val profileUrl: String?
@@ -1018,6 +1018,7 @@ private fun SeasonsSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
+        val sortedSeasons = remember(seasons) { seasons.sortedByDescending { it.seasonNumber } }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
@@ -1025,7 +1026,7 @@ private fun SeasonsSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(seasons.sortedByDescending { it.seasonNumber }, contentType = { "season" }) { season ->
+            items(sortedSeasons, key = { it.id }, contentType = { "season" }) { season ->
                 Column(modifier = Modifier.width(120.dp)) {
                     Card(
                         modifier = Modifier
@@ -1081,7 +1082,7 @@ private fun VideosSection(
                 .tvFocusRestorer()
                 .tvFocusExitHandler(),
         ) {
-            items(videos, contentType = { "video" }) { video ->
+            items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
                 val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
                     "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
                 } else null

@@ -74,6 +74,49 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private companion object {
         val sharedJson = Json { ignoreUnknownKeys = true }
+        private val CACHED_CAPABILITIES by lazy {
+            org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
+                playableMediaTypes = listOf(
+                    org.jellyfin.sdk.model.api.MediaType.VIDEO,
+                    org.jellyfin.sdk.model.api.MediaType.AUDIO,
+                ),
+                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.entries,
+                supportsMediaControl = true,
+                supportsPersistentIdentifier = true,
+                deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
+                    directPlayProfiles = emptyList(),
+                    transcodingProfiles = emptyList(),
+                    containerProfiles = emptyList(),
+                    codecProfiles = emptyList(),
+                    subtitleProfiles = listOf(
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "srt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ass",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "ssa",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "subrip",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "vtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                        org.jellyfin.sdk.model.api.SubtitleProfile(
+                            format = "webvtt",
+                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
+                        ),
+                    ),
+                ),
+            )
+        }
     }
 
     private val currentMaxParentalRating: Int?
@@ -90,10 +133,10 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private fun List<MediaItem>.filterByParentalRating(): List<MediaItem> {
         val max = currentMaxParentalRating ?: return this
-        return filter { item ->
-            item.officialRating?.let { rating ->
+        return mapNotNull { item ->
+            if (item.officialRating?.let { rating ->
                 ratingToAge(rating)?.let { age -> age <= max }
-            } != false
+            } != false) item else null
         }
     }
 
@@ -519,11 +562,13 @@ class JellyfinApiClientImpl @Inject constructor(
         query: String,
         mediaTypes: List<MediaType>?,
         limit: Int,
+        startIndex: Int,
     ): Result<SearchResult> = apiResult {
         val response = requireApi().itemsApi.getItems(
             searchTerm = query,
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             limit = limit,
+            startIndex = startIndex,
             recursive = true,
             fields = listOf(
                 org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
@@ -533,7 +578,7 @@ class JellyfinApiClientImpl @Inject constructor(
         SearchResult(
             items = response.items.map { it.toMediaItem() }.filterByParentalRating(),
             totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
+            startIndex = startIndex,
         )
     }
 
@@ -1459,49 +1504,7 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = apiResult {
-        requireApi().sessionApi.postFullCapabilities(
-            data = org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
-                playableMediaTypes = listOf(
-                    org.jellyfin.sdk.model.api.MediaType.VIDEO,
-                    org.jellyfin.sdk.model.api.MediaType.AUDIO,
-                ),
-                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.values().toList(),
-                supportsMediaControl = true,
-                supportsPersistentIdentifier = true,
-                deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
-                    directPlayProfiles = emptyList(),
-                    transcodingProfiles = emptyList(),
-                    containerProfiles = emptyList(),
-                    codecProfiles = emptyList(),
-                    subtitleProfiles = listOf(
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "srt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "ass",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "ssa",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "subrip",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "vtt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                        org.jellyfin.sdk.model.api.SubtitleProfile(
-                            format = "webvtt",
-                            method = org.jellyfin.sdk.model.api.SubtitleDeliveryMethod.EXTERNAL,
-                        ),
-                    ),
-                ),
-            )
-        )
+        requireApi().sessionApi.postFullCapabilities(data = CACHED_CAPABILITIES)
     }
 }
 

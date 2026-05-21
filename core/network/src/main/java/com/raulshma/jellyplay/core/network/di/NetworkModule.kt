@@ -75,6 +75,16 @@ abstract class NetworkModule {
                 .connectionPool(ConnectionPool(5, 10, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
+                .addNetworkInterceptor { chain ->
+                    val response = chain.proceed(chain.request())
+                    if (response.isSuccessful && chain.request().url.encodedPath.contains("/Images/")) {
+                        response.newBuilder()
+                            .header("Cache-Control", "max-age=604800")
+                            .build()
+                    } else {
+                        response
+                    }
+                }
                 .build()
         }
     }

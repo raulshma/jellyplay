@@ -88,6 +88,7 @@ interface JellyfinApiClient {
         query: String,
         mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
+        startIndex: Int = 0,
     ): Result<SearchResult>
 
     suspend fun getGenres(
