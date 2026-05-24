@@ -16,11 +16,15 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +39,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.pow
 
 data class AudioQueueItem(
     val id: String,
@@ -70,6 +75,11 @@ class AudioPlaybackManager @Inject constructor(
     private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val bassBoostHelper = BassBoostHelper()
+    private val virtualizerHelper = VirtualizerHelper()
+    private val reverbHelper = ReverbHelper()
+    private val balanceProcessor = BalanceAudioProcessor()
+    private val visualizerHelper = AudioVisualizerHelper()
 
     private var _dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
     private var _nightModeStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
@@ -151,6 +161,36 @@ class AudioPlaybackManager @Inject constructor(
     private val _equalizerSettings = MutableStateFlow(com.raulshma.jellyplay.core.model.EqualizerSettings())
     val equalizerSettings: StateFlow<com.raulshma.jellyplay.core.model.EqualizerSettings> = _equalizerSettings.asStateFlow()
 
+    private val _equalizerPreset = MutableStateFlow(EqualizerPreset.FLAT)
+    val equalizerPreset: StateFlow<EqualizerPreset> = _equalizerPreset.asStateFlow()
+
+    private val _bassBoostEnabled = MutableStateFlow(false)
+    val bassBoostEnabled: StateFlow<Boolean> = _bassBoostEnabled.asStateFlow()
+
+    private var _bassBoostStrength = EffectStrength.MODERATE
+    val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
+
+    private val _virtualizerEnabled = MutableStateFlow(false)
+    val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
+
+    private val _virtualizerStrength = MutableStateFlow(500)
+    val virtualizerStrength: StateFlow<Int> = _virtualizerStrength.asStateFlow()
+
+    private val _reverbPreset = MutableStateFlow(ReverbPreset.NONE)
+    val reverbPresetState: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
+
+    private val _lrBalance = MutableStateFlow(0f)
+    val lrBalance: StateFlow<Float> = _lrBalance.asStateFlow()
+
+    private val _pitchSemitones = MutableStateFlow(0f)
+    val pitchSemitones: StateFlow<Float> = _pitchSemitones.asStateFlow()
+
+    private val _autoEqByGenre = MutableStateFlow(false)
+    val autoEqByGenre: StateFlow<Boolean> = _autoEqByGenre.asStateFlow()
+
+    val fftData: StateFlow<ByteArray> = visualizerHelper.fftData
+    val waveformData: StateFlow<ByteArray> = visualizerHelper.waveformData
+
     private val replayGainProcessor = ReplayGainAudioProcessor()
     private val crossfadeReplayGainProcessor = ReplayGainAudioProcessor()
     private val _replayGainMode = MutableStateFlow(AudioNormalizationMode.NONE)
@@ -230,7 +270,7 @@ class AudioPlaybackManager @Inject constructor(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(replayGainProcessor))
+                    .setAudioProcessors(arrayOf(replayGainProcessor, balanceProcessor))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -252,6 +292,8 @@ class AudioPlaybackManager @Inject constructor(
             .build()
         mediaSession = session
         sessionManager.setActiveSession(session)
+
+        attachAudioEffects(player.audioSessionId)
 
         return player
     }
@@ -521,7 +563,10 @@ class AudioPlaybackManager @Inject constructor(
 
     fun changePlaybackSpeed(value: Float) {
         _speed.value = value
-        exoPlayer?.setPlaybackSpeed(value)
+        val pitchMultiplier = if (_pitchSemitones.value == 0f) 1.0f else {
+            2.0f.pow(_pitchSemitones.value / 12.0f)
+        }
+        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(value, pitchMultiplier)
         crossfadePlayer?.setPlaybackSpeed(value)
     }
 
@@ -626,11 +671,13 @@ class AudioPlaybackManager @Inject constructor(
         val newLevels = _equalizerSettings.value.bandLevels.toMutableList()
         newLevels[bandIndex] = levelDb
         _equalizerSettings.value = com.raulshma.jellyplay.core.model.EqualizerSettings(newLevels)
+        _equalizerPreset.value = EqualizerPreset.CUSTOM
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
     fun resetEqualizer() {
         _equalizerSettings.value = com.raulshma.jellyplay.core.model.EqualizerSettings()
+        _equalizerPreset.value = EqualizerPreset.FLAT
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
@@ -730,6 +777,128 @@ class AudioPlaybackManager @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    private fun attachAudioEffects(audioSessionId: Int) {
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (_equalizerEnabled.value) {
+            equalizerHelper.attach(audioSessionId)
+            equalizerHelper.setEnabled(true)
+            equalizerHelper.setSettings(_equalizerSettings.value)
+        }
+        if (_dialogueBoostEnabled.value) {
+            dialogueBoost.attach(audioSessionId)
+            dialogueBoost.setEnabled(true)
+        }
+        if (_bassBoostEnabled.value) {
+            bassBoostHelper.attach(audioSessionId)
+            bassBoostHelper.setEnabled(true)
+        }
+        if (_virtualizerEnabled.value) {
+            virtualizerHelper.attach(audioSessionId)
+            virtualizerHelper.setEnabled(true)
+        }
+        if (_reverbPreset.value != ReverbPreset.NONE) {
+            reverbHelper.attach(audioSessionId)
+            reverbHelper.setEnabled(true)
+        }
+        visualizerHelper.attach(audioSessionId)
+        visualizerHelper.setEnabled(true)
+    }
+
+    fun setEqualizerPreset(preset: EqualizerPreset) {
+        _equalizerPreset.value = preset
+        if (preset != EqualizerPreset.CUSTOM) {
+            val settings = EqualizerSettings(preset.bandLevels())
+            _equalizerSettings.value = settings
+            equalizerHelper.setSettings(settings)
+        }
+    }
+
+    fun toggleBassBoost() {
+        _bassBoostEnabled.value = !_bassBoostEnabled.value
+        applyBassBoost()
+    }
+
+    fun setBassBoostStrength(strength: EffectStrength) {
+        _bassBoostStrength = strength
+        bassBoostHelper.setStrength(strength)
+    }
+
+    private fun applyBassBoost() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        bassBoostHelper.attach(audioSessionId)
+        bassBoostHelper.setStrength(_bassBoostStrength)
+        bassBoostHelper.setEnabled(_bassBoostEnabled.value)
+    }
+
+    fun toggleVirtualizer() {
+        _virtualizerEnabled.value = !_virtualizerEnabled.value
+        applyVirtualizer()
+    }
+
+    fun setVirtualizerStrength(strength: Int) {
+        _virtualizerStrength.value = strength
+        virtualizerHelper.setStrength(strength)
+    }
+
+    private fun applyVirtualizer() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        virtualizerHelper.attach(audioSessionId)
+        virtualizerHelper.setStrength(_virtualizerStrength.value)
+        virtualizerHelper.setEnabled(_virtualizerEnabled.value)
+    }
+
+    fun setReverbPreset(preset: ReverbPreset) {
+        _reverbPreset.value = preset
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (preset == ReverbPreset.NONE) {
+            reverbHelper.setEnabled(false)
+            reverbHelper.detach()
+        } else {
+            reverbHelper.detach()
+            reverbHelper.attach(audioSessionId)
+            reverbHelper.setPreset(preset)
+        }
+    }
+
+    fun setLrBalance(balance: Float) {
+        _lrBalance.value = balance
+        balanceProcessor.setBalance(balance)
+    }
+
+    fun setPitchSemitones(semitones: Float) {
+        _pitchSemitones.value = semitones
+        val multiplier = if (semitones == 0f) 1.0f else {
+            2.0f.pow(semitones / 12.0f)
+        }
+        val currentSpeed = _speed.value
+        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(currentSpeed, multiplier)
+    }
+
+    fun setAutoEqByGenre(enabled: Boolean) {
+        _autoEqByGenre.value = enabled
+    }
+
+    fun applyAutoEqForGenre(genres: List<String>?) {
+        if (!_autoEqByGenre.value) return
+        if (genres.isNullOrEmpty()) return
+        val matchedPreset = genres.firstNotNullOfOrNull { genre ->
+            EqualizerPreset.fromGenre(genre)
+        } ?: return
+        if (matchedPreset != _equalizerPreset.value) {
+            setEqualizerPreset(matchedPreset)
+        }
+    }
+
+    fun enableVisualizer(enabled: Boolean) {
+        visualizerHelper.setEnabled(enabled)
+    }
 
     private fun onTrackEnded() {
         when {
@@ -941,6 +1110,15 @@ class AudioPlaybackManager @Inject constructor(
         applyNightMode()
         applyDialogueBoost()
         applyEqualizer()
+        applyBassBoost()
+        applyVirtualizer()
+        if (_reverbPreset.value != ReverbPreset.NONE) {
+            reverbHelper.detach()
+            reverbHelper.attach(secondary.audioSessionId)
+            reverbHelper.setPreset(_reverbPreset.value)
+        }
+        visualizerHelper.attach(secondary.audioSessionId)
+        visualizerHelper.setEnabled(true)
 
         _isCrossfading.value = false
 
@@ -1111,6 +1289,10 @@ class AudioPlaybackManager @Inject constructor(
         exoPlayer = null
         dialogueBoost.detach()
         equalizerHelper.detach()
+        bassBoostHelper.detach()
+        virtualizerHelper.detach()
+        reverbHelper.detach()
+        visualizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
 

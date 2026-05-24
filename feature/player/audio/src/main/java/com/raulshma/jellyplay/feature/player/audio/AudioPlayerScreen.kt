@@ -69,6 +69,13 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SpatialAudio
+import androidx.compose.material.icons.filled.SurroundSound
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.Piano
+import androidx.compose.material.icons.filled.Balance
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
@@ -141,6 +148,7 @@ fun AudioPlayerScreen(
     var showQueue by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
+    var showEffectsSheet by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -159,11 +167,12 @@ fun AudioPlayerScreen(
     }
 
     BackHandler {
-        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch) {
+        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch || showEffectsSheet) {
             showQueue = false
             showSpeedPicker = false
             showEqualizer = false
             showLyricsSearch = false
+            showEffectsSheet = false
         } else if (showLyrics) {
             showLyrics = false
         } else {
@@ -357,6 +366,7 @@ fun AudioPlayerScreen(
                     nightModeStrength = viewModel.nightModeStrength,
                     onSpeedClick = { showMenu = false; showSpeedPicker = true },
                     onEqualizerClick = { showMenu = false; showEqualizer = true },
+                    onEffectsClick = { showMenu = false; showEffectsSheet = true },
                     onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
                     onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
@@ -584,9 +594,11 @@ fun AudioPlayerScreen(
         EqualizerSheet(
             enabled = viewModel.equalizerEnabled,
             bandLevels = viewModel.equalizerSettings.bandLevels,
+            currentPreset = viewModel.equalizerPreset,
             onToggle = { viewModel.toggleEqualizer() },
             onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
             onReset = { viewModel.resetEqualizer() },
+            onPresetChange = { viewModel.applyEqualizerPreset(it) },
             onDismiss = { showEqualizer = false },
         )
     }
@@ -613,6 +625,14 @@ fun AudioPlayerScreen(
             onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
             onCancel = { viewModel.cancelSleepTimer() },
             onDismiss = { showSleepTimer = false },
+        )
+    }
+
+    if (showEffectsSheet) {
+        AudioEffectsSheet(
+            viewModel = viewModel,
+            onDismiss = { showEffectsSheet = false },
+            onOpenEqualizer = { showEffectsSheet = false; showEqualizer = true },
         )
     }
 }
@@ -764,9 +784,11 @@ private fun SpeedPickerSheet(
 private fun EqualizerSheet(
     enabled: Boolean,
     bandLevels: List<Int>,
+    currentPreset: com.raulshma.jellyplay.core.model.EqualizerPreset,
     onToggle: () -> Unit,
     onBandChange: (Int, Int) -> Unit,
     onReset: () -> Unit,
+    onPresetChange: (com.raulshma.jellyplay.core.model.EqualizerPreset) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -792,6 +814,20 @@ private fun EqualizerSheet(
                     androidx.compose.material3.Switch(
                         checked = enabled,
                         onCheckedChange = { onToggle() },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val presets = com.raulshma.jellyplay.core.model.EqualizerPreset.entries.filter { it != com.raulshma.jellyplay.core.model.EqualizerPreset.CUSTOM }
+                items(presets.size) { index ->
+                    val preset = presets[index]
+                    androidx.compose.material3.FilterChip(
+                        selected = currentPreset == preset,
+                        onClick = { onPresetChange(preset) },
+                        label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
                     )
                 }
             }
@@ -1175,6 +1211,360 @@ private fun LyricsOverlay(
 
 
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AudioEffectsSheet(
+    viewModel: AudioPlayerViewModel,
+    onDismiss: () -> Unit,
+    onOpenEqualizer: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Text("Audio Effects", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                androidx.compose.material3.HorizontalDivider()
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Tune, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Equalizer", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Row {
+                        TextButton(onClick = onOpenEqualizer) { Text("Open") }
+                        Spacer(Modifier.width(4.dp))
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.equalizerEnabled,
+                            onCheckedChange = { viewModel.toggleEqualizer() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.bassBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Bass Boost", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.bassBoostStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.bassBoostEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.bassBoostStrength == strength,
+                                    onClick = { viewModel.setBassBoostStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.bassBoostEnabled,
+                            onCheckedChange = { viewModel.toggleBassBoost() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.SurroundSound,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.virtualizerEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Virtualizer / Spatial", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "${(viewModel.virtualizerStrength / 10)}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (viewModel.virtualizerEnabled) {
+                        Slider(
+                            value = viewModel.virtualizerStrength.toFloat(),
+                            onValueChange = { viewModel.applyVirtualizerStrength(it.toInt()) },
+                            valueRange = 0f..1000f,
+                            modifier = Modifier.width(120.dp),
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.virtualizerEnabled,
+                        onCheckedChange = { viewModel.toggleVirtualizer() },
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Waves,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Reverb", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val reverbPresets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
+                    items(reverbPresets.size) { index ->
+                        val preset = reverbPresets[index]
+                        androidx.compose.material3.FilterChip(
+                            selected = viewModel.reverbPreset == preset,
+                            onClick = { viewModel.applyReverbPreset(preset) },
+                            label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.RecordVoiceOver,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Dialogue Boost", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.dialogueBoostStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.dialogueBoostEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.dialogueBoostStrength == strength,
+                                    onClick = { viewModel.setDialogueBoostStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.dialogueBoostEnabled,
+                            onCheckedChange = { viewModel.toggleDialogueBoost() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Nightlight,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Night Mode", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.nightModeStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.nightModeEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.nightModeStrength == strength,
+                                    onClick = { viewModel.setNightModeStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.nightModeEnabled,
+                            onCheckedChange = { viewModel.toggleNightMode() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Balance,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.lrBalance != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("L/R Balance", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                when {
+                                    viewModel.lrBalance < 0f -> "Left ${kotlin.math.abs((viewModel.lrBalance * 100).toInt())}%"
+                                    viewModel.lrBalance > 0f -> "Right ${(viewModel.lrBalance * 100).toInt()}%"
+                                    else -> "Center"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Slider(
+                        value = viewModel.lrBalance,
+                        onValueChange = { viewModel.applyLrBalance(it) },
+                        valueRange = -1f..1f,
+                        modifier = Modifier.width(140.dp),
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Piano,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.pitchSemitones != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Pitch", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (viewModel.pitchSemitones == 0f) "Original"
+                                else "${if (viewModel.pitchSemitones > 0) "+" else ""}${String.format("%.1f", viewModel.pitchSemitones)} semitones",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Slider(
+                        value = viewModel.pitchSemitones,
+                        onValueChange = { viewModel.applyPitchSemitones(it) },
+                        valueRange = -12f..12f,
+                        steps = 23,
+                        modifier = Modifier.width(140.dp),
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.autoEqByGenre) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Auto-EQ by Genre", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Apply EQ preset based on track genre",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.autoEqByGenre,
+                        onCheckedChange = { viewModel.applyAutoEqByGenre(it) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+
+
 @Composable
 private fun PixelPlayerTopBar(
     onBack: () -> Unit,
@@ -1191,6 +1581,7 @@ private fun PixelPlayerTopBar(
     nightModeStrength: com.raulshma.jellyplay.core.model.EffectStrength,
     onSpeedClick: () -> Unit,
     onEqualizerClick: () -> Unit,
+    onEffectsClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
@@ -1253,6 +1644,12 @@ private fun PixelPlayerTopBar(
                         text = { Text("Equalizer") },
                         onClick = onEqualizerClick,
                         leadingIcon = { Icon(Icons.Default.Tune, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Audio Effects") },
+                        onClick = onEffectsClick,
+                        leadingIcon = { Icon(Icons.Default.SpatialAudio, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
