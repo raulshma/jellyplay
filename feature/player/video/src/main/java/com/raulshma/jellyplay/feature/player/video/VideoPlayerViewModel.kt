@@ -23,6 +23,8 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -295,15 +297,21 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val groupPlayingId = syncPlayManager.currentGroup?.playingItemId
+            val currentGroup = syncPlayManager.currentGroup
+            val groupPlayingId = currentGroup?.playingItemId
             if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
                 try {
-                    syncPlayManager.setNewQueue(
-                        itemIds = listOf(itemId),
-                        playingItemId = itemId,
-                        mediaSourceId = mediaSourceId,
-                        startPositionTicks = startPositionTicks
-                    )
+                    val matchingEntry = currentGroup.playlistItemMap.entries.find { it.value == itemId }
+                    if (matchingEntry != null) {
+                        syncPlayManager.setPlaylistItem(matchingEntry.key)
+                    } else {
+                        syncPlayManager.setNewQueue(
+                            itemIds = listOf(itemId),
+                            playingItemId = itemId,
+                            mediaSourceId = mediaSourceId,
+                            startPositionTicks = startPositionTicks
+                        )
+                    }
                 } catch (_: Exception) { }
             }
 
@@ -697,7 +705,30 @@ class VideoPlayerViewModel @Inject constructor(
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
+
+            if (syncPlayManager.isInSyncPlaySession) {
+                val group = syncPlayManager.currentGroup
+                val currentPlaylistItemId = group?.playingPlaylistItemId
+                val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
+                if (currentPlaylistItemId != null && nextExistsInQueue) {
+                    syncPlayController.sendNextItem(currentPlaylistItemId)
+                    return@launch
+                }
+            }
+
             initialize(next.id, null, 0L)
+        }
+    }
+
+    fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
+        viewModelScope.launch {
+            syncPlayManager.setRepeatMode(mode)
+        }
+    }
+
+    fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
+        viewModelScope.launch {
+            syncPlayManager.setShuffleMode(mode)
         }
     }
 

@@ -16,6 +16,9 @@ data class SyncPlayGroup(
     val isPlaying: Boolean = false,
     val positionTicks: Long? = null,
     val playlistItemIds: List<String> = emptyList(),
+    val playlistItemMap: Map<String, String> = emptyMap(),
+    val repeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
+    val shuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
 )
 
 @Immutable
@@ -32,6 +35,7 @@ data class SyncPlayGroupInfo(
     val repeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
     val shuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
     val playlistItemIds: List<String> = emptyList(),
+    val playlistItemMap: Map<String, String> = emptyMap(),
 )
 
 @Immutable
