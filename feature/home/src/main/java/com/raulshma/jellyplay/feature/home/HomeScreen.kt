@@ -692,10 +692,19 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    HeaderStatusIndicator(
-                        status = headerStatus,
-                        tint = appBarIconColorFaded,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ModeSwitch(
+                            currentMode = viewModel.homeMode,
+                            onModeChange = onModeChange,
+                        )
+                        HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 8.dp),
+                            tint = appBarIconColorFaded,
+                        )
+                    }
 
                     Spacer(Modifier.weight(1f))
 
@@ -705,10 +714,6 @@ fun HomeScreen(
                             .padding(horizontal = 4.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ModeSwitch(
-                                currentMode = viewModel.homeMode,
-                                onModeChange = onModeChange,
-                            )
                             ExpressiveIconButton(
                                 onClick = {
                                     showSurprise = !showSurprise
