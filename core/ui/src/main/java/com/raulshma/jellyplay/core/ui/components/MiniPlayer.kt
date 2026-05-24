@@ -71,19 +71,32 @@ fun MiniPlayer(
     onAddToQueue: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(
-        visible = isVisible && title.isNotBlank(),
-        enter = slideInVertically(
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+
+    val enterTransition = if (sharedTransitionScope != null) {
+        fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing))
+    } else {
+        slideInVertically(
             initialOffsetY = { it },
             animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-        exit = slideOutVertically(
+        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing))
+    }
+
+    val exitTransition = if (sharedTransitionScope != null) {
+        fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing))
+    } else {
+        slideOutVertically(
             targetOffsetY = { it },
             animationSpec = tween(AnimationTokens.DefaultDuration),
-        ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing)),
+        ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing))
+    }
+
+    AnimatedVisibility(
+        visible = isVisible && title.isNotBlank(),
+        enter = enterTransition,
+        exit = exitTransition,
         modifier = modifier,
     ) {
-        val sharedTransitionScope = LocalSharedTransitionScope.current
         val animatedVisibilityScope = this
 
         // Pixel Player–style: artwork-tinted pill surface
@@ -119,6 +132,12 @@ fun MiniPlayer(
                 Modifier.sharedBounds(
                     rememberSharedContentState(key = "audio_player_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
+                        spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                        )
+                    }
                 )
             }
         } else Modifier

@@ -225,6 +225,12 @@ fun AudioPlayerScreen(
                 Modifier.sharedBounds(
                     rememberSharedContentState(key = "audio_player_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
+                        spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                        )
+                    }
                 )
             }
         } else Modifier
@@ -255,8 +261,11 @@ fun AudioPlayerScreen(
                                         }
                                         showQueue = true
                                     } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
-                                        // Instantly go back and let the SharedTransitionLayout perform the high-fidelity morph animation back to the MiniPlayer pill!
-                                        onBack()
+                                        // Instantly reset visual translation offset to ensure morph begins from stable bounds
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.snapTo(0f)
+                                            onBack()
+                                        }
                                     } else {
                                         coroutineScope.launch {
                                             swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
