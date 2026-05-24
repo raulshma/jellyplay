@@ -88,6 +88,7 @@ import com.raulshma.jellyplay.feature.music.components.GraphicEqVisualizer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
+import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import kotlinx.coroutines.launch
 
 @Composable
@@ -138,16 +139,18 @@ fun MusicHomeScreen(
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
         val headerHeightPx = with(density) { headerHeight.toPx() }
+        
+        val transitionRange = 140.dp
+        val transitionRangePx = with(density) { transitionRange.toPx() }
         val scrollFraction by remember {
             derivedStateOf {
-                (scrollOffset / headerHeightPx).coerceIn(0f, 1f)
+                if (listState.firstVisibleItemIndex > 0) {
+                    1f
+                } else {
+                    (listState.firstVisibleItemScrollOffset.toFloat() / transitionRangePx).coerceIn(0f, 1f)
+                }
             }
         }
-
-        val appBarAlpha by animateFloatAsState(
-            targetValue = if (scrollFraction > 0.8f) 1f else 0f,
-            animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing), label = "appBarAlpha",
-        )
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             // Ambient Fluid Mesh Gradient Backdrop
@@ -224,63 +227,44 @@ fun MusicHomeScreen(
                 }
             }
 
-            val scrimAlpha by animateFloatAsState(
-                targetValue = if (scrollFraction > 0.8f) 0.85f else 0f,
-                animationSpec = tween(AnimationTokens.MediumDuration, easing = FancyTransitionEasing),
-                label = "scrimAlpha",
-            )
-            val borderAlpha by animateFloatAsState(
-                targetValue = if (scrollFraction > 0.8f) 0.12f else 0f,
-                animationSpec = tween(AnimationTokens.MediumDuration, easing = FancyTransitionEasing),
-                label = "borderAlpha",
-            )
-            val iconContainerAlpha by animateFloatAsState(
-                targetValue = if (scrollFraction > 0.8f) 0.15f else 0f,
-                animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing),
-                label = "iconContainerAlpha",
-            )
-
-            val dockScale by animateFloatAsState(
-                targetValue = if (scrollFraction > 0.8f) 0.96f else 1f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "dockScale"
-            )
+            val borderAlpha = 0.12f * scrollFraction
+            val dockScale = 1f - (0.04f * scrollFraction)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(
-                        horizontal = animateDpAsState(if (scrollFraction > 0.8f) 16.dp else 0.dp, label = "dockPad").value,
-                        vertical = animateDpAsState(if (scrollFraction > 0.8f) 8.dp else 0.dp, label = "dockPadV").value
+                        horizontal = (16f * scrollFraction).dp,
+                        vertical = (8f * scrollFraction).dp
                     )
                     .graphicsLayer {
                         scaleX = dockScale
                         scaleY = dockScale
                     }
-                    .clip(if (scrollFraction > 0.8f) ShapeCache.smooth28 else RoundedCornerShape(0.dp))
-                    .background(
-                        if (scrollFraction > 0.8f) {
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
-                        } else {
-                            Color.Transparent
-                        }
+                    .clip(
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
                     )
-                    .then(
-                        if (scrollFraction > 0.8f) Modifier
-                            .border(
-                                BorderStroke(
-                                    1.dp,
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 2f),
-                                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 0.5f),
-                                        )
-                                    )
-                                ),
-                                ShapeCache.smooth28
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                    )
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 2f),
+                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 0.5f),
+                                )
                             )
-                        else Modifier
+                        ),
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
                     )
             ) {
                 androidx.compose.foundation.layout.Row(
