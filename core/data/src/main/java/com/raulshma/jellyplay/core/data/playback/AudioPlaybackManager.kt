@@ -928,8 +928,9 @@ class AudioPlaybackManager @Inject constructor(
                         lastDuration = dur
                     }
                     if (_lyrics.value.isNotEmpty()) {
+                        // Compensate for the 300ms lyrics scroll/fade transition
                         _currentLyricIndex.value = findCurrentLyricLine(
-                            _lyrics.value, _currentPosition.value
+                            _lyrics.value, _currentPosition.value + 300L
                         )
                     }
 
@@ -937,7 +938,7 @@ class AudioPlaybackManager @Inject constructor(
                     startCrossfadeIfNeeded()
                 }
             }
-            delay(500)
+            delay(100)
             }
         }
     }
