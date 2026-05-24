@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
@@ -93,6 +94,11 @@ data class VideoPlayerUiState(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val bassBoostEnabled: Boolean = false,
+    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
+    val virtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Int = 500,
+    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
     val sleepTimerActive: Boolean = false,
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerRemainingMs: Long = 0L,
