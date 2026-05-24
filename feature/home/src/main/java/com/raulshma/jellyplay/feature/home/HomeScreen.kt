@@ -177,11 +177,21 @@ fun HomeScreen(
     }
 
     var showSurprise by remember { mutableStateOf(false) }
-    val allItems = remember(sections) { sections.flatMap { it.items } }
-    val featuredCandidates = remember(allItems) {
-        allItems.filter {
-            it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES
-        }.ifEmpty { allItems }
+    val featuredCandidates = remember(sections) {
+        val latestItems = sections
+            .filter { it.type == HomeSectionType.LATEST_MEDIA }
+            .flatMap { section ->
+                section.items
+                    .filter { it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES }
+                    .take(3)
+            }
+        if (latestItems.isNotEmpty()) {
+            latestItems
+        } else {
+            sections.flatMap { it.items }
+                .filter { it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES }
+                .ifEmpty { sections.flatMap { it.items } }
+        }
     }
 
     var featuredIndex by remember { mutableIntStateOf(0) }
