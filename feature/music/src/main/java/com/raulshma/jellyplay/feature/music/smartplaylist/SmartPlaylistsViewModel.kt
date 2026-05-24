@@ -39,13 +39,61 @@ class SmartPlaylistsViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
-            mediaRepository.getMediaItems(
-                mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
-                limit = playlist.maxItems,
-            ).onSuccess { result ->
-                var items = result.items
-                items = applyCriteria(items, playlist.criteria)
-                items = applySort(items, playlist.sortBy)
+
+            val hasPlayCountFilter = playlist.criteria.any { it.type == CriterionType.PLAY_COUNT }
+            val hasDateAddedSort = playlist.sortBy == SmartPlaylistSort.DATE_ADDED
+            val hasPlayCountSort = playlist.sortBy == SmartPlaylistSort.PLAY_COUNT
+
+            val apiSortBy = when {
+                hasDateAddedSort -> "DateCreated"
+                hasPlayCountSort -> "DatePlayed"
+                playlist.sortBy == SmartPlaylistSort.RATING -> "CommunityRating"
+                playlist.sortBy == SmartPlaylistSort.TITLE -> "SortName"
+                playlist.sortBy == SmartPlaylistSort.ARTIST -> "AlbumArtist"
+                playlist.sortBy == SmartPlaylistSort.ALBUM -> "Album"
+                playlist.sortBy == SmartPlaylistSort.YEAR -> "ProductionYear"
+                else -> "SortName"
+            }
+            val apiSortOrder = when {
+                hasDateAddedSort || hasPlayCountSort -> "Descending"
+                playlist.sortBy == SmartPlaylistSort.RATING || playlist.sortBy == SmartPlaylistSort.YEAR -> "Descending"
+                else -> "Ascending"
+            }
+
+            val unplayedOnly = hasPlayCountFilter && playlist.criteria
+                .filter { it.type == CriterionType.PLAY_COUNT }
+                .any { it.operator == CriterionOperator.EQUALS && it.value == "0" }
+
+            val nonPlayCountCriteria = playlist.criteria.filter { it.type != CriterionType.PLAY_COUNT }
+
+            val favoriteOnly = playlist.criteria.isEmpty() && playlist.id == "favorites"
+
+            val result = if (favoriteOnly) {
+                mediaRepository.getFavorites(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                    limit = playlist.maxItems,
+                )
+            } else {
+                val genreFilters = nonPlayCountCriteria.filter { it.type == CriterionType.GENRE }
+                    .mapNotNull { it.value }
+                mediaRepository.getMediaItems(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                    genres = genreFilters.takeIf { it.isNotEmpty() },
+                    sortBy = apiSortBy,
+                    sortOrder = apiSortOrder,
+                    limit = playlist.maxItems,
+                )
+            }
+
+            result.onSuccess { searchResult ->
+                var items = searchResult.items
+                if (unplayedOnly) {
+                    items = items.filter { !it.isPlayed }
+                }
+                items = applyCriteria(items, nonPlayCountCriteria)
+                if (!hasDateAddedSort && !hasPlayCountSort) {
+                    items = applySort(items, playlist.sortBy)
+                }
                 generatedItems = items.take(playlist.maxItems)
             }.onFailure {
                 error = it.message ?: "Failed to generate playlist"
@@ -97,7 +145,12 @@ class SmartPlaylistsViewModel @Inject constructor(
                         CriterionOperator.EQUALS -> item.communityRating?.let { it >= (criterion.value.toFloatOrNull() ?: 0f) } == true
                         else -> true
                     }
-                    CriterionType.PLAY_COUNT -> true // Not available in basic MediaItem
+                    CriterionType.PLAY_COUNT -> when (criterion.operator) {
+                        CriterionOperator.EQUALS -> if (criterion.value == "0") !item.isPlayed else item.isPlayed
+                        CriterionOperator.GREATER_THAN -> item.isPlayed
+                        CriterionOperator.LESS_THAN -> !item.isPlayed
+                        else -> true
+                    }
                     CriterionType.TAG -> when (criterion.operator) {
                         CriterionOperator.EQUALS -> item.tags.any { it.equals(criterion.value, ignoreCase = true) }
                         CriterionOperator.CONTAINS -> item.tags.any { it.contains(criterion.value, ignoreCase = true) }
@@ -116,8 +169,8 @@ class SmartPlaylistsViewModel @Inject constructor(
             SmartPlaylistSort.ALBUM -> items.sortedBy { it.album ?: "" }
             SmartPlaylistSort.YEAR -> items.sortedByDescending { it.year ?: 0 }
             SmartPlaylistSort.RATING -> items.sortedByDescending { it.communityRating ?: 0f }
-            SmartPlaylistSort.PLAY_COUNT -> items // Not available
-            SmartPlaylistSort.DATE_ADDED -> items // Not available
+            SmartPlaylistSort.PLAY_COUNT -> items.sortedByDescending { if (it.isPlayed) 1 else 0 }
+            SmartPlaylistSort.DATE_ADDED -> items // Handled server-side via DateCreated sort
         }
     }
 

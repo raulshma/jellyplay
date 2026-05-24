@@ -33,18 +33,20 @@ class PlaylistDetailViewModel @Inject constructor(
     var error by mutableStateOf<String?>(null)
         private set
 
-    fun load(playlistId: String) {
+    fun load(playlistId: String, playlistName: String? = null) {
         viewModelScope.launch {
             isLoading = true
             error = null
             mediaRepository.getPlaylistItems(playlistId, limit = 200)
                 .onSuccess {
                     items = it
-                    if (it.isNotEmpty()) {
-                        // Try to infer playlist name from parent if available; otherwise keep previous
-                    }
+                    this@PlaylistDetailViewModel.playlistName = playlistName ?: ""
                 }
                 .onFailure { error = it.message }
+            if (playlistName == null) {
+                mediaRepository.getMediaDetail(playlistId)
+                    .onSuccess { this@PlaylistDetailViewModel.playlistName = it.item.name }
+            }
             isLoading = false
         }
     }

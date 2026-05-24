@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -88,7 +87,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -109,7 +107,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -366,7 +363,7 @@ fun AudioPlayerScreen(
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
                     sleepTimerActive = viewModel.sleepTimerActive,
-                    sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else formatDuration(viewModel.sleepTimerRemainingMs),
+                    sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(viewModel.sleepTimerRemainingMs),
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                 )
 
@@ -430,8 +427,10 @@ fun AudioPlayerScreen(
                             PixelSecondaryControls(
                                 shuffleMode = viewModel.shuffleMode,
                                 repeatMode = viewModel.repeatMode,
+                                isFavorite = viewModel.isFavorite,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                                onToggleFavorite = { viewModel.toggleFavorite() },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -488,8 +487,10 @@ fun AudioPlayerScreen(
                         PixelSecondaryControls(
                             shuffleMode = viewModel.shuffleMode,
                             repeatMode = viewModel.repeatMode,
+                            isFavorite = viewModel.isFavorite,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                            onToggleFavorite = { viewModel.toggleFavorite() },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
@@ -914,12 +915,16 @@ private fun LyricsSearchSheet(
                                 }
                                 Spacer(Modifier.width(8.dp))
                                 if (track.hasSyncedLyrics) {
-                                    SuggestionChip(
-                                        onClick = {},
-                                        label = {
-                                            Text("Synced", style = MaterialTheme.typography.labelSmall)
-                                        },
-                                        modifier = Modifier.height(24.dp),
+                                    Text(
+                                        "Synced",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer,
+                                                RoundedCornerShape(8.dp),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
                                     )
                                 } else if (track.hasPlainLyrics) {
                                     Text(
@@ -1421,12 +1426,12 @@ private fun PixelProgressSection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            formatDuration(currentPosition),
+            com.raulshma.jellyplay.core.ui.components.formatDurationMs(currentPosition),
             style = MaterialTheme.typography.labelSmall,
             color = accentColor.copy(alpha = 0.8f),
         )
         Text(
-            if (duration > 0) formatDuration(duration) else "--:--",
+            if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.5f),
         )
@@ -1502,8 +1507,10 @@ private fun PixelTransportControls(
 private fun PixelSecondaryControls(
     shuffleMode: Boolean,
     repeatMode: Int,
+    isFavorite: Boolean,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
+    onToggleFavorite: () -> Unit,
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
@@ -1537,10 +1544,14 @@ private fun PixelSecondaryControls(
             },
         )
         IconButtonWithPressAnimation(
-            onClick = { /* TODO: Favorite via Jellyfin API */ },
-            tint = Color.White.copy(alpha = 0.6f),
+            onClick = onToggleFavorite,
+            tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
-                Icon(Icons.Default.FavoriteBorder, "Favorite", modifier = Modifier.size(22.dp))
+                Icon(
+                    if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    "Favorite",
+                    modifier = Modifier.size(22.dp),
+                )
             },
         )
     }
@@ -1688,7 +1699,7 @@ private fun AudioSleepTimerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = if (isEndOfEpisodeMode) "End of episode" else formatDuration(remainingMs),
+                        text = if (isEndOfEpisodeMode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(remainingMs),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -1738,18 +1749,6 @@ private fun AudioSleepTimerSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-    }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
     }
 }
 

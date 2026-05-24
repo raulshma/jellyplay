@@ -130,4 +130,16 @@ class MusicHomeViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+
+    fun surpriseMe(callback: (String) -> Unit) {
+        viewModelScope.launch {
+            mediaRepository.getMediaItems(
+                mediaTypes = listOf(MediaType.AUDIO),
+                sortBy = "Random",
+                limit = 1,
+            ).onSuccess { result ->
+                result.items.firstOrNull()?.let { callback(it.id) }
+            }
+        }
+    }
 }

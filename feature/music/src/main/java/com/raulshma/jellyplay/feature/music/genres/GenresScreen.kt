@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenresScreen(
-    onItemClick: (String) -> Unit,
+    onItemClick: (id: String, name: String) -> Unit,
     onBack: () -> Unit = {},
     viewModel: GenresViewModel = hiltViewModel(),
 ) {
@@ -158,7 +158,7 @@ fun GenresScreen(
                             items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
                                 GenreChip(
                                     name = genre.name,
-                                    onClick = { onItemClick(genre.id) },
+                                    onClick = { onItemClick(genre.id, genre.name) },
                                 )
                             }
                         }

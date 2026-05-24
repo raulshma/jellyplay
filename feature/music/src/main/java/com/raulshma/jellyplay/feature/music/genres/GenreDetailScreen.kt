@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.music.tracks
+package com.raulshma.jellyplay.feature.music.genres
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,15 +47,15 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TracksScreen(
+fun GenreDetailScreen(
+    genreName: String,
     onItemClick: (String) -> Unit,
-    onBack: () -> Unit = {},
-    viewModel: TracksViewModel = hiltViewModel(),
+    onBack: () -> Unit,
+    viewModel: GenreDetailViewModel = hiltViewModel(),
 ) {
     val tracks = viewModel.tracks.collectAsLazyPagingItems()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
@@ -100,7 +98,7 @@ fun TracksScreen(
                         )
                     }
                     Text(
-                        text = "Tracks",
+                        text = genreName,
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
@@ -144,7 +142,6 @@ fun TracksScreen(
                             val isTv = LocalTvMode.current
                             LazyColumn(
                                 contentPadding = PaddingValues(
-                                    top = 8.dp,
                                     bottom = adaptiveInfo.bottomPadding(isTv),
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
