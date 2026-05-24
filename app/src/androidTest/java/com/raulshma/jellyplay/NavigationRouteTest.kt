@@ -32,7 +32,7 @@ class NavigationRouteTest {
             Route.AlbumDetail(albumId = "album-002"),
             Route.ArtistDetail(artistId = "artist-003"),
             Route.Playlists,
-            Route.PlaylistDetail(playlistId = "playlist-004"),
+            Route.PlaylistDetail(playlistId = "playlist-004", playlistName = "Test Playlist"),
             Route.SmartPlaylists,
             Route.SmartPlaylistDetail(playlistId = "sp-005"),
             Route.MoodPlaylists,

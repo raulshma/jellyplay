@@ -64,12 +64,16 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 @Composable
 fun PlaylistDetailScreen(
     playlistId: String,
+    playlistName: String = "",
     onBack: () -> Unit,
     onPlayItem: (String) -> Unit,
-    onAddToQueue: ((com.raulshma.jellyplay.core.model.PlaylistItem) -> Unit)? = null,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
-    val playlistName = viewModel.playlistName
+    val initialPlaylistName = playlistName
+    LaunchedEffect(playlistId) {
+        viewModel.load(playlistId, initialPlaylistName)
+    }
+    val resolvedPlaylistName = viewModel.playlistName
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
         isLoading = viewModel.isLoading,
@@ -114,7 +118,7 @@ fun PlaylistDetailScreen(
                         )
                     }
                     Text(
-                        text = playlistName,
+                        text = resolvedPlaylistName,
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                         ),
@@ -157,7 +161,7 @@ fun PlaylistDetailScreen(
                             PlaylistTrackRow(
                                 item = item,
                                 onClick = { onPlayItem(item.id) },
-                                onAddToQueue = onAddToQueue?.let { { it(item) } },
+                                onAddToQueue = { viewModel.addToQueue(item) },
                             )
                         }
                     }

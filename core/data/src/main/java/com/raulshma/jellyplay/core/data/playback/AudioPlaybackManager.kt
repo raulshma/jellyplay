@@ -65,6 +65,7 @@ class AudioPlaybackManager @Inject constructor(
     private var isLoadingItem = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
+    private var queueLoadingJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
     private val dialogueBoost = DialogueBoostHelper()
@@ -116,6 +117,9 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _queue = MutableStateFlow<List<AudioQueueItem>>(emptyList())
     val queue: StateFlow<List<AudioQueueItem>> = _queue.asStateFlow()
+
+    private var unshuffledQueue: List<AudioQueueItem> = emptyList()
+    private var unshuffledIndex: Int = -1
 
     private val _currentIndex = MutableStateFlow(-1)
     val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
@@ -372,7 +376,8 @@ class AudioPlaybackManager @Inject constructor(
                         }
 
                         // Load the remaining items in a background job so the first track starts playing instantly!
-                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        queueLoadingJob?.cancel()
+                        queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             val mediaItemsBefore = mutableListOf<MediaItem>()
                             val mediaItemsAfter = mutableListOf<MediaItem>()
 
@@ -406,10 +411,10 @@ class AudioPlaybackManager @Inject constructor(
                                     }
                                     if (mediaItemsBefore.isNotEmpty()) {
                                         player.addMediaItems(0, mediaItemsBefore)
-                                        // Update active track index state after preceding items are inserted at 0
                                         _currentIndex.value = playIndex
                                     }
                                 }
+                                queueLoadingJob = null
                             }
                         }
                     }
@@ -457,6 +462,7 @@ class AudioPlaybackManager @Inject constructor(
     fun removeFromQueue(index: Int) {
         val q = _queue.value
         if (index < 0 || index >= q.size) return
+        if (queueLoadingJob != null) return
         val wasPlaying = index == _currentIndex.value
         _queue.value = q.toMutableList().apply { removeAt(index) }.toList()
         if (wasPlaying) {
@@ -472,22 +478,11 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun skipToNext() {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
         cancelCrossfade()
         val next = when {
-            _shuffleMode.value -> {
-                val excluded = _currentIndex.value
-                if (q.size <= 1) return
-                var candidate = (0 until q.size).random()
-                var attempts = 0
-                while (candidate == excluded && attempts < 10) {
-                    candidate = (0 until q.size).random()
-                    attempts++
-                }
-                if (candidate == excluded) return
-                candidate
-            }
             _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
             _repeatMode.value >= 1 -> 0
             else -> return
@@ -497,6 +492,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun skipToPrevious() {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
         val player = exoPlayer ?: return
@@ -506,18 +502,6 @@ class AudioPlaybackManager @Inject constructor(
             return
         }
         val prev = when {
-            _shuffleMode.value -> {
-                val excluded = _currentIndex.value
-                if (q.size <= 1) return
-                var candidate = (0 until q.size).random()
-                var attempts = 0
-                while (candidate == excluded && attempts < 10) {
-                    candidate = (0 until q.size).random()
-                    attempts++
-                }
-                if (candidate == excluded) return
-                candidate
-            }
             _currentIndex.value > 0 -> _currentIndex.value - 1
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return
@@ -542,7 +526,57 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun toggleShuffle() {
-        _shuffleMode.value = !_shuffleMode.value
+        val wasShuffled = _shuffleMode.value
+        _shuffleMode.value = !wasShuffled
+        val player = exoPlayer ?: return
+
+        if (_shuffleMode.value) {
+            val q = _queue.value
+            val curIdx = _currentIndex.value
+            unshuffledQueue = q
+            unshuffledIndex = curIdx
+            if (q.size <= 1) return
+            val current = q.getOrNull(curIdx)
+            val others = q.filterIndexed { i, _ -> i != curIdx }.toMutableList()
+            others.shuffle()
+            val newQueue = if (current != null) listOf(current) + others else others
+            _queue.value = newQueue
+            _currentIndex.value = 0
+            scope.launch {
+                val mediaItems = newQueue.mapNotNull { qi ->
+                    mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
+                        mediaItemCache.put(qi.id, it)
+                    }
+                }
+                if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                    val currentPos = player.currentPosition
+                    player.setMediaItems(mediaItems, 0, currentPos)
+                    player.prepare()
+                }
+            }
+        } else {
+            val currentItemId = _currentPlayingItemId.value
+            val original = unshuffledQueue
+            if (original.isNotEmpty()) {
+                _queue.value = original
+                val restoreIndex = original.indexOfFirst { it.id == currentItemId }.coerceAtLeast(0)
+                _currentIndex.value = restoreIndex
+                unshuffledQueue = emptyList()
+                unshuffledIndex = -1
+                scope.launch {
+                    val mediaItems = original.mapNotNull { qi ->
+                        mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
+                            mediaItemCache.put(qi.id, it)
+                        }
+                    }
+                    if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                        val currentPos = player.currentPosition
+                        player.setMediaItems(mediaItems, restoreIndex, currentPos)
+                        player.prepare()
+                    }
+                }
+            }
+        }
     }
 
     fun cycleRepeatMode() {
@@ -550,6 +584,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun playFromQueue(index: Int) {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (index < 0 || index >= q.size) return
         cancelCrossfade()
@@ -701,6 +736,17 @@ class AudioPlaybackManager @Inject constructor(
             _repeatMode.value == 2 -> {
                 exoPlayer?.seekTo(0)
                 exoPlayer?.play()
+            }
+            _repeatMode.value == 1 -> {
+                val q = _queue.value
+                if (q.size > 1) {
+                    _currentIndex.value = 0
+                    exoPlayer?.seekTo(0, 0L)
+                    exoPlayer?.play()
+                } else {
+                    exoPlayer?.seekTo(0)
+                    exoPlayer?.play()
+                }
             }
             else -> {
                 _isPlaying.value = false
@@ -897,6 +943,42 @@ class AudioPlaybackManager @Inject constructor(
         applyEqualizer()
 
         _isCrossfading.value = false
+
+        val queueItems = _queue.value
+        if (queueItems.size > 1) {
+            val itemsAfter = mutableListOf<MediaItem>()
+            val itemsBefore = mutableListOf<MediaItem>()
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                for (i in (nextIndex + 1) until queueItems.size) {
+                    val qi = queueItems[i]
+                    val cached = mediaItemCache.get(qi.id)
+                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                    if (mediaItem != null) {
+                        itemsAfter.add(mediaItem)
+                        mediaItemCache.put(qi.id, mediaItem)
+                    }
+                }
+                for (i in 0 until nextIndex) {
+                    val qi = queueItems[i]
+                    val cached = mediaItemCache.get(qi.id)
+                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                    if (mediaItem != null) {
+                        itemsBefore.add(mediaItem)
+                        mediaItemCache.put(qi.id, mediaItem)
+                    }
+                }
+                launch(kotlinx.coroutines.Dispatchers.Main) {
+                    if (exoPlayer == secondary) {
+                        if (itemsAfter.isNotEmpty()) {
+                            secondary.addMediaItems(itemsAfter)
+                        }
+                        if (itemsBefore.isNotEmpty()) {
+                            secondary.addMediaItems(0, itemsBefore)
+                        }
+                    }
+                }
+            }
+        }
 
         playbackRepository.reportPlaybackStart(
             PlaybackStartInfo(

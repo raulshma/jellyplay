@@ -296,7 +296,11 @@ fun MusicHomeScreen(
                             .padding(horizontal = 4.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ExpressiveIconButton(onClick = { /* surprise me */ }, modifier = Modifier.size(40.dp)) {
+                            ExpressiveIconButton(onClick = {
+                                viewModel.surpriseMe { trackId ->
+                                    onItemClick(trackId)
+                                }
+                            }, modifier = Modifier.size(40.dp)) {
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = "Surprise Me",

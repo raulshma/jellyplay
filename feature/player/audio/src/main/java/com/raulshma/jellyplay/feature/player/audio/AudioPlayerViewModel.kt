@@ -97,6 +97,9 @@ class AudioPlayerViewModel @Inject constructor(
     var preAmpDb by mutableFloatStateOf(0f)
         private set
 
+    var isFavorite by mutableStateOf(false)
+        private set
+
     var lyrics by mutableStateOf<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
         private set
 
@@ -160,6 +163,16 @@ class AudioPlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             audioPlaybackManager.currentIndex.collect { currentIndex = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.currentPlayingItemId.collect { itemId ->
+                if (itemId != null) {
+                    mediaRepository.getMediaDetail(itemId)
+                        .onSuccess { isFavorite = it.item.isFavorite }
+                } else {
+                    isFavorite = false
+                }
+            }
         }
         viewModelScope.launch {
             audioPlaybackManager.lyrics.collect { lyrics = it }
@@ -441,6 +454,14 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun stopPlayback() {
         audioPlaybackManager.stopAndRelease()
+    }
+
+    fun toggleFavorite() {
+        val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
+        viewModelScope.launch {
+            mediaRepository.toggleFavorite(itemId)
+                .onSuccess { isFavorite = it }
+        }
     }
 
     val currentPlayingItemId: String?
