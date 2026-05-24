@@ -124,6 +124,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
@@ -180,9 +183,37 @@ fun AudioPlayerScreen(
     val pillSurface = remember(artworkColors) { artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f) }
     val pillSurfaceDark = remember(artworkColors) { artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f) }
 
+    val navBarColor = com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor.current
+    androidx.compose.runtime.DisposableEffect(tintedBg) {
+        val oldColor = navBarColor.value
+        navBarColor.value = tintedBg
+        onDispose {
+            navBarColor.value = oldColor
+        }
+    }
+
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDarkTheme = remember(preferences.themeMode, isSystemDark) {
+        when (preferences.themeMode) {
+            com.raulshma.jellyplay.core.model.ThemeMode.DARK -> true
+            com.raulshma.jellyplay.core.model.ThemeMode.LIGHT -> false
+            com.raulshma.jellyplay.core.model.ThemeMode.SYSTEM -> isSystemDark
+        }
+    }
+
+    // Animatables for swipe gestures
+    val swipeDismissOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val horizontalSwipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    var dragDirection by remember { mutableStateOf<DragDirection?>(null) }
+    var totalDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var totalDragY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
+        darkTheme = isDarkTheme,
         oledMode = preferences.oledMode,
     ) {
         Box(
@@ -192,7 +223,96 @@ fun AudioPlayerScreen(
                     Brush.verticalGradient(
                         colors = listOf(tintedBgLight, tintedBg, tintedBg),
                     )
-                ),
+                )
+                .pointerInput(Unit) {
+                    val scopeHeight = size.height.toFloat()
+                    detectDragGestures(
+                        onDragStart = {
+                            dragDirection = null
+                            totalDragX = 0f
+                            totalDragY = 0f
+                        },
+                        onDragEnd = {
+                            when (dragDirection) {
+                                DragDirection.VERTICAL -> {
+                                    if (swipeDismissOffset.value > 300f) {
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.animateTo(
+                                                targetValue = scopeHeight,
+                                                animationSpec = tween(durationMillis = 250)
+                                            )
+                                            onBack()
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    }
+                                }
+                                DragDirection.HORIZONTAL -> {
+                                    val threshold = 180f
+                                    if (horizontalSwipeOffset.value < -threshold) { // Swipe Left -> Next
+                                        coroutineScope.launch {
+                                            viewModel.skipToNext()
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    } else if (horizontalSwipeOffset.value > threshold) { // Swipe Right -> Prev
+                                        coroutineScope.launch {
+                                            viewModel.skipToPrevious()
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    }
+                                }
+                                null -> {}
+                            }
+                            dragDirection = null
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                            }
+                            dragDirection = null
+                        }
+                    ) { change, dragAmount ->
+                        totalDragX += dragAmount.x
+                        totalDragY += dragAmount.y
+
+                        if (dragDirection == null) {
+                            val threshold = 10f
+                            if (kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) && kotlin.math.abs(totalDragY) > threshold) {
+                                dragDirection = DragDirection.VERTICAL
+                            } else if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) && kotlin.math.abs(totalDragX) > threshold) {
+                                dragDirection = DragDirection.HORIZONTAL
+                            }
+                        }
+
+                        when (dragDirection) {
+                            DragDirection.VERTICAL -> {
+                                change.consume()
+                                coroutineScope.launch {
+                                    val newOffset = (swipeDismissOffset.value + dragAmount.y).coerceAtLeast(0f)
+                                    swipeDismissOffset.snapTo(newOffset)
+                                }
+                            }
+                            DragDirection.HORIZONTAL -> {
+                                change.consume()
+                                coroutineScope.launch {
+                                    val newOffset = horizontalSwipeOffset.value + dragAmount.x
+                                    horizontalSwipeOffset.snapTo(newOffset)
+                                }
+                            }
+                            null -> {}
+                        }
+                    }
+                }
+                .graphicsLayer {
+                    translationY = swipeDismissOffset.value
+                },
         ) {
             Column(
                 modifier = Modifier
@@ -351,11 +471,68 @@ fun AudioPlayerScreen(
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
+                        // Prevent overlap with transparent app bottom NavigationBar on phone
+                        Spacer(Modifier.height(80.dp))
+                    }
+                }
+            } // Close Column (main layout)
+
+            // Swipe track cards overlays
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val cardWidthDp = 260.dp
+            val cardWidthPx = remember(density) { with(density) { cardWidthDp.toPx() } }
+
+            if (horizontalSwipeOffset.value < 0) {
+                val nextIndex = if (viewModel.currentIndex >= 0 && viewModel.queue.isNotEmpty()) {
+                    (viewModel.currentIndex + 1) % viewModel.queue.size
+                } else 0
+                val nextTrack = viewModel.queue.getOrNull(nextIndex)
+                if (nextTrack != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        val slideOffset = (cardWidthPx + horizontalSwipeOffset.value).coerceAtLeast(0f)
+                        SwipeTrackCard(
+                            title = nextTrack.name,
+                            artist = nextTrack.artist,
+                            artworkUrl = nextTrack.imageUrl ?: "",
+                            isNext = true,
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    translationX = slideOffset
+                                }
+                                .padding(end = 16.dp)
+                        )
+                    }
+                }
+            } else if (horizontalSwipeOffset.value > 0) {
+                val prevIndex = if (viewModel.currentIndex >= 0 && viewModel.queue.isNotEmpty()) {
+                    (viewModel.currentIndex - 1 + viewModel.queue.size) % viewModel.queue.size
+                } else 0
+                val prevTrack = viewModel.queue.getOrNull(prevIndex)
+                if (prevTrack != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        val slideOffset = (-cardWidthPx + horizontalSwipeOffset.value).coerceAtMost(0f)
+                        SwipeTrackCard(
+                            title = prevTrack.name,
+                            artist = prevTrack.artist,
+                            artworkUrl = prevTrack.imageUrl ?: "",
+                            isNext = false,
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    translationX = slideOffset
+                                }
+                                .padding(start = 16.dp)
+                        )
                     }
                 }
             }
-        }
-    }
+        } // Close Box (root container)
+    } // Close ArtworkThemeWrapper
 
     // ── Bottom sheets (unchanged functionality) ──
     if (showQueue && viewModel.queue.isNotEmpty()) {
@@ -1033,36 +1210,46 @@ private fun PixelPlayerTopBar(
                 IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
                     Icon(Icons.Default.MoreVert, "More", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
+                val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    leadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 DropdownMenu(expanded = showMenu, onDismissRequest = { onMenuToggle(false) }) {
                     DropdownMenuItem(
                         text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
                         onClick = onSpeedClick,
                         leadingIcon = { Icon(Icons.Default.Speed, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Equalizer") },
                         onClick = onEqualizerClick,
                         leadingIcon = { Icon(Icons.Default.Tune, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
                         onClick = { onDialogueBoostClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
                         onClick = { onNightModeClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Ambient Mode") },
                         onClick = onAmbientClick,
                         leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
                         onClick = onSleepTimerClick,
                         leadingIcon = { Icon(Icons.Default.Timer, null) },
+                        colors = itemColors,
                     )
                 }
             }
@@ -1497,6 +1684,93 @@ private fun formatDuration(ms: Long): String {
         String.format("%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%d:%02d", minutes, seconds)
+    }
+}
+
+private enum class DragDirection { VERTICAL, HORIZONTAL }
+
+@Composable
+private fun SwipeTrackCard(
+    title: String,
+    artist: String,
+    artworkUrl: String,
+    isNext: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = Color.Black.copy(alpha = 0.85f),
+        ),
+        modifier = modifier
+            .width(260.dp)
+            .height(80.dp)
+            .shadow(12.dp, RoundedCornerShape(16.dp)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isNext) {
+                Icon(
+                    Icons.Default.SkipNext,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            } else {
+                Icon(
+                    Icons.Default.SkipPrevious,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (artworkUrl.isNotBlank()) {
+                    MediaImage(
+                        url = artworkUrl,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

@@ -317,61 +317,37 @@ private fun MainContent(
                 Scaffold(
                     bottomBar = {
                         if (!isPlayerScreen && !isExpanded) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                            NavigationBar(
+                                containerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                tonalElevation = 0.dp,
                             ) {
-                                MiniPlayer(
-                                    isVisible = showMiniPlayer,
-                                    title = audioTitle,
-                                    artist = audioArtist,
-                                    artworkUri = audioArtworkUrl,
-                                    isPlaying = isAudioPlaying,
-                                    onClick = {
-                                        val itemId = audioItemId ?: return@MiniPlayer
-                                        navigator.navigate(Route.AudioPlayer(itemId))
-                                    },
-                                    onClose = {
-                                        isMiniPlayerDismissed = true
-                                    },
-                                    onPlayPause = {
-                                        audioPlaybackManager.togglePlayPause()
-                                    },
-                                    onSkipNext = {
-                                        audioPlaybackManager.skipToNext()
-                                    },
-                                )
-                                NavigationBar(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    tonalElevation = 0.dp,
-                                ) {
-                                    activeTopLevelRoutes.forEach { (route, label) ->
-                                        NavigationBarItem(
-                                            selected = route == currentTopLevel,
-                                            onClick = { navigator.navigate(route) },
-                                            icon = {
-                                                NavIcon(route, label)
-                                            },
-                                            label = { Text(label) },
-                                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                                selectedIconColor = Color.White,
-                                                selectedTextColor = Color.White,
-                                                unselectedIconColor = Color.White.copy(alpha = 0.45f),
-                                                unselectedTextColor = Color.White.copy(alpha = 0.45f),
-                                            ),
-                                        )
-                                    }
+                                activeTopLevelRoutes.forEach { (route, label) ->
+                                    NavigationBarItem(
+                                        selected = route == currentTopLevel,
+                                        onClick = { navigator.navigate(route) },
+                                        icon = {
+                                            NavIcon(route, label)
+                                        },
+                                        label = { Text(label) },
+                                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            selectedIconColor = Color.White,
+                                            selectedTextColor = Color.White,
+                                            unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                                            unselectedTextColor = Color.White.copy(alpha = 0.45f),
+                                        ),
+                                    )
                                 }
                             }
                         }
                     },
                 ) { innerPadding ->
+                    val bottomPadding = if (isAudioPlayerScreen) 0.dp else innerPadding.calculateBottomPadding()
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(bottom = innerPadding.calculateBottomPadding())
+                            .padding(bottom = bottomPadding)
                     ) {
                         Row(modifier = Modifier.fillMaxSize()) {
                             if (!isPlayerScreen && isExpanded) {
@@ -424,6 +400,36 @@ private fun MainContent(
                                         },
                                     )
                                 }
+                            }
+                        }
+
+                        // Floating MiniPlayer for phone aligned above the navigation bar
+                        if (!isPlayerScreen && !isExpanded) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 8.dp)
+                            ) {
+                                MiniPlayer(
+                                    isVisible = showMiniPlayer,
+                                    title = audioTitle,
+                                    artist = audioArtist,
+                                    artworkUri = audioArtworkUrl,
+                                    isPlaying = isAudioPlaying,
+                                    onClick = {
+                                        val itemId = audioItemId ?: return@MiniPlayer
+                                        navigator.navigate(Route.AudioPlayer(itemId))
+                                    },
+                                    onClose = {
+                                        isMiniPlayerDismissed = true
+                                    },
+                                    onPlayPause = {
+                                        audioPlaybackManager.togglePlayPause()
+                                    },
+                                    onSkipNext = {
+                                        audioPlaybackManager.skipToNext()
+                                    },
+                                )
                             }
                         }
 
