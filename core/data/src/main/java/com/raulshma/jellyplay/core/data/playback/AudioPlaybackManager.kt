@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
@@ -59,11 +60,21 @@ class AudioPlaybackManager @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val sessionManager: PlaybackSessionManager,
+    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var exoPlayer: ExoPlayer? = null
     private var crossfadePlayer: ExoPlayer? = null
+    private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+
+    init {
+        scope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                currentPreferences = prefs
+            }
+        }
+    }
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
@@ -277,8 +288,19 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                currentPreferences.audioPreloadBufferSize.minBufferMs,
+                currentPreferences.audioPreloadBufferSize.maxBufferMs,
+                1_000,
+                3_000
+            )
+            .setTargetBufferBytes(-1)
+            .build()
+
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -318,8 +340,19 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                currentPreferences.audioPreloadBufferSize.minBufferMs,
+                currentPreferences.audioPreloadBufferSize.maxBufferMs,
+                1_000,
+                3_000
+            )
+            .setTargetBufferBytes(-1)
+            .build()
+
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)

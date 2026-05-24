@@ -174,6 +174,7 @@ fun SettingsScreen(
     var showControlsTimeoutPicker by remember { mutableStateOf(false) }
     var showSwipeSeekPicker by remember { mutableStateOf(false) }
     var showPreloadBufferPicker by remember { mutableStateOf(false) }
+    var showAudioPreloadBufferPicker by remember { mutableStateOf(false) }
     var showNightModeVolumePicker by remember { mutableStateOf(false) }
     var showNightModeGainPicker by remember { mutableStateOf(false) }
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
@@ -704,7 +705,7 @@ fun SettingsScreen(
                     for (i in 0..20) audioItems.add(i)
                     var idx = 0
                     val total = run {
-                        var c = 8
+                        var c = 9
                         if (preferences.equalizerEnabled) c++
                         if (preferences.dialogueBoostEnabled) c++
                         if (preferences.nightModeEnabled) c++
@@ -767,6 +768,14 @@ fun SettingsScreen(
                         trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
                         index = idx++, count = total,
                         onClick = { showCrossfadePicker = true },
+                    )
+                    SettingListItem(
+                        icon = Icons.Default.Cached,
+                        title = "Preload Buffer",
+                        subtitle = "Amount to buffer ahead during audio playback",
+                        trailingText = preferences.audioPreloadBufferSize.displayName,
+                        index = idx++, count = total,
+                        onClick = { showAudioPreloadBufferPicker = true },
                     )
                     SettingListItem(
                         icon = Icons.Default.Tune,
@@ -1489,6 +1498,23 @@ fun SettingsScreen(
             onSelect = {
                 viewModel.setVideoPreloadBufferSize(it)
                 showPreloadBufferPicker = false
+            },
+        )
+    }
+
+    if (showAudioPreloadBufferPicker) {
+        SettingsListPickerSheet(
+            title = "Audio Preload Buffer Size",
+            items = PreloadBufferSize.entries,
+            label = { it.displayName },
+            subtitle = {
+                "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s"
+            },
+            isSelected = { it == preferences.audioPreloadBufferSize },
+            onDismiss = { showAudioPreloadBufferPicker = false },
+            onSelect = {
+                viewModel.setAudioPreloadBufferSize(it)
+                showAudioPreloadBufferPicker = false
             },
         )
     }

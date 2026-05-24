@@ -106,6 +106,7 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
         val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
+        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
         val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
         val REPLAYGAIN_PRE_AMP_DB = stringPreferencesKey("replaygain_pre_amp_db")
@@ -278,6 +279,9 @@ class UserPreferencesStore @Inject constructor(
             syncPlaySpeedToSyncDurationMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS]?.toLongOrNull() ?: 1000,
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
+            } catch (_: Exception) { PreloadBufferSize.MEDIUM },
+            audioPreloadBufferSize = try {
+                PreloadBufferSize.valueOf(prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
             audioNormalizationMode = try {
                 when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
@@ -603,6 +607,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
         context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
+    }
+
+    suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) {
+        context.dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
