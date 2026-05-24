@@ -331,17 +331,17 @@ fun HomeScreen(
             navBarColor.value = backgroundColor
         }
 
-        val appBarCollapsed by remember {
+        val transitionRange = 140.dp
+        val transitionRangePx = with(density) { transitionRange.toPx() }
+        val scrollFraction by remember {
             derivedStateOf {
-                listState.firstVisibleItemIndex > 0 ||
-                        listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
+                if (listState.firstVisibleItemIndex > 0) {
+                    1f
+                } else {
+                    (listState.firstVisibleItemScrollOffset.toFloat() / transitionRangePx).coerceIn(0f, 1f)
+                }
             }
         }
-        val appBarColor by animateFloatAsState(
-        targetValue = if (appBarCollapsed) 1f else 0f,
-            animationSpec = tween(300, easing = AlphaEasing),
-            label = "appBarColor",
-        )
 
         val contentPad = adaptiveInfo.contentPadding(isTv)
 
@@ -625,64 +625,46 @@ fun HomeScreen(
                 }
             }
 
-            val scrimAlpha by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 0.85f else 0f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "scrimAlpha",
-            )
-            val borderAlpha by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 0.12f else 0f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "borderAlpha",
-            )
-            val appBarIconColor by animateColorAsState(
-                targetValue = if (appBarCollapsed) MaterialTheme.colorScheme.onSurface else Color.White,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "appBarIconColor",
-            )
+            val borderAlpha = 0.12f * scrollFraction
+            val appBarIconColor = lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollFraction)
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
-
-            val dockScale by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 0.96f else 1f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "dockScale"
-            )
+            val dockScale = 1f - (0.04f * scrollFraction)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(
-                        horizontal = animateDpAsState(if (appBarCollapsed) 16.dp else 0.dp, label = "dockPad").value,
-                        vertical = animateDpAsState(if (appBarCollapsed) 8.dp else 0.dp, label = "dockPadV").value
+                        horizontal = (16f * scrollFraction).dp,
+                        vertical = (8f * scrollFraction).dp
                     )
                     .graphicsLayer {
                         scaleX = dockScale
                         scaleY = dockScale
                     }
-                    .clip(if (appBarCollapsed) ShapeCache.smooth28 else RoundedCornerShape(0.dp))
-                    .background(
-                        if (appBarCollapsed) {
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
-                        } else {
-                            Color.Transparent
-                        }
+                    .clip(
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
                     )
-                    .then(
-                        if (appBarCollapsed) Modifier
-                            .border(
-                                BorderStroke(
-                                    1.dp,
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = borderAlpha * 2f),
-                                            Color.White.copy(alpha = borderAlpha * 0.5f),
-                                        )
-                                    )
-                                ),
-                                ShapeCache.smooth28
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                    )
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = borderAlpha * 2f),
+                                    Color.White.copy(alpha = borderAlpha * 0.5f),
+                                )
                             )
-                        else Modifier
+                        ),
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
                     )
             ) {
                 androidx.compose.foundation.layout.Row(
