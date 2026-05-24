@@ -15,12 +15,15 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Path
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -40,6 +43,7 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -236,29 +240,58 @@ fun MusicHomeScreen(
                 label = "iconContainerAlpha",
             )
 
+            val dockScale by animateFloatAsState(
+                targetValue = if (scrollFraction > 0.8f) 0.96f else 1f,
+                animationSpec = tween(400, easing = FancyTransitionEasing),
+                label = "dockScale"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(
+                        horizontal = animateDpAsState(if (scrollFraction > 0.8f) 16.dp else 0.dp, label = "dockPad").value,
+                        vertical = animateDpAsState(if (scrollFraction > 0.8f) 8.dp else 0.dp, label = "dockPadV").value
+                    )
+                    .graphicsLayer {
+                        scaleX = dockScale
+                        scaleY = dockScale
+                    }
+                    .clip(if (scrollFraction > 0.8f) ShapeCache.smooth28 else RoundedCornerShape(0.dp))
                     .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.background.copy(alpha = scrimAlpha * 0.95f),
-                                MaterialTheme.colorScheme.background.copy(alpha = scrimAlpha),
-                            ),
-                        )
+                        if (scrollFraction > 0.8f) {
+                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
+                        } else {
+                            Color.Transparent
+                        }
+                    )
+                    .then(
+                        if (scrollFraction > 0.8f) Modifier
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 2f),
+                                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 0.5f),
+                                        )
+                                    )
+                                ),
+                                ShapeCache.smooth28
+                            )
+                        else Modifier
                     )
             ) {
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
                         .height(64.dp)
-                        .padding(horizontal = 4.dp),
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = contentPad),
                     ) {
                         ModeSwitch(
                             currentMode = viewModel.homeMode,
@@ -267,6 +300,7 @@ fun MusicHomeScreen(
                         HeaderStatusIndicator(
                             status = headerStatus,
                             modifier = Modifier.padding(start = 8.dp),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
                         )
                     }
 
@@ -275,11 +309,10 @@ fun MusicHomeScreen(
                     androidx.compose.foundation.layout.Box(
                         modifier = Modifier
                             .clip(ShapeCache.smooth20)
-                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = iconContainerAlpha))
                             .padding(horizontal = 4.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { /* surprise me */ }, modifier = Modifier.size(40.dp)) {
+                            ExpressiveIconButton(onClick = { /* surprise me */ }, modifier = Modifier.size(40.dp)) {
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = "Surprise Me",
@@ -287,7 +320,7 @@ fun MusicHomeScreen(
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
-                            IconButton(onClick = onSyncPlayClick, modifier = Modifier.size(40.dp)) {
+                            ExpressiveIconButton(onClick = onSyncPlayClick, modifier = Modifier.size(40.dp)) {
                                 Icon(
                                     Icons.Default.Group,
                                     contentDescription = "SyncPlay",
@@ -304,7 +337,7 @@ fun MusicHomeScreen(
                                     }
                                 }
                             ) {
-                                IconButton(onClick = onDownloadsClick, modifier = Modifier.size(40.dp)) {
+                                ExpressiveIconButton(onClick = onDownloadsClick, modifier = Modifier.size(40.dp)) {
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Downloads",
@@ -313,7 +346,7 @@ fun MusicHomeScreen(
                                     )
                                 }
                             }
-                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
+                            ExpressiveIconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
                                 Icon(
                                     Icons.Default.Settings,
                                     contentDescription = "Settings",
@@ -324,24 +357,6 @@ fun MusicHomeScreen(
                         }
                     }
                 }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha),
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 1.5f),
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha),
-                                    Color.Transparent,
-                                ),
-                            )
-                        )
-                )
             }
         }
     }
@@ -456,28 +471,76 @@ private fun MusicHeroHeader(
         }
     }
 
+    val artworkColors = LocalArtworkColors.current
+    val startColor = artworkColors?.vibrant ?: MaterialTheme.colorScheme.primary
+    val endColor = artworkColors?.accentColor ?: MaterialTheme.colorScheme.tertiary
+    val titleBrush = remember(startColor, endColor) {
+        Brush.linearGradient(colors = listOf(startColor, endColor))
+    }
+
+    val wavePhase by rememberInfiniteTransition(label = "wave_phase").animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "wavePhase"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { translationY = scrollOffset * 0.25f }
             .padding(top = 76.dp, bottom = 12.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-            Text(
-                text = greeting,
-                style = MaterialTheme.typography.displayMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-1.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Normal
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp)
+                    .align(Alignment.BottomCenter)
+                    .graphicsLayer { alpha = 0.2f }
+            ) {
+                val width = size.width
+                val height = size.height
+                val path = Path()
+                path.moveTo(0f, height * 0.5f)
+                for (x in 0..width.toInt() step 5) {
+                    val xRad = (x.toFloat() / width) * 2f * Math.PI.toFloat() * 1.5f + wavePhase
+                    val y = height * 0.5f + Math.sin(xRad.toDouble()).toFloat() * 14.dp.toPx()
+                    path.lineTo(x.toFloat(), y)
+                }
+                path.lineTo(width, height)
+                path.lineTo(0f, height)
+                path.close()
+                drawPath(
+                    path,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(startColor.copy(alpha = 0.45f), Color.Transparent),
+                        startY = height * 0.1f,
+                        endY = height
+                    )
+                )
+            }
+
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-2.5).sp,
+                        brush = titleBrush
+                    )
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -494,6 +557,16 @@ private fun MusicHeroHeader(
                 label = "breath"
             )
 
+            val playSpinAngle by rememberInfiniteTransition(label = "vinyl_spin").animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(5000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "spin"
+            )
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -501,11 +574,16 @@ private fun MusicHeroHeader(
                     .clip(ShapeCache.smooth28)
                     .clickable { onClick(featuredItem.id) },
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f)
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.48f)
                 ),
                 border = BorderStroke(
                     1.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.16f),
+                            Color.White.copy(alpha = 0.04f)
+                        )
+                    )
                 )
             ) {
                 Row(
@@ -519,14 +597,21 @@ private fun MusicHeroHeader(
                         Box(
                             modifier = Modifier
                                 .background(
-                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
                                     ShapeCache.smoothPill
                                 )
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .border(
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                                    ShapeCache.smoothPill
+                                )
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "RECOMMENDED",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                ),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -535,7 +620,10 @@ private fun MusicHeroHeader(
 
                         Text(
                             text = "Your Daily Mix",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.5).sp
+                            ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
@@ -544,7 +632,7 @@ private fun MusicHeroHeader(
                         Text(
                             text = "Based on your recent listening",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                         )
 
                         Spacer(modifier = Modifier.height(20.dp))
@@ -557,14 +645,17 @@ private fun MusicHeroHeader(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .graphicsLayer { rotationZ = playSpinAngle },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.PlayArrow,
                                     contentDescription = "Play Mix",
                                     tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .graphicsLayer { rotationZ = -playSpinAngle }
                                 )
                             }
 
@@ -669,9 +760,9 @@ private fun QuickAccessRow(
     onPlaylistsClick: () -> Unit,
 ) {
     val items = listOf(
-        CategoryItem("Artists", Icons.Default.Group, onArtistsClick, CircleShape, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
-        CategoryItem("Albums", Icons.Default.Album, onAlbumsClick, ShapeCache.smooth14, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
-        CategoryItem("Tracks", Icons.Default.MusicNote, onTracksClick, ShapeCache.smoothPill, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
+        CategoryItem("Artists", Icons.Default.Group, onArtistsClick, ShapeCache.smooth24, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
+        CategoryItem("Albums", Icons.Default.Album, onAlbumsClick, ShapeCache.smooth16, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
+        CategoryItem("Tracks", Icons.Default.MusicNote, onTracksClick, ShapeCache.smooth32, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
         CategoryItem("Genres", Icons.Default.GraphicEq, onGenresClick, ShapeCache.smooth20, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant),
         CategoryItem("Playlists", Icons.Default.QueueMusic, onPlaylistsClick, ShapeCache.smooth28, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface)
     )
@@ -681,14 +772,34 @@ private fun QuickAccessRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.padding(vertical = 12.dp)
     ) {
-        items(items) { item ->
+        itemsIndexed(items) { index, item ->
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(index * 60L)
+                visible = true
+            }
+            val slideOffset by animateFloatAsState(
+                targetValue = if (visible) 0f else 60f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                label = "stagger"
+            )
+            val alphaState by animateFloatAsState(
+                targetValue = if (visible) 1f else 0f,
+                animationSpec = tween(300),
+                label = "stagger_alpha"
+            )
             ExpressiveCategoryButton(
                 label = item.label,
                 icon = item.icon,
                 onClick = item.onClick,
                 shape = item.shape,
                 containerColor = item.containerColor,
-                contentColor = item.contentColor
+                contentColor = item.contentColor,
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationX = slideOffset
+                        alpha = alphaState
+                    }
             )
         }
     }
@@ -792,5 +903,37 @@ private fun TrackItem(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+fun ExpressiveIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.82f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "expressive_btn_scale"
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
