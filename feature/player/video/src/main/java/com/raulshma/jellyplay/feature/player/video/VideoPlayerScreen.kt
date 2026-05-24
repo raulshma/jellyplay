@@ -219,6 +219,19 @@ fun VideoPlayerScreen(
         }
     }
 
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    LaunchedEffect(windowInfo.isWindowFocused) {
+        if (windowInfo.isWindowFocused) {
+            activity?.let { act ->
+                val window = act.window
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
     val preferredPlayer = uiState.preferredPlayerType
     val streamUrl = uiState.streamUrl
 
