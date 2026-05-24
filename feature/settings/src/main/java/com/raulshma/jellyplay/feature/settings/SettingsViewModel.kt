@@ -345,6 +345,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setVideoPreloadBufferSize(size) }
     }
 
+    fun setAudioPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
+        viewModelScope.launch { preferencesStore.setAudioPreloadBufferSize(size) }
+    }
+
     fun setSegmentBehavior(
         type: com.raulshma.jellyplay.core.model.MediaSegmentType,
         behavior: com.raulshma.jellyplay.core.model.SegmentBehavior,

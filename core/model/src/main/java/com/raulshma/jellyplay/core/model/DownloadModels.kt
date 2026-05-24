@@ -93,6 +93,7 @@ data class UserPreferences(
     val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
     val syncPlaySpeedToSyncDurationMs: Long = 1000,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    val audioPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,
     val replayGainPreAmpDb: Float = 0f,
