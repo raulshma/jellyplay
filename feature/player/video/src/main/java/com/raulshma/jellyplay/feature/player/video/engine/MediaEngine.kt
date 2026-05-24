@@ -61,6 +61,11 @@ data class AudioEffectsConfig(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val bassBoostEnabled: Boolean = false,
+    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
+    val virtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Int = 500,
+    val reverbPreset: com.raulshma.jellyplay.core.model.ReverbPreset = com.raulshma.jellyplay.core.model.ReverbPreset.NONE,
 )
 
 data class EngineCapabilities(

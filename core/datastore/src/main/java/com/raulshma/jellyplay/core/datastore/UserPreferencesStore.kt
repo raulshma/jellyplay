@@ -12,12 +12,14 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -104,6 +106,7 @@ class UserPreferencesStore @Inject constructor(
         val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
         val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
+        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
         val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
         val REPLAYGAIN_PRE_AMP_DB = stringPreferencesKey("replaygain_pre_amp_db")
@@ -118,6 +121,15 @@ class UserPreferencesStore @Inject constructor(
         val DREAM_KEN_BURNS_ENABLED = stringPreferencesKey("dream_ken_burns_enabled")
         val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
         val DREAM_SHOW_TITLE = stringPreferencesKey("dream_show_title")
+        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
+        val BASS_BOOST_ENABLED = stringPreferencesKey("bass_boost_enabled")
+        val BASS_BOOST_STRENGTH = stringPreferencesKey("bass_boost_strength")
+        val VIRTUALIZER_ENABLED = stringPreferencesKey("virtualizer_enabled")
+        val VIRTUALIZER_STRENGTH = stringPreferencesKey("virtualizer_strength")
+        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
+        val LR_BALANCE = stringPreferencesKey("lr_balance")
+        val AUTO_EQ_BY_GENRE = stringPreferencesKey("auto_eq_by_genre")
+        val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -268,6 +280,9 @@ class UserPreferencesStore @Inject constructor(
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
+            audioPreloadBufferSize = try {
+                PreloadBufferSize.valueOf(prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
+            } catch (_: Exception) { PreloadBufferSize.MEDIUM },
             audioNormalizationMode = try {
                 when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
                     "REPLAYGAIN" -> AudioNormalizationMode.TRACK
@@ -295,6 +310,21 @@ class UserPreferencesStore @Inject constructor(
                 DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
             } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
             dreamShowTitle = prefs[Keys.DREAM_SHOW_TITLE]?.toBoolean() ?: true,
+            equalizerPreset = try {
+                EqualizerPreset.valueOf(prefs[Keys.EQUALIZER_PRESET] ?: EqualizerPreset.FLAT.name)
+            } catch (_: Exception) { EqualizerPreset.FLAT },
+            bassBoostEnabled = prefs[Keys.BASS_BOOST_ENABLED]?.toBoolean() ?: false,
+            bassBoostStrength = try {
+                EffectStrength.valueOf(prefs[Keys.BASS_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
+            } catch (_: Exception) { EffectStrength.MODERATE },
+            virtualizerEnabled = prefs[Keys.VIRTUALIZER_ENABLED]?.toBoolean() ?: false,
+            virtualizerStrength = prefs[Keys.VIRTUALIZER_STRENGTH]?.toIntOrNull() ?: 500,
+            reverbPreset = try {
+                ReverbPreset.valueOf(prefs[Keys.REVERB_PRESET] ?: ReverbPreset.NONE.name)
+            } catch (_: Exception) { ReverbPreset.NONE },
+            lrBalance = prefs[Keys.LR_BALANCE]?.toFloatOrNull() ?: 0f,
+            autoEqByGenre = prefs[Keys.AUTO_EQ_BY_GENRE]?.toBoolean() ?: false,
+            pitchSemitones = prefs[Keys.PITCH_SEMITONES]?.toFloatOrNull() ?: 0f,
         )
     }.distinctUntilChanged()
 
@@ -579,6 +609,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
+    suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) {
+        context.dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
+    }
+
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
         context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
     }
@@ -633,6 +667,42 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDreamShowTitle(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled.toString() }
+    }
+
+    suspend fun setEqualizerPreset(preset: EqualizerPreset) {
+        context.dataStore.edit { it[Keys.EQUALIZER_PRESET] = preset.name }
+    }
+
+    suspend fun setBassBoostEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setBassBoostStrength(strength: EffectStrength) {
+        context.dataStore.edit { it[Keys.BASS_BOOST_STRENGTH] = strength.name }
+    }
+
+    suspend fun setVirtualizerEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setVirtualizerStrength(strength: Int) {
+        context.dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength.toString() }
+    }
+
+    suspend fun setReverbPreset(preset: ReverbPreset) {
+        context.dataStore.edit { it[Keys.REVERB_PRESET] = preset.name }
+    }
+
+    suspend fun setLrBalance(balance: Float) {
+        context.dataStore.edit { it[Keys.LR_BALANCE] = balance.toString() }
+    }
+
+    suspend fun setAutoEqByGenre(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled.toString() }
+    }
+
+    suspend fun setPitchSemitones(semitones: Float) {
+        context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

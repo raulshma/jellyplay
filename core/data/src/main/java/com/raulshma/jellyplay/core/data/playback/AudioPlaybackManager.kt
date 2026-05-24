@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
@@ -16,11 +17,15 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +40,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.pow
 
 data class AudioQueueItem(
     val id: String,
@@ -54,21 +60,37 @@ class AudioPlaybackManager @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val sessionManager: PlaybackSessionManager,
+    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var exoPlayer: ExoPlayer? = null
     private var crossfadePlayer: ExoPlayer? = null
+    private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+
+    init {
+        scope.launch {
+            preferencesStore.preferences.collect { prefs ->
+                currentPreferences = prefs
+            }
+        }
+    }
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
     private var isLoadingItem = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
+    private var queueLoadingJob: Job? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private val mediaItemCache = android.util.LruCache<String, MediaItem>(50)
     private val dialogueBoost = DialogueBoostHelper()
     private val equalizerHelper = EqualizerHelper()
+    private val bassBoostHelper = BassBoostHelper()
+    private val virtualizerHelper = VirtualizerHelper()
+    private val reverbHelper = ReverbHelper()
+    private val balanceProcessor = BalanceAudioProcessor()
+    private val visualizerHelper = AudioVisualizerHelper()
 
     private var _dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
     private var _nightModeStrength = com.raulshma.jellyplay.core.model.EffectStrength.MODERATE
@@ -117,6 +139,9 @@ class AudioPlaybackManager @Inject constructor(
     private val _queue = MutableStateFlow<List<AudioQueueItem>>(emptyList())
     val queue: StateFlow<List<AudioQueueItem>> = _queue.asStateFlow()
 
+    private var unshuffledQueue: List<AudioQueueItem> = emptyList()
+    private var unshuffledIndex: Int = -1
+
     private val _currentIndex = MutableStateFlow(-1)
     val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
@@ -146,6 +171,36 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _equalizerSettings = MutableStateFlow(com.raulshma.jellyplay.core.model.EqualizerSettings())
     val equalizerSettings: StateFlow<com.raulshma.jellyplay.core.model.EqualizerSettings> = _equalizerSettings.asStateFlow()
+
+    private val _equalizerPreset = MutableStateFlow(EqualizerPreset.FLAT)
+    val equalizerPreset: StateFlow<EqualizerPreset> = _equalizerPreset.asStateFlow()
+
+    private val _bassBoostEnabled = MutableStateFlow(false)
+    val bassBoostEnabled: StateFlow<Boolean> = _bassBoostEnabled.asStateFlow()
+
+    private var _bassBoostStrength = EffectStrength.MODERATE
+    val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
+
+    private val _virtualizerEnabled = MutableStateFlow(false)
+    val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
+
+    private val _virtualizerStrength = MutableStateFlow(500)
+    val virtualizerStrength: StateFlow<Int> = _virtualizerStrength.asStateFlow()
+
+    private val _reverbPreset = MutableStateFlow(ReverbPreset.NONE)
+    val reverbPresetState: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
+
+    private val _lrBalance = MutableStateFlow(0f)
+    val lrBalance: StateFlow<Float> = _lrBalance.asStateFlow()
+
+    private val _pitchSemitones = MutableStateFlow(0f)
+    val pitchSemitones: StateFlow<Float> = _pitchSemitones.asStateFlow()
+
+    private val _autoEqByGenre = MutableStateFlow(false)
+    val autoEqByGenre: StateFlow<Boolean> = _autoEqByGenre.asStateFlow()
+
+    val fftData: StateFlow<ByteArray> = visualizerHelper.fftData
+    val waveformData: StateFlow<ByteArray> = visualizerHelper.waveformData
 
     private val replayGainProcessor = ReplayGainAudioProcessor()
     private val crossfadeReplayGainProcessor = ReplayGainAudioProcessor()
@@ -184,9 +239,7 @@ class AudioPlaybackManager @Inject constructor(
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
-                onTrackTransitionedAuto()
-            }
+            onTrackTransitioned()
         }
     }
 
@@ -228,15 +281,26 @@ class AudioPlaybackManager @Inject constructor(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(replayGainProcessor))
+                    .setAudioProcessors(arrayOf(replayGainProcessor, balanceProcessor))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
             }
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                currentPreferences.audioPreloadBufferSize.minBufferMs,
+                currentPreferences.audioPreloadBufferSize.maxBufferMs,
+                1_000,
+                3_000
+            )
+            .setTargetBufferBytes(-1)
+            .build()
+
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -250,6 +314,8 @@ class AudioPlaybackManager @Inject constructor(
             .build()
         mediaSession = session
         sessionManager.setActiveSession(session)
+
+        attachAudioEffects(player.audioSessionId)
 
         return player
     }
@@ -274,8 +340,19 @@ class AudioPlaybackManager @Inject constructor(
             }
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                currentPreferences.audioPreloadBufferSize.minBufferMs,
+                currentPreferences.audioPreloadBufferSize.maxBufferMs,
+                1_000,
+                3_000
+            )
+            .setTargetBufferBytes(-1)
+            .build()
+
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -298,6 +375,7 @@ class AudioPlaybackManager @Inject constructor(
         }
         val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
         return MediaItem.Builder()
+            .setMediaId(queueItem.id)
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
@@ -363,31 +441,58 @@ class AudioPlaybackManager @Inject constructor(
                     val queueItems = _queue.value
                     val playIndex = _currentIndex.value
 
-                    val mediaItems = mutableListOf<MediaItem>()
-                    for (i in queueItems.indices) {
-                        val qi = queueItems[i]
-                        if (i == playIndex) {
-                            val startMs = startPositionMs
-                            buildMediaItemForQueueItem(qi, startMs)?.let { mediaItem ->
-                                mediaItems.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        } else {
-                            val cached = mediaItemCache.get(qi.id)
-                            if (cached != null) {
-                                mediaItems.add(cached)
-                            } else {
-                                buildMediaItemForQueueItem(qi)?.let { mediaItem ->
-                                    mediaItems.add(mediaItem)
+                    val clickedItem = queueItems.getOrNull(playIndex)
+                    if (clickedItem != null) {
+                        val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
+                        if (clickedMediaItem != null) {
+                            player.setMediaItem(clickedMediaItem, startPositionMs)
+                            player.prepare()
+                            player.playWhenReady = true
+                        }
+
+                        // Load the remaining items in a background job so the first track starts playing instantly!
+                        queueLoadingJob?.cancel()
+                        queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val mediaItemsBefore = mutableListOf<MediaItem>()
+                            val mediaItemsAfter = mutableListOf<MediaItem>()
+
+                            // Build media items after current item
+                            for (i in (playIndex + 1) until queueItems.size) {
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                                if (mediaItem != null) {
+                                    mediaItemsAfter.add(mediaItem)
                                     mediaItemCache.put(qi.id, mediaItem)
                                 }
                             }
+
+                            // Build media items before current item
+                            for (i in 0 until playIndex) {
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                                if (mediaItem != null) {
+                                    mediaItemsBefore.add(mediaItem)
+                                    mediaItemCache.put(qi.id, mediaItem)
+                                }
+                            }
+
+                            // Apply to ExoPlayer on main thread
+                            launch(kotlinx.coroutines.Dispatchers.Main) {
+                                if (exoPlayer == player) {
+                                    if (mediaItemsAfter.isNotEmpty()) {
+                                        player.addMediaItems(mediaItemsAfter)
+                                    }
+                                    if (mediaItemsBefore.isNotEmpty()) {
+                                        player.addMediaItems(0, mediaItemsBefore)
+                                        _currentIndex.value = playIndex
+                                    }
+                                }
+                                queueLoadingJob = null
+                            }
                         }
                     }
-
-                    player.setMediaItems(mediaItems, playIndex, startPositionMs)
-                    player.prepare()
-                    player.playWhenReady = true
 
                     playbackRepository.reportPlaybackStart(
                         PlaybackStartInfo(
@@ -432,6 +537,7 @@ class AudioPlaybackManager @Inject constructor(
     fun removeFromQueue(index: Int) {
         val q = _queue.value
         if (index < 0 || index >= q.size) return
+        if (queueLoadingJob != null) return
         val wasPlaying = index == _currentIndex.value
         _queue.value = q.toMutableList().apply { removeAt(index) }.toList()
         if (wasPlaying) {
@@ -447,22 +553,11 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun skipToNext() {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
         cancelCrossfade()
         val next = when {
-            _shuffleMode.value -> {
-                val excluded = _currentIndex.value
-                if (q.size <= 1) return
-                var candidate = (0 until q.size).random()
-                var attempts = 0
-                while (candidate == excluded && attempts < 10) {
-                    candidate = (0 until q.size).random()
-                    attempts++
-                }
-                if (candidate == excluded) return
-                candidate
-            }
             _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
             _repeatMode.value >= 1 -> 0
             else -> return
@@ -472,6 +567,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun skipToPrevious() {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (q.isEmpty()) return
         val player = exoPlayer ?: return
@@ -481,18 +577,6 @@ class AudioPlaybackManager @Inject constructor(
             return
         }
         val prev = when {
-            _shuffleMode.value -> {
-                val excluded = _currentIndex.value
-                if (q.size <= 1) return
-                var candidate = (0 until q.size).random()
-                var attempts = 0
-                while (candidate == excluded && attempts < 10) {
-                    candidate = (0 until q.size).random()
-                    attempts++
-                }
-                if (candidate == excluded) return
-                candidate
-            }
             _currentIndex.value > 0 -> _currentIndex.value - 1
             _repeatMode.value >= 1 -> q.lastIndex
             else -> return
@@ -512,12 +596,65 @@ class AudioPlaybackManager @Inject constructor(
 
     fun changePlaybackSpeed(value: Float) {
         _speed.value = value
-        exoPlayer?.setPlaybackSpeed(value)
+        val pitchMultiplier = if (_pitchSemitones.value == 0f) 1.0f else {
+            2.0f.pow(_pitchSemitones.value / 12.0f)
+        }
+        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(value, pitchMultiplier)
         crossfadePlayer?.setPlaybackSpeed(value)
     }
 
     fun toggleShuffle() {
-        _shuffleMode.value = !_shuffleMode.value
+        val wasShuffled = _shuffleMode.value
+        _shuffleMode.value = !wasShuffled
+        val player = exoPlayer ?: return
+
+        if (_shuffleMode.value) {
+            val q = _queue.value
+            val curIdx = _currentIndex.value
+            unshuffledQueue = q
+            unshuffledIndex = curIdx
+            if (q.size <= 1) return
+            val current = q.getOrNull(curIdx)
+            val others = q.filterIndexed { i, _ -> i != curIdx }.toMutableList()
+            others.shuffle()
+            val newQueue = if (current != null) listOf(current) + others else others
+            _queue.value = newQueue
+            _currentIndex.value = 0
+            scope.launch {
+                val mediaItems = newQueue.mapNotNull { qi ->
+                    mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
+                        mediaItemCache.put(qi.id, it)
+                    }
+                }
+                if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                    val currentPos = player.currentPosition
+                    player.setMediaItems(mediaItems, 0, currentPos)
+                    player.prepare()
+                }
+            }
+        } else {
+            val currentItemId = _currentPlayingItemId.value
+            val original = unshuffledQueue
+            if (original.isNotEmpty()) {
+                _queue.value = original
+                val restoreIndex = original.indexOfFirst { it.id == currentItemId }.coerceAtLeast(0)
+                _currentIndex.value = restoreIndex
+                unshuffledQueue = emptyList()
+                unshuffledIndex = -1
+                scope.launch {
+                    val mediaItems = original.mapNotNull { qi ->
+                        mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
+                            mediaItemCache.put(qi.id, it)
+                        }
+                    }
+                    if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                        val currentPos = player.currentPosition
+                        player.setMediaItems(mediaItems, restoreIndex, currentPos)
+                        player.prepare()
+                    }
+                }
+            }
+        }
     }
 
     fun cycleRepeatMode() {
@@ -525,6 +662,7 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     fun playFromQueue(index: Int) {
+        if (queueLoadingJob != null) return
         val q = _queue.value
         if (index < 0 || index >= q.size) return
         cancelCrossfade()
@@ -566,11 +704,13 @@ class AudioPlaybackManager @Inject constructor(
         val newLevels = _equalizerSettings.value.bandLevels.toMutableList()
         newLevels[bandIndex] = levelDb
         _equalizerSettings.value = com.raulshma.jellyplay.core.model.EqualizerSettings(newLevels)
+        _equalizerPreset.value = EqualizerPreset.CUSTOM
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
     fun resetEqualizer() {
         _equalizerSettings.value = com.raulshma.jellyplay.core.model.EqualizerSettings()
+        _equalizerPreset.value = EqualizerPreset.FLAT
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
@@ -671,11 +811,144 @@ class AudioPlaybackManager @Inject constructor(
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 
+    private fun attachAudioEffects(audioSessionId: Int) {
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (_equalizerEnabled.value) {
+            equalizerHelper.attach(audioSessionId)
+            equalizerHelper.setEnabled(true)
+            equalizerHelper.setSettings(_equalizerSettings.value)
+        }
+        if (_dialogueBoostEnabled.value) {
+            dialogueBoost.attach(audioSessionId)
+            dialogueBoost.setEnabled(true)
+        }
+        if (_bassBoostEnabled.value) {
+            bassBoostHelper.attach(audioSessionId)
+            bassBoostHelper.setEnabled(true)
+        }
+        if (_virtualizerEnabled.value) {
+            virtualizerHelper.attach(audioSessionId)
+            virtualizerHelper.setEnabled(true)
+        }
+        if (_reverbPreset.value != ReverbPreset.NONE) {
+            reverbHelper.attach(audioSessionId)
+            reverbHelper.setEnabled(true)
+        }
+        visualizerHelper.attach(audioSessionId)
+        visualizerHelper.setEnabled(true)
+    }
+
+    fun setEqualizerPreset(preset: EqualizerPreset) {
+        _equalizerPreset.value = preset
+        if (preset != EqualizerPreset.CUSTOM) {
+            val settings = EqualizerSettings(preset.bandLevels())
+            _equalizerSettings.value = settings
+            equalizerHelper.setSettings(settings)
+        }
+    }
+
+    fun toggleBassBoost() {
+        _bassBoostEnabled.value = !_bassBoostEnabled.value
+        applyBassBoost()
+    }
+
+    fun setBassBoostStrength(strength: EffectStrength) {
+        _bassBoostStrength = strength
+        bassBoostHelper.setStrength(strength)
+    }
+
+    private fun applyBassBoost() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        bassBoostHelper.attach(audioSessionId)
+        bassBoostHelper.setStrength(_bassBoostStrength)
+        bassBoostHelper.setEnabled(_bassBoostEnabled.value)
+    }
+
+    fun toggleVirtualizer() {
+        _virtualizerEnabled.value = !_virtualizerEnabled.value
+        applyVirtualizer()
+    }
+
+    fun setVirtualizerStrength(strength: Int) {
+        _virtualizerStrength.value = strength
+        virtualizerHelper.setStrength(strength)
+    }
+
+    private fun applyVirtualizer() {
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        virtualizerHelper.attach(audioSessionId)
+        virtualizerHelper.setStrength(_virtualizerStrength.value)
+        virtualizerHelper.setEnabled(_virtualizerEnabled.value)
+    }
+
+    fun setReverbPreset(preset: ReverbPreset) {
+        _reverbPreset.value = preset
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (preset == ReverbPreset.NONE) {
+            reverbHelper.setEnabled(false)
+            reverbHelper.detach()
+        } else {
+            reverbHelper.detach()
+            reverbHelper.attach(audioSessionId)
+            reverbHelper.setPreset(preset)
+        }
+    }
+
+    fun setLrBalance(balance: Float) {
+        _lrBalance.value = balance
+        balanceProcessor.setBalance(balance)
+    }
+
+    fun setPitchSemitones(semitones: Float) {
+        _pitchSemitones.value = semitones
+        val multiplier = if (semitones == 0f) 1.0f else {
+            2.0f.pow(semitones / 12.0f)
+        }
+        val currentSpeed = _speed.value
+        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(currentSpeed, multiplier)
+    }
+
+    fun setAutoEqByGenre(enabled: Boolean) {
+        _autoEqByGenre.value = enabled
+    }
+
+    fun applyAutoEqForGenre(genres: List<String>?) {
+        if (!_autoEqByGenre.value) return
+        if (genres.isNullOrEmpty()) return
+        val matchedPreset = genres.firstNotNullOfOrNull { genre ->
+            EqualizerPreset.fromGenre(genre)
+        } ?: return
+        if (matchedPreset != _equalizerPreset.value) {
+            setEqualizerPreset(matchedPreset)
+        }
+    }
+
+    fun enableVisualizer(enabled: Boolean) {
+        visualizerHelper.setEnabled(enabled)
+    }
+
     private fun onTrackEnded() {
         when {
             _repeatMode.value == 2 -> {
                 exoPlayer?.seekTo(0)
                 exoPlayer?.play()
+            }
+            _repeatMode.value == 1 -> {
+                val q = _queue.value
+                if (q.size > 1) {
+                    _currentIndex.value = 0
+                    exoPlayer?.seekTo(0, 0L)
+                    exoPlayer?.play()
+                } else {
+                    exoPlayer?.seekTo(0)
+                    exoPlayer?.play()
+                }
             }
             else -> {
                 _isPlaying.value = false
@@ -683,12 +956,22 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
-    private fun onTrackTransitionedAuto() {
+    private fun onTrackTransitioned() {
         val player = exoPlayer ?: return
-        val nextIndex = player.currentMediaItemIndex
-        if (nextIndex >= 0 && nextIndex < _queue.value.size) {
-            _currentIndex.value = nextIndex
-            val nextItem = _queue.value[nextIndex]
+        val currentMediaId = player.currentMediaItem?.mediaId
+        val queueItems = _queue.value
+        val matchIndex = if (currentMediaId != null) {
+            queueItems.indexOfFirst { it.id == currentMediaId }
+        } else -1
+        
+        val targetIndex = if (matchIndex >= 0) matchIndex else {
+            val idx = player.currentMediaItemIndex
+            if (idx >= 0 && idx < queueItems.size) idx else -1
+        }
+
+        if (targetIndex >= 0) {
+            _currentIndex.value = targetIndex
+            val nextItem = queueItems[targetIndex]
             currentItemId = nextItem.id
             _currentPlayingItemId.value = nextItem.id
             _title.value = nextItem.name
@@ -781,6 +1064,7 @@ class AudioPlaybackManager @Inject constructor(
 
                 val artUri = Uri.parse(playbackRepository.getImageUrl(nextItem.id, maxWidth = 600))
                 val mediaItem = MediaItem.Builder()
+                    .setMediaId(nextItem.id)
                     .setUri(url)
                     .setMediaMetadata(
                         MediaMetadata.Builder()
@@ -859,8 +1143,53 @@ class AudioPlaybackManager @Inject constructor(
         applyNightMode()
         applyDialogueBoost()
         applyEqualizer()
+        applyBassBoost()
+        applyVirtualizer()
+        if (_reverbPreset.value != ReverbPreset.NONE) {
+            reverbHelper.detach()
+            reverbHelper.attach(secondary.audioSessionId)
+            reverbHelper.setPreset(_reverbPreset.value)
+        }
+        visualizerHelper.attach(secondary.audioSessionId)
+        visualizerHelper.setEnabled(true)
 
         _isCrossfading.value = false
+
+        val queueItems = _queue.value
+        if (queueItems.size > 1) {
+            val itemsAfter = mutableListOf<MediaItem>()
+            val itemsBefore = mutableListOf<MediaItem>()
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                for (i in (nextIndex + 1) until queueItems.size) {
+                    val qi = queueItems[i]
+                    val cached = mediaItemCache.get(qi.id)
+                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                    if (mediaItem != null) {
+                        itemsAfter.add(mediaItem)
+                        mediaItemCache.put(qi.id, mediaItem)
+                    }
+                }
+                for (i in 0 until nextIndex) {
+                    val qi = queueItems[i]
+                    val cached = mediaItemCache.get(qi.id)
+                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                    if (mediaItem != null) {
+                        itemsBefore.add(mediaItem)
+                        mediaItemCache.put(qi.id, mediaItem)
+                    }
+                }
+                launch(kotlinx.coroutines.Dispatchers.Main) {
+                    if (exoPlayer == secondary) {
+                        if (itemsAfter.isNotEmpty()) {
+                            secondary.addMediaItems(itemsAfter)
+                        }
+                        if (itemsBefore.isNotEmpty()) {
+                            secondary.addMediaItems(0, itemsBefore)
+                        }
+                    }
+                }
+            }
+        }
 
         playbackRepository.reportPlaybackStart(
             PlaybackStartInfo(
@@ -928,8 +1257,9 @@ class AudioPlaybackManager @Inject constructor(
                         lastDuration = dur
                     }
                     if (_lyrics.value.isNotEmpty()) {
+                        // Compensate for the 300ms lyrics scroll/fade transition
                         _currentLyricIndex.value = findCurrentLyricLine(
-                            _lyrics.value, _currentPosition.value
+                            _lyrics.value, _currentPosition.value + 300L
                         )
                     }
 
@@ -937,7 +1267,7 @@ class AudioPlaybackManager @Inject constructor(
                     startCrossfadeIfNeeded()
                 }
             }
-            delay(500)
+            delay(100)
             }
         }
     }
@@ -992,6 +1322,10 @@ class AudioPlaybackManager @Inject constructor(
         exoPlayer = null
         dialogueBoost.detach()
         equalizerHelper.detach()
+        bassBoostHelper.detach()
+        virtualizerHelper.detach()
+        reverbHelper.detach()
+        visualizerHelper.detach()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
 

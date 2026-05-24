@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +69,13 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SpatialAudio
+import androidx.compose.material.icons.filled.SurroundSound
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.Piano
+import androidx.compose.material.icons.filled.Balance
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
@@ -88,7 +94,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -109,7 +114,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -124,6 +128,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
@@ -135,9 +142,13 @@ fun AudioPlayerScreen(
     onAmbientClick: (String?, String, String) -> Unit = { _, _, _ -> },
     viewModel: AudioPlayerViewModel = hiltViewModel(),
 ) {
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
     var showQueue by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
+    var showEffectsSheet by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -156,11 +167,12 @@ fun AudioPlayerScreen(
     }
 
     BackHandler {
-        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch) {
+        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch || showEffectsSheet) {
             showQueue = false
             showSpeedPicker = false
             showEqualizer = false
             showLyricsSearch = false
+            showEffectsSheet = false
         } else if (showLyrics) {
             showLyrics = false
         } else {
@@ -180,19 +192,156 @@ fun AudioPlayerScreen(
     val pillSurface = remember(artworkColors) { artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f) }
     val pillSurfaceDark = remember(artworkColors) { artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f) }
 
+    val navBarColor = com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor.current
+    androidx.compose.runtime.DisposableEffect(tintedBg) {
+        val oldColor = navBarColor.value
+        navBarColor.value = tintedBg
+        onDispose {
+            navBarColor.value = oldColor
+        }
+    }
+
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDarkTheme = remember(preferences.themeMode, isSystemDark) {
+        when (preferences.themeMode) {
+            com.raulshma.jellyplay.core.model.ThemeMode.DARK -> true
+            com.raulshma.jellyplay.core.model.ThemeMode.LIGHT -> false
+            com.raulshma.jellyplay.core.model.ThemeMode.SYSTEM -> isSystemDark
+        }
+    }
+
+    // Animatables for swipe gestures
+    val swipeDismissOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val horizontalSwipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    var dragDirection by remember { mutableStateOf<DragDirection?>(null) }
+    var totalDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var totalDragY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+
     ArtworkThemeWrapper(
         imageUrl = viewModel.albumArtUrl.ifBlank { null },
         dynamicTheming = preferences.dynamicTheming,
+        darkTheme = isDarkTheme,
         oledMode = preferences.oledMode,
     ) {
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedContainerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedBounds(
+                    rememberSharedContentState(key = "audio_player_container"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
+                        spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                        )
+                    }
+                )
+            }
+        } else Modifier
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .then(sharedContainerModifier)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(tintedBgLight, tintedBg, tintedBg),
                     )
-                ),
+                )
+                .pointerInput(Unit) {
+                    val scopeHeight = size.height.toFloat()
+                    detectDragGestures(
+                        onDragStart = {
+                            dragDirection = null
+                            totalDragX = 0f
+                            totalDragY = 0f
+                        },
+                        onDragEnd = {
+                            when (dragDirection) {
+                                DragDirection.VERTICAL -> {
+                                    if (swipeDismissOffset.value < -80f || totalDragY < -150f) {
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                        showQueue = true
+                                    } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
+                                        // Instantly reset visual translation offset to ensure morph begins from stable bounds
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.snapTo(0f)
+                                            onBack()
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    }
+                                }
+                                DragDirection.HORIZONTAL -> {
+                                    val threshold = 180f
+                                    if (horizontalSwipeOffset.value < -threshold) { // Swipe Left -> Next
+                                        coroutineScope.launch {
+                                            viewModel.skipToNext()
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    } else if (horizontalSwipeOffset.value > threshold) { // Swipe Right -> Prev
+                                        coroutineScope.launch {
+                                            viewModel.skipToPrevious()
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                        }
+                                    }
+                                }
+                                null -> {}
+                            }
+                            dragDirection = null
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                horizontalSwipeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                            }
+                            dragDirection = null
+                        }
+                    ) { change, dragAmount ->
+                        totalDragX += dragAmount.x
+                        totalDragY += dragAmount.y
+
+                        if (dragDirection == null) {
+                            val threshold = 10f
+                            if (kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) && kotlin.math.abs(totalDragY) > threshold) {
+                                dragDirection = DragDirection.VERTICAL
+                            } else if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) && kotlin.math.abs(totalDragX) > threshold) {
+                                dragDirection = DragDirection.HORIZONTAL
+                            }
+                        }
+
+                        when (dragDirection) {
+                            DragDirection.VERTICAL -> {
+                                change.consume()
+                                coroutineScope.launch {
+                                    val newOffset = (swipeDismissOffset.value + dragAmount.y).coerceAtLeast(-120f)
+                                    swipeDismissOffset.snapTo(newOffset)
+                                }
+                            }
+                            DragDirection.HORIZONTAL -> {
+                                change.consume()
+                                coroutineScope.launch {
+                                    val newOffset = horizontalSwipeOffset.value + dragAmount.x
+                                    horizontalSwipeOffset.snapTo(newOffset)
+                                }
+                            }
+                            null -> {}
+                        }
+                    }
+                }
+                .graphicsLayer {
+                    translationY = swipeDismissOffset.value
+                },
         ) {
             Column(
                 modifier = Modifier
@@ -217,13 +366,14 @@ fun AudioPlayerScreen(
                     nightModeStrength = viewModel.nightModeStrength,
                     onSpeedClick = { showMenu = false; showSpeedPicker = true },
                     onEqualizerClick = { showMenu = false; showEqualizer = true },
+                    onEffectsClick = { showMenu = false; showEffectsSheet = true },
                     onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
                     onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(viewModel.albumArtUrl.ifBlank { null }, viewModel.title, viewModel.artist) },
                     sleepTimerActive = viewModel.sleepTimerActive,
-                    sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else formatDuration(viewModel.sleepTimerRemainingMs),
+                    sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(viewModel.sleepTimerRemainingMs),
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                 )
 
@@ -287,8 +437,10 @@ fun AudioPlayerScreen(
                             PixelSecondaryControls(
                                 shuffleMode = viewModel.shuffleMode,
                                 repeatMode = viewModel.repeatMode,
+                                isFavorite = viewModel.isFavorite,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                                onToggleFavorite = { viewModel.toggleFavorite() },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -345,17 +497,76 @@ fun AudioPlayerScreen(
                         PixelSecondaryControls(
                             shuffleMode = viewModel.shuffleMode,
                             repeatMode = viewModel.repeatMode,
+                            isFavorite = viewModel.isFavorite,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
+                            onToggleFavorite = { viewModel.toggleFavorite() },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
+                        // Prevent overlap with transparent app bottom NavigationBar on phone
+                        Spacer(Modifier.height(80.dp))
+                    }
+                }
+            } // Close Column (main layout)
+
+            // Swipe track cards overlays
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val cardWidthDp = 260.dp
+            val cardWidthPx = remember(density) { with(density) { cardWidthDp.toPx() } }
+
+            if (horizontalSwipeOffset.value < 0) {
+                val nextIndex = if (viewModel.currentIndex >= 0 && viewModel.queue.isNotEmpty()) {
+                    (viewModel.currentIndex + 1) % viewModel.queue.size
+                } else 0
+                val nextTrack = viewModel.queue.getOrNull(nextIndex)
+                if (nextTrack != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        val slideOffset = (cardWidthPx + horizontalSwipeOffset.value).coerceAtLeast(0f)
+                        SwipeTrackCard(
+                            title = nextTrack.name,
+                            artist = nextTrack.artist,
+                            artworkUrl = nextTrack.imageUrl ?: "",
+                            isNext = true,
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    translationX = slideOffset
+                                }
+                                .padding(end = 16.dp)
+                        )
+                    }
+                }
+            } else if (horizontalSwipeOffset.value > 0) {
+                val prevIndex = if (viewModel.currentIndex >= 0 && viewModel.queue.isNotEmpty()) {
+                    (viewModel.currentIndex - 1 + viewModel.queue.size) % viewModel.queue.size
+                } else 0
+                val prevTrack = viewModel.queue.getOrNull(prevIndex)
+                if (prevTrack != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        val slideOffset = (-cardWidthPx + horizontalSwipeOffset.value).coerceAtMost(0f)
+                        SwipeTrackCard(
+                            title = prevTrack.name,
+                            artist = prevTrack.artist,
+                            artworkUrl = prevTrack.imageUrl ?: "",
+                            isNext = false,
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    translationX = slideOffset
+                                }
+                                .padding(start = 16.dp)
+                        )
                     }
                 }
             }
-        }
-    }
+        } // Close Box (root container)
+    } // Close ArtworkThemeWrapper
 
     // ── Bottom sheets (unchanged functionality) ──
     if (showQueue && viewModel.queue.isNotEmpty()) {
@@ -383,9 +594,11 @@ fun AudioPlayerScreen(
         EqualizerSheet(
             enabled = viewModel.equalizerEnabled,
             bandLevels = viewModel.equalizerSettings.bandLevels,
+            currentPreset = viewModel.equalizerPreset,
             onToggle = { viewModel.toggleEqualizer() },
             onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
             onReset = { viewModel.resetEqualizer() },
+            onPresetChange = { viewModel.applyEqualizerPreset(it) },
             onDismiss = { showEqualizer = false },
         )
     }
@@ -412,6 +625,14 @@ fun AudioPlayerScreen(
             onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
             onCancel = { viewModel.cancelSleepTimer() },
             onDismiss = { showSleepTimer = false },
+        )
+    }
+
+    if (showEffectsSheet) {
+        AudioEffectsSheet(
+            viewModel = viewModel,
+            onDismiss = { showEffectsSheet = false },
+            onOpenEqualizer = { showEffectsSheet = false; showEqualizer = true },
         )
     }
 }
@@ -563,9 +784,11 @@ private fun SpeedPickerSheet(
 private fun EqualizerSheet(
     enabled: Boolean,
     bandLevels: List<Int>,
+    currentPreset: com.raulshma.jellyplay.core.model.EqualizerPreset,
     onToggle: () -> Unit,
     onBandChange: (Int, Int) -> Unit,
     onReset: () -> Unit,
+    onPresetChange: (com.raulshma.jellyplay.core.model.EqualizerPreset) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -591,6 +814,20 @@ private fun EqualizerSheet(
                     androidx.compose.material3.Switch(
                         checked = enabled,
                         onCheckedChange = { onToggle() },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val presets = com.raulshma.jellyplay.core.model.EqualizerPreset.entries.filter { it != com.raulshma.jellyplay.core.model.EqualizerPreset.CUSTOM }
+                items(presets.size) { index ->
+                    val preset = presets[index]
+                    androidx.compose.material3.FilterChip(
+                        selected = currentPreset == preset,
+                        onClick = { onPresetChange(preset) },
+                        label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
                     )
                 }
             }
@@ -714,12 +951,16 @@ private fun LyricsSearchSheet(
                                 }
                                 Spacer(Modifier.width(8.dp))
                                 if (track.hasSyncedLyrics) {
-                                    SuggestionChip(
-                                        onClick = {},
-                                        label = {
-                                            Text("Synced", style = MaterialTheme.typography.labelSmall)
-                                        },
-                                        modifier = Modifier.height(24.dp),
+                                    Text(
+                                        "Synced",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer,
+                                                RoundedCornerShape(8.dp),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
                                     )
                                 } else if (track.hasPlainLyrics) {
                                     Text(
@@ -970,6 +1211,360 @@ private fun LyricsOverlay(
 
 
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AudioEffectsSheet(
+    viewModel: AudioPlayerViewModel,
+    onDismiss: () -> Unit,
+    onOpenEqualizer: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Text("Audio Effects", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                androidx.compose.material3.HorizontalDivider()
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Tune, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Equalizer", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Row {
+                        TextButton(onClick = onOpenEqualizer) { Text("Open") }
+                        Spacer(Modifier.width(4.dp))
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.equalizerEnabled,
+                            onCheckedChange = { viewModel.toggleEqualizer() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.bassBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Bass Boost", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.bassBoostStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.bassBoostEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.bassBoostStrength == strength,
+                                    onClick = { viewModel.setBassBoostStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.bassBoostEnabled,
+                            onCheckedChange = { viewModel.toggleBassBoost() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.SurroundSound,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.virtualizerEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Virtualizer / Spatial", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "${(viewModel.virtualizerStrength / 10)}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (viewModel.virtualizerEnabled) {
+                        Slider(
+                            value = viewModel.virtualizerStrength.toFloat(),
+                            onValueChange = { viewModel.applyVirtualizerStrength(it.toInt()) },
+                            valueRange = 0f..1000f,
+                            modifier = Modifier.width(120.dp),
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.virtualizerEnabled,
+                        onCheckedChange = { viewModel.toggleVirtualizer() },
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Waves,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Reverb", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val reverbPresets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
+                    items(reverbPresets.size) { index ->
+                        val preset = reverbPresets[index]
+                        androidx.compose.material3.FilterChip(
+                            selected = viewModel.reverbPreset == preset,
+                            onClick = { viewModel.applyReverbPreset(preset) },
+                            label = { Text(preset.displayName, style = MaterialTheme.typography.labelSmall) },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.RecordVoiceOver,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Dialogue Boost", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.dialogueBoostStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.dialogueBoostEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.dialogueBoostStrength == strength,
+                                    onClick = { viewModel.setDialogueBoostStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.dialogueBoostEnabled,
+                            onCheckedChange = { viewModel.toggleDialogueBoost() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Nightlight,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Night Mode", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                viewModel.nightModeStrength.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (viewModel.nightModeEnabled) {
+                            com.raulshma.jellyplay.core.model.EffectStrength.entries.forEach { strength ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = viewModel.nightModeStrength == strength,
+                                    onClick = { viewModel.setNightModeStrength(strength) },
+                                    label = { Text(strength.displayName, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.nightModeEnabled,
+                            onCheckedChange = { viewModel.toggleNightMode() },
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Balance,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.lrBalance != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("L/R Balance", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                when {
+                                    viewModel.lrBalance < 0f -> "Left ${kotlin.math.abs((viewModel.lrBalance * 100).toInt())}%"
+                                    viewModel.lrBalance > 0f -> "Right ${(viewModel.lrBalance * 100).toInt()}%"
+                                    else -> "Center"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Slider(
+                        value = viewModel.lrBalance,
+                        onValueChange = { viewModel.applyLrBalance(it) },
+                        valueRange = -1f..1f,
+                        modifier = Modifier.width(140.dp),
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Piano,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.pitchSemitones != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Pitch", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (viewModel.pitchSemitones == 0f) "Original"
+                                else "${if (viewModel.pitchSemitones > 0) "+" else ""}${String.format("%.1f", viewModel.pitchSemitones)} semitones",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Slider(
+                        value = viewModel.pitchSemitones,
+                        onValueChange = { viewModel.applyPitchSemitones(it) },
+                        valueRange = -12f..12f,
+                        steps = 23,
+                        modifier = Modifier.width(140.dp),
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (viewModel.autoEqByGenre) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Auto-EQ by Genre", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Apply EQ preset based on track genre",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.autoEqByGenre,
+                        onCheckedChange = { viewModel.applyAutoEqByGenre(it) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+
+
 @Composable
 private fun PixelPlayerTopBar(
     onBack: () -> Unit,
@@ -986,6 +1581,7 @@ private fun PixelPlayerTopBar(
     nightModeStrength: com.raulshma.jellyplay.core.model.EffectStrength,
     onSpeedClick: () -> Unit,
     onEqualizerClick: () -> Unit,
+    onEffectsClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
@@ -1033,36 +1629,52 @@ private fun PixelPlayerTopBar(
                 IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
                     Icon(Icons.Default.MoreVert, "More", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
+                val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    leadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 DropdownMenu(expanded = showMenu, onDismissRequest = { onMenuToggle(false) }) {
                     DropdownMenuItem(
                         text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
                         onClick = onSpeedClick,
                         leadingIcon = { Icon(Icons.Default.Speed, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Equalizer") },
                         onClick = onEqualizerClick,
                         leadingIcon = { Icon(Icons.Default.Tune, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Audio Effects") },
+                        onClick = onEffectsClick,
+                        leadingIcon = { Icon(Icons.Default.SpatialAudio, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
                         onClick = { onDialogueBoostClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
                         onClick = { onNightModeClick(); onMenuToggle(false) },
                         leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Ambient Mode") },
                         onClick = onAmbientClick,
                         leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                        colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
                         onClick = onSleepTimerClick,
                         leadingIcon = { Icon(Icons.Default.Timer, null) },
+                        colors = itemColors,
                     )
                 }
             }
@@ -1084,6 +1696,19 @@ private fun AlbumArtwork(
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
 ) {
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "audio_player_album_art"),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
     Box(
         modifier = Modifier
             .fillMaxWidth(if (isExpanded) 0.85f else 0.75f)
@@ -1095,7 +1720,8 @@ private fun AlbumArtwork(
                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
             )
-            .clip(ShapeCache.smooth24),
+            .clip(ShapeCache.smooth24)
+            .then(sharedModifier),
         contentAlignment = Alignment.Center,
     ) {
         if (albumArtUrl.isNotBlank()) {
@@ -1197,12 +1823,12 @@ private fun PixelProgressSection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            formatDuration(currentPosition),
+            com.raulshma.jellyplay.core.ui.components.formatDurationMs(currentPosition),
             style = MaterialTheme.typography.labelSmall,
             color = accentColor.copy(alpha = 0.8f),
         )
         Text(
-            if (duration > 0) formatDuration(duration) else "--:--",
+            if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.5f),
         )
@@ -1228,6 +1854,19 @@ private fun PixelTransportControls(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+        val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedNextModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "audio_player_skip_next"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
+
         IconButtonWithPressAnimation(
             onClick = onSkipPrevious,
             icon = {
@@ -1255,6 +1894,7 @@ private fun PixelTransportControls(
                 )
             },
             size = 48.dp,
+            modifier = sharedNextModifier,
         )
     }
 }
@@ -1264,8 +1904,10 @@ private fun PixelTransportControls(
 private fun PixelSecondaryControls(
     shuffleMode: Boolean,
     repeatMode: Int,
+    isFavorite: Boolean,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
+    onToggleFavorite: () -> Unit,
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
@@ -1299,10 +1941,14 @@ private fun PixelSecondaryControls(
             },
         )
         IconButtonWithPressAnimation(
-            onClick = { /* TODO: Favorite via Jellyfin API */ },
-            tint = Color.White.copy(alpha = 0.6f),
+            onClick = onToggleFavorite,
+            tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
-                Icon(Icons.Default.FavoriteBorder, "Favorite", modifier = Modifier.size(22.dp))
+                Icon(
+                    if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    "Favorite",
+                    modifier = Modifier.size(22.dp),
+                )
             },
         )
     }
@@ -1323,6 +1969,19 @@ private fun PixelPlayPauseButton(
         label = "pixelPlayScale",
     )
 
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "audio_player_play_pause"),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
     // Light tinted background (Pixel Player uses a cream/light pink)
     val buttonBg = accentColor.copy(alpha = 0.25f).let { c ->
         Color(
@@ -1335,6 +1994,7 @@ private fun PixelPlayPauseButton(
 
     Box(
         modifier = Modifier
+            .then(sharedModifier)
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(ShapeCache.smooth20)
@@ -1362,6 +2022,7 @@ private fun IconButtonWithPressAnimation(
     tint: Color = Color.White,
     icon: @Composable () -> Unit,
     size: androidx.compose.ui.unit.Dp = 40.dp,
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1373,7 +2034,7 @@ private fun IconButtonWithPressAnimation(
 
     IconButton(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable(),
@@ -1435,7 +2096,7 @@ private fun AudioSleepTimerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = if (isEndOfEpisodeMode) "End of episode" else formatDuration(remainingMs),
+                        text = if (isEndOfEpisodeMode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(remainingMs),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -1488,15 +2149,90 @@ private fun AudioSleepTimerSheet(
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
+private enum class DragDirection { VERTICAL, HORIZONTAL }
+
+@Composable
+private fun SwipeTrackCard(
+    title: String,
+    artist: String,
+    artworkUrl: String,
+    isNext: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = Color.Black.copy(alpha = 0.85f),
+        ),
+        modifier = modifier
+            .width(260.dp)
+            .height(80.dp)
+            .shadow(12.dp, RoundedCornerShape(16.dp)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isNext) {
+                Icon(
+                    Icons.Default.SkipNext,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            } else {
+                Icon(
+                    Icons.Default.SkipPrevious,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (artworkUrl.isNotBlank()) {
+                    MediaImage(
+                        url = artworkUrl,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

@@ -39,6 +39,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Shuffle
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
@@ -50,6 +57,10 @@ fun SyncPlayPlayerSheet(
     isSynced: Boolean,
     isPlaying: Boolean,
     ignoreWait: Boolean,
+    repeatMode: SyncPlayRepeatMode,
+    shuffleMode: SyncPlayShuffleMode,
+    onRepeatModeChange: (SyncPlayRepeatMode) -> Unit,
+    onShuffleModeChange: (SyncPlayShuffleMode) -> Unit,
     onTogglePlayPause: () -> Unit,
     onStop: () -> Unit,
     onLeave: () -> Unit,
@@ -156,6 +167,83 @@ fun SyncPlayPlayerSheet(
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                var repeatExpanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.weight(1f)) {
+                    FilledTonalButton(
+                        onClick = { repeatExpanded = true },
+                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        shape = ShapeCache.smoothPill,
+                    ) {
+                        Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        val label = when (repeatMode) {
+                            SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
+                            SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
+                            SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                        }
+                        Text(label)
+                    }
+                    DropdownMenu(
+                        expanded = repeatExpanded,
+                        onDismissRequest = { repeatExpanded = false },
+                    ) {
+                        SyncPlayRepeatMode.entries.forEach { mode ->
+                            val label = when (mode) {
+                                SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
+                                SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
+                                SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                            }
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onRepeatModeChange(mode)
+                                    repeatExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                var shuffleExpanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.weight(1f)) {
+                    FilledTonalButton(
+                        onClick = { shuffleExpanded = true },
+                        modifier = Modifier.fillMaxWidth().tvFocusable(),
+                        shape = ShapeCache.smoothPill,
+                    ) {
+                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        val label = when (shuffleMode) {
+                            SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
+                            SyncPlayShuffleMode.SORTED -> "Sorted"
+                        }
+                        Text(label)
+                    }
+                    DropdownMenu(
+                        expanded = shuffleExpanded,
+                        onDismissRequest = { shuffleExpanded = false },
+                    ) {
+                        SyncPlayShuffleMode.entries.forEach { mode ->
+                            val label = when (mode) {
+                                SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
+                                SyncPlayShuffleMode.SORTED -> "Sorted"
+                            }
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onShuffleModeChange(mode)
+                                    shuffleExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
             }
 

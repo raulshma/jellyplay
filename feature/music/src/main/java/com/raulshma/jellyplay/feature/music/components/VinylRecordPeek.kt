@@ -1,0 +1,89 @@
+package com.raulshma.jellyplay.feature.music.components
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun VinylRecordPeek(
+    isHoveredOrFocused: Boolean,
+    modifier: Modifier = Modifier,
+    size: Dp = 120.dp,
+    labelColor: Color = MaterialTheme.colorScheme.primary,
+) {
+    val slideFraction by animateFloatAsState(
+        targetValue = if (isHoveredOrFocused) 0.35f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "vinylSlide"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "vinylRotationTransition")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "vinylRotation"
+    )
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .offset(x = size * slideFraction)
+            .rotate(if (slideFraction > 0.05f) rotation else 0f)
+            .clip(CircleShape)
+            .background(Color(0xFF0F0F0F)),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.toPx() / 2f, size.toPx() / 2f)
+            val maxRadius = size.toPx() / 2f
+
+            val grooveSpacing = 12f
+            var currentRadius = maxRadius - 10f
+            while (currentRadius > maxRadius * 0.42f) {
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.08f),
+                    radius = currentRadius,
+                    center = center,
+                    style = Stroke(width = 1f)
+                )
+                currentRadius -= grooveSpacing
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(size * 0.35f)
+                .clip(CircleShape)
+                .background(labelColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(size * 0.08f)
+                    .clip(CircleShape)
+                    .background(Color.Black)
+            )
+        }
+    }
+}

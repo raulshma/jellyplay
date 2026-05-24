@@ -219,6 +219,19 @@ fun VideoPlayerScreen(
         }
     }
 
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    LaunchedEffect(windowInfo.isWindowFocused) {
+        if (windowInfo.isWindowFocused) {
+            activity?.let { act ->
+                val window = act.window
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
     val preferredPlayer = uiState.preferredPlayerType
     val streamUrl = uiState.streamUrl
 
@@ -1239,6 +1252,10 @@ private fun PlayerSheetRouter(
                 isSynced = uiState.isSyncPlaySynced,
                 isPlaying = uiState.isPlaying,
                 ignoreWait = syncPlayIgnoreWait,
+                repeatMode = uiState.syncPlayRepeatMode,
+                shuffleMode = uiState.syncPlayShuffleMode,
+                onRepeatModeChange = { viewModel.setSyncPlayRepeatMode(it) },
+                onShuffleModeChange = { viewModel.setSyncPlayShuffleMode(it) },
                 chatMessages = syncPlayChatMessages,
                 onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
                 onStop = { viewModel.syncPlayStop() },

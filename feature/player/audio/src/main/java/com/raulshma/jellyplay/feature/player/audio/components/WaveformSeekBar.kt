@@ -40,9 +40,11 @@ fun WaveformSeekBar(
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var isDragging by remember { androidx.compose.runtime.mutableStateOf(false) }
     var phaseShift by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) return@LaunchedEffect
+    val isAnimating = isPlaying || isDragging
+    LaunchedEffect(isAnimating) {
+        if (!isAnimating) return@LaunchedEffect
         while (true) {
             withFrameNanos { nanoTime ->
                 phaseShift = ((nanoTime / 1_000_000f) % 2000f) / 2000f * (2 * PI).toFloat()
@@ -50,14 +52,14 @@ fun WaveformSeekBar(
         }
     }
 
-    val targetAmplitudeRatio = if (isPlaying) 1f else 0f
+    val targetAmplitudeRatio = if (isAnimating) 1f else 0f
     val currentAmplitudeRatio by animateFloatAsState(
         targetValue = targetAmplitudeRatio,
         animationSpec = tween(durationMillis = 500),
         label = "amplitudeRatio",
     )
 
-    val currentPhase = if (isPlaying) phaseShift else 0f
+    val currentPhase = if (isAnimating) phaseShift else 0f
 
     val density = LocalDensity.current
     val strokeWidthPx = remember(density) { with(density) { 4.dp.toPx() } }
@@ -80,7 +82,11 @@ fun WaveformSeekBar(
                 }
             }
             .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, _ ->
+                detectHorizontalDragGestures(
+                    onDragStart = { isDragging = true },
+                    onDragEnd = { isDragging = false },
+                    onDragCancel = { isDragging = false }
+                ) { change, _ ->
                     change.consume()
                     val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
                     onSeek(fraction)

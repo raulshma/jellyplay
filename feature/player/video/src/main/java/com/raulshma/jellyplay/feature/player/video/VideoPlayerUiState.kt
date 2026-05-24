@@ -11,12 +11,15 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
@@ -50,6 +53,8 @@ data class VideoPlayerUiState(
     val syncPlayParticipantCount: Int = 0,
     val isSyncPlaySynced: Boolean = false,
     val isSyncPlaySyncing: Boolean = false,
+    val syncPlayRepeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
+    val syncPlayShuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
     val nextEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
@@ -89,6 +94,11 @@ data class VideoPlayerUiState(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val bassBoostEnabled: Boolean = false,
+    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
+    val virtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Int = 500,
+    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
     val sleepTimerActive: Boolean = false,
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerRemainingMs: Long = 0L,

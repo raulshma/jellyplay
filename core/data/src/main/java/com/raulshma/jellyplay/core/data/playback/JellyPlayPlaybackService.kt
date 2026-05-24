@@ -10,7 +10,7 @@ import javax.inject.Inject
 
 @UnstableApi
 @AndroidEntryPoint
-class JellyPlayPlaybackService : MediaSessionService() {
+class JellyPlayPlaybackService : MediaSessionService(), PlaybackSessionManager.Listener {
 
     @Inject lateinit var sessionManager: PlaybackSessionManager
     @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
@@ -18,23 +18,27 @@ class JellyPlayPlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         setMediaNotificationProvider(JellyPlayNotificationProvider(this))
+        sessionManager.addListener(this)
+    }
+
+    override fun onSessionChanged(newSession: MediaSession?, oldSession: MediaSession?) {
+        if (oldSession != null && isSessionAdded(oldSession)) {
+            removeSession(oldSession)
+        }
+        if (newSession != null && !isSessionAdded(newSession)) {
+            addSession(newSession)
+        }
+        if (newSession == null) {
+            stopSelf()
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return sessionManager.currentSession
     }
 
-    /**
-     * When the app starts the service (via `startService`), we need to ensure the current
-     * session is added to this service so the MediaNotificationManager tracks it and posts
-     * the notification. This also handles media button events when a controller connects.
-     */
     @UnstableApi
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val session = sessionManager.currentSession
-        if (session != null && !isSessionAdded(session)) {
-            addSession(session)
-        }
         return super.onStartCommand(intent, flags, startId)
     }
 
@@ -52,6 +56,7 @@ class JellyPlayPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        sessionManager.removeListener(this)
         val session = sessionManager.currentSession
         if (session != null) {
             sessionManager.clearSession(session)

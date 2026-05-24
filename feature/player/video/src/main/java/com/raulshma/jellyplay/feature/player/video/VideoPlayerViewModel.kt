@@ -23,16 +23,20 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -295,15 +299,21 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val groupPlayingId = syncPlayManager.currentGroup?.playingItemId
+            val currentGroup = syncPlayManager.currentGroup
+            val groupPlayingId = currentGroup?.playingItemId
             if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
                 try {
-                    syncPlayManager.setNewQueue(
-                        itemIds = listOf(itemId),
-                        playingItemId = itemId,
-                        mediaSourceId = mediaSourceId,
-                        startPositionTicks = startPositionTicks
-                    )
+                    val matchingEntry = currentGroup.playlistItemMap.entries.find { it.value == itemId }
+                    if (matchingEntry != null) {
+                        syncPlayManager.setPlaylistItem(matchingEntry.key)
+                    } else {
+                        syncPlayManager.setNewQueue(
+                            itemIds = listOf(itemId),
+                            playingItemId = itemId,
+                            mediaSourceId = mediaSourceId,
+                            startPositionTicks = startPositionTicks
+                        )
+                    }
                 } catch (_: Exception) { }
             }
 
@@ -662,6 +672,48 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.setChannelMixEnabled(newVal)
         }
     }
+
+    fun toggleBassBoost() {
+        val newVal = !_uiState.value.bassBoostEnabled
+        _uiState.update { it.copy(bassBoostEnabled = newVal) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setBassBoostEnabled(newVal)
+        }
+    }
+
+    fun setBassBoostStrength(strength: EffectStrength) {
+        _uiState.update { it.copy(bassBoostStrength = strength) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setBassBoostStrength(strength)
+        }
+    }
+
+    fun toggleVirtualizer() {
+        val newVal = !_uiState.value.virtualizerEnabled
+        _uiState.update { it.copy(virtualizerEnabled = newVal) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setVirtualizerEnabled(newVal)
+        }
+    }
+
+    fun setVirtualizerStrength(strength: Int) {
+        _uiState.update { it.copy(virtualizerStrength = strength) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setVirtualizerStrength(strength)
+        }
+    }
+
+    fun setReverbPreset(preset: ReverbPreset) {
+        _uiState.update { it.copy(reverbPreset = preset) }
+        updateConfigWithUiState()
+        viewModelScope.launch {
+            preferencesStore.setReverbPreset(preset)
+        }
+    }
     
     private fun updateConfigWithUiState() {
         val state = _uiState.value
@@ -682,6 +734,11 @@ class VideoPlayerViewModel @Inject constructor(
                 audioNormalizationEnabled = state.audioNormalizationEnabled,
                 channelMixMode = state.channelMixMode,
                 channelMixEnabled = state.channelMixEnabled,
+                bassBoostEnabled = state.bassBoostEnabled,
+                bassBoostStrength = state.bassBoostStrength,
+                virtualizerEnabled = state.virtualizerEnabled,
+                virtualizerStrength = state.virtualizerStrength,
+                reverbPreset = state.reverbPreset,
             )
         )
         playerSessionManager.engine?.updateConfig(config)
@@ -697,7 +754,30 @@ class VideoPlayerViewModel @Inject constructor(
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
+
+            if (syncPlayManager.isInSyncPlaySession) {
+                val group = syncPlayManager.currentGroup
+                val currentPlaylistItemId = group?.playingPlaylistItemId
+                val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
+                if (currentPlaylistItemId != null && nextExistsInQueue) {
+                    syncPlayController.sendNextItem(currentPlaylistItemId)
+                    return@launch
+                }
+            }
+
             initialize(next.id, null, 0L)
+        }
+    }
+
+    fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
+        viewModelScope.launch {
+            syncPlayManager.setRepeatMode(mode)
+        }
+    }
+
+    fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
+        viewModelScope.launch {
+            syncPlayManager.setShuffleMode(mode)
         }
     }
 

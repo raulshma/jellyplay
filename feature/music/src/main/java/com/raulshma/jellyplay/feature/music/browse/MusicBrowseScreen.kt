@@ -50,7 +50,7 @@ fun MusicBrowseScreen(
     onArtistClick: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
     onTrackClick: (String) -> Unit,
-    onGenreClick: (String) -> Unit,
+    onGenreClick: (id: String, name: String) -> Unit,
     onPlaylistClick: (String) -> Unit,
     viewModel: MusicBrowseViewModel = hiltViewModel(),
 ) {
@@ -191,7 +191,7 @@ private fun TracksPage(
                                 artist = track.albumArtist,
                                 album = track.album,
                                 duration = track.runTimeTicks?.let { ticks ->
-                                    formatDuration(ticks / 10_000)
+                                    com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
                                 },
                                 imageUrl = viewModel.getImageUrl(track.id),
                                 onClick = { onItemClick(track.id) },
@@ -208,7 +208,7 @@ private fun TracksPage(
 @Composable
 private fun GenresPage(
     viewModel: MusicBrowseViewModel,
-    onItemClick: (String) -> Unit,
+    onItemClick: (id: String, name: String) -> Unit,
     contentPad: Dp = 16.dp,
     gridMin: Dp = 120.dp,
     spacing: Dp = 8.dp,
@@ -229,7 +229,7 @@ private fun GenresPage(
             items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
                 GenreChip(
                     name = genre.name,
-                    onClick = { onItemClick(genre.id) },
+                    onClick = { onItemClick(genre.id, genre.name) },
                 )
             }
         }
@@ -315,11 +315,4 @@ private fun <T : Any> PagedGrid(
             }
         }
     }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return String.format("%d:%02d", minutes, seconds)
 }

@@ -14,8 +14,10 @@ import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsSource
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -91,10 +93,43 @@ class AudioPlayerViewModel @Inject constructor(
     var equalizerSettings by mutableStateOf(com.raulshma.jellyplay.core.model.EqualizerSettings())
         private set
 
+    var equalizerPreset by mutableStateOf(EqualizerPreset.FLAT)
+        private set
+
+    var bassBoostEnabled by mutableStateOf(false)
+        private set
+
+    private var _bassBoostStrength = mutableStateOf(EffectStrength.MODERATE)
+    val bassBoostStrength: EffectStrength by _bassBoostStrength
+
+    var virtualizerEnabled by mutableStateOf(false)
+        private set
+
+    var virtualizerStrength by mutableStateOf(500)
+        private set
+
+    var reverbPreset by mutableStateOf(ReverbPreset.NONE)
+        private set
+
+    var lrBalance by mutableFloatStateOf(0f)
+        private set
+
+    var pitchSemitones by mutableFloatStateOf(0f)
+        private set
+
+    var autoEqByGenre by mutableStateOf(false)
+        private set
+
+    var fftData by mutableStateOf(ByteArray(0))
+        private set
+
     var normalizationMode by mutableStateOf(AudioNormalizationMode.NONE)
         private set
 
     var preAmpDb by mutableFloatStateOf(0f)
+        private set
+
+    var isFavorite by mutableStateOf(false)
         private set
 
     var lyrics by mutableStateOf<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
@@ -162,6 +197,16 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.currentIndex.collect { currentIndex = it }
         }
         viewModelScope.launch {
+            audioPlaybackManager.currentPlayingItemId.collect { itemId ->
+                if (itemId != null) {
+                    mediaRepository.getMediaDetail(itemId)
+                        .onSuccess { isFavorite = it.item.isFavorite }
+                } else {
+                    isFavorite = false
+                }
+            }
+        }
+        viewModelScope.launch {
             audioPlaybackManager.lyrics.collect { lyrics = it }
         }
         viewModelScope.launch {
@@ -184,6 +229,33 @@ class AudioPlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             audioPlaybackManager.equalizerSettings.collect { equalizerSettings = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.equalizerPreset.collect { equalizerPreset = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.bassBoostEnabled.collect { bassBoostEnabled = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.virtualizerEnabled.collect { virtualizerEnabled = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.virtualizerStrength.collect { virtualizerStrength = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.reverbPresetState.collect { reverbPreset = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.lrBalance.collect { lrBalance = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.pitchSemitones.collect { pitchSemitones = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.autoEqByGenre.collect { autoEqByGenre = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.fftData.collect { fftData = it }
         }
         viewModelScope.launch {
             audioPlaybackManager.crossfadeDurationMs.collect { crossfadeDurationMs = it }
@@ -237,6 +309,12 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
             audioPlaybackManager.setReplayGainMode(prefs.audioNormalizationMode)
             audioPlaybackManager.setReplayGainPreAmpDb(prefs.replayGainPreAmpDb)
+            _bassBoostStrength.value = prefs.bassBoostStrength
+            audioPlaybackManager.setBassBoostStrength(prefs.bassBoostStrength)
+            audioPlaybackManager.setVirtualizerStrength(prefs.virtualizerStrength)
+            audioPlaybackManager.setLrBalance(prefs.lrBalance)
+            audioPlaybackManager.setPitchSemitones(prefs.pitchSemitones)
+            audioPlaybackManager.setAutoEqByGenre(prefs.autoEqByGenre)
         }
 
         fetchBlurHash(itemId)
@@ -365,6 +443,72 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.resetEqualizer()
         viewModelScope.launch {
             preferencesStore.setEqualizerSettings(equalizerSettings)
+            preferencesStore.setEqualizerPreset(equalizerPreset)
+        }
+    }
+
+    fun applyEqualizerPreset(preset: EqualizerPreset) {
+        audioPlaybackManager.setEqualizerPreset(preset)
+        viewModelScope.launch {
+            preferencesStore.setEqualizerPreset(preset)
+            preferencesStore.setEqualizerSettings(equalizerSettings)
+        }
+    }
+
+    fun toggleBassBoost() {
+        audioPlaybackManager.toggleBassBoost()
+        viewModelScope.launch {
+            preferencesStore.setBassBoostEnabled(bassBoostEnabled)
+        }
+    }
+
+    fun setBassBoostStrength(strength: EffectStrength) {
+        _bassBoostStrength.value = strength
+        audioPlaybackManager.setBassBoostStrength(strength)
+        viewModelScope.launch {
+            preferencesStore.setBassBoostStrength(strength)
+        }
+    }
+
+    fun toggleVirtualizer() {
+        audioPlaybackManager.toggleVirtualizer()
+        viewModelScope.launch {
+            preferencesStore.setVirtualizerEnabled(virtualizerEnabled)
+        }
+    }
+
+    fun applyVirtualizerStrength(strength: Int) {
+        audioPlaybackManager.setVirtualizerStrength(strength)
+        viewModelScope.launch {
+            preferencesStore.setVirtualizerStrength(strength)
+        }
+    }
+
+    fun applyReverbPreset(preset: ReverbPreset) {
+        audioPlaybackManager.setReverbPreset(preset)
+        viewModelScope.launch {
+            preferencesStore.setReverbPreset(preset)
+        }
+    }
+
+    fun applyLrBalance(balance: Float) {
+        audioPlaybackManager.setLrBalance(balance)
+        viewModelScope.launch {
+            preferencesStore.setLrBalance(balance)
+        }
+    }
+
+    fun applyPitchSemitones(semitones: Float) {
+        audioPlaybackManager.setPitchSemitones(semitones)
+        viewModelScope.launch {
+            preferencesStore.setPitchSemitones(semitones)
+        }
+    }
+
+    fun applyAutoEqByGenre(enabled: Boolean) {
+        audioPlaybackManager.setAutoEqByGenre(enabled)
+        viewModelScope.launch {
+            preferencesStore.setAutoEqByGenre(enabled)
         }
     }
 
@@ -441,6 +585,14 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun stopPlayback() {
         audioPlaybackManager.stopAndRelease()
+    }
+
+    fun toggleFavorite() {
+        val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
+        viewModelScope.launch {
+            mediaRepository.toggleFavorite(itemId)
+                .onSuccess { isFavorite = it }
+        }
     }
 
     val currentPlayingItemId: String?

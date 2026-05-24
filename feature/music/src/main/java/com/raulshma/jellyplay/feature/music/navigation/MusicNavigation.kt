@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.feature.music.albums.AlbumsScreen
 import com.raulshma.jellyplay.feature.music.artistdetail.ArtistDetailScreen
 import com.raulshma.jellyplay.feature.music.artists.ArtistsScreen
 import com.raulshma.jellyplay.feature.music.genres.GenresScreen
+import com.raulshma.jellyplay.feature.music.genres.GenreDetailScreen
 import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistDetailScreen
 import com.raulshma.jellyplay.feature.music.moodplaylist.MoodPlaylistsScreen
 import com.raulshma.jellyplay.feature.music.smartplaylist.SmartPlaylistDetailScreen
@@ -24,8 +25,8 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
             onArtistClick = { artistId -> navigator.navigate(Route.ArtistDetail(artistId)) },
             onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
             onTrackClick = { trackId -> navigator.navigate(Route.AudioPlayer(trackId)) },
-            onGenreClick = { genreId -> },
-            onPlaylistClick = { playlistId -> navigator.navigate(Route.PlaylistDetail(playlistId)) },
+            onGenreClick = { genreId, genreName -> navigator.navigate(Route.GenreDetail(genreId, genreName)) },
+            onPlaylistClick = { playlistId -> navigator.navigate(Route.PlaylistDetail(playlistId, "")) },
         )
     }
     entry<Route.Artists> {
@@ -51,8 +52,8 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
     }
     entry<Route.Genres> {
         GenresScreen(
-            onItemClick = { genreId ->
-                // Navigate to genre items - could use Library with genre filter
+            onItemClick = { genreId, genreName ->
+                navigator.navigate(Route.GenreDetail(genreId, genreName))
             },
         )
     }
@@ -75,6 +76,15 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
                 navigator.navigate(Route.AlbumDetail(albumId))
             },
             onTrackClick = { trackId ->
+                navigator.navigate(Route.AudioPlayer(trackId))
+            },
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<Route.GenreDetail> { key ->
+        GenreDetailScreen(
+            genreName = key.genreName,
+            onItemClick = { trackId ->
                 navigator.navigate(Route.AudioPlayer(trackId))
             },
             onBack = { navigator.goBack() },
@@ -116,8 +126,8 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
     }
     entry<Route.Playlists> {
         PlaylistsScreen(
-            onPlaylistClick = { playlistId ->
-                navigator.navigate(Route.PlaylistDetail(playlistId))
+            onPlaylistClick = { playlistId, playlistName ->
+                navigator.navigate(Route.PlaylistDetail(playlistId, playlistName))
             },
             onBack = { navigator.goBack() },
         )
@@ -125,6 +135,7 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
     entry<Route.PlaylistDetail> { key ->
         PlaylistDetailScreen(
             playlistId = key.playlistId,
+            playlistName = key.playlistName,
             onPlayItem = { trackId ->
                 navigator.navigate(Route.AudioPlayer(trackId))
             },

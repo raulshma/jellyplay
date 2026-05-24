@@ -2,6 +2,11 @@ package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -23,6 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,6 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 
 @Composable
 fun ArtistCard(
@@ -60,6 +70,27 @@ fun ArtistCard(
         label = "artistCardBrightness",
     )
 
+    val ringTransition = rememberInfiniteTransition(label = "artist_ring")
+    val ringRotation by ringTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val ringPulse by ringTransition.animateFloat(
+        initialValue = 2.dp.value,
+        targetValue = 3.5.dp.value,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FancyTransitionEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -77,10 +108,31 @@ fun ArtistCard(
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        val secondaryColor = MaterialTheme.colorScheme.secondary
+        val tertiaryColor = MaterialTheme.colorScheme.tertiary
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .padding(6.dp)
+                .drawBehind {
+                    rotate(ringRotation) {
+                        drawCircle(
+                            brush = Brush.sweepGradient(
+                                colors = listOf(
+                                    primaryColor,
+                                    secondaryColor,
+                                    tertiaryColor,
+                                    primaryColor
+                                )
+                            ),
+                            radius = size.minDimension / 2f + 4.dp.toPx(),
+                            style = Stroke(width = ringPulse.dp.toPx())
+                        )
+                    }
+                }
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
