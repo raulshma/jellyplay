@@ -1,5 +1,6 @@
-package com.raulshma.jellyplay.feature.music.tracks
+package com.raulshma.jellyplay.feature.music.genres
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -10,20 +11,26 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class TracksViewModel @Inject constructor(
+class GenreDetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     val audioPlaybackManager: AudioPlaybackManager,
 ) : ViewModel() {
 
+    private val genreId: String = savedStateHandle[Route.GenreDetail::genreId.name] ?: ""
+    private val genreName: String = savedStateHandle[Route.GenreDetail::genreName.name] ?: ""
+
     val tracks: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
         mediaTypes = listOf(MediaType.AUDIO),
+        genres = listOf(genreName),
         sortBy = "SortName",
     ).cachedIn(viewModelScope)
 

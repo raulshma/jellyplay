@@ -55,7 +55,9 @@ sealed class Route : NavKey {
     @Serializable data class MoodPlaylistDetail(val playlistId: String) : Route()
     @Serializable data class CollectionDetail(val collectionId: String) : Route()
     @Serializable data object Playlists : Route()
-    @Serializable data class PlaylistDetail(val playlistId: String) : Route()
+    @Serializable data class PlaylistDetail(val playlistId: String, val playlistName: String = "") : Route()
+
+    @Serializable data class GenreDetail(val genreId: String, val genreName: String = "") : Route()
 
     @Serializable data class OfflinePlayer(
         val filePath: String,

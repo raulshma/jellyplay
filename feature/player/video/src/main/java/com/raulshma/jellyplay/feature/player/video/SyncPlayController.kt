@@ -4,6 +4,8 @@ import android.util.Log
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -57,10 +59,13 @@ internal class SyncPlayController(
 
     init {
         if (syncPlayManager.isInSyncPlaySession) {
+            val group = syncPlayManager.currentGroup
             uiState.update { it.copy(
                 isInSyncPlaySession = true,
-                syncPlayGroupName = syncPlayManager.currentGroup?.groupName,
-                syncPlayParticipantCount = syncPlayManager.currentGroup?.participantCount ?: 0,
+                syncPlayGroupName = group?.groupName,
+                syncPlayParticipantCount = group?.participantCount ?: 0,
+                syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+                syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
             ) }
         }
     }
@@ -72,10 +77,13 @@ internal class SyncPlayController(
     fun joinGroup(groupId: String) {
         viewModel.viewModelScope.launch {
             syncPlayManager.joinGroup(groupId)
+            val group = syncPlayManager.currentGroup
             uiState.update { it.copy(
-                syncPlayGroupName = syncPlayManager.currentGroup?.groupName ?: groupId,
+                syncPlayGroupName = group?.groupName ?: groupId,
                 isInSyncPlaySession = true,
-                syncPlayParticipantCount = syncPlayManager.currentGroup?.participantCount ?: 0,
+                syncPlayParticipantCount = group?.participantCount ?: 0,
+                syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+                syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
             ) }
             startCommandListener()
         }
@@ -116,10 +124,13 @@ internal class SyncPlayController(
 
     fun reattachSession() {
         if (!syncPlayManager.isInSyncPlaySession) return
+        val group = syncPlayManager.currentGroup
         uiState.update { it.copy(
             isInSyncPlaySession = true,
-            syncPlayGroupName = syncPlayManager.currentGroup?.groupName,
-            syncPlayParticipantCount = syncPlayManager.currentGroup?.participantCount ?: 0,
+            syncPlayGroupName = group?.groupName,
+            syncPlayParticipantCount = group?.participantCount ?: 0,
+            syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+            syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
         ) }
     }
 
@@ -456,6 +467,8 @@ internal class SyncPlayController(
         uiState.update { it.copy(
             syncPlayGroupName = currentCachedGroup?.groupName ?: it.syncPlayGroupName,
             syncPlayParticipantCount = currentCachedGroup?.participantCount ?: it.syncPlayParticipantCount,
+            syncPlayRepeatMode = currentCachedGroup?.repeatMode ?: it.syncPlayRepeatMode,
+            syncPlayShuffleMode = currentCachedGroup?.shuffleMode ?: it.syncPlayShuffleMode,
         ) }
     }
 

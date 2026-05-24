@@ -6,6 +6,11 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -13,6 +18,11 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.unit.sp
+import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
@@ -177,11 +187,21 @@ fun HomeScreen(
     }
 
     var showSurprise by remember { mutableStateOf(false) }
-    val allItems = remember(sections) { sections.flatMap { it.items } }
-    val featuredCandidates = remember(allItems) {
-        allItems.filter {
-            it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES
-        }.ifEmpty { allItems }
+    val featuredCandidates = remember(sections) {
+        val latestItems = sections
+            .filter { it.type == HomeSectionType.LATEST_MEDIA }
+            .flatMap { section ->
+                section.items
+                    .filter { it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES }
+                    .take(3)
+            }
+        if (latestItems.isNotEmpty()) {
+            latestItems
+        } else {
+            sections.flatMap { it.items }
+                .filter { it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES }
+                .ifEmpty { sections.flatMap { it.items } }
+        }
     }
 
     var featuredIndex by remember { mutableIntStateOf(0) }
@@ -311,17 +331,17 @@ fun HomeScreen(
             navBarColor.value = backgroundColor
         }
 
-        val appBarCollapsed by remember {
+        val transitionRange = 140.dp
+        val transitionRangePx = with(density) { transitionRange.toPx() }
+        val scrollFraction by remember {
             derivedStateOf {
-                listState.firstVisibleItemIndex > 0 ||
-                        listState.firstVisibleItemScrollOffset > headerHeightPx * 0.7f
+                if (listState.firstVisibleItemIndex > 0) {
+                    1f
+                } else {
+                    (listState.firstVisibleItemScrollOffset.toFloat() / transitionRangePx).coerceIn(0f, 1f)
+                }
             }
         }
-        val appBarColor by animateFloatAsState(
-        targetValue = if (appBarCollapsed) 1f else 0f,
-            animationSpec = tween(300, easing = AlphaEasing),
-            label = "appBarColor",
-        )
 
         val contentPad = adaptiveInfo.contentPadding(isTv)
 
@@ -440,6 +460,7 @@ fun HomeScreen(
                                             height = headerHeight,
                                             backgroundColor = backgroundColor,
                                             contentPadding = contentPad,
+                                            listState = listState,
                                             onItemClick = {
                                                 onItemClick(it)
                                             },
@@ -604,32 +625,45 @@ fun HomeScreen(
                 }
             }
 
-            val scrimAlpha by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 0.85f else 0f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "scrimAlpha",
-            )
-            val borderAlpha by animateFloatAsState(
-                targetValue = if (appBarCollapsed) 0.12f else 0f,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "borderAlpha",
-            )
-            val appBarIconColor by animateColorAsState(
-                targetValue = if (appBarCollapsed) MaterialTheme.colorScheme.onSurface else Color.White,
-                animationSpec = tween(400, easing = FancyTransitionEasing),
-                label = "appBarIconColor",
-            )
+            val borderAlpha = 0.12f * scrollFraction
+            val appBarIconColor = lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollFraction)
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+            val dockScale = 1f - (0.04f * scrollFraction)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(
+                        horizontal = (16f * scrollFraction).dp,
+                        vertical = (8f * scrollFraction).dp
+                    )
+                    .graphicsLayer {
+                        scaleX = dockScale
+                        scaleY = dockScale
+                    }
+                    .clip(
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
+                    )
                     .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                backgroundColor.copy(alpha = scrimAlpha * 0.95f),
-                                backgroundColor.copy(alpha = scrimAlpha),
-                            ),
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                    )
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = borderAlpha * 2f),
+                                    Color.White.copy(alpha = borderAlpha * 0.5f),
+                                )
+                            )
+                        ),
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
                         )
                     )
             ) {
@@ -637,14 +671,22 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
-                        .statusBarsPadding()
-                        .padding(horizontal = 4.dp),
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    HeaderStatusIndicator(
-                        status = headerStatus,
-                        modifier = Modifier.padding(start = contentPad),
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ModeSwitch(
+                            currentMode = viewModel.homeMode,
+                            onModeChange = onModeChange,
+                        )
+                        HeaderStatusIndicator(
+                            status = headerStatus,
+                            modifier = Modifier.padding(start = 8.dp),
+                            tint = appBarIconColorFaded,
+                        )
+                    }
 
                     Spacer(Modifier.weight(1f))
 
@@ -654,11 +696,7 @@ fun HomeScreen(
                             .padding(horizontal = 4.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ModeSwitch(
-                                currentMode = viewModel.homeMode,
-                                onModeChange = onModeChange,
-                            )
-                            IconButton(
+                            ExpressiveIconButton(
                                 onClick = {
                                     showSurprise = !showSurprise
                                     if (!showSurprise) autoRotateEnabled = true
@@ -672,7 +710,7 @@ fun HomeScreen(
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
-                            IconButton(
+                            ExpressiveIconButton(
                                 onClick = {
                                     onSyncPlayClick()
                                 },
@@ -694,7 +732,7 @@ fun HomeScreen(
                                     }
                                 }
                             ) {
-                                IconButton(
+                                ExpressiveIconButton(
                                     onClick = {
                                         onDownloadsClick()
                                     },
@@ -708,7 +746,7 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            IconButton(
+                            ExpressiveIconButton(
                                 onClick = {
                                     onSettingsClick()
                                 },
@@ -724,24 +762,6 @@ fun HomeScreen(
                         }
                     }
                 }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    appBarIconColor.copy(alpha = borderAlpha),
-                                    appBarIconColor.copy(alpha = borderAlpha * 1.5f),
-                                    appBarIconColor.copy(alpha = borderAlpha),
-                                    Color.Transparent,
-                                ),
-                            )
-                        )
-                )
             }
         }
     }
@@ -782,10 +802,19 @@ private fun AnimatedHeroHeader(
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    listState: LazyListState,
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
 ) {
+    val parallaxOffset by remember(listState) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex == 0) {
+                listState.firstVisibleItemScrollOffset.toFloat() * 0.45f
+            } else 0f
+        }
+    }
+
     AnimatedContent(
         targetState = featuredItem,
         transitionSpec = {
@@ -819,6 +848,7 @@ private fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
+            parallaxOffset = parallaxOffset,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
             onFocusChange = onFocusChange,
@@ -833,11 +863,14 @@ private fun HeroHeader(
     height: androidx.compose.ui.unit.Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    parallaxOffset: Float = 0f,
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -871,19 +904,71 @@ private fun HeroHeader(
         }
     }
 
-    val backdropModifier = Modifier
-        .fillMaxSize()
+    val breathTransition = rememberInfiniteTransition(label = "hero_breath")
+    val breathScale by breathTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = FancyTransitionEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breath"
+    )
+
+    val playPulseScale by rememberInfiniteTransition(label = "play_pulse").animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = AlphaEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "playPulseScale"
+    )
+    val playPulseAlpha by rememberInfiniteTransition(label = "play_pulse_alpha").animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = AlphaEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "playPulseAlpha"
+    )
+
+    val ratingPulse by rememberInfiniteTransition(label = "rating_pulse").animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FancyTransitionEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ratingPulse"
+    )
+
+    // Expressive Asymmetrical mask for compact mobile portrait layout
+    val heroShape = if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+        AbsoluteSmoothCornerShape(
+            cornerRadiusTL = 0.dp,
+            cornerRadiusTR = 0.dp,
+            cornerRadiusBL = 36.dp,
+            cornerRadiusBR = 14.dp,
+            smoothnessAsPercentTL = 60,
+            smoothnessAsPercentTR = 60,
+            smoothnessAsPercentBL = 60,
+            smoothnessAsPercentBR = 60,
+        )
+    } else {
+        RoundedCornerShape(0.dp)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
+            .clip(heroShape)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
             }
-            // On TV, the hero container should NOT be focusable — only the
-            // Play and Details buttons inside should receive D-pad focus.
             .then(
                 if (!isTv) {
                     Modifier.clickable(
@@ -898,7 +983,13 @@ private fun HeroHeader(
             url = backdropUrl,
             contentDescription = item.name,
             blurHash = item.blurHashes.backdrop,
-            modifier = backdropModifier,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = parallaxOffset
+                    scaleX = breathScale
+                    scaleY = breathScale
+                },
             contentScale = ContentScale.Crop,
         )
 
@@ -908,10 +999,10 @@ private fun HeroHeader(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.4f),
+                            Color.Black.copy(alpha = 0.45f),
                             Color.Transparent,
                             backgroundColor.copy(alpha = 0.3f),
-                            backgroundColor.copy(alpha = 0.8f),
+                            backgroundColor.copy(alpha = 0.85f),
                             backgroundColor,
                         ),
                         startY = 0f,
@@ -928,81 +1019,105 @@ private fun HeroHeader(
         ) {
             Text(
                 text = item.name,
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-1.5).sp,
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.55f),
+                        offset = androidx.compose.ui.geometry.Offset(2f, 4f),
+                        blurRadius = 8f
+                    )
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item.year?.let {
-                    Text(
-                        text = it.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)), ShapeCache.smooth8)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = it.toString(),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        )
+                    }
                 }
                 item.runTimeTicks?.let { ticks ->
                     val minutes = ticks / 600_000_000
-                    Text(
-                        text = "${minutes}m",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)), ShapeCache.smooth8)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "${minutes}m",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        )
+                    }
                 }
                 item.officialRating?.let {
                     Box(
                         modifier = Modifier
-                            .clip(ShapeCache.smooth4)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                ),
+                                ShapeCache.smooth8
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
                         Text(
                             text = it,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
                 item.communityRating?.let { rating ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Favorite,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = String.format("%.1f", rating),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        )
-                    }
-                }
-            }
-
-            if (item.genres.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                ) {
-                    item.genres.forEach { genre ->
-                        Box(
-                            modifier = Modifier
-                                .clip(ShapeCache.smooth16)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                        ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)), ShapeCache.smooth8)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .graphicsLayer {
+                                        scaleX = ratingPulse
+                                        scaleY = ratingPulse
+                                    },
+                            )
+                            Spacer(Modifier.width(4.dp))
                             Text(
-                                text = genre,
-                                style = MaterialTheme.typography.bodySmall,
+                                text = String.format("%.1f", rating),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                             )
                         }
@@ -1010,8 +1125,35 @@ private fun HeroHeader(
                 }
             }
 
+            if (item.genres.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    item.genres.forEach { genre ->
+                        Box(
+                            modifier = Modifier
+                                .clip(ShapeCache.smooth12)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                .border(
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                                    ShapeCache.smooth12
+                                )
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = genre,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            )
+                        }
+                    }
+                }
+            }
+
             item.overview?.let { overview ->
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1021,10 +1163,11 @@ private fun HeroHeader(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
 
@@ -1032,65 +1175,133 @@ private fun HeroHeader(
                     modifier = Modifier
                         .height(48.dp)
                         .then(heroTvFocusState.focusModifier)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smooth24)
-                        .clip(ShapeCache.smooth24)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
                         .focusRequester(heroPlayFocusRequester)
                         .onFocusChanged { focusState ->
                             onFocusChange(focusState.isFocused || focusState.hasFocus)
                         }
-                        .clickable(
-                            interactionSource = playInteractionSource,
-                            indication = null,
-                            onClick = onClick,
-                        )
-                        .padding(horizontal = 24.dp)
-                        .graphicsLayer { scaleX = playScale; scaleY = playScale },
-                    contentAlignment = Alignment.Center,
+                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                    if (!isTv) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(2.4f)
+                                .align(Alignment.Center)
+                                .graphicsLayer {
+                                    scaleX = playPulseScale
+                                    scaleY = playPulseScale
+                                    alpha = playPulseAlpha
+                                }
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), ShapeCache.smoothPill)
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (hasProgress) "Resume" else "Play",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .clip(ShapeCache.smoothPill)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                    )
+                                )
+                            )
+                            .clickable(
+                                interactionSource = playInteractionSource,
+                                indication = null,
+                                onClick = onClick,
+                            )
+                            .padding(horizontal = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (hasProgress) "Resume" else "Play",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
                     }
                 }
 
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smooth24)
-                        .clip(ShapeCache.smooth24)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                        .tvFocusIndicator(heroTvFocusState, ShapeCache.smoothPill)
                         .focusRequester(heroDetailsFocusRequester)
                         .onFocusChanged { focusState ->
                             onFocusChange(focusState.isFocused || focusState.hasFocus)
                         }
-                        .clickable(
-                            interactionSource = detailsInteractionSource,
-                            indication = null,
-                            onClick = onDetailsClick ?: onClick,
-                        )
-                        .padding(horizontal = 24.dp)
-                        .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale },
-                    contentAlignment = Alignment.Center,
+                        .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale }
                 ) {
-                    Text(
-                        "Details",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .clip(ShapeCache.smoothPill)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            .border(
+                                BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                                ShapeCache.smoothPill
+                            )
+                            .clickable(
+                                interactionSource = detailsInteractionSource,
+                                indication = null,
+                                onClick = onDetailsClick ?: onClick,
+                            )
+                            .padding(horizontal = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "Details",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ExpressiveIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.82f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "expressive_btn_scale"
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 

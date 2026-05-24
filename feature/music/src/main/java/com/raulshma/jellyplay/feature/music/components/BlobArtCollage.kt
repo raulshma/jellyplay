@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -29,58 +31,65 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
  * Shows overlapping album art in circular/oval blob shapes.
  *
  * @param imageUrls List of artwork URLs (uses up to 3)
- * @param imageUrlBuilder Optional function to build URLs from IDs
  */
 @Composable
 fun BlobArtCollage(
     imageUrls: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            .width(320.dp)
-            .height(220.dp),
+    BoxWithConstraints(
+        modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        // Central large oval blob
-        if (imageUrls.isNotEmpty()) {
-            MediaImage(
-                url = imageUrls[0],
-                contentDescription = null,
-                modifier = Modifier
-                    .size(width = 200.dp, height = 220.dp)
-                    .clip(OvalBlobShape)
-                    .align(Alignment.Center),
-                contentScale = ContentScale.Crop,
-            )
-        }
+        val w = if (maxWidth == Dp.Unspecified || maxWidth == 0.dp) 320.dp else maxWidth
+        val h = if (maxHeight == Dp.Unspecified || maxHeight == 0.dp) 220.dp else maxHeight
 
-        // Small circular blob — top-left
-        if (imageUrls.size > 1) {
-            MediaImage(
-                url = imageUrls[1],
-                contentDescription = null,
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .align(Alignment.TopStart)
-                    .offset(x = 8.dp, y = 16.dp),
-                contentScale = ContentScale.Crop,
-            )
-        }
+        Box(
+            modifier = Modifier
+                .width(w)
+                .height(h),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Central large oval blob
+            if (imageUrls.isNotEmpty()) {
+                MediaImage(
+                    url = imageUrls[0],
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(width = w * 0.62f, height = h)
+                        .clip(OvalBlobShape)
+                        .align(Alignment.Center),
+                    contentScale = ContentScale.Crop,
+                )
+            }
 
-        // Small circular blob — right
-        if (imageUrls.size > 2) {
-            MediaImage(
-                url = imageUrls[2],
-                contentDescription = null,
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .align(Alignment.CenterEnd)
-                    .offset(x = (-4).dp, y = (-20).dp),
-                contentScale = ContentScale.Crop,
-            )
+            // Small circular blob — top-left
+            if (imageUrls.size > 1) {
+                MediaImage(
+                    url = imageUrls[1],
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(h * 0.33f)
+                        .clip(CircleShape)
+                        .align(Alignment.TopStart)
+                        .offset(x = w * 0.02f, y = h * 0.07f),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            // Small circular blob — right
+            if (imageUrls.size > 2) {
+                MediaImage(
+                    url = imageUrls[2],
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(h * 0.27f)
+                        .clip(CircleShape)
+                        .align(Alignment.CenterEnd)
+                        .offset(x = -(w * 0.01f), y = -(h * 0.09f)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
     }
 }

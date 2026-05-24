@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay
 
+import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,12 +40,22 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         handleIncomingIntent(intent)
 

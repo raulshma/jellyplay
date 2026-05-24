@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,36 +85,54 @@ fun AlbumCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(ShapeCache.smooth8)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
+                .aspectRatio(1f),
+            contentAlignment = Alignment.CenterStart,
         ) {
+            val isPeekExpanded = tvFocusState.isFocused || isPressed
+
             if (imageUrl != null) {
-                MediaImage(
-                    url = imageUrl,
-                    contentDescription = name,
-                    blurHash = blurHash,
-                    contentScale = ContentScale.Crop,
+                VinylRecordPeek(
+                    isHoveredOrFocused = isPeekExpanded,
+                    size = 114.dp,
+                    labelColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(ShapeCache.smooth8),
-                )
-            } else {
-                Text(
-                    text = name.take(2).uppercase(),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp)
                 )
             }
 
-            if (brightnessOverlay > 0.01f) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.White.copy(alpha = brightnessOverlay))
-                )
+            Box(
+                modifier = Modifier
+                    .size(114.dp)
+                    .clip(ShapeCache.smooth12)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (imageUrl != null) {
+                    MediaImage(
+                        url = imageUrl,
+                        contentDescription = name,
+                        blurHash = blurHash,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(ShapeCache.smooth12),
+                    )
+                } else {
+                    Text(
+                        text = name.take(2).uppercase(),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                if (brightnessOverlay > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.White.copy(alpha = brightnessOverlay))
+                    )
+                }
             }
         }
         Text(

@@ -212,6 +212,30 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setNightModeStrength(strength) }
     }
 
+    fun setBassBoostEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setBassBoostEnabled(enabled) }
+    }
+
+    fun setBassBoostStrength(strength: EffectStrength) {
+        viewModelScope.launch { preferencesStore.setBassBoostStrength(strength) }
+    }
+
+    fun setVirtualizerEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVirtualizerEnabled(enabled) }
+    }
+
+    fun setVirtualizerStrength(strength: Int) {
+        viewModelScope.launch { preferencesStore.setVirtualizerStrength(strength) }
+    }
+
+    fun setReverbPreset(preset: com.raulshma.jellyplay.core.model.ReverbPreset) {
+        viewModelScope.launch { preferencesStore.setReverbPreset(preset) }
+    }
+
+    fun setAutoEqByGenre(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setAutoEqByGenre(enabled) }
+    }
+
     fun setDecoderMode(mode: DecoderMode) {
         viewModelScope.launch { preferencesStore.setDecoderMode(mode) }
     }
@@ -319,6 +343,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setVideoPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
         viewModelScope.launch { preferencesStore.setVideoPreloadBufferSize(size) }
+    }
+
+    fun setAudioPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
+        viewModelScope.launch { preferencesStore.setAudioPreloadBufferSize(size) }
     }
 
     fun setSegmentBehavior(

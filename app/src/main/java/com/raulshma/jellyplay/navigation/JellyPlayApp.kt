@@ -61,9 +61,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.runtime.NavEntryDecorator
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
@@ -279,7 +282,12 @@ private fun MainContent(
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
-        CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        androidx.compose.animation.SharedTransitionLayout {
+            CompositionLocalProvider(
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
+                LocalNavigationBarColor provides navBarColorState
+            ) {
             if (isTv && !isPlayerScreen) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -317,51 +325,26 @@ private fun MainContent(
                 Scaffold(
                     bottomBar = {
                         if (!isPlayerScreen && !isExpanded) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                            NavigationBar(
+                                containerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                tonalElevation = 0.dp,
                             ) {
-                                MiniPlayer(
-                                    isVisible = showMiniPlayer,
-                                    title = audioTitle,
-                                    artist = audioArtist,
-                                    artworkUri = audioArtworkUrl,
-                                    isPlaying = isAudioPlaying,
-                                    onClick = {
-                                        val itemId = audioItemId ?: return@MiniPlayer
-                                        navigator.navigate(Route.AudioPlayer(itemId))
-                                    },
-                                    onClose = {
-                                        isMiniPlayerDismissed = true
-                                    },
-                                    onPlayPause = {
-                                        audioPlaybackManager.togglePlayPause()
-                                    },
-                                    onSkipNext = {
-                                        audioPlaybackManager.skipToNext()
-                                    },
-                                )
-                                NavigationBar(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    tonalElevation = 0.dp,
-                                ) {
-                                    activeTopLevelRoutes.forEach { (route, label) ->
-                                        NavigationBarItem(
-                                            selected = route == currentTopLevel,
-                                            onClick = { navigator.navigate(route) },
-                                            icon = {
-                                                NavIcon(route, label)
-                                            },
-                                            label = { Text(label) },
-                                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                                selectedIconColor = Color.White,
-                                                selectedTextColor = Color.White,
-                                                unselectedIconColor = Color.White.copy(alpha = 0.45f),
-                                                unselectedTextColor = Color.White.copy(alpha = 0.45f),
-                                            ),
-                                        )
-                                    }
+                                activeTopLevelRoutes.forEach { (route, label) ->
+                                    NavigationBarItem(
+                                        selected = route == currentTopLevel,
+                                        onClick = { navigator.navigate(route) },
+                                        icon = {
+                                            NavIcon(route, label)
+                                        },
+                                        label = { Text(label) },
+                                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            selectedIconColor = Color.White,
+                                            selectedTextColor = Color.White,
+                                            unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                                            unselectedTextColor = Color.White.copy(alpha = 0.45f),
+                                        ),
+                                    )
                                 }
                             }
                         }
@@ -371,7 +354,6 @@ private fun MainContent(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
                         Row(modifier = Modifier.fillMaxSize()) {
                             if (!isPlayerScreen && isExpanded) {
@@ -400,6 +382,7 @@ private fun MainContent(
                                         onModeChange = onModeChange,
                                         enterPip = enterPip,
                                         enterVideoMiniMode = enterVideoMiniMode,
+                                        innerPadding = innerPadding,
                                     )
                                 }
                                 if (showMiniPlayer && isExpanded) {
@@ -414,6 +397,7 @@ private fun MainContent(
                                             navigator.navigate(Route.AudioPlayer(itemId))
                                         },
                                         onClose = {
+                                            audioPlaybackManager.stopAndRelease()
                                             isMiniPlayerDismissed = true
                                         },
                                         onPlayPause = {
@@ -424,6 +408,37 @@ private fun MainContent(
                                         },
                                     )
                                 }
+                            }
+                        }
+
+                        // Floating MiniPlayer for phone aligned above the navigation bar
+                        if (!isPlayerScreen && !isExpanded) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = innerPadding.calculateBottomPadding() + 2.dp)
+                            ) {
+                                MiniPlayer(
+                                    isVisible = showMiniPlayer,
+                                    title = audioTitle,
+                                    artist = audioArtist,
+                                    artworkUri = audioArtworkUrl,
+                                    isPlaying = isAudioPlaying,
+                                    onClick = {
+                                        val itemId = audioItemId ?: return@MiniPlayer
+                                        navigator.navigate(Route.AudioPlayer(itemId))
+                                    },
+                                    onClose = {
+                                        audioPlaybackManager.stopAndRelease()
+                                        isMiniPlayerDismissed = true
+                                    },
+                                    onPlayPause = {
+                                        audioPlaybackManager.togglePlayPause()
+                                    },
+                                    onSkipNext = {
+                                        audioPlaybackManager.skipToNext()
+                                    },
+                                )
                             }
                         }
 
@@ -446,11 +461,12 @@ private fun MainContent(
                                 },
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(end = 8.dp, bottom = 8.dp)
+                                    .padding(end = 8.dp, bottom = innerPadding.calculateBottomPadding() + 8.dp)
                                     .fillMaxWidth(0.45f),
                             )
                         }
                     }
+                }
                 }
             }
         }
@@ -581,6 +597,7 @@ private fun MainNavDisplay(
     onModeChange: (HomeMode) -> Unit,
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit = {},
+    innerPadding: PaddingValues = PaddingValues(0.dp),
     modifier: Modifier = Modifier,
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
@@ -588,21 +605,46 @@ private fun MainNavDisplay(
     val saveableStateHolder = rememberSaveableStateHolder()
     val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
 
+    val paddingDecorator = remember(innerPadding) {
+        NavEntryDecorator<NavKey>(
+            decorate = { entry ->
+                val contentKey = entry.contentKey.toString()
+                val isPlayer = contentKey.contains("AudioPlayer") ||
+                        contentKey.contains("VideoPlayer") ||
+                        contentKey.contains("OfflinePlayer") ||
+                        contentKey.contains("LiveTvChannelPlayer") ||
+                        contentKey.contains("Ambient")
+
+                if (isPlayer) {
+                    entry.Content()
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding())
+                    ) {
+                        entry.Content()
+                    }
+                }
+            }
+        )
+    }
+
     NavDisplay(
                 backStack = currentBackStack,
                 onBack = { navigator.goBack() },
-                entryDecorators = listOf(entryDecorator),
+                entryDecorators = listOf(entryDecorator, paddingDecorator),
                 transitionSpec = {
                     val targetLast = targetState
                     val initialLast = initialState
-                    val isModalRoute = targetLast is Route.Settings ||
-                            targetLast is Route.Downloads ||
-                            targetLast is Route.SyncPlay ||
-                            targetLast is Route.SeerrSettings
-                    val isModalPop = initialLast is Route.Settings ||
-                            initialLast is Route.Downloads ||
-                            initialLast is Route.SyncPlay ||
-                            initialLast is Route.SeerrSettings
+                    val isModalRoute = targetLast == Route.Settings ||
+                            targetLast == Route.Downloads ||
+                            targetLast == Route.SyncPlay ||
+                            targetLast == Route.SeerrSettings
+                    val isModalPop = initialLast == Route.Settings ||
+                            initialLast == Route.Downloads ||
+                            initialLast == Route.SyncPlay ||
+                            initialLast == Route.SeerrSettings
                     val isTabSwitch = targetLast is Route && initialLast is Route &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetLast as Route) &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialLast as Route)
@@ -660,10 +702,10 @@ private fun MainNavDisplay(
                 },
                 popTransitionSpec = {
                     val initialLast = initialState
-                    val isModalPop = initialLast is Route.Settings ||
-                            initialLast is Route.Downloads ||
-                            initialLast is Route.SyncPlay ||
-                            initialLast is Route.SeerrSettings
+                    val isModalPop = initialLast == Route.Settings ||
+                            initialLast == Route.Downloads ||
+                            initialLast == Route.SyncPlay ||
+                            initialLast == Route.SeerrSettings
                     if (isModalPop) {
                         fadeIn(tween(200, easing = AlphaEasing)) togetherWith fadeOut(
                             tween(200, easing = AlphaEasing)

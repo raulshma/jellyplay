@@ -93,6 +93,7 @@ data class UserPreferences(
     val syncPlaySpeedToSyncMaxDelayMs: Long = 3000,
     val syncPlaySpeedToSyncDurationMs: Long = 1000,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    val audioPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,
     val replayGainPreAmpDb: Float = 0f,
@@ -107,6 +108,15 @@ data class UserPreferences(
     val dreamKenBurnsEnabled: Boolean = true,
     val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
     val dreamShowTitle: Boolean = true,
+    val equalizerPreset: EqualizerPreset = EqualizerPreset.FLAT,
+    val bassBoostEnabled: Boolean = false,
+    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
+    val virtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Int = 500,
+    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
+    val lrBalance: Float = 0f,
+    val autoEqByGenre: Boolean = false,
+    val pitchSemitones: Float = 0f,
 )
 
 @Immutable

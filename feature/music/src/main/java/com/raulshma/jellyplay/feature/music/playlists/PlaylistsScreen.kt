@@ -58,7 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 
 @Composable
 fun PlaylistsScreen(
-    onPlaylistClick: (String) -> Unit,
+    onPlaylistClick: (id: String, name: String) -> Unit,
     onBack: () -> Unit,
     viewModel: PlaylistsViewModel = hiltViewModel(),
 ) {
@@ -136,7 +136,7 @@ fun PlaylistsScreen(
                             val playlist = viewModel.playlists[index]
                             PlaylistItemRow(
                                 playlist = playlist,
-                                onClick = { onPlaylistClick(playlist.id) },
+                                onClick = { onPlaylistClick(playlist.id, playlist.name) },
                             )
                         }
                     }

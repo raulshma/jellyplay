@@ -31,10 +31,13 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
+import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
+import com.raulshma.jellyplay.core.data.playback.ReverbHelper
+import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
@@ -111,6 +114,9 @@ class ExoPlayerEngine(
     private val equalizerHelper = EqualizerHelper()
     private val audioNormalizationHelper = AudioNormalizationHelper()
     private val channelMixHelper = ChannelMixHelper()
+    private val bassBoostHelper = BassBoostHelper()
+    private val virtualizerHelper = VirtualizerHelper()
+    private val reverbHelper = ReverbHelper()
 
     private var lastVideoStats: EngineVideoStats? = null
     private var audioEffectsAttached = false
@@ -557,6 +563,9 @@ class ExoPlayerEngine(
             equalizerHelper.attach(sid)
             audioNormalizationHelper.attach(sid)
             channelMixHelper.attach(sid)
+            bassBoostHelper.attach(sid)
+            virtualizerHelper.attach(sid)
+            reverbHelper.attach(sid)
             audioEffectsAttached = true
         }
         
@@ -574,6 +583,20 @@ class ExoPlayerEngine(
 
         channelMixHelper.setMode(config.channelMixMode)
         channelMixHelper.setEnabled(config.channelMixEnabled)
+
+        bassBoostHelper.setStrength(config.bassBoostStrength)
+        bassBoostHelper.setEnabled(config.bassBoostEnabled)
+
+        virtualizerHelper.setStrength(config.virtualizerStrength)
+        virtualizerHelper.setEnabled(config.virtualizerEnabled)
+
+        if (config.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) {
+            reverbHelper.detach()
+            reverbHelper.attach(sid)
+            reverbHelper.setPreset(config.reverbPreset)
+        } else {
+            reverbHelper.setEnabled(false)
+        }
         
         lastAudioEffectsConfig = config
     }
@@ -584,6 +607,9 @@ class ExoPlayerEngine(
         equalizerHelper.detach()
         audioNormalizationHelper.detach()
         channelMixHelper.detach()
+        bassBoostHelper.detach()
+        virtualizerHelper.detach()
+        reverbHelper.detach()
         audioEffectsAttached = false
         lastAudioEffectsConfig = null
     }
