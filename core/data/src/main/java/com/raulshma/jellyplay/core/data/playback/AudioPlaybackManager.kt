@@ -184,9 +184,7 @@ class AudioPlaybackManager @Inject constructor(
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
-                onTrackTransitionedAuto()
-            }
+            onTrackTransitioned()
         }
     }
 
@@ -363,31 +361,57 @@ class AudioPlaybackManager @Inject constructor(
                     val queueItems = _queue.value
                     val playIndex = _currentIndex.value
 
-                    val mediaItems = mutableListOf<MediaItem>()
-                    for (i in queueItems.indices) {
-                        val qi = queueItems[i]
-                        if (i == playIndex) {
-                            val startMs = startPositionMs
-                            buildMediaItemForQueueItem(qi, startMs)?.let { mediaItem ->
-                                mediaItems.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        } else {
-                            val cached = mediaItemCache.get(qi.id)
-                            if (cached != null) {
-                                mediaItems.add(cached)
-                            } else {
-                                buildMediaItemForQueueItem(qi)?.let { mediaItem ->
-                                    mediaItems.add(mediaItem)
+                    val clickedItem = queueItems.getOrNull(playIndex)
+                    if (clickedItem != null) {
+                        val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
+                        if (clickedMediaItem != null) {
+                            player.setMediaItem(clickedMediaItem, startPositionMs)
+                            player.prepare()
+                            player.playWhenReady = true
+                        }
+
+                        // Load the remaining items in a background job so the first track starts playing instantly!
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val mediaItemsBefore = mutableListOf<MediaItem>()
+                            val mediaItemsAfter = mutableListOf<MediaItem>()
+
+                            // Build media items after current item
+                            for (i in (playIndex + 1) until queueItems.size) {
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                                if (mediaItem != null) {
+                                    mediaItemsAfter.add(mediaItem)
                                     mediaItemCache.put(qi.id, mediaItem)
+                                }
+                            }
+
+                            // Build media items before current item
+                            for (i in 0 until playIndex) {
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                                if (mediaItem != null) {
+                                    mediaItemsBefore.add(mediaItem)
+                                    mediaItemCache.put(qi.id, mediaItem)
+                                }
+                            }
+
+                            // Apply to ExoPlayer on main thread
+                            launch(kotlinx.coroutines.Dispatchers.Main) {
+                                if (exoPlayer == player) {
+                                    if (mediaItemsAfter.isNotEmpty()) {
+                                        player.addMediaItems(mediaItemsAfter)
+                                    }
+                                    if (mediaItemsBefore.isNotEmpty()) {
+                                        player.addMediaItems(0, mediaItemsBefore)
+                                        // Update active track index state after preceding items are inserted at 0
+                                        _currentIndex.value = playIndex
+                                    }
                                 }
                             }
                         }
                     }
-
-                    player.setMediaItems(mediaItems, playIndex, startPositionMs)
-                    player.prepare()
-                    player.playWhenReady = true
 
                     playbackRepository.reportPlaybackStart(
                         PlaybackStartInfo(
@@ -683,7 +707,7 @@ class AudioPlaybackManager @Inject constructor(
         }
     }
 
-    private fun onTrackTransitionedAuto() {
+    private fun onTrackTransitioned() {
         val player = exoPlayer ?: return
         val nextIndex = player.currentMediaItemIndex
         if (nextIndex >= 0 && nextIndex < _queue.value.size) {

@@ -46,4 +46,22 @@ class TracksViewModel @Inject constructor(
             audioPlaybackManager.addToQueue(queueItem)
         }
     }
+
+    fun playAll(tracks: List<MediaItem>, startIndex: Int) {
+        viewModelScope.launch {
+            val queueItems = tracks.map { track ->
+                AudioQueueItem(
+                    id = track.id,
+                    name = track.name,
+                    artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                    album = track.album,
+                    imageUrl = getImageUrl(track.id),
+                    mediaSourceId = null,
+                    durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                    normalizationGain = track.normalizationGain,
+                )
+            }
+            audioPlaybackManager.playQueue(queueItems, startIndex)
+        }
+    }
 }

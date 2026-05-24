@@ -83,6 +83,9 @@ fun MiniPlayer(
         ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing)),
         modifier = modifier,
     ) {
+        val sharedTransitionScope = LocalSharedTransitionScope.current
+        val animatedVisibilityScope = this
+
         // Pixel Player–style: artwork-tinted pill surface
         val navBarColorState = LocalNavigationBarColor.current
         val fallbackColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -110,6 +113,16 @@ fun MiniPlayer(
         val fallbackIconBg = if (isDarkSurface) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f)
         val fallbackIconTint = if (isDarkSurface) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.4f)
 
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedContainerModifier = if (sharedTransitionScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedBounds(
+                    rememberSharedContentState(key = "audio_player_container"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
+
         Surface(
             shape = ShapeCache.smoothPill,
             color = animatedColor,
@@ -117,7 +130,8 @@ fun MiniPlayer(
             tonalElevation = 2.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .then(sharedContainerModifier),
         ) {
             Row(
                 modifier = Modifier
@@ -129,12 +143,23 @@ fun MiniPlayer(
             ) {
                 // Circular artwork thumbnail
                 if (artworkUri.isNotBlank()) {
+                    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+                    val sharedArtModifier = if (sharedTransitionScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                rememberSharedContentState(key = "audio_player_album_art"),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                            )
+                        }
+                    } else Modifier
+
                     MediaImage(
                         url = artworkUri,
                         contentDescription = title,
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .then(sharedArtModifier),
                         contentScale = ContentScale.Crop,
                     )
                 } else {
@@ -190,6 +215,26 @@ fun MiniPlayer(
                     )
                 }
 
+                @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+                val sharedPlayPauseModifier = if (sharedTransitionScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = "audio_player_play_pause"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else Modifier
+
+                @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+                val sharedSkipNextModifier = if (sharedTransitionScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = "audio_player_skip_next"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else Modifier
+
                 AnimatedIconButton(
                     onClick = onPlayPause,
                     size = 40.dp,
@@ -198,6 +243,7 @@ fun MiniPlayer(
                     iconVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     iconDescription = if (isPlaying) "Pause" else "Play",
                     iconSize = 22.dp,
+                    modifier = sharedPlayPauseModifier,
                 )
 
                 AnimatedIconButton(
@@ -207,6 +253,7 @@ fun MiniPlayer(
                     iconVector = Icons.Default.SkipNext,
                     iconDescription = "Skip Next",
                     iconSize = 20.dp,
+                    modifier = sharedSkipNextModifier,
                 )
 
                 AnimatedIconButton(
@@ -231,6 +278,7 @@ private fun AnimatedIconButton(
     iconVector: ImageVector,
     iconDescription: String,
     iconSize: Dp,
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -243,7 +291,7 @@ private fun AnimatedIconButton(
     val shape = ShapeCache.smoothPill
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .scale(scale)
             .then(
