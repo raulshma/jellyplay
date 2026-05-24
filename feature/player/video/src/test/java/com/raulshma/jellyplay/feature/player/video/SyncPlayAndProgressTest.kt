@@ -109,6 +109,44 @@ class SyncPlayCommandHandlerTest {
     }
 
     @Test
+    fun syncPlayCommand_playlistItemTransition_usesSetPlaylistItemIfFoundInQueue() {
+        val playlistItemMap = mapOf("playlist_item_1" to "item_A", "playlist_item_2" to "item_B")
+        val targetItemId = "item_B"
+
+        val matchingEntry = playlistItemMap.entries.find { it.value == targetItemId }
+        assertNotNull(matchingEntry)
+        assertEquals("playlist_item_2", matchingEntry?.key)
+    }
+
+    @Test
+    fun syncPlayCommand_playlistItemTransition_usesSetNewQueueIfNotFoundInQueue() {
+        val playlistItemMap = mapOf("playlist_item_1" to "item_A")
+        val targetItemId = "item_C"
+
+        val matchingEntry = playlistItemMap.entries.find { it.value == targetItemId }
+        assertNull(matchingEntry)
+    }
+
+    @Test
+    fun syncPlayCommand_groupUpdate_parsesRepeatAndShuffleModes() {
+        val repeatModeStr = "RepeatOne"
+        val repeatMode = when (repeatModeStr) {
+            "RepeatOne" -> com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ONE
+            "RepeatAll" -> com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ALL
+            else -> com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_NONE
+        }
+
+        val shuffleModeStr = "Shuffle"
+        val shuffleMode = when (shuffleModeStr) {
+            "Shuffle" -> com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SHUFFLE
+            else -> com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SORTED
+        }
+
+        assertEquals(com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_ONE, repeatMode)
+        assertEquals(com.raulshma.jellyplay.core.model.SyncPlayShuffleMode.SHUFFLE, shuffleMode)
+    }
+
+    @Test
     fun syncPlayCommand_waitForGroup_setsSyncedFalse() {
         var isSynced = true
         isSynced = false

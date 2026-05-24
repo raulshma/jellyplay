@@ -205,6 +205,9 @@ class SyncPlayManager @Inject constructor(
                                 playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
                                 positionTicks = currentGroup?.positionTicks,
                                 playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
+                                playlistItemMap = currentGroup?.playlistItemMap ?: emptyMap(),
+                                repeatMode = currentGroup?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+                                shuffleMode = currentGroup?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
                             ))
                             _commands.tryEmit(SyncPlayCommand.GroupUpdate(groupName, count))
                         }
@@ -214,12 +217,22 @@ class SyncPlayManager @Inject constructor(
                             val playlist = data.optJSONArray("Playlist")
                             val itemIds = mutableListOf<String>()
                             val playlistItemIds = mutableListOf<String>()
+                            val playlistItemMap = mutableMapOf<String, String>()
                             if (playlist != null) {
                                 for (i in 0 until playlist.length()) {
                                     val item = playlist.optJSONObject(i)
                                     if (item != null) {
-                                        itemIds.add(item.optString("ItemId", ""))
-                                        playlistItemIds.add(item.optString("PlaylistItemId", ""))
+                                        val itemId = item.optString("ItemId", "")
+                                        val playlistItemId = item.optString("PlaylistItemId", "")
+                                        if (itemId.isNotBlank()) {
+                                            itemIds.add(itemId)
+                                        }
+                                        if (playlistItemId.isNotBlank()) {
+                                            playlistItemIds.add(playlistItemId)
+                                        }
+                                        if (itemId.isNotBlank() && playlistItemId.isNotBlank()) {
+                                            playlistItemMap[playlistItemId] = itemId
+                                        }
                                     }
                                 }
                             }
@@ -234,6 +247,18 @@ class SyncPlayManager @Inject constructor(
                                 ?: ""
                             val whenMs = parseWhen(data)
                             val lastUpdate = data.optString("LastUpdate", "")
+
+                            val repeatModeStr = data.optString("RepeatMode", "RepeatNone")
+                            val repeatMode = when (repeatModeStr) {
+                                "RepeatOne" -> SyncPlayRepeatMode.REPEAT_ONE
+                                "RepeatAll" -> SyncPlayRepeatMode.REPEAT_ALL
+                                else -> SyncPlayRepeatMode.REPEAT_NONE
+                            }
+                            val shuffleModeStr = data.optString("ShuffleMode", "Sorted")
+                            val shuffleMode = when (shuffleModeStr) {
+                                "Shuffle" -> SyncPlayShuffleMode.SHUFFLE
+                                else -> SyncPlayShuffleMode.SORTED
+                            }
 
                             if (playingItemId.isNotBlank()) {
                                 _commands.tryEmit(SyncPlayCommand.PlayQueueUpdate(
@@ -257,7 +282,10 @@ class SyncPlayManager @Inject constructor(
                                 playingPlaylistItemId = playingPlaylistItemId,
                                 isPlaying = isPlaying,
                                 playlistItemIds = playlistItemIds,
+                                playlistItemMap = playlistItemMap,
                                 positionTicks = startPositionTicks,
+                                repeatMode = repeatMode,
+                                shuffleMode = shuffleMode,
                             ))
                         }
                         "StateUpdate" -> {
@@ -349,6 +377,9 @@ class SyncPlayManager @Inject constructor(
                         playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
                         positionTicks = currentGroup?.positionTicks,
                         playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
+                        playlistItemMap = currentGroup?.playlistItemMap ?: emptyMap(),
+                        repeatMode = currentGroup?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+                        shuffleMode = currentGroup?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
                     ))
                     _commands.tryEmit(SyncPlayCommand.GroupUpdate(groupName, participantCount))
                 }
@@ -515,6 +546,9 @@ class SyncPlayManager @Inject constructor(
                 playingPlaylistItemId = currentGroup?.playingPlaylistItemId,
                 positionTicks = info.positionTicks ?: currentGroup?.positionTicks,
                 playlistItemIds = currentGroup?.playlistItemIds ?: emptyList(),
+                playlistItemMap = currentGroup?.playlistItemMap ?: emptyMap(),
+                repeatMode = currentGroup?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
+                shuffleMode = currentGroup?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
             )
             cachedGroup.set(newGroup)
             _commands.tryEmit(SyncPlayCommand.GroupUpdate(newGroup.groupName, newGroup.participantCount))
