@@ -165,7 +165,12 @@ fun TracksScreen(
                                                 formatDuration(ticks / 10_000)
                                             },
                                             imageUrl = viewModel.getImageUrl(track.id),
-                                            onClick = { onItemClick(track.id) },
+                                            onClick = {
+                                                val loadedTracks = tracks.itemSnapshotList.items
+                                                val clickIndex = loadedTracks.indexOfFirst { it.id == track.id }
+                                                viewModel.playAll(loadedTracks, if (clickIndex >= 0) clickIndex else 0)
+                                                onItemClick(track.id)
+                                            },
                                             onAddToQueue = { viewModel.addToQueue(track) },
                                             blurHash = track.blurHashes.primary,
                                         )

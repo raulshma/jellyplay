@@ -138,6 +138,9 @@ fun AudioPlayerScreen(
     onAmbientClick: (String?, String, String) -> Unit = { _, _, _ -> },
     viewModel: AudioPlayerViewModel = hiltViewModel(),
 ) {
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
     var showQueue by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
@@ -216,9 +219,20 @@ fun AudioPlayerScreen(
         darkTheme = isDarkTheme,
         oledMode = preferences.oledMode,
     ) {
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedContainerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedBounds(
+                    rememberSharedContentState(key = "audio_player_container"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .then(sharedContainerModifier)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(tintedBgLight, tintedBg, tintedBg),
@@ -235,14 +249,14 @@ fun AudioPlayerScreen(
                         onDragEnd = {
                             when (dragDirection) {
                                 DragDirection.VERTICAL -> {
-                                    if (swipeDismissOffset.value > 300f) {
+                                    if (swipeDismissOffset.value < -80f || totalDragY < -150f) {
                                         coroutineScope.launch {
-                                            swipeDismissOffset.animateTo(
-                                                targetValue = scopeHeight,
-                                                animationSpec = tween(durationMillis = 250)
-                                            )
-                                            onBack()
+                                            swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
                                         }
+                                        showQueue = true
+                                    } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
+                                        // Instantly go back and let the SharedTransitionLayout perform the high-fidelity morph animation back to the MiniPlayer pill!
+                                        onBack()
                                     } else {
                                         coroutineScope.launch {
                                             swipeDismissOffset.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
@@ -295,7 +309,7 @@ fun AudioPlayerScreen(
                             DragDirection.VERTICAL -> {
                                 change.consume()
                                 coroutineScope.launch {
-                                    val newOffset = (swipeDismissOffset.value + dragAmount.y).coerceAtLeast(0f)
+                                    val newOffset = (swipeDismissOffset.value + dragAmount.y).coerceAtLeast(-120f)
                                     swipeDismissOffset.snapTo(newOffset)
                                 }
                             }
@@ -1271,6 +1285,19 @@ private fun AlbumArtwork(
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
 ) {
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "audio_player_album_art"),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
     Box(
         modifier = Modifier
             .fillMaxWidth(if (isExpanded) 0.85f else 0.75f)
@@ -1282,7 +1309,8 @@ private fun AlbumArtwork(
                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
             )
-            .clip(ShapeCache.smooth24),
+            .clip(ShapeCache.smooth24)
+            .then(sharedModifier),
         contentAlignment = Alignment.Center,
     ) {
         if (albumArtUrl.isNotBlank()) {
@@ -1415,6 +1443,19 @@ private fun PixelTransportControls(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+        val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        val sharedNextModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "audio_player_skip_next"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        } else Modifier
+
         IconButtonWithPressAnimation(
             onClick = onSkipPrevious,
             icon = {
@@ -1442,6 +1483,7 @@ private fun PixelTransportControls(
                 )
             },
             size = 48.dp,
+            modifier = sharedNextModifier,
         )
     }
 }
@@ -1510,6 +1552,19 @@ private fun PixelPlayPauseButton(
         label = "pixelPlayScale",
     )
 
+    val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "audio_player_play_pause"),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
     // Light tinted background (Pixel Player uses a cream/light pink)
     val buttonBg = accentColor.copy(alpha = 0.25f).let { c ->
         Color(
@@ -1522,6 +1577,7 @@ private fun PixelPlayPauseButton(
 
     Box(
         modifier = Modifier
+            .then(sharedModifier)
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(ShapeCache.smooth20)
@@ -1549,6 +1605,7 @@ private fun IconButtonWithPressAnimation(
     tint: Color = Color.White,
     icon: @Composable () -> Unit,
     size: androidx.compose.ui.unit.Dp = 40.dp,
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1560,7 +1617,7 @@ private fun IconButtonWithPressAnimation(
 
     IconButton(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable(),

@@ -279,7 +279,12 @@ private fun MainContent(
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
-        CompositionLocalProvider(LocalNavigationBarColor provides navBarColorState) {
+        @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+        androidx.compose.animation.SharedTransitionLayout {
+            CompositionLocalProvider(
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
+                LocalNavigationBarColor provides navBarColorState
+            ) {
             if (isTv && !isPlayerScreen) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -390,6 +395,7 @@ private fun MainContent(
                                             navigator.navigate(Route.AudioPlayer(itemId))
                                         },
                                         onClose = {
+                                            audioPlaybackManager.stopAndRelease()
                                             isMiniPlayerDismissed = true
                                         },
                                         onPlayPause = {
@@ -408,7 +414,7 @@ private fun MainContent(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .padding(bottom = 8.dp)
+                                    .padding(bottom = 2.dp)
                             ) {
                                 MiniPlayer(
                                     isVisible = showMiniPlayer,
@@ -421,6 +427,7 @@ private fun MainContent(
                                         navigator.navigate(Route.AudioPlayer(itemId))
                                     },
                                     onClose = {
+                                        audioPlaybackManager.stopAndRelease()
                                         isMiniPlayerDismissed = true
                                     },
                                     onPlayPause = {
@@ -457,6 +464,7 @@ private fun MainContent(
                             )
                         }
                     }
+                }
                 }
             }
         }
