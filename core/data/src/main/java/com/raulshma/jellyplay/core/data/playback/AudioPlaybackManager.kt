@@ -296,6 +296,7 @@ class AudioPlaybackManager @Inject constructor(
         }
         val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
         return MediaItem.Builder()
+            .setMediaId(queueItem.id)
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
@@ -709,10 +710,20 @@ class AudioPlaybackManager @Inject constructor(
 
     private fun onTrackTransitioned() {
         val player = exoPlayer ?: return
-        val nextIndex = player.currentMediaItemIndex
-        if (nextIndex >= 0 && nextIndex < _queue.value.size) {
-            _currentIndex.value = nextIndex
-            val nextItem = _queue.value[nextIndex]
+        val currentMediaId = player.currentMediaItem?.mediaId
+        val queueItems = _queue.value
+        val matchIndex = if (currentMediaId != null) {
+            queueItems.indexOfFirst { it.id == currentMediaId }
+        } else -1
+        
+        val targetIndex = if (matchIndex >= 0) matchIndex else {
+            val idx = player.currentMediaItemIndex
+            if (idx >= 0 && idx < queueItems.size) idx else -1
+        }
+
+        if (targetIndex >= 0) {
+            _currentIndex.value = targetIndex
+            val nextItem = queueItems[targetIndex]
             currentItemId = nextItem.id
             _currentPlayingItemId.value = nextItem.id
             _title.value = nextItem.name
@@ -805,6 +816,7 @@ class AudioPlaybackManager @Inject constructor(
 
                 val artUri = Uri.parse(playbackRepository.getImageUrl(nextItem.id, maxWidth = 600))
                 val mediaItem = MediaItem.Builder()
+                    .setMediaId(nextItem.id)
                     .setUri(url)
                     .setMediaMetadata(
                         MediaMetadata.Builder()
