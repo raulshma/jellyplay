@@ -81,7 +81,7 @@ class JellyPlayNotificationProvider(
             mediaSession,
             IconCompat.createWithResource(appContext, R.drawable.ic_notification_rewind),
             "Rewind",
-            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_SEEK_BACK,
         )
         val playPauseAction = actionFactory.createMediaAction(
             mediaSession,
@@ -96,7 +96,7 @@ class JellyPlayNotificationProvider(
             mediaSession,
             IconCompat.createWithResource(appContext, R.drawable.ic_notification_forward),
             "Fast Forward",
-            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_SEEK_FORWARD,
         )
         val stopAction = actionFactory.createMediaAction(
             mediaSession,
