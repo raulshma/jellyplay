@@ -128,3 +128,87 @@ class FindActiveCueTest {
         assertNull(result)
     }
 }
+
+class FindActiveCuesTest {
+
+    private val cues = listOf(
+        TimedCue(0L, 1_000_000L, "First"),
+        TimedCue(1_000_000L, 2_000_000L, "Second"),
+        TimedCue(2_000_000L, 3_000_000L, "Third"),
+        TimedCue(5_000_000L, 6_000_000L, "Fourth"),
+    )
+
+    @Test
+    fun findActiveCues_atStartOfCue_returnsSingleCue() {
+        val result = SubtitleParserHelper.findActiveCues(cues, 0L, 0L)
+        assertEquals(1, result.size)
+        assertEquals("First", result[0].text.toString())
+    }
+
+    @Test
+    fun findActiveCues_inGap_returnsEmpty() {
+        val result = SubtitleParserHelper.findActiveCues(cues, 3_500_000L, 0L)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun findActiveCues_emptyList_returnsEmpty() {
+        val result = SubtitleParserHelper.findActiveCues(emptyList(), 1_000_000L, 0L)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun findActiveCues_withOffset_returnsCorrectCues() {
+        val result = SubtitleParserHelper.findActiveCues(cues, 500_000L, 1_000_000L)
+        assertEquals(1, result.size)
+        assertEquals("Second", result[0].text.toString())
+    }
+
+    @Test
+    fun findActiveCues_overlappingCues_returnsAll() {
+        val overlapping = listOf(
+            TimedCue(1_000_000L, 3_000_000L, "Top"),
+            TimedCue(1_500_000L, 2_500_000L, "Bottom"),
+            TimedCue(2_000_000L, 4_000_000L, "Middle"),
+        )
+        val result = SubtitleParserHelper.findActiveCues(overlapping, 2_000_000L, 0L)
+        assertEquals(3, result.size)
+        val texts = result.map { it.text.toString() }
+        assertTrue(texts.contains("Top"))
+        assertTrue(texts.contains("Bottom"))
+        assertTrue(texts.contains("Middle"))
+    }
+
+    @Test
+    fun findActiveCues_partialOverlap_returnsOnlyActive() {
+        val overlapping = listOf(
+            TimedCue(0L, 2_000_000L, "A"),
+            TimedCue(1_000_000L, 3_000_000L, "B"),
+            TimedCue(4_000_000L, 5_000_000L, "C"),
+        )
+        val result = SubtitleParserHelper.findActiveCues(overlapping, 1_500_000L, 0L)
+        assertEquals(2, result.size)
+        val texts = result.map { it.text.toString() }
+        assertTrue(texts.contains("A"))
+        assertTrue(texts.contains("B"))
+    }
+
+    @Test
+    fun findActiveCues_atExactBoundary_returnsNext() {
+        val result = SubtitleParserHelper.findActiveCues(cues, 1_000_000L, 0L)
+        assertEquals(1, result.size)
+        assertEquals("Second", result[0].text.toString())
+    }
+
+    @Test
+    fun findActiveCues_afterAllCues_returnsEmpty() {
+        val result = SubtitleParserHelper.findActiveCues(cues, 7_000_000L, 0L)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun findActiveCues_beforeAllCues_returnsEmpty() {
+        val result = SubtitleParserHelper.findActiveCues(cues, -1L, 0L)
+        assertTrue(result.isEmpty())
+    }
+}
