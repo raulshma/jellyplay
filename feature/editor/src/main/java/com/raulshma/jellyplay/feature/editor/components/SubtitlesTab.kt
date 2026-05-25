@@ -391,6 +391,7 @@ private fun RemoteSubtitleCard(
                     subtitle.format?.let { append(" • $it") }
                     if (subtitle.downloadCount > 0) append(" • ${subtitle.downloadCount} downloads")
                     if (subtitle.frameRate != null) append(" • ${subtitle.frameRate}fps")
+                    if (subtitle.communityRating != null) append(" • ★ ${"%.1f".format(subtitle.communityRating)}")
                 }
                 if (info.isNotBlank()) Text(info, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
