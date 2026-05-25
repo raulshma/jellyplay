@@ -26,6 +26,10 @@ fun EntryProviderScope<NavKey>.homeSection(
             onSeerrItemClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
             },
+            onSearchItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onSearchSeerrClick = { tmdbId, mediaType ->
+                navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
+            },
             homeMode = homeMode,
             onModeChange = onModeChange,
             musicContent = musicContent,
