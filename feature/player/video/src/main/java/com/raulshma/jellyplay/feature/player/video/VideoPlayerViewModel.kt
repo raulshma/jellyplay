@@ -1162,7 +1162,7 @@ class VideoPlayerViewModel @Inject constructor(
             "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.APPLICATION_SUBRIP
+            "mov_text" -> MimeTypes.APPLICATION_TTML
             else -> null
         }
     }

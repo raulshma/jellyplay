@@ -18,8 +18,11 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.border
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.unit.sp
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
@@ -44,6 +47,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,18 +62,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +102,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -152,6 +166,8 @@ fun HomeScreen(
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit = {},
     musicContent: @Composable () -> Unit = {},
+    onSearchItemClick: (String) -> Unit = {},
+    onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     if (viewModel.homeMode == HomeMode.MUSIC) {
@@ -161,6 +177,7 @@ fun HomeScreen(
 
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
+    val isRefreshing = viewModel.isRefreshing
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
@@ -240,7 +257,7 @@ fun HomeScreen(
             { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
         }
         val kidsOnRefresh = remember {
-            { currentViewModel.refresh() }
+            { currentViewModel.onRefresh() }
         }
         val kidsOnItemClick = remember {
             { id: String -> currentOnItemClick(id) }
@@ -249,6 +266,7 @@ fun HomeScreen(
             sections = sections,
             favorites = viewModel.favorites,
             isLoading = isLoading,
+            isRefreshing = isRefreshing,
             error = error,
             imageUrlBuilder = kidsImageUrlBuilder,
             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
@@ -401,6 +419,24 @@ fun HomeScreen(
             result
         }
 
+        var isSearchExpanded by remember { mutableStateOf(false) }
+        val focusManager = LocalFocusManager.current
+
+        BackHandler(enabled = isSearchExpanded) {
+            if (viewModel.searchQuery.isNotBlank()) {
+                viewModel.clearSearch()
+            } else {
+                isSearchExpanded = false
+                focusManager.clearFocus()
+            }
+        }
+
+        @OptIn(ExperimentalMaterial3Api::class)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.onRefresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
                 error != null && sections.isEmpty() -> {
@@ -630,139 +666,267 @@ fun HomeScreen(
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
             val dockScale = 1f - (0.04f * scrollFraction)
 
-            Box(
+            AnimatedContent(
+                targetState = isSearchExpanded,
+                transitionSpec = {
+                    fadeIn(tween(300, easing = AlphaEasing)) togetherWith fadeOut(tween(200, easing = AlphaEasing))
+                },
+                label = "headerSearchToggle",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = (16f * scrollFraction).dp,
-                        vertical = (8f * scrollFraction).dp
-                    )
-                    .graphicsLayer {
-                        scaleX = dockScale
-                        scaleY = dockScale
-                    }
-                    .clip(
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
-                    )
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = borderAlpha * 2f),
-                                    Color.White.copy(alpha = borderAlpha * 0.5f),
+                    .statusBarsPadding(),
+            ) { searchMode ->
+                if (searchMode) {
+                    val searchFocusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clip(ShapeCache.smooth28)
+                                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f))
+                                .border(
+                                    BorderStroke(
+                                        1.dp,
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                                            )
+                                        )
+                                    ),
+                                    ShapeCache.smooth28,
                                 )
-                            )
-                        ),
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
-            ) {
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ModeSwitch(
-                            currentMode = viewModel.homeMode,
-                            onModeChange = onModeChange,
-                        )
-                        HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 8.dp),
-                            tint = appBarIconColorFaded,
-                        )
-                    }
-
-                    Spacer(Modifier.weight(1f))
-
-                    androidx.compose.foundation.layout.Box(
-                        modifier = Modifier
-                            .clip(ShapeCache.smooth20)
-                            .padding(horizontal = 4.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ExpressiveIconButton(
-                                onClick = {
-                                    showSurprise = !showSurprise
-                                    if (!showSurprise) autoRotateEnabled = true
-                                },
-                                modifier = Modifier.size(40.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = "Surprise Me",
-                                    tint = if (showSurprise) MaterialTheme.colorScheme.primary else appBarIconColorFaded,
-                                    modifier = Modifier.size(20.dp),
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(22.dp),
                                 )
-                            }
-                            ExpressiveIconButton(
-                                onClick = {
-                                    onSyncPlayClick()
-                                },
-                                modifier = Modifier.size(40.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Group,
-                                    contentDescription = "SyncPlay",
-                                    tint = appBarIconColorFaded,
-                                    modifier = Modifier.size(20.dp),
+                                @OptIn(ExperimentalMaterial3Api::class)
+                                TextField(
+                                    value = viewModel.searchQuery,
+                                    onValueChange = { viewModel.updateSearchQuery(it) },
+                                    placeholder = {
+                                        Text(
+                                            "Search movies, shows, music...",
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .focusRequester(searchFocusRequester),
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        cursorColor = MaterialTheme.colorScheme.primary,
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent,
+                                    ),
+                                    textStyle = MaterialTheme.typography.bodyLarge,
                                 )
-                            }
-                            BadgedBox(
-                                badge = {
-                                    if (activeDownloadCount > 0) {
-                                        Badge {
-                                            Text(activeDownloadCount.toString())
-                                        }
-                                    }
-                                }
-                            ) {
                                 ExpressiveIconButton(
                                     onClick = {
-                                        onDownloadsClick()
+                                        if (viewModel.searchQuery.isNotBlank()) {
+                                            viewModel.clearSearch()
+                                        } else {
+                                            isSearchExpanded = false
+                                        }
                                     },
                                     modifier = Modifier.size(40.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = "Downloads",
-                                        tint = appBarIconColorFaded,
+                                        Icons.Default.Close,
+                                        contentDescription = "Close search",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
                             }
-                            ExpressiveIconButton(
-                                onClick = {
-                                    onSettingsClick()
+                        }
+
+                        if (viewModel.searchQuery.isNotBlank()) {
+                            HomeSearchResultsOverlay(
+                                jellyfinResults = viewModel.searchJellyfinResults,
+                                seerrResults = viewModel.searchSeerrResults,
+                                isSearching = viewModel.isSearching,
+                                getImageUrl = { viewModel.getImageUrl(it) },
+                                onJellyfinClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.clearSearch()
+                                    onItemClick(item.id)
                                 },
-                                modifier = Modifier.size(40.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = appBarIconColorFaded,
-                                    modifier = Modifier.size(20.dp),
+                                onSeerrClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.clearSearch()
+                                    onSearchSeerrClick(item.id, item.mediaType)
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = (16f * scrollFraction).dp,
+                                vertical = (8f * scrollFraction).dp
+                            )
+                            .graphicsLayer {
+                                scaleX = dockScale
+                                scaleY = dockScale
+                            }
+                            .clip(
+                                AbsoluteSmoothCornerShape(
+                                    cornerRadius = (28f * scrollFraction).dp,
+                                    smoothnessAsPercent = 60
                                 )
+                            )
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                            )
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = borderAlpha * 2f),
+                                            Color.White.copy(alpha = borderAlpha * 0.5f),
+                                        )
+                                    )
+                                ),
+                                AbsoluteSmoothCornerShape(
+                                    cornerRadius = (28f * scrollFraction).dp,
+                                    smoothnessAsPercent = 60
+                                )
+                            )
+                    ) {
+                        androidx.compose.foundation.layout.Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                ModeSwitch(
+                                    currentMode = viewModel.homeMode,
+                                    onModeChange = onModeChange,
+                                )
+                                HeaderStatusIndicator(
+                                    status = headerStatus,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                    tint = appBarIconColorFaded,
+                                )
+                            }
+
+                            Spacer(Modifier.weight(1f))
+
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .clip(ShapeCache.smooth20)
+                                    .padding(horizontal = 4.dp),
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ExpressiveIconButton(
+                                        onClick = { isSearchExpanded = true },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = "Search",
+                                            tint = appBarIconColorFaded,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    ExpressiveIconButton(
+                                        onClick = {
+                                            showSurprise = !showSurprise
+                                            if (!showSurprise) autoRotateEnabled = true
+                                        },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = "Surprise Me",
+                                            tint = if (showSurprise) MaterialTheme.colorScheme.primary else appBarIconColorFaded,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    ExpressiveIconButton(
+                                        onClick = {
+                                            onSyncPlayClick()
+                                        },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Group,
+                                            contentDescription = "SyncPlay",
+                                            tint = appBarIconColorFaded,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    BadgedBox(
+                                        badge = {
+                                            if (activeDownloadCount > 0) {
+                                                Badge {
+                                                    Text(activeDownloadCount.toString())
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        ExpressiveIconButton(
+                                            onClick = {
+                                                onDownloadsClick()
+                                            },
+                                            modifier = Modifier.size(40.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Download,
+                                                contentDescription = "Downloads",
+                                                tint = appBarIconColorFaded,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                    }
+                                    ExpressiveIconButton(
+                                        onClick = {
+                                            onSettingsClick()
+                                        },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Settings,
+                                            contentDescription = "Settings",
+                                            tint = appBarIconColorFaded,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+        }
         }
     }
 
@@ -1023,7 +1187,7 @@ private fun HeroHeader(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-1.5).sp,
                     shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color.Black.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
                         offset = androidx.compose.ui.geometry.Offset(2f, 4f),
                         blurRadius = 8f
                     )
@@ -1250,7 +1414,7 @@ private fun HeroHeader(
                             .clip(ShapeCache.smoothPill)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                             .border(
-                                BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 ShapeCache.smoothPill
                             )
                             .clickable(
@@ -1268,6 +1432,278 @@ private fun HeroHeader(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeSearchResultsOverlay(
+    jellyfinResults: List<MediaItem>,
+    seerrResults: List<SeerrSearchItem>,
+    isSearching: Boolean,
+    getImageUrl: (String) -> String,
+    onJellyfinClick: (MediaItem) -> Unit,
+    onSeerrClick: (SeerrSearchItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val totalItems = jellyfinResults.size + seerrResults.size
+    val hasAnyResults = totalItems > 0
+
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(250, easing = AlphaEasing)) + expandVertically(
+            animationSpec = tween(300, easing = FancyTransitionEasing),
+            expandFrom = Alignment.Top,
+        ),
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .clip(ShapeCache.smooth28)
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.97f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                                )
+                        )
+                    ),
+                    ShapeCache.smooth28,
+                ),
+        ) {
+            if (isSearching && !hasAnyResults) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            } else if (!hasAnyResults && !isSearching) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "No results found",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    if (jellyfinResults.isNotEmpty()) {
+                        item(contentType = "libraryHeader") {
+                            Text(
+                                text = "Library",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.8.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                        items(
+                            count = jellyfinResults.size,
+                            key = { index -> "jf-${jellyfinResults[index].id}" },
+                            contentType = { "libraryItem" },
+                        ) { index ->
+                            val item = jellyfinResults[index]
+                            SearchItemRow(
+                                title = item.name,
+                                subtitle = buildString {
+                                    item.year?.let { append(it) }
+                                    if (item.year != null && item.mediaType != null) append(" · ")
+                                    when (item.mediaType) {
+                                        MediaType.MOVIE -> append("Movie")
+                                        MediaType.SERIES -> append("TV Show")
+                                        MediaType.AUDIO, MediaType.MUSIC -> append("Music")
+                                        else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
+                                    }
+                                },
+                                imageUrl = getImageUrl(item.id),
+                                onClick = { onJellyfinClick(item) },
+                                index = index,
+                            )
+                        }
+                    }
+                    if (seerrResults.isNotEmpty()) {
+                        if (jellyfinResults.isNotEmpty()) {
+                            item(contentType = "divider") {
+                                HorizontalDivider(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                )
+                            }
+                        }
+                        item(contentType = "seerrHeader") {
+                            Text(
+                                text = "Request via Seerr",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.8.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                        items(
+                            count = seerrResults.size,
+                            key = { index -> "sr-${seerrResults[index].id}" },
+                            contentType = { "seerrItem" },
+                        ) { index ->
+                            val item = seerrResults[index]
+                            SearchItemRow(
+                                title = item.displayName,
+                                subtitle = buildString {
+                                    item.year?.let { append(it) }
+                                    val typeLabel = when {
+                                        item.mediaType.equals("movie", ignoreCase = true) -> "Movie"
+                                        item.mediaType.equals("tv", ignoreCase = true) -> "TV Show"
+                                        else -> item.mediaType
+                                    }
+                                    if (item.year != null) append(" · ")
+                                    append(typeLabel)
+                                    item.voteAverage?.let { rating ->
+                                        if (rating > 0) {
+                                            append(" · ★ ")
+                                            append(String.format("%.1f", rating))
+                                        }
+                                    }
+                                },
+                                imageUrl = item.posterUrl ?: "",
+                                onClick = { onSeerrClick(item) },
+                                index = index + jellyfinResults.size,
+                            )
+                        }
+                    }
+                    if (isSearching) {
+                        item(contentType = "loadingIndicator") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchItemRow(
+    title: String,
+    subtitle: String,
+    imageUrl: String,
+    onClick: () -> Unit,
+    index: Int,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "searchItemScale",
+    )
+
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    val animationProgress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(250, delayMillis = (index % 10) * 25, easing = AlphaEasing),
+        label = "searchItemAnim",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = animationProgress
+                translationY = (1f - animationProgress) * 8f
+            }
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(ShapeCache.smooth10)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (imageUrl.isNotBlank()) {
+                MediaImage(
+                    url = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(ShapeCache.smooth10),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -1453,7 +1889,7 @@ private fun WideMediaCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.4f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
                                 ),
                             )
                         )
@@ -1465,7 +1901,7 @@ private fun WideMediaCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                                 ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),

@@ -57,6 +57,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -105,6 +106,7 @@ import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateShee
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.findActivity
+import com.raulshma.jellyplay.feature.player.video.subtitle.VttTagParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
@@ -356,15 +358,6 @@ fun VideoPlayerScreen(
     val shouldShowUpNext = uiState.shouldShowUpNext
     val activeSegment = uiState.activeSegment
     val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
-
-    val skipSegmentText: String? = when {
-        activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON -> activeSegment.type.skipLabel
-        else -> null
-    }
-    val onSkipSegment: () -> Unit = remember(activeSegment) {
-        if (activeSegment != null) {{ viewModel.skipSegment(activeSegment) }}
-        else {{}}
-    }
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
@@ -765,8 +758,7 @@ fun VideoPlayerScreen(
             audioPassthrough = uiState.audioPassthrough,
             isOcrRunning = uiState.isOcrRunning,
             segments = uiState.segments,
-            skipSegmentText = skipSegmentText,
-            onSkipSegment = onSkipSegment,
+
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls && !isInPipMode,
@@ -969,7 +961,10 @@ private fun BoxScope.MpvSubtitleOverlay(
     val textStyle = TextStyle(
         fontSize = fontSize.sp,
         lineHeight = (fontSize + 4).sp,
+        fontWeight = FontWeight.Bold,
     )
+
+    val annotatedText = remember(text) { VttTagParser.parseAnnotated(text) }
 
     Box(
         modifier = Modifier
@@ -990,7 +985,7 @@ private fun BoxScope.MpvSubtitleOverlay(
             SubtitleEdgeType.OUTLINE -> {
                 SubtitleOutlineOffsets.forEach { (x, y) ->
                     SubtitleTextLayer(
-                        text = text,
+                        text = annotatedText,
                         color = edgeColor,
                         textStyle = textStyle,
                         modifier = Modifier.offset(x.dp, y.dp),
@@ -999,7 +994,7 @@ private fun BoxScope.MpvSubtitleOverlay(
             }
             SubtitleEdgeType.DROP_SHADOW -> {
                 SubtitleTextLayer(
-                    text = text,
+                    text = annotatedText,
                     color = edgeColor.copy(alpha = 0.85f),
                     textStyle = textStyle,
                     modifier = Modifier.offset(2.dp, 2.dp),
@@ -1007,7 +1002,7 @@ private fun BoxScope.MpvSubtitleOverlay(
             }
             SubtitleEdgeType.RAISED -> {
                 SubtitleTextLayer(
-                    text = text,
+                    text = annotatedText,
                     color = edgeColor.copy(alpha = 0.75f),
                     textStyle = textStyle,
                     modifier = Modifier.offset(1.dp, 1.dp),
@@ -1015,7 +1010,7 @@ private fun BoxScope.MpvSubtitleOverlay(
             }
             SubtitleEdgeType.DEPRESSED -> {
                 SubtitleTextLayer(
-                    text = text,
+                    text = annotatedText,
                     color = edgeColor.copy(alpha = 0.75f),
                     textStyle = textStyle,
                     modifier = Modifier.offset((-1).dp, (-1).dp),
@@ -1024,7 +1019,7 @@ private fun BoxScope.MpvSubtitleOverlay(
         }
 
         SubtitleTextLayer(
-            text = text,
+            text = annotatedText,
             color = Color(style.fontColor.value),
             textStyle = textStyle,
         )
@@ -1033,7 +1028,7 @@ private fun BoxScope.MpvSubtitleOverlay(
 
 @Composable
 private fun SubtitleTextLayer(
-    text: String,
+    text: AnnotatedString,
     color: Color,
     textStyle: TextStyle,
     modifier: Modifier = Modifier,

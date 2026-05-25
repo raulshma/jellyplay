@@ -51,9 +51,10 @@ fun VinylRecordPeek(
             .offset(x = size * slideFraction)
             .rotate(if (slideFraction > 0.05f) rotation else 0f)
             .clip(CircleShape)
-            .background(Color(0xFF0F0F0F)),
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest),
         contentAlignment = Alignment.Center
     ) {
+        val grooveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.toPx() / 2f, size.toPx() / 2f)
             val maxRadius = size.toPx() / 2f
@@ -62,7 +63,7 @@ fun VinylRecordPeek(
             var currentRadius = maxRadius - 10f
             while (currentRadius > maxRadius * 0.42f) {
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.08f),
+                    color = grooveColor,
                     radius = currentRadius,
                     center = center,
                     style = Stroke(width = 1f)

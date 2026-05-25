@@ -568,8 +568,8 @@ private fun MusicHeroHeader(
                     1.dp,
                     Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.16f),
-                            Color.White.copy(alpha = 0.04f)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                         )
                     )
                 )

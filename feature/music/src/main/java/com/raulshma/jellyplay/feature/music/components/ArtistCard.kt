@@ -160,7 +160,7 @@ fun ArtistCard(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = brightnessOverlay))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
                 )
             }
         }

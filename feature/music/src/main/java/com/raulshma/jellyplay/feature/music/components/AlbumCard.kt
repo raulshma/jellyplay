@@ -130,7 +130,7 @@ fun AlbumCard(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.White.copy(alpha = brightnessOverlay))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
                     )
                 }
             }

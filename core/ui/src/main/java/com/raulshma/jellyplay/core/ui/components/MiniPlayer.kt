@@ -115,16 +115,13 @@ fun MiniPlayer(
             label = "miniPlayerColor",
         )
 
-        val isDarkSurface = pixelTint.let { c ->
-            (c.red * 0.299f + c.green * 0.587f + c.blue * 0.114f) < 0.45f
-        }
-        val contentTextColor = if (isDarkSurface) Color.White else Color.Black
-        val contentTextColorSecondary = if (isDarkSurface) Color.White.copy(alpha = 0.65f) else Color.Black.copy(alpha = 0.6f)
-        val contentIconTint = if (isDarkSurface) Color.White else Color.Black.copy(alpha = 0.7f)
-        val iconButtonContainer = if (isDarkSurface) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.08f)
-        val iconButtonContent = if (isDarkSurface) Color.White else Color.Black.copy(alpha = 0.8f)
-        val fallbackIconBg = if (isDarkSurface) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f)
-        val fallbackIconTint = if (isDarkSurface) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.4f)
+        val contentTextColor = MaterialTheme.colorScheme.onSurface
+        val contentTextColorSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+        val contentIconTint = MaterialTheme.colorScheme.onSurfaceVariant
+        val iconButtonContainer = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        val iconButtonContent = MaterialTheme.colorScheme.onSurface
+        val fallbackIconBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        val fallbackIconTint = MaterialTheme.colorScheme.onSurfaceVariant
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         val sharedContainerModifier = if (sharedTransitionScope != null) {
@@ -227,7 +224,7 @@ fun MiniPlayer(
                     AnimatedIconButton(
                         onClick = onAddToQueue,
                         size = 36.dp,
-                        contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                         iconVector = Icons.Default.QueueMusic,
                         iconDescription = "Add to Queue",
                         iconSize = 20.dp,
@@ -268,7 +265,7 @@ fun MiniPlayer(
                 AnimatedIconButton(
                     onClick = onSkipNext,
                     size = 36.dp,
-                    contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     iconVector = Icons.Default.SkipNext,
                     iconDescription = "Skip Next",
                     iconSize = 20.dp,
@@ -278,7 +275,7 @@ fun MiniPlayer(
                 AnimatedIconButton(
                     onClick = onClose,
                     size = 36.dp,
-                    contentColor = if (isDarkSurface) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     iconVector = Icons.Default.Close,
                     iconDescription = "Close",
                     iconSize = 20.dp,

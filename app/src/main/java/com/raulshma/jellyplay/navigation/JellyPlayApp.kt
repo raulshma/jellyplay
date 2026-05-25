@@ -293,8 +293,8 @@ private fun MainContent(
                     colorScheme = tvDarkColorScheme(
                         background = MaterialTheme.colorScheme.background,
                         surface = MaterialTheme.colorScheme.surfaceContainer,
-                        onBackground = Color.White,
-                        onSurface = Color.White,
+                        onBackground = MaterialTheme.colorScheme.onSurface,
+                        onSurface = MaterialTheme.colorScheme.onSurface,
                         primary = MaterialTheme.colorScheme.primary,
                         onPrimary = MaterialTheme.colorScheme.onPrimary,
                         secondary = MaterialTheme.colorScheme.secondary,
@@ -339,10 +339,10 @@ private fun MainContent(
                                         label = { Text(label) },
                                         colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
                                             indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                            selectedIconColor = Color.White,
-                                            selectedTextColor = Color.White,
-                                            unselectedIconColor = Color.White.copy(alpha = 0.45f),
-                                            unselectedTextColor = Color.White.copy(alpha = 0.45f),
+                                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         ),
                                     )
                                 }
@@ -530,13 +530,13 @@ private fun TvMainLayout(
                                 drawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
                             },
                             leadingContent = {
-                                NavIcon(route, label, tint = Color.White)
+                                NavIcon(route, label, tint = MaterialTheme.colorScheme.onSurface)
                             },
                             content = {
                                 Text(
                                     label,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             },
                             modifier = Modifier
