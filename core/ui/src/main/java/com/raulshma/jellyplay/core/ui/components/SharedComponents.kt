@@ -161,7 +161,7 @@ fun PlayButtonWithProgress(
         label = "playBtnCombinedScale",
     )
 
-    val trackColor = Color.White.copy(alpha = 0.25f)
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
     val progressColor = dominantColor
 
     Box(
@@ -183,7 +183,7 @@ fun PlayButtonWithProgress(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Color.Black.copy(alpha = 0.65f),
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                     ShapeCache.smooth10,
                 )
         )
@@ -361,7 +361,7 @@ fun PosterCard(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.White.copy(alpha = brightnessOverlay))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
                     )
                 }
 
@@ -374,7 +374,7 @@ fun PosterCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.45f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
                                 ),
                             )
                         )
@@ -405,7 +405,7 @@ fun PosterCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                                 ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),

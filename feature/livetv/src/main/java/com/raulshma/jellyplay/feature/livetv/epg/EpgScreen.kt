@@ -83,7 +83,7 @@ fun EpgScreen(
     } else {
         lerp(
             MaterialTheme.colorScheme.background,
-            Color.Black,
+            MaterialTheme.colorScheme.surface,
             0.70f,
         )
     }

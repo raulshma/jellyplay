@@ -143,7 +143,7 @@ internal fun <T> SettingsListPickerSheet(
                             .clip(shape)
                             .background(
                                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                else Color.White.copy(alpha = 0.04f),
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
                             )
                             .then(tvFocusState.focusModifier)
                             .tvFocusIndicator(tvFocusState, shape)
