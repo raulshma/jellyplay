@@ -52,6 +52,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
@@ -154,6 +155,7 @@ fun MediaDetailScreen(
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    onEditClick: (itemId: String) -> Unit = {},
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -262,6 +264,7 @@ fun MediaDetailScreen(
             getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
             onSeerrRequest = { seerrRequestItem = it },
             onNavigate = onNavigate,
+            onEditClick = { onEditClick(itemId) },
             albumTracks = viewModel.albumTracks,
             onPlayAlbumTrack = { index -> viewModel.playAlbum(index) },
         )
@@ -339,6 +342,7 @@ private fun DetailContent(
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    onEditClick: () -> Unit = {},
     albumTracks: List<MediaItem> = emptyList(),
     onPlayAlbumTrack: (Int) -> Unit = {},
 ) {
@@ -839,6 +843,26 @@ private fun DetailContent(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
                                 tint = backIconColor,
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    if (!isTv) {
+                        val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
+                                )
+                        ) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = "Edit",
+                                tint = editIconColor,
                             )
                         }
                     }
