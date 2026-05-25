@@ -121,6 +121,22 @@ fun SubtitleDownloadSheet(
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
+                                    if (sub.isHashMatch) {
+                                        Text(
+                                            "Perfect Match",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                            ),
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    sub.communityRating?.let {
+                                        Text(
+                                            "★ ${"%.1f".format(it)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                     sub.language?.let {
                                         Text(
                                             it.uppercase(),
