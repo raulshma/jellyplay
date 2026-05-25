@@ -174,7 +174,8 @@ interface JellyfinApiClient {
     fun getImageUrl(
         itemId: String,
         imageType: String = "Primary",
-        maxWidth: Int = 400,
+        maxWidth: Int? = 400,
+        imageIndex: Int? = null,
         tag: String? = null,
     ): String
 

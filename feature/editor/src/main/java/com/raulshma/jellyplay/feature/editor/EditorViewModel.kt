@@ -305,7 +305,23 @@ class EditorViewModel @Inject constructor(
     }
 
     fun getImageUrl(itemId: String, imageInfo: com.raulshma.jellyplay.core.model.ImageInfo): String {
-        return apiClient.getImageUrl(itemId, imageInfo.imageType, 400, imageInfo.imageTag)
+        return apiClient.getImageUrl(
+            itemId,
+            imageInfo.imageType,
+            400,
+            imageInfo.imageIndex,
+            imageInfo.imageTag,
+        )
+    }
+
+    fun getFullImageUrl(itemId: String, imageInfo: com.raulshma.jellyplay.core.model.ImageInfo): String {
+        return apiClient.getImageUrl(
+            itemId,
+            imageInfo.imageType,
+            null,
+            imageInfo.imageIndex,
+            imageInfo.imageTag,
+        )
     }
 
     private suspend fun reloadImageInfos(itemId: String) {
