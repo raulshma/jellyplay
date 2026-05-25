@@ -29,6 +29,7 @@ data class UserEntity(
     val primaryImageTag: String? = null,
     val maxParentalAgeRating: Int? = null,
     val enabledFolderIds: String? = null,
+    val isAdmin: Boolean = false,
     val lastConnected: Long = System.currentTimeMillis(),
 )
 

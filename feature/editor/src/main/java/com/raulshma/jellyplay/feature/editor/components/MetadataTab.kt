@@ -1,0 +1,714 @@
+package com.raulshma.jellyplay.feature.editor.components
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.feature.editor.EditorUiState
+import com.raulshma.jellyplay.feature.editor.EditorViewModel
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun MetadataTab(
+    viewModel: EditorViewModel,
+) {
+    val state by viewModel.uiState.collectAsState()
+
+    if (state.isLoading) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.CircularProgressIndicator()
+        }
+        return
+    }
+
+    val mediaType = state.mediaDetail?.item?.mediaType
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        SectionHeader(title = "General", initiallyExpanded = true) {
+            OutlinedTextField(
+                value = state.name,
+                onValueChange = { viewModel.updateField { s -> s.copy(name = it) } },
+                label = { Text("Title") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.originalTitle,
+                onValueChange = { viewModel.updateField { s -> s.copy(originalTitle = it) } },
+                label = { Text("Original Title") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.sortName,
+                onValueChange = { viewModel.updateField { s -> s.copy(sortName = it) } },
+                label = { Text("Sort Title") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.overview,
+                onValueChange = { viewModel.updateField { s -> s.copy(overview = it) } },
+                label = { Text("Overview") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 4,
+                maxLines = 8,
+            )
+            if (mediaType == MediaType.MOVIE || mediaType == MediaType.SERIES) {
+                OutlinedTextField(
+                    value = state.tagline,
+                    onValueChange = { viewModel.updateField { s -> s.copy(tagline = it) } },
+                    label = { Text("Tagline") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
+        }
+
+        SectionHeader(title = "Ratings") {
+            OutlinedTextField(
+                value = state.communityRating,
+                onValueChange = { viewModel.updateField { s -> s.copy(communityRating = it) } },
+                label = { Text("Community Rating (0-10)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            )
+            if (mediaType == MediaType.MOVIE) {
+                OutlinedTextField(
+                    value = state.criticRating,
+                    onValueChange = { viewModel.updateField { s -> s.copy(criticRating = it) } },
+                    label = { Text("Critic Rating") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            }
+
+            val parentalRatings = state.editorInfo?.parentalRatingOptions ?: emptyList()
+            var officialExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = officialExpanded,
+                onExpandedChange = { officialExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = state.officialRating,
+                    onValueChange = { viewModel.updateField { s -> s.copy(officialRating = it) } },
+                    label = { Text("Official Rating") },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                    singleLine = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = officialExpanded) },
+                )
+                ExposedDropdownMenu(
+                    expanded = officialExpanded,
+                    onDismissRequest = { officialExpanded = false },
+                ) {
+                    parentalRatings.forEach { rating ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(rating.name) },
+                            onClick = {
+                                viewModel.updateField { s -> s.copy(officialRating = rating.name) }
+                                officialExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            var customExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = customExpanded,
+                onExpandedChange = { customExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = state.customRating,
+                    onValueChange = { viewModel.updateField { s -> s.copy(customRating = it) } },
+                    label = { Text("Custom Rating") },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                    singleLine = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customExpanded) },
+                )
+                ExposedDropdownMenu(
+                    expanded = customExpanded,
+                    onDismissRequest = { customExpanded = false },
+                ) {
+                    parentalRatings.forEach { rating ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(rating.name) },
+                            onClick = {
+                                viewModel.updateField { s -> s.copy(customRating = rating.name) }
+                                customExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        SectionHeader(title = "Dates & Numbers") {
+            OutlinedTextField(
+                value = state.productionYear,
+                onValueChange = { viewModel.updateField { s -> s.copy(productionYear = it) } },
+                label = { Text("Production Year") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            OutlinedTextField(
+                value = state.premiereDate,
+                onValueChange = { viewModel.updateField { s -> s.copy(premiereDate = it) } },
+                label = { Text("Premiere Date") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("YYYY-MM-DD") },
+            )
+            if (mediaType == MediaType.SERIES) {
+                OutlinedTextField(
+                    value = state.endDate,
+                    onValueChange = { viewModel.updateField { s -> s.copy(endDate = it) } },
+                    label = { Text("End Date") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("YYYY-MM-DD") },
+                )
+                OutlinedTextField(
+                    value = state.runtimeMinutes,
+                    onValueChange = { viewModel.updateField { s -> s.copy(runtimeMinutes = it) } },
+                    label = { Text("Runtime (minutes)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+            if (mediaType == MediaType.EPISODE) {
+                OutlinedTextField(
+                    value = state.indexNumber,
+                    onValueChange = { viewModel.updateField { s -> s.copy(indexNumber = it) } },
+                    label = { Text("Episode Number") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(
+                    value = state.parentIndexNumber,
+                    onValueChange = { viewModel.updateField { s -> s.copy(parentIndexNumber = it) } },
+                    label = { Text("Season Number") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+        }
+
+        if (mediaType == MediaType.SERIES) {
+            SectionHeader(title = "Series Settings") {
+                var statusExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = statusExpanded,
+                    onExpandedChange = { statusExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = state.status,
+                        onValueChange = { viewModel.updateField { s -> s.copy(status = it) } },
+                        label = { Text("Status") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = statusExpanded,
+                        onDismissRequest = { statusExpanded = false },
+                    ) {
+                        listOf("Continuing", "Ended", "Unreleased").forEach { status ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(status) },
+                                onClick = {
+                                    viewModel.updateField { s -> s.copy(status = status) }
+                                    statusExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                var displayExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = displayExpanded,
+                    onExpandedChange = { displayExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = state.displayOrder,
+                        onValueChange = { viewModel.updateField { s -> s.copy(displayOrder = it) } },
+                        label = { Text("Display Order") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = displayExpanded) },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = displayExpanded,
+                        onDismissRequest = { displayExpanded = false },
+                    ) {
+                        listOf("Aired", "Absolute", "DVD", "Digital", "Production").forEach { order ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(order) },
+                                onClick = {
+                                    viewModel.updateField { s -> s.copy(displayOrder = order) }
+                                    displayExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = state.airTime,
+                    onValueChange = { viewModel.updateField { s -> s.copy(airTime = it) } },
+                    label = { Text("Air Time") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+
+                Text("Air Days", style = MaterialTheme.typography.titleSmall)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    val days = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+                    days.forEach { day ->
+                        FilterChip(
+                            selected = day in state.airDays,
+                            onClick = {
+                                val newDays = if (day in state.airDays) {
+                                    state.airDays - day
+                                } else {
+                                    (state.airDays + day).sortedBy { days.indexOf(it) }
+                                }
+                                viewModel.updateField { s -> s.copy(airDays = newDays) }
+                            },
+                            label = { Text(day.take(3)) },
+                        )
+                    }
+                }
+            }
+        }
+
+        SectionHeader(title = "Genres") {
+            EditableChipGroup(
+                items = state.genres,
+                onAdd = { viewModel.updateField { s -> s.copy(genres = (s.genres + it).sortedBy { g -> g.lowercase() }) } },
+                onRemove = { viewModel.updateField { s -> s.copy(genres = s.genres - it) } },
+            )
+        }
+
+        SectionHeader(title = "Tags") {
+            EditableChipGroup(
+                items = state.tags,
+                onAdd = { viewModel.updateField { s -> s.copy(tags = (s.tags + it).sortedBy { t -> t.lowercase() }) } },
+                onRemove = { viewModel.updateField { s -> s.copy(tags = s.tags - it) } },
+            )
+        }
+
+        SectionHeader(title = "Studios") {
+            EditableChipGroup(
+                items = state.studios,
+                onAdd = { viewModel.updateField { s -> s.copy(studios = (s.studios + it).sortedBy { st -> st.lowercase() }) } },
+                onRemove = { viewModel.updateField { s -> s.copy(studios = s.studios - it) } },
+            )
+        }
+
+        SectionHeader(title = "People") {
+            PeopleEditor(
+                people = state.people,
+                onAdd = { person -> viewModel.updateField { s -> s.copy(people = s.people + person) } },
+                onRemove = { person -> viewModel.updateField { s -> s.copy(people = s.people - person) } },
+                onUpdate = { old, new -> viewModel.updateField { s ->
+                    s.copy(people = s.people.map { if (it == old) new else it })
+                }},
+            )
+        }
+
+        val externalIds = state.editorInfo?.externalIdInfos ?: emptyList()
+        if (externalIds.isNotEmpty()) {
+            SectionHeader(title = "External IDs") {
+                externalIds.forEach { extId ->
+                    val currentValue = state.providerIds[extId.key] ?: ""
+                    OutlinedTextField(
+                        value = currentValue,
+                        onValueChange = { newValue ->
+                            viewModel.updateField { s ->
+                                s.copy(providerIds = s.providerIds.toMutableMap().apply {
+                                    if (newValue.isBlank()) remove(extId.key)
+                                    else put(extId.key, newValue)
+                                })
+                            }
+                        },
+                        label = { Text(extId.name) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+            }
+        }
+
+        SectionHeader(title = "Metadata Locking") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Lock all metadata", modifier = Modifier.weight(1f))
+                Switch(
+                    checked = state.lockData,
+                    onCheckedChange = { viewModel.updateField { s -> s.copy(lockData = it) } },
+                )
+            }
+
+            if (!state.lockData) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Lock individual fields:", style = MaterialTheme.typography.titleSmall)
+                val lockableFields = listOf(
+                    "Name" to "Name",
+                    "Overview" to "Overview",
+                    "Genres" to "Genres",
+                    "OfficialRating" to "Parental Rating",
+                    "Cast" to "People",
+                    "ProductionLocations" to "Production Locations",
+                    "Studios" to "Studios",
+                    "Tags" to "Tags",
+                    "Runtime" to "Runtime",
+                )
+                lockableFields.forEach { (key, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Checkbox(
+                            checked = key !in state.lockedFields,
+                            onCheckedChange = { checked ->
+                                viewModel.updateField { s ->
+                                    s.copy(
+                                        lockedFields = if (checked) {
+                                            s.lockedFields - key
+                                        } else {
+                                            s.lockedFields + key
+                                        }
+                                    )
+                                }
+                            },
+                        )
+                        Text(label, modifier = Modifier.clickable {
+                            val checked = key !in state.lockedFields
+                            viewModel.updateField { s ->
+                                s.copy(
+                                    lockedFields = if (!checked) {
+                                        s.lockedFields - key
+                                    } else {
+                                        s.lockedFields + key
+                                    }
+                                )
+                            }
+                        })
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EditableChipGroup(
+    items: List<String>,
+    onAdd: (String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    var newEntry by remember { mutableStateOf("") }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items.forEach { item ->
+                InputChip(
+                    selected = false,
+                    onClick = { onRemove(item) },
+                    label = { Text(item) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Remove",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = newEntry,
+                onValueChange = { newEntry = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Add new...") },
+                singleLine = true,
+            )
+            IconButton(
+                onClick = {
+                    if (newEntry.isNotBlank()) {
+                        onAdd(newEntry.trim())
+                        newEntry = ""
+                    }
+                },
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeopleEditor(
+    people: List<com.raulshma.jellyplay.core.model.EditorPerson>,
+    onAdd: (com.raulshma.jellyplay.core.model.EditorPerson) -> Unit,
+    onRemove: (com.raulshma.jellyplay.core.model.EditorPerson) -> Unit,
+    onUpdate: (old: com.raulshma.jellyplay.core.model.EditorPerson, new: com.raulshma.jellyplay.core.model.EditorPerson) -> Unit,
+) {
+    var showPersonDialog by remember { mutableStateOf<com.raulshma.jellyplay.core.model.EditorPerson?>(null) }
+    var isNewPerson by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        people.forEach { person ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(person.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "${person.type}${person.role?.let { " as $it" } ?: ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = {
+                    isNewPerson = false
+                    showPersonDialog = person
+                }) {
+                    Icon(Icons.Filled.ExpandMore, contentDescription = "Edit")
+                }
+                IconButton(onClick = { onRemove(person) }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        androidx.compose.material3.TextButton(onClick = {
+            isNewPerson = true
+            showPersonDialog = com.raulshma.jellyplay.core.model.EditorPerson()
+        }) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Add Person")
+        }
+    }
+
+    showPersonDialog?.let { editingPerson ->
+        PersonEditorDialog(
+            person = editingPerson,
+            isNew = isNewPerson,
+            onDismiss = { showPersonDialog = null },
+            onConfirm = { person ->
+                if (isNewPerson) onAdd(person)
+                else onUpdate(editingPerson, person)
+                showPersonDialog = null
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PersonEditorDialog(
+    person: com.raulshma.jellyplay.core.model.EditorPerson,
+    isNew: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (com.raulshma.jellyplay.core.model.EditorPerson) -> Unit,
+) {
+    var name by remember { mutableStateOf(person.name) }
+    var role by remember { mutableStateOf(person.role ?: "") }
+    var type by remember { mutableStateOf(person.type) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isNew) "Add Person" else "Edit Person") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                val personTypes = listOf("Actor", "Director", "Writer", "Producer", "Composer", "GuestStar", "Conductor", "Lyricist", "Arranger")
+                var typeExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = typeExpanded,
+                    onExpandedChange = { typeExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = type,
+                        onValueChange = { type = it },
+                        label = { Text("Type") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeExpanded,
+                        onDismissRequest = { typeExpanded = false },
+                    ) {
+                        personTypes.forEach { pType ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(pType) },
+                                onClick = { type = pType; typeExpanded = false },
+                            )
+                        }
+                    }
+                }
+                if (type in listOf("Actor", "GuestStar")) {
+                    OutlinedTextField(
+                        value = role,
+                        onValueChange = { role = it },
+                        label = { Text("Role") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    onConfirm(
+                        com.raulshma.jellyplay.core.model.EditorPerson(
+                            id = person.id.ifBlank { java.util.UUID.randomUUID().toString() },
+                            name = name,
+                            role = role.ifBlank { null },
+                            type = type,
+                            primaryImageTag = person.primaryImageTag,
+                        )
+                    )
+                },
+                enabled = name.isNotBlank(),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
