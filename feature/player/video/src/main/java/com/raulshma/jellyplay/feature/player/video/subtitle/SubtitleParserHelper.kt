@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.subtitle
 
-import androidx.media3.common.C
 import androidx.media3.common.Format
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.Consumer
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.extractor.text.CuesWithTiming
@@ -38,29 +36,54 @@ object SubtitleParserHelper {
         parser.reset()
 
         return cues.flatMap { cuesWithTiming ->
-            cuesWithTiming.cues.map { cue ->
+            cuesWithTiming.cues.mapNotNull { cue ->
+                val text = cue.text
+                if (text.isNullOrBlank()) return@mapNotNull null
                 TimedCue(
                     startTimeUs = cuesWithTiming.startTimeUs,
                     endTimeUs = cuesWithTiming.endTimeUs,
-                    text = cue.text ?: "",
+                    text = text,
                 )
             }
         }.sortedBy { it.startTimeUs }
     }
 
-    fun findActiveCue(cues: List<TimedCue>, positionUs: Long, offsetUs: Long): TimedCue? {
+    fun findActiveCue(cues: List<TimedCue>, positionUs: Long, offsetUs: Long): TimedCue? =
+        findActiveCues(cues, positionUs, offsetUs).firstOrNull()
+
+    fun findActiveCues(cues: List<TimedCue>, positionUs: Long, offsetUs: Long): List<TimedCue> {
+        if (cues.isEmpty()) return emptyList()
         val adjustedPosition = positionUs + offsetUs
+        val startIndex = findFirstActiveCandidate(cues, adjustedPosition)
+        if (startIndex < 0) return emptyList()
+        val result = mutableListOf<TimedCue>()
+        for (i in startIndex..cues.lastIndex) {
+            val cue = cues[i]
+            if (cue.startTimeUs > adjustedPosition) break
+            if (adjustedPosition < cue.endTimeUs) {
+                result.add(cue)
+            }
+        }
+        return result
+    }
+
+    private fun findFirstActiveCandidate(cues: List<TimedCue>, positionUs: Long): Int {
         var low = 0
         var high = cues.lastIndex
+        var result = -1
         while (low <= high) {
             val mid = (low + high).ushr(1)
             val cue = cues[mid]
-            when {
-                adjustedPosition < cue.startTimeUs -> high = mid - 1
-                adjustedPosition >= cue.endTimeUs -> low = mid + 1
-                else -> return cue
+            if (positionUs < cue.startTimeUs) {
+                high = mid - 1
+            } else if (positionUs >= cue.endTimeUs) {
+                low = mid + 1
+            } else {
+                result = mid
+                high = mid - 1
             }
         }
-        return null
+        if (result >= 0) return result
+        return if (low in cues.indices && cues[low].startTimeUs <= positionUs) low else -1
     }
 }

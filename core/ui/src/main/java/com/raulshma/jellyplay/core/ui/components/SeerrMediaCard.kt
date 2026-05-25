@@ -223,16 +223,16 @@ fun SeerrMediaCard(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.White.copy(alpha = brightnessOverlay))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
                     )
                 }
 
                 if (isLoading) {
                     val shimmerBrush = Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.0f),
-                            Color.White.copy(alpha = 0.18f),
-                            Color.White.copy(alpha = 0.0f),
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.0f),
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.0f),
                         ),
                         start = Offset(effectiveShimmerOffset, 0f),
                         end = Offset(effectiveShimmerOffset + 400f, 400f),
@@ -255,7 +255,7 @@ fun SeerrMediaCard(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.Black.copy(alpha = 0.5f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
                                     ),
                                 )
                             )
@@ -268,7 +268,7 @@ fun SeerrMediaCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                                 ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -302,7 +302,7 @@ fun SeerrMediaCard(
                     val labelColor = if (isUpcoming) {
                         MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f)
                     } else {
-                        Color.Black.copy(alpha = 0.6f)
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
                     }
 
                     val textColor = if (isUpcoming) {
@@ -374,7 +374,7 @@ fun SeerrMediaCard(
                                 .padding(end = 4.dp, bottom = 4.dp)
                                 .then(requestBtnFocusState.focusModifier)
                                 .clip(ShapeCache.smooth8)
-                                .background(Color.Black.copy(alpha = 0.6f))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
                                 .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
                         ) {
                             Icon(

@@ -50,6 +50,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +83,7 @@ fun KidsHomeScreen(
     sections: List<HomeSection>,
     favorites: List<MediaItem>,
     isLoading: Boolean,
+    isRefreshing: Boolean = false,
     error: String?,
     imageUrlBuilder: (MediaItem) -> String,
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
@@ -119,6 +121,11 @@ fun KidsHomeScreen(
         if (allItems.isNotEmpty() && showSurprise) allItems.random() else null
     }
 
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -232,6 +239,7 @@ fun KidsHomeScreen(
                 }
             }
         }
+    }
     }
 }
 

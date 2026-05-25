@@ -417,6 +417,7 @@ class ExoPlayerEngine(
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or (style.backgroundColor.value and 0x00FFFFFF)
         pv.subtitleView?.let { sv ->
+            sv.setApplyEmbeddedStyles(false)
             sv.setStyle(
                 CaptionStyleCompat(
                     style.fontColor.value,
@@ -699,7 +700,7 @@ class ExoPlayerEngine(
             "vtt", "webvtt" -> MimeTypes.TEXT_VTT
             "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.APPLICATION_SUBRIP
+            "mov_text" -> MimeTypes.APPLICATION_TTML
             else -> null
         }
     }
