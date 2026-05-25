@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.editor.components
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -54,8 +57,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
@@ -73,6 +79,7 @@ fun ImagesTab(
     var showUploadSheet by remember { mutableStateOf(false) }
     var showBrowseSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<ImageInfo?>(null) }
+    var selectedImageInfo by remember { mutableStateOf<ImageInfo?>(null) }
 
     if (state.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -125,6 +132,7 @@ fun ImagesTab(
                             imageInfo = imageInfo,
                             imageUrl = viewModel.getImageUrl(itemId, imageInfo),
                             onDelete = { showDeleteConfirm = imageInfo },
+                            onClick = { selectedImageInfo = imageInfo },
                         )
                     }
                 }
@@ -180,6 +188,14 @@ fun ImagesTab(
             },
         )
     }
+
+    selectedImageInfo?.let { imageInfo ->
+        FullImageDialog(
+            imageUrl = viewModel.getFullImageUrl(itemId, imageInfo),
+            imageInfo = imageInfo,
+            onDismiss = { selectedImageInfo = null },
+        )
+    }
 }
 
 @Composable
@@ -187,11 +203,13 @@ private fun ImageCard(
     imageInfo: ImageInfo,
     imageUrl: String,
     onDelete: () -> Unit,
+    onClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        onClick = onClick,
     ) {
         Box {
             AsyncImage(
@@ -533,6 +551,59 @@ private fun RemoteImageCard(
                     Icons.Filled.Download,
                     contentDescription = "Download",
                     tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullImageDialog(
+    imageUrl: String,
+    imageInfo: ImageInfo,
+    onDismiss: () -> Unit,
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(0.5f, 5f)
+                        offsetX += pan.x
+                        offsetY += pan.y
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = imageInfo.imageType,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offsetX,
+                        translationY = offsetY,
+                    ),
+                contentScale = ContentScale.Fit,
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Close",
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

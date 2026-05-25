@@ -920,13 +920,15 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int, tag: String?): String {
+    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val server = _currentServer.value ?: return ""
-        return "${server.address}/Items/$itemId/Images/$imageType?maxWidth=$maxWidth"
+        val indexPart = imageIndex?.let { "/$it" } ?: ""
+        val widthPart = maxWidth?.let { "?maxWidth=$it" } ?: ""
+        return "${server.address}/Items/$itemId/Images/$imageType$indexPart$widthPart"
     }
 
     override fun getBackdropImageUrl(itemId: String, maxWidth: Int, tag: String?): String =
-        getImageUrl(itemId, "Backdrop", maxWidth, tag)
+        getImageUrl(itemId, "Backdrop", maxWidth, null, tag)
 
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String {
         val server = _currentServer.value ?: return ""
