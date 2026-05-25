@@ -578,7 +578,7 @@ private fun SeerrDetailContent(
                         modifier = Modifier
                             .padding(8.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.3f))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
                             .then(backFocusState.focusModifier)
                             .tvFocusIndicator(backFocusState, CircleShape)
                             .clickable(onClick = onBack),
@@ -1213,7 +1213,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                             text = "IMDb",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
-                            color = Color.Black
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(Modifier.width(6.dp))
@@ -1240,9 +1240,9 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     Text(
                         text = "TMDB",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = Color.Black
-                    )
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                 }
                 Spacer(Modifier.width(6.dp))
                 Text(

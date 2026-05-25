@@ -81,6 +81,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
@@ -176,6 +177,7 @@ fun HomeScreen(
 
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
+    val isRefreshing = viewModel.isRefreshing
     val error = viewModel.error
     val kidsMode = viewModel.kidsModeEnabled
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
@@ -255,7 +257,7 @@ fun HomeScreen(
             { item: MediaItem -> currentViewModel.getImageUrl(item.id) }
         }
         val kidsOnRefresh = remember {
-            { currentViewModel.refresh() }
+            { currentViewModel.onRefresh() }
         }
         val kidsOnItemClick = remember {
             { id: String -> currentOnItemClick(id) }
@@ -264,6 +266,7 @@ fun HomeScreen(
             sections = sections,
             favorites = viewModel.favorites,
             isLoading = isLoading,
+            isRefreshing = isRefreshing,
             error = error,
             imageUrlBuilder = kidsImageUrlBuilder,
             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
@@ -428,6 +431,12 @@ fun HomeScreen(
             }
         }
 
+        @OptIn(ExperimentalMaterial3Api::class)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.onRefresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
                 error != null && sections.isEmpty() -> {
@@ -683,8 +692,8 @@ fun HomeScreen(
                                         1.dp,
                                         Brush.linearGradient(
                                             colors = listOf(
-                                                Color.White.copy(alpha = 0.18f),
-                                                Color.White.copy(alpha = 0.06f),
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
                                             )
                                         )
                                     ),
@@ -917,6 +926,7 @@ fun HomeScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -1177,7 +1187,7 @@ private fun HeroHeader(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-1.5).sp,
                     shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color.Black.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
                         offset = androidx.compose.ui.geometry.Offset(2f, 4f),
                         blurRadius = 8f
                     )
@@ -1404,7 +1414,7 @@ private fun HeroHeader(
                             .clip(ShapeCache.smoothPill)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                             .border(
-                                BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 ShapeCache.smoothPill
                             )
                             .clickable(
@@ -1459,10 +1469,10 @@ private fun HomeSearchResultsOverlay(
                     BorderStroke(
                         1.dp,
                         Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.12f),
-                                Color.White.copy(alpha = 0.04f),
-                            )
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                                )
                         )
                     ),
                     ShapeCache.smooth28,
@@ -1879,7 +1889,7 @@ private fun WideMediaCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.4f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
                                 ),
                             )
                         )
@@ -1891,7 +1901,7 @@ private fun WideMediaCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                                 ShapeCache.smooth4,
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp),

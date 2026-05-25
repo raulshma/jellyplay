@@ -810,7 +810,7 @@ private fun DetailContent(
                                 .padding(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    color = if (scrollCollapsed < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
                                 )
                                 .then(backFocusState.focusModifier)
                                 .tvFocusIndicator(backFocusState, CircleShape)
@@ -832,7 +832,7 @@ private fun DetailContent(
                                 .padding(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    color = if (scrollCollapsed < 0.5f) Color.Black.copy(alpha = 0.3f) else Color.Transparent
+                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
                                 )
                         ) {
                             Icon(
@@ -2462,7 +2462,7 @@ private fun EpisodeCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
                 Icons.Default.PlayArrow,
@@ -2471,7 +2471,7 @@ private fun EpisodeCard(
                 modifier = Modifier
                     .size(48.dp)
                     .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
                     .then(epPlayFocusState.focusModifier)
                     .then(Modifier.tvFocusIndicator(epPlayFocusState, CircleShape))
                     .clickable(

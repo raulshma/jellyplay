@@ -70,6 +70,8 @@ class HomeViewModel @Inject constructor(
         private set
     var isLoading by mutableStateOf(true)
         private set
+    var isRefreshing by mutableStateOf(false)
+        private set
     var error by mutableStateOf<String?>(null)
         private set
     var kidsModeEnabled by mutableStateOf(false)
@@ -172,6 +174,16 @@ class HomeViewModel @Inject constructor(
             error = null
             fetchAndUpdateSections()
             isLoading = false
+            startPeriodicRefresh()
+        }
+    }
+
+    fun onRefresh() {
+        viewModelScope.launch {
+            isRefreshing = true
+            error = null
+            fetchAndUpdateSections()
+            isRefreshing = false
             startPeriodicRefresh()
         }
     }
