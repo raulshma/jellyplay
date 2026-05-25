@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,7 +67,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -123,9 +128,16 @@ fun SearchScreen(
 
     val hasActiveFilters = filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()
 
-    BackHandler(enabled = query.isNotBlank() || hasActiveFilters) {
-        viewModel.search("")
-        viewModel.clearFilters()
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    var isSearchFocused by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isSearchFocused || query.isNotBlank() || hasActiveFilters) {
+        when {
+            isSearchFocused -> focusManager.clearFocus()
+            query.isNotBlank() -> viewModel.search("")
+            hasActiveFilters -> viewModel.clearFilters()
+        }
     }
 
     val speechLauncher = rememberLauncherForActivityResult(
@@ -158,6 +170,7 @@ fun SearchScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
+    val seerrCardWidth = adaptiveInfo.rowCardWidth(isTv)
 
     val gridPadding = PaddingValues(
         start = contentPad,
@@ -272,6 +285,8 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusEvent { isSearchFocused = it.isFocused }
                             .tvFocusable(),
                         singleLine = true,
                         shape = ShapeCache.smooth16,
@@ -449,6 +464,7 @@ fun SearchScreen(
                                         }
                                     },
                                     onRequestClick = { requestItem = seerrItem },
+                                    modifier = Modifier.width(seerrCardWidth),
                                 )
                             }
                         }
