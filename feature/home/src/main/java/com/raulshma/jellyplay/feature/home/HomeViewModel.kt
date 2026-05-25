@@ -26,9 +26,13 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -420,6 +424,92 @@ class HomeViewModel @Inject constructor(
             seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
                 _tvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
             }
+        }
+    }
+
+    // ── Home search ──
+
+    var searchQuery by mutableStateOf("")
+        private set
+    var searchJellyfinResults by mutableStateOf<List<MediaItem>>(emptyList())
+        private set
+    var searchSeerrResults by mutableStateOf<List<SeerrSearchItem>>(emptyList())
+        private set
+    var isSearching by mutableStateOf(false)
+        private set
+
+    private val searchQueryFlow = MutableStateFlow("")
+    private var searchJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            searchQueryFlow
+                .debounce(400)
+                .distinctUntilChanged()
+                .collect { query ->
+                    searchJob?.cancel()
+                    if (query.isBlank()) {
+                        searchJellyfinResults = emptyList()
+                        searchSeerrResults = emptyList()
+                        isSearching = false
+                    } else {
+                        searchJob = launch { performSearch(query) }
+                    }
+                }
+        }
+    }
+
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+        searchQueryFlow.value = query
+        if (query.isBlank()) {
+            isSearching = false
+        }
+    }
+
+    fun clearSearch() {
+        searchQuery = ""
+        searchQueryFlow.value = ""
+        searchJellyfinResults = emptyList()
+        searchSeerrResults = emptyList()
+        isSearching = false
+    }
+
+    private suspend fun performSearch(query: String) {
+        isSearching = true
+        try {
+            kotlinx.coroutines.coroutineScope {
+                val jellyfinDeferred = async { mediaRepository.search(query, limit = 8) }
+                val seerrDeferred = async {
+                    try {
+                        val connected = seerrRepository.isConnected().first()
+                        val enabled = seerrRepository.isSearchEnabled().first()
+                        if (connected && enabled) {
+                            seerrRepository.search(query).getOrNull()?.results?.take(8)
+                        } else null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                jellyfinDeferred.await().onSuccess { result ->
+                    searchJellyfinResults = result.items
+                }
+                seerrDeferred.await()?.let { results ->
+                    searchSeerrResults = results
+                } ?: run {
+                    searchSeerrResults = emptyList()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            searchJellyfinResults = emptyList()
+            searchSeerrResults = emptyList()
+        } finally {
+            isSearching = false
         }
     }
 
