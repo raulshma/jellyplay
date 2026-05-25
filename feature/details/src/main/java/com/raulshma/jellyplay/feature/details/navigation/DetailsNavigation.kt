@@ -42,6 +42,7 @@ fun EntryProviderScope<NavKey>.detailsSection(
             onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onNavigateToSeries = { seriesId -> navigator.navigate(Route.MediaDetail(seriesId)) },
             onNavigate = { route -> navigator.navigate(route) },
+            onEditClick = { itemId -> navigator.navigate(Route.MetadataEditor(itemId)) },
             onBack = { navigator.goBack() },
         )
     }

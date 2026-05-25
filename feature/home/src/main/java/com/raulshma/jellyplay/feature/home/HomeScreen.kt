@@ -73,11 +73,13 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -680,105 +682,66 @@ fun HomeScreen(
                     val searchFocusRequester = remember { FocusRequester() }
                     LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                .clip(ShapeCache.smooth28)
-                                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f))
-                                .border(
-                                    BorderStroke(
-                                        1.dp,
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                            )
-                                        )
-                                    ),
-                                    ShapeCache.smooth28,
-                                )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(22.dp),
-                                )
-                                @OptIn(ExperimentalMaterial3Api::class)
-                                TextField(
-                                    value = viewModel.searchQuery,
-                                    onValueChange = { viewModel.updateSearchQuery(it) },
-                                    placeholder = {
-                                        Text(
-                                            "Search movies, shows, music...",
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(56.dp)
-                                        .focusRequester(searchFocusRequester),
-                                    singleLine = true,
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        cursorColor = MaterialTheme.colorScheme.primary,
-                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                    ),
-                                    textStyle = MaterialTheme.typography.bodyLarge,
-                                )
-                                ExpressiveIconButton(
-                                    onClick = {
-                                        if (viewModel.searchQuery.isNotBlank()) {
-                                            viewModel.clearSearch()
-                                        } else {
-                                            isSearchExpanded = false
-                                        }
-                                    },
-                                    modifier = Modifier.size(40.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Close search",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-
-                        if (viewModel.searchQuery.isNotBlank()) {
-                            HomeSearchResultsOverlay(
-                                jellyfinResults = viewModel.searchJellyfinResults,
-                                seerrResults = viewModel.searchSeerrResults,
-                                isSearching = viewModel.isSearching,
-                                getImageUrl = { viewModel.getImageUrl(it) },
-                                onJellyfinClick = { item ->
-                                    isSearchExpanded = false
-                                    viewModel.clearSearch()
-                                    onItemClick(item.id)
+                    @OptIn(ExperimentalMaterial3Api::class)
+                    DockedSearchBar(
+                        inputField = {
+                            SearchBarDefaults.InputField(
+                                query = viewModel.searchQuery,
+                                onQueryChange = { viewModel.updateSearchQuery(it) },
+                                onSearch = { },
+                                expanded = true,
+                                onExpandedChange = { expanded ->
+                                    if (!expanded) {
+                                        if (viewModel.searchQuery.isNotBlank()) viewModel.clearSearch()
+                                        else isSearchExpanded = false
+                                    }
                                 },
-                                onSeerrClick = { item ->
-                                    isSearchExpanded = false
-                                    viewModel.clearSearch()
-                                    onSearchSeerrClick(item.id, item.mediaType)
+                                placeholder = { Text("Search movies, shows, music...") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    ExpressiveIconButton(
+                                        onClick = {
+                                            if (viewModel.searchQuery.isNotBlank()) viewModel.clearSearch()
+                                            else isSearchExpanded = false
+                                        },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Close search",
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
                                 },
-                                modifier = Modifier.padding(horizontal = 12.dp),
+                                modifier = Modifier.focusRequester(searchFocusRequester),
                             )
-                        }
+                        },
+                        expanded = viewModel.searchQuery.isNotBlank(),
+                        onExpandedChange = { },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        shape = ShapeCache.smooth28,
+                        colors = SearchBarDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+                        ),
+                    ) {
+                        HomeSearchResultsOverlay(
+                            jellyfinResults = viewModel.searchJellyfinResults,
+                            seerrResults = viewModel.searchSeerrResults,
+                            isSearching = viewModel.isSearching,
+                            getImageUrl = { viewModel.getImageUrl(it) },
+                            onJellyfinClick = { item ->
+                                isSearchExpanded = false
+                                viewModel.clearSearch()
+                                onItemClick(item.id)
+                            },
+                            onSeerrClick = { item ->
+                                isSearchExpanded = false
+                                viewModel.clearSearch()
+                                onSearchSeerrClick(item.id, item.mediaType)
+                            },
+                        )
                     }
                 } else {
                     Box(
@@ -1451,33 +1414,11 @@ private fun HomeSearchResultsOverlay(
     val totalItems = jellyfinResults.size + seerrResults.size
     val hasAnyResults = totalItems > 0
 
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(tween(250, easing = AlphaEasing)) + expandVertically(
-            animationSpec = tween(300, easing = FancyTransitionEasing),
-            expandFrom = Alignment.Top,
-        ),
-        modifier = modifier,
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(max = 420.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 420.dp)
-                .clip(ShapeCache.smooth28)
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.97f))
-                .border(
-                    BorderStroke(
-                        1.dp,
-                        Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
-                                )
-                        )
-                    ),
-                    ShapeCache.smooth28,
-                ),
-        ) {
             if (isSearching && !hasAnyResults) {
                 Box(
                     modifier = Modifier
@@ -1616,7 +1557,6 @@ private fun HomeSearchResultsOverlay(
                 }
             }
         }
-    }
 }
 
 @Composable

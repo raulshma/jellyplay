@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -36,6 +37,10 @@ class MainViewModel @Inject constructor(
     val isRestoring = _isRestoring.asStateFlow()
 
     val isAuthenticated = authRepository.isAuthenticated
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val isAdmin = authRepository.currentUser
+        .map { it?.isAdmin == true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val preferences = preferencesStore.preferences
