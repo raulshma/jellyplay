@@ -119,8 +119,7 @@ internal fun PlayerControls(
     audioPassthrough: Boolean,
     isOcrRunning: Boolean,
     segments: List<MediaSegment> = emptyList(),
-    skipSegmentText: String? = null,
-    onSkipSegment: () -> Unit = {},
+
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -368,44 +367,7 @@ internal fun PlayerControls(
                     onSeekEnd = onSeekEnd,
                 )
 
-                AnimatedVisibility(
-                    visible = skipSegmentText != null,
-                    enter = PlayerAnimations.skipButtonEnter,
-                    exit = PlayerAnimations.skipButtonExit,
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(ShapeCache.smoothPill)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                                .then(skipFocusState.focusModifier)
-                                .tvFocusIndicator(skipFocusState, ShapeCache.smoothPill)
-                                .clickable(onClick = onSkipSegment)
-                                .padding(horizontal = 20.dp, vertical = 10.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FastForward,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = skipSegmentText ?: "",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.3.sp,
-                                ),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
+
 
                 Row(
                     modifier = Modifier

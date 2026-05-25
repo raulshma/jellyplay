@@ -359,15 +359,6 @@ fun VideoPlayerScreen(
     val activeSegment = uiState.activeSegment
     val activeSegmentBehavior = activeSegment?.let { uiState.behaviorForType(it.type) }
 
-    val skipSegmentText: String? = when {
-        activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON -> activeSegment.type.skipLabel
-        else -> null
-    }
-    val onSkipSegment: () -> Unit = remember(activeSegment) {
-        if (activeSegment != null) {{ viewModel.skipSegment(activeSegment) }}
-        else {{}}
-    }
-
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
             detectedAspectRatio ?: AspectRatio.FIT
@@ -767,8 +758,7 @@ fun VideoPlayerScreen(
             audioPassthrough = uiState.audioPassthrough,
             isOcrRunning = uiState.isOcrRunning,
             segments = uiState.segments,
-            skipSegmentText = skipSegmentText,
-            onSkipSegment = onSkipSegment,
+
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
             isVisible = showControls && !isInPipMode,
