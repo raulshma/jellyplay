@@ -32,6 +32,7 @@ data class CreditTimestamps(
 @Serializable
 data class RemoteSubtitleInfo(
     val id: String,
+    @SerialName("ThreeLetterISOLanguageName") val threeLetterISOLanguageName: String = "",
     val language: String? = null,
     val name: String? = null,
     val format: String? = null,
@@ -39,5 +40,14 @@ data class RemoteSubtitleInfo(
     val dateCreated: String? = null,
     val downloadCount: Int = 0,
     val isHashMatch: Boolean = false,
+    val isForced: Boolean = false,
+    val isHearingImpaired: Boolean = false,
+    val isAiTranslated: Boolean? = null,
+    val isMachineTranslated: Boolean? = null,
+    val isEmbedNotSynced: Boolean? = null,
+    val communityRating: Double? = null,
+    val frameRate: Float? = null,
+    val author: String? = null,
     val provider: String? = null,
+    @SerialName("ProviderName") val providerName: String? = null,
 )

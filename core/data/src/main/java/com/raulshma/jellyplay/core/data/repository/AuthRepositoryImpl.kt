@@ -137,6 +137,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = user.accessToken,
                     primaryImageTag = user.primaryImageTag,
                     maxParentalAgeRating = user.maxParentalAgeRating,
+                    isAdmin = user.isAdmin,
                     enabledFolderIds = json.encodeToString(
                         user.enabledFolderIds
                     ),
@@ -209,6 +210,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = user.accessToken,
                     primaryImageTag = user.primaryImageTag,
                     maxParentalAgeRating = user.maxParentalAgeRating,
+                    isAdmin = user.isAdmin,
                     enabledFolderIds = json.encodeToString(
                         user.enabledFolderIds
                     ),
@@ -262,6 +264,7 @@ class AuthRepositoryImpl @Inject constructor(
                         serverAddress = server.address,
                         accessToken = token,
                         serverId = serverId,
+                        isAdmin = userEntity.isAdmin,
                         maxParentalAgeRating = userEntity.maxParentalAgeRating,
                         primaryImageTag = userEntity.primaryImageTag,
                         enabledFolderIds = userEntity.enabledFolderIds?.let {
@@ -332,6 +335,7 @@ class AuthRepositoryImpl @Inject constructor(
         serverAddress = serverAddress,
         accessToken = accessToken,
         serverId = serverId,
+        isAdmin = isAdmin,
         maxParentalAgeRating = maxParentalAgeRating,
         primaryImageTag = primaryImageTag,
         enabledFolderIds = enabledFolderIds?.let {

@@ -102,6 +102,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
+import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
@@ -790,6 +791,7 @@ private fun MainNavDisplay(
             searchSection(navigator)
             liveTvSection(navigator)
             detailsSection(navigator)
+            editorSection(navigator)
             videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
             audioPlayerSection(navigator)
             downloadsSection(navigator)

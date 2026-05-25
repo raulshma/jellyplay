@@ -18,7 +18,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         DownloadEntity::class,
         LyricsCacheEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class JellyPlayDatabase : RoomDatabase() {
