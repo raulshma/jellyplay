@@ -276,8 +276,13 @@ class LibVlcPlayerEngine(
     }
 
     override fun release() {
-        releaseInternal(releaseVlc = true)
         engineScope.cancel()
+        releaseInternal(releaseVlc = true)
+        _playbackState.value = EnginePlaybackState.IDLE
+        _isPlaying.value = false
+        _availableTracks.value = emptyList()
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     private fun releaseInternal(releaseVlc: Boolean) {
@@ -488,6 +493,9 @@ class LibVlcPlayerEngine(
 
         if (request.headers.isNotEmpty()) {
             media.addOption(":http-user-agent=JellyPlay")
+            request.headers.forEach { (key, value) ->
+                media.addOption(":http-header=${key}: ${value}")
+            }
         }
 
         request.externalSubtitles.forEach { sub ->
@@ -576,15 +584,17 @@ class LibVlcPlayerEngine(
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch(Dispatchers.Default) {
+        val ticker = engineScope.launch {
             while (isActive) {
                 delay(500)
-                trySend(currentPositionMs)
-                val currentlyPlaying = _isPlaying.value
-                if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
-                    updateBufferAndStats()
+                runCatching {
+                    trySend(currentPositionMs)
+                    val currentlyPlaying = _isPlaying.value
+                    if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
+                        updateBufferAndStats()
+                    }
+                    lastPlayingState = currentlyPlaying
                 }
-                lastPlayingState = currentlyPlaying
             }
         }
         awaitClose { ticker.cancel() }
