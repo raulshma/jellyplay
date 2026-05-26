@@ -94,17 +94,6 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
-        val SYNCPLAY_PROGRESS_REPORTING_MODE = stringPreferencesKey("syncplay_progress_reporting_mode")
-        val SYNCPLAY_AUTO_JOIN_LAST_GROUP = stringPreferencesKey("syncplay_auto_join_last_group")
-        val SYNCPLAY_NOTIFY_USER_JOIN_LEAVE = stringPreferencesKey("syncplay_notify_user_join_leave")
-        val SYNCPLAY_NOTIFY_CHAT_MESSAGES = stringPreferencesKey("syncplay_notify_chat_messages")
-        val SYNCPLAY_NOTIFY_SYNC_ISSUES = stringPreferencesKey("syncplay_notify_sync_issues")
-        val SYNCPLAY_DEFAULT_IGNORE_WAIT = stringPreferencesKey("syncplay_default_ignore_wait")
-        val SYNCPLAY_SYNC_CORRECTION = stringPreferencesKey("syncplay_sync_correction")
-        val SYNCPLAY_SPEED_TO_SYNC_ENABLED = stringPreferencesKey("syncplay_speed_to_sync_enabled")
-        val SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_min_delay_ms")
-        val SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS = stringPreferencesKey("syncplay_speed_to_sync_max_delay_ms")
-        val SYNCPLAY_SPEED_TO_SYNC_DURATION_MS = stringPreferencesKey("syncplay_speed_to_sync_duration_ms")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
@@ -266,17 +255,6 @@ class UserPreferencesStore @Inject constructor(
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
             segmentBehaviors = readSegmentBehaviors(prefs),
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
-            syncPlayProgressReportingMode = prefs[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] ?: "SUPPRESS_DURING",
-            syncPlayAutoJoinLastGroup = prefs[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP]?.toBoolean() ?: false,
-            syncPlayNotifyUserJoinLeave = prefs[Keys.SYNCPLAY_NOTIFY_USER_JOIN_LEAVE]?.toBoolean() ?: true,
-            syncPlayNotifyChatMessages = prefs[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES]?.toBoolean() ?: true,
-            syncPlayNotifySyncIssues = prefs[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES]?.toBoolean() ?: true,
-            syncPlayDefaultIgnoreWait = prefs[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT]?.toBoolean() ?: false,
-            syncPlaySyncCorrection = prefs[Keys.SYNCPLAY_SYNC_CORRECTION]?.toBoolean() ?: false,
-            syncPlaySpeedToSyncEnabled = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED]?.toBoolean() ?: true,
-            syncPlaySpeedToSyncMinDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS]?.toLongOrNull() ?: 60,
-            syncPlaySpeedToSyncMaxDelayMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS]?.toLongOrNull() ?: 3000,
-            syncPlaySpeedToSyncDurationMs = prefs[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS]?.toLongOrNull() ?: 1000,
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
@@ -559,50 +537,6 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlayProgressReportingMode(mode: String) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_PROGRESS_REPORTING_MODE] = mode }
-    }
-
-    suspend fun setSyncPlayAutoJoinLastGroup(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_AUTO_JOIN_LAST_GROUP] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlayNotifyUserJoinLeave(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_USER_JOIN_LEAVE] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlayNotifyChatMessages(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_CHAT_MESSAGES] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlayNotifySyncIssues(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_NOTIFY_SYNC_ISSUES] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_DEFAULT_IGNORE_WAIT] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlaySyncCorrection(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_SYNC_CORRECTION] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlaySpeedToSyncEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setSyncPlaySpeedToSyncMinDelayMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MIN_DELAY_MS] = ms.toString() }
-    }
-
-    suspend fun setSyncPlaySpeedToSyncMaxDelayMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_MAX_DELAY_MS] = ms.toString() }
-    }
-
-    suspend fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SYNCPLAY_SPEED_TO_SYNC_DURATION_MS] = ms.toString() }
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {

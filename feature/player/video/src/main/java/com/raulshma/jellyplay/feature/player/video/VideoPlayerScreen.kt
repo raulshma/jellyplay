@@ -101,7 +101,7 @@ import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
-import com.raulshma.jellyplay.feature.player.video.components.SyncPlayChatOverlay
+
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
@@ -170,7 +170,7 @@ fun VideoPlayerScreen(
 
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
 
-    var syncPlayChatVisible by remember { mutableStateOf(false) }
+
 
     val localSubtitleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -363,7 +363,6 @@ fun VideoPlayerScreen(
     val detectedAspectRatio = uiState.detectedAspectRatio
 
     val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
-    val syncPlayChatMessages by viewModel.syncPlayChatMessages.collectAsStateWithLifecycle()
 
     val isInIntro = uiState.isInIntro
     val isInCredits = uiState.isInCredits
@@ -727,17 +726,6 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
-        if (uiState.isInSyncPlaySession && syncPlayChatVisible) {
-            SyncPlayChatOverlay(
-                messages = syncPlayChatMessages,
-                isVisible = syncPlayChatVisible,
-                onSendMessage = { viewModel.syncPlaySendChatMessage(it) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 200.dp),
-            )
-        }
-
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -930,9 +918,7 @@ fun VideoPlayerScreen(
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
-        onToggleChatOverlay = { syncPlayChatVisible = !syncPlayChatVisible },
         syncPlayIgnoreWait = syncPlayIgnoreWait,
-        syncPlayChatMessages = syncPlayChatMessages,
         onLoadLocalSubtitle = {
             localSubtitleLauncher.launch(
                 arrayOf(
@@ -1105,9 +1091,7 @@ private fun PlayerSheetRouter(
     doSeekTo: (Long) -> Unit,
     viewModel: VideoPlayerViewModel,
     itemId: String,
-    onToggleChatOverlay: () -> Unit,
     syncPlayIgnoreWait: Boolean,
-    syncPlayChatMessages: List<com.raulshma.jellyplay.core.model.SyncPlayChatMessage>,
     onLoadLocalSubtitle: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1263,20 +1247,13 @@ private fun PlayerSheetRouter(
                 shuffleMode = uiState.syncPlayShuffleMode,
                 onRepeatModeChange = { viewModel.setSyncPlayRepeatMode(it) },
                 onShuffleModeChange = { viewModel.setSyncPlayShuffleMode(it) },
-                chatMessages = syncPlayChatMessages,
                 onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
                 onStop = { viewModel.syncPlayStop() },
                 onLeave = {
                     viewModel.leaveSyncPlay()
-                    onToggleChatOverlay()
                     onSheetChange(PlayerSheet.None)
                 },
                 onIgnoreWaitChange = { viewModel.syncPlaySetIgnoreWait(it) },
-                onSendChatMessage = { viewModel.syncPlaySendChatMessage(it) },
-                onToggleChatOverlay = {
-                    onToggleChatOverlay()
-                    onSheetChange(PlayerSheet.None)
-                },
                  onDismiss = dismissSheet,
              )
          }
