@@ -149,6 +149,10 @@ class ExoPlayerEngine(
         override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
             _currentCues.value = cueGroup.cues.mapNotNull { it.text?.toString() }
         }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            applyAudioEffects()
+        }
     }
 
     override fun load(request: PlaybackRequest) {
@@ -285,6 +289,7 @@ class ExoPlayerEngine(
     }
 
     override fun release() {
+        engineScope.cancel()
         player?.removeListener(listener)
         playerView?.player = null
         playerView = null
@@ -295,7 +300,11 @@ class ExoPlayerEngine(
         currentSubtitleConfigs.clear()
         lastVideoStats = null
         releaseAudioEffects()
-        engineScope.cancel()
+        _playbackState.value = EnginePlaybackState.IDLE
+        _isPlaying.value = false
+        _availableTracks.value = emptyList()
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     override fun play() {
@@ -361,6 +370,10 @@ class ExoPlayerEngine(
                 )
             } else {
                 val groups = p.currentTracks.groups.filter { it.type == exoType }
+                if (groups.isEmpty()) {
+                    selector.setParameters(params)
+                    return
+                }
                 val groupIndex = index.coerceIn(groups.indices)
                 if (groupIndex in groups.indices) {
                     val fallbackGroup = groups[groupIndex].mediaTrackGroup
@@ -467,10 +480,10 @@ class ExoPlayerEngine(
         val p = player ?: run { close(); return@callbackFlow }
         val posListener = object : Player.Listener {
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                trySend(p.currentPosition)
+                runCatching { trySend(p.currentPosition) }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
-                trySend(p.currentPosition)
+                runCatching { trySend(p.currentPosition) }
             }
         }
         p.addListener(posListener)
@@ -480,22 +493,24 @@ class ExoPlayerEngine(
         val ticker = engineScope.launch {
             while (isActive) {
                 delay(500)
-                val currentlyPlaying = p.isPlaying
-                if (currentlyPlaying) {
-                    trySend(p.currentPosition)
-                    _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                    updateVideoStats()
-                } else if (currentlyPlaying != lastPlayingState) {
-                    trySend(p.currentPosition)
-                    _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                runCatching {
+                    val currentlyPlaying = p.isPlaying
+                    if (currentlyPlaying) {
+                        trySend(p.currentPosition)
+                        _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                        updateVideoStats()
+                    } else if (currentlyPlaying != lastPlayingState) {
+                        trySend(p.currentPosition)
+                        _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
+                    }
+                    lastPlayingState = currentlyPlaying
                 }
-                lastPlayingState = currentlyPlaying
             }
         }
 
         awaitClose {
             ticker.cancel()
-            p.removeListener(posListener)
+            try { p.removeListener(posListener) } catch (_: Exception) {}
         }
     }
 

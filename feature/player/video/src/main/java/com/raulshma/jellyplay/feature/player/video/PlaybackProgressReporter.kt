@@ -73,8 +73,8 @@ internal class PlaybackProgressReporter(
         progressJob = viewModel.viewModelScope.launch {
             while (true) {
                 delay(10_000)
-                val engine = getMediaEngine() ?: continue
-                val itemId = getCurrentItemId() ?: continue
+                val engine = getMediaEngine() ?: break
+                val itemId = getCurrentItemId() ?: break
                 val positionTicks = engine.currentPositionMs * 10_000
                 val isPaused = !engine.isPlaying.value
                 playbackRepository.reportPlaybackProgress(
