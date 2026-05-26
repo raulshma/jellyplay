@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -230,6 +232,8 @@ fun MusicHomeScreen(
             val borderAlpha = 0.12f * scrollFraction
             val dockScale = 1f - (0.04f * scrollFraction)
 
+            var isFabExpanded by remember { mutableStateOf(false) }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -267,84 +271,126 @@ fun MusicHomeScreen(
                         )
                     )
             ) {
-                androidx.compose.foundation.layout.Row(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    ModeSwitch(
+                        currentMode = viewModel.homeMode,
+                        onModeChange = onModeChange,
+                    )
+                    HeaderStatusIndicator(
+                        status = headerStatus,
+                        modifier = Modifier.padding(start = 8.dp),
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                    )
+                }
+            }
+
+            FloatingActionButtonMenu(
+                expanded = isFabExpanded,
+                button = {
+                    ToggleFloatingActionButton(
+                        checked = isFabExpanded,
+                        onCheckedChange = { isFabExpanded = it },
+                        containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                            initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            finalColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                     ) {
-                        ModeSwitch(
-                            currentMode = viewModel.homeMode,
-                            onModeChange = onModeChange,
-                        )
-                        HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 8.dp),
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+                        Icon(
+                            if (isFabExpanded) Icons.Default.Close else Icons.Default.MoreVert,
+                            contentDescription = if (isFabExpanded) "Close menu" else "More options",
                         )
                     }
-
-                    Spacer(Modifier.weight(1f))
-
-                    androidx.compose.foundation.layout.Box(
-                        modifier = Modifier
-                            .clip(ShapeCache.smooth20)
-                            .padding(horizontal = 4.dp),
-                    ) {
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 16.dp,
+                        bottom = 16.dp,
+                    ),
+            ) {
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        viewModel.surpriseMe { trackId ->
+                            onItemClick(trackId)
+                        }
+                    },
+                    text = { Text("Surprise Me") },
+                    icon = {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onSyncPlayClick()
+                    },
+                    text = { Text("SyncPlay") },
+                    icon = {
+                        Icon(
+                            Icons.Default.Group,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onDownloadsClick()
+                    },
+                    text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ExpressiveIconButton(onClick = {
-                                viewModel.surpriseMe { trackId ->
-                                    onItemClick(trackId)
-                                }
-                            }, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = "Surprise Me",
-                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            ExpressiveIconButton(onClick = onSyncPlayClick, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.Group,
-                                    contentDescription = "SyncPlay",
-                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            BadgedBox(
-                                badge = {
-                                    if (activeDownloadCount > 0) {
-                                        Badge {
-                                            Text(activeDownloadCount.toString())
-                                        }
-                                    }
-                                }
-                            ) {
-                                ExpressiveIconButton(onClick = onDownloadsClick, modifier = Modifier.size(40.dp)) {
-                                    Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = "Downloads",
-                                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(20.dp),
+                            Text("Downloads")
+                            if (activeDownloadCount > 0) {
+                                Badge(
+                                    modifier = Modifier.padding(start = 6.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                ) {
+                                    Text(
+                                        activeDownloadCount.toString(),
+                                        color = MaterialTheme.colorScheme.onPrimary,
                                     )
                                 }
                             }
-                            ExpressiveIconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
                         }
-                    }
-                }
+                    },
+                    icon = {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onSettingsClick()
+                    },
+                    text = { Text("Settings") },
+                    icon = {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
             }
         }
     }
