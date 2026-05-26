@@ -195,8 +195,6 @@ private fun MainContent(
         scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
     }
 
-    var lastNavigatedAt by remember { mutableStateOf(0L) }
-
     val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
     val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
@@ -240,25 +238,6 @@ private fun MainContent(
     val enterVideoMiniMode: () -> Unit = remember(navigator) {
         {
             navigator.goBack()
-        }
-    }
-
-    androidx.compose.runtime.LaunchedEffect(viewModel.syncPlayManager) {
-        viewModel.syncPlayManager.commands.collect { command ->
-            if (command is com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand.PlayQueueUpdate) {
-                if (command.playingItemId.isBlank()) return@collect
-                val route = navigator.currentRoute()
-                val isPlayer = route is Route.VideoPlayer ||
-                        route is Route.OfflinePlayer ||
-                        route is Route.LiveTvChannelPlayer ||
-                        route is Route.AudioPlayer
-                if (!isPlayer) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastNavigatedAt < 2000L) return@collect
-                    lastNavigatedAt = now
-                    navigator.navigate(Route.VideoPlayer(command.playingItemId, startPositionTicks = command.positionTicks))
-                }
-            }
         }
     }
 

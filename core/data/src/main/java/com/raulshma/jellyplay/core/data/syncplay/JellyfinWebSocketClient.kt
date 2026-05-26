@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class SyncPlayEvent(
+data class WebSocketEvent(
     val type: String,
     val data: JSONObject,
 )
@@ -29,8 +29,8 @@ class JellyfinWebSocketClient @Inject constructor(
     private val okHttpClient: OkHttpClient,
 ) {
     private var webSocket: WebSocket? = null
-    private val _events = MutableSharedFlow<SyncPlayEvent>(extraBufferCapacity = 64)
-    val events: SharedFlow<SyncPlayEvent> = _events.asSharedFlow()
+    private val _events = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<WebSocketEvent> = _events.asSharedFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var serverUrl: String? = null
@@ -140,7 +140,7 @@ class JellyfinWebSocketClient @Inject constructor(
                 "KeepAlive",
                 "GroupJoined",
                 "GroupLeft" -> {
-                    _events.tryEmit(SyncPlayEvent(type = messageType, data = data))
+                    _events.tryEmit(WebSocketEvent(type = messageType, data = data))
                 }
             }
         } catch (e: Exception) {

@@ -360,50 +360,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
     }
 
-    fun setSyncPlayProgressReportingMode(mode: String) {
-        viewModelScope.launch { preferencesStore.setSyncPlayProgressReportingMode(mode) }
-    }
-
-    fun setSyncPlayAutoJoinLastGroup(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlayAutoJoinLastGroup(enabled) }
-    }
-
-    fun setSyncPlayNotifyUserJoinLeave(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlayNotifyUserJoinLeave(enabled) }
-    }
-
-    fun setSyncPlayNotifyChatMessages(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlayNotifyChatMessages(enabled) }
-    }
-
-    fun setSyncPlayNotifySyncIssues(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlayNotifySyncIssues(enabled) }
-    }
-
-    fun setSyncPlayDefaultIgnoreWait(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlayDefaultIgnoreWait(enabled) }
-    }
-
-    fun setSyncPlaySyncCorrection(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlaySyncCorrection(enabled) }
-    }
-
-    fun setSyncPlaySpeedToSyncEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncEnabled(enabled) }
-    }
-
-    fun setSyncPlaySpeedToSyncMinDelayMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncMinDelayMs(ms) }
-    }
-
-    fun setSyncPlaySpeedToSyncMaxDelayMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncMaxDelayMs(ms) }
-    }
-
-    fun setSyncPlaySpeedToSyncDurationMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setSyncPlaySpeedToSyncDurationMs(ms) }
-    }
-
     fun setGaplessEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setGaplessEnabled(enabled) }
     }
