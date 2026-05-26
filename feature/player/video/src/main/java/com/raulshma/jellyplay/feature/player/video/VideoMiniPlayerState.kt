@@ -66,6 +66,10 @@ class VideoMiniPlayerState @Inject constructor() {
         if (!_isMiniMode.value) return null
         if (_itemId.value != itemId) return null
         val engine = _engine
+        job?.cancel()
+        job = null
+        miniScope?.cancel()
+        miniScope = null
         _isMiniMode.value = false
         _engine = null
         _itemId.value = null

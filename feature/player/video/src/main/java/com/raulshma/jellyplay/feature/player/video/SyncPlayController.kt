@@ -111,6 +111,7 @@ internal class SyncPlayController(
     }
 
     fun reset() {
+        commandJob?.cancel()
         scheduledCommandJob?.cancel()
         syncCorrectionJob?.cancel()
         syncStateResetJob?.cancel()

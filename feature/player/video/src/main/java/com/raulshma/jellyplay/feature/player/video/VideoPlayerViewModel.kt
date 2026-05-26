@@ -250,6 +250,7 @@ class VideoPlayerViewModel @Inject constructor(
         subtitleStreamIndex: Int? = null,
         audioStreamIndex: Int? = null,
     ) {
+        released = false
         pendingSubtitleStreamIndex = subtitleStreamIndex
         pendingAudioStreamIndex = audioStreamIndex
         val currentItemId = playerSessionManager.sessionState.value.currentItemId
@@ -591,6 +592,8 @@ class VideoPlayerViewModel @Inject constructor(
         val currentSpeed = _uiState.value.playbackSpeed
         val currentQuality = _uiState.value.streamingQuality
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(currentQuality)?.toInt()
+        progressReporter.cancelJobs()
+        releaseVideoMediaSession()
         _uiState.update {
             it.copy(
                 showPlaybackErrorDialog = false,
@@ -601,6 +604,14 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, currentSpeed, maxBitrate)
+            val sessionState = playerSessionManager.sessionState.value
+            createVideoMediaSession(
+                sessionState.currentItemId ?: "",
+                sessionState.title,
+                sessionState.subtitle,
+            )
+            progressReporter.startPositionTracking()
+            progressReporter.startProgressReporting()
         }
     }
 
@@ -1302,7 +1313,11 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager.requestAutoEnterPip(false)
     }
 
+    private var released = false
+
     fun release() {
+        if (released) return
+        released = true
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
         val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
@@ -1310,25 +1325,29 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            viewModelScope.launch {
-                playbackRepository.reportPlaybackStopped(
-                    itemId = itemId,
-                    sessionId = sessionId,
-                    positionTicks = positionTicks,
-                )
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    playbackRepository.reportPlaybackStopped(
+                        itemId = itemId,
+                        sessionId = sessionId,
+                        positionTicks = positionTicks,
+                    )
+                }
             }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
+        if (released) return
+        released = true
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
         val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
                 }

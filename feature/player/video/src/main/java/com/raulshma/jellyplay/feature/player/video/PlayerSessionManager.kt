@@ -155,6 +155,7 @@ class PlayerSessionManager(
         startPositionTicks: Long,
         prefs: com.raulshma.jellyplay.core.model.UserPreferences,
     ) {
+        _engine.value?.release()
         val eng = PlayerEngineFactory.create(context, playerType)
         _engine.value = eng
         lastPlayerType = playerType

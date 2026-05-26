@@ -266,18 +266,22 @@ fun VideoPlayerScreen(
         }
 
         onDispose {
-            // If we're currently in PiP, don't release the engine or reset the UI.
-            // The engine needs to stay alive until PiP is dismissed or returned to.
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
             if (!currentlyInPip) {
                 activity?.let {
-                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    val window = it.window
-                    val controller = WindowCompat.getInsetsController(window, window.decorView)
-                    controller.show(WindowInsetsCompat.Type.systemBars())
+                    if (!it.isDestroyed && !it.isFinishing) {
+                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        val window = it.window
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        controller.show(WindowInsetsCompat.Type.systemBars())
+                    }
                 }
-                activity?.let { act -> FrameRateMatcher.restoreOriginalMode(act) }
+                activity?.let { act ->
+                    if (!act.isDestroyed && !act.isFinishing) {
+                        FrameRateMatcher.restoreOriginalMode(act)
+                    }
+                }
                 playerViewRef = null
                 viewModel.release()
             }
@@ -286,38 +290,46 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(uiState.isPlaying) {
         activity?.let {
-            if (uiState.isPlaying) {
-                it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            } else {
-                it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (!it.isDestroyed && !it.isFinishing) {
+                if (uiState.isPlaying) {
+                    it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
             }
         }
     }
 
     LaunchedEffect(Unit) {
         delay(400)
-        activity?.requestedOrientation = when (uiState.defaultOrientation) {
-            OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity?.let {
+            if (!it.isDestroyed && !it.isFinishing) {
+                it.requestedOrientation = when (uiState.defaultOrientation) {
+                    OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+            }
         }
     }
 
     LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
         if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
-            activity?.let { FrameRateMatcher.matchFrameRate(it, uiState.videoFrameRate) }
+            activity?.let { if (!it.isDestroyed && !it.isFinishing) FrameRateMatcher.matchFrameRate(it, uiState.videoFrameRate) }
         }
     }
 
     LaunchedEffect(uiState.rememberBrightness) {
         if (uiState.rememberBrightness && uiState.brightnessLevel != 0.5f) {
             activity?.let { act ->
-                val layout = act.window.attributes
-                layout.screenBrightness = uiState.brightnessLevel
-                act.window.attributes = layout
-                brightnessOverlay = uiState.brightnessLevel
+                if (!act.isDestroyed && !act.isFinishing) {
+                    val layout = act.window.attributes
+                    layout.screenBrightness = uiState.brightnessLevel
+                    act.window.attributes = layout
+                    brightnessOverlay = uiState.brightnessLevel
+                }
             }
         }
     }
