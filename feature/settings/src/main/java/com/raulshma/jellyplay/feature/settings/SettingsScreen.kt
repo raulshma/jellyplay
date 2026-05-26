@@ -180,9 +180,7 @@ fun SettingsScreen(
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
     var showCrossfadePicker by remember { mutableStateOf(false) }
     var showAudioDelayPicker by remember { mutableStateOf(false) }
-    var showSyncPlayMinDelayPicker by remember { mutableStateOf(false) }
-    var showSyncPlayMaxDelayPicker by remember { mutableStateOf(false) }
-    var showSyncPlayDurationPicker by remember { mutableStateOf(false) }
+
     var showSubtitleFontPicker by remember { mutableStateOf(false) }
     var showSubtitleColorPicker by remember { mutableStateOf(false) }
     var showSubtitleBgColorPicker by remember { mutableStateOf(false) }
@@ -584,113 +582,9 @@ fun SettingsScreen(
                 SettingsGroup(
                     icon = Icons.Default.Group,
                     title = "SyncPlay",
-                    summary = { if (preferences.syncPlayProgressReportingMode == "NEVER") "Disabled" else "Active" },
+                    summary = { "Watch together with friends" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    val syncItems = mutableListOf<Pair<String, Int>>()
-                    syncItems.add("progress" to 0)
-                    syncItems.add("autoJoin" to 1)
-                    syncItems.add("notifications" to 2)
-                    syncItems.add("ignoreWait" to 3)
-                    syncItems.add("syncCorrection" to 4)
-                    var syncIdx = 5
-                    if (preferences.syncPlaySyncCorrection) {
-                        syncItems.add("speedCorrection" to syncIdx++)
-                    }
-                    if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
-                        syncItems.add("minDelay" to syncIdx++)
-                        syncItems.add("maxDelay" to syncIdx++)
-                        syncItems.add("duration" to syncIdx)
-                    }
-                    val total = syncItems.size
-                    var idx = 0
-
-                    var progressMode by remember { mutableStateOf(preferences.syncPlayProgressReportingMode) }
-                    SettingListItem(
-                        icon = Icons.Default.Speed,
-                        title = "Progress Reporting",
-                        subtitle = when (progressMode) {
-                            "SUPPRESS_DURING" -> "Suppress during SyncPlay"
-                            "ALWAYS" -> "Always report"
-                            "NEVER" -> "Never report"
-                            else -> "Suppress during SyncPlay"
-                        },
-                        index = idx++, count = total,
-                        onClick = {
-                            val modes = listOf("SUPPRESS_DURING", "ALWAYS", "NEVER")
-                            val nextIndex = (modes.indexOf(progressMode) + 1) % modes.size
-                            progressMode = modes[nextIndex]
-                            viewModel.setSyncPlayProgressReportingMode(progressMode)
-                        },
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Group,
-                        title = "Auto-Join Last Group",
-                        subtitle = "Automatically rejoin last group on app start",
-                        checked = preferences.syncPlayAutoJoinLastGroup,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setSyncPlayAutoJoinLastGroup(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Notifications,
-                        title = "Join/Leave Notifications",
-                        subtitle = "Show when users join or leave",
-                        checked = preferences.syncPlayNotifyUserJoinLeave,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setSyncPlayNotifyUserJoinLeave(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Notifications,
-                        title = "Default Ignore Wait",
-                        subtitle = "Ignore group waits by default when joining",
-                        checked = preferences.syncPlayDefaultIgnoreWait,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setSyncPlayDefaultIgnoreWait(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Speed,
-                        title = "Sync Correction",
-                        subtitle = "Automatically correct playback sync drift",
-                        checked = preferences.syncPlaySyncCorrection,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setSyncPlaySyncCorrection(it) },
-                    )
-                    if (preferences.syncPlaySyncCorrection) {
-                        SettingToggleItem(
-                            icon = Icons.Default.Speed,
-                            title = "Speed Correction",
-                            subtitle = "Adjust playback speed to fix small sync drift",
-                            checked = preferences.syncPlaySpeedToSyncEnabled,
-                            index = idx++, count = total,
-                            onCheckedChange = { viewModel.setSyncPlaySpeedToSyncEnabled(it) },
-                        )
-                    }
-                    if (preferences.syncPlaySyncCorrection && preferences.syncPlaySpeedToSyncEnabled) {
-                        SettingListItem(
-                            icon = Icons.Default.Timer,
-                            title = "Speed Correction Min Delay",
-                            subtitle = "Minimum delay before speed correction activates",
-                            trailingText = "${preferences.syncPlaySpeedToSyncMinDelayMs}ms",
-                            index = idx++, count = total,
-                            onClick = { showSyncPlayMinDelayPicker = true },
-                        )
-                        SettingListItem(
-                            icon = Icons.Default.Timer,
-                            title = "Speed Correction Max Delay",
-                            subtitle = "Maximum delay for speed correction (seeks above this)",
-                            trailingText = "${preferences.syncPlaySpeedToSyncMaxDelayMs}ms",
-                            index = idx++, count = total,
-                            onClick = { showSyncPlayMaxDelayPicker = true },
-                        )
-                        SettingListItem(
-                            icon = Icons.Default.Timer,
-                            title = "Speed Correction Duration",
-                            subtitle = "How long the speed adjustment lasts",
-                            trailingText = "${preferences.syncPlaySpeedToSyncDurationMs}ms",
-                            index = idx, count = total,
-                            onClick = { showSyncPlayDurationPicker = true },
-                        )
-                    }
                 }
             }
 
@@ -1626,42 +1520,6 @@ fun SettingsScreen(
                 viewModel.setAudioDelayMs(it.toLong())
                 showAudioDelayPicker = false
             },
-        )
-    }
-
-    if (showSyncPlayMinDelayPicker) {
-        val values = listOf(30L, 50L, 60L, 100L, 150L, 200L, 300L, 500L)
-        SettingsListPickerSheet(
-            title = "Speed Correction Min Delay",
-            items = values,
-            label = { "${it}ms" },
-            isSelected = { it == preferences.syncPlaySpeedToSyncMinDelayMs },
-            onDismiss = { showSyncPlayMinDelayPicker = false },
-            onSelect = { viewModel.setSyncPlaySpeedToSyncMinDelayMs(it); showSyncPlayMinDelayPicker = false },
-        )
-    }
-
-    if (showSyncPlayMaxDelayPicker) {
-        val values = listOf(1000L, 2000L, 3000L, 5000L, 10000L)
-        SettingsListPickerSheet(
-            title = "Speed Correction Max Delay",
-            items = values,
-            label = { "${it}ms" },
-            isSelected = { it == preferences.syncPlaySpeedToSyncMaxDelayMs },
-            onDismiss = { showSyncPlayMaxDelayPicker = false },
-            onSelect = { viewModel.setSyncPlaySpeedToSyncMaxDelayMs(it); showSyncPlayMaxDelayPicker = false },
-        )
-    }
-
-    if (showSyncPlayDurationPicker) {
-        val values = listOf(300L, 500L, 1000L, 1500L, 2000L, 3000L)
-        SettingsListPickerSheet(
-            title = "Speed Correction Duration",
-            items = values,
-            label = { "${it}ms" },
-            isSelected = { it == preferences.syncPlaySpeedToSyncDurationMs },
-            onDismiss = { showSyncPlayDurationPicker = false },
-            onSelect = { viewModel.setSyncPlaySpeedToSyncDurationMs(it); showSyncPlayDurationPicker = false },
         )
     }
 

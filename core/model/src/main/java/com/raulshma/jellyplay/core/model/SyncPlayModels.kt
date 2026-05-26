@@ -65,25 +65,43 @@ enum class SyncPlayShuffleMode {
 
 @Immutable
 @Serializable
-data class SyncPlayChatMessage(
-    val id: String,
-    val userId: String,
-    val userName: String,
-    val text: String,
-    val timestamp: Long = System.currentTimeMillis(),
-    val type: SyncPlayChatMessageType = SyncPlayChatMessageType.USER,
+data class UtcTimeResponse(
+    val requestReceptionTime: String,
+    val responseTransmissionTime: String,
 )
 
 @Immutable
 @Serializable
-enum class SyncPlayChatMessageType {
-    USER,
-    SYSTEM,
-}
+data class SyncPlayPlaybackCommand(
+    val command: String,
+    val whenMs: Long,
+    val positionTicks: Long,
+    val playlistItemId: String,
+    val emittedAtMs: Long,
+)
 
 @Immutable
 @Serializable
-data class UtcTimeResponse(
-    val requestReceptionTime: String,
-    val responseTransmissionTime: String,
+data class SyncPlayQueueUpdateData(
+    val playlistItemIds: List<String>,
+    val itemIds: List<String>,
+    val playingItemIndex: Int,
+    val playingItemId: String,
+    val playingPlaylistItemId: String,
+    val startPositionTicks: Long,
+    val isPlaying: Boolean,
+    val whenMs: Long,
+    val lastUpdateMs: Long,
+    val repeatMode: SyncPlayRepeatMode,
+    val shuffleMode: SyncPlayShuffleMode,
+    val reason: String,
+)
+
+@Immutable
+@Serializable
+data class SyncPlayGroupUpdateData(
+    val groupId: String,
+    val groupName: String,
+    val participantCount: Int,
+    val participants: List<String> = emptyList(),
 )
