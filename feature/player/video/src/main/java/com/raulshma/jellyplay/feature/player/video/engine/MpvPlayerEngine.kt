@@ -95,9 +95,9 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
-    private var pendingSubtitles: List<SubtitleSource> = emptyList()
-    private var pendingPreferredSubtitleLanguage: String? = null
-    private var lastLoggedSubtitleText: String? = null
+    @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
+    @Volatile private var pendingPreferredSubtitleLanguage: String? = null
+    @Volatile private var lastLoggedSubtitleText: String? = null
     
     private var currentConfig = EngineConfig()
     private val dialogueBoost = DialogueBoostHelper()
@@ -313,16 +313,21 @@ class MpvPlayerEngine(
         nightMode.detach()
         audioNormalization.detach()
         channelMix.detach()
-        mpvView?.let { view ->
-            view.removeObserver()
-            try { view.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
-        }
-        mpvView = null
         engineScope.cancel()
+        val view = mpvView
+        mpvView = null
+        view?.let {
+            it.removeObserver()
+            try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
+        }
+        _playbackState.value = EnginePlaybackState.IDLE
+        _isPlaying.value = false
+        _availableTracks.value = emptyList()
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     override fun play() {
-        _isPlaying.value = true
         try {
             if (_playbackState.value == EnginePlaybackState.ENDED) {
                 mpvView?.mpv?.command("seek", "0", "absolute")
@@ -332,7 +337,6 @@ class MpvPlayerEngine(
     }
 
     override fun pause() {
-        _isPlaying.value = false
         try { mpvView?.mpv?.setPropertyBoolean("pause", true) } catch (_: Exception) {}
     }
 
@@ -530,7 +534,7 @@ class MpvPlayerEngine(
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
-        val ticker = engineScope.launch(Dispatchers.Default) {
+        val ticker = engineScope.launch {
             while (isActive) {
                 delay(500)
                 trySend(currentPositionMs)
