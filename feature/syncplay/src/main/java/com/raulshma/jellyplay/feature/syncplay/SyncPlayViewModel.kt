@@ -6,7 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayCommand
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
@@ -21,24 +21,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-
-data class ChatMessageEntry(
-    val userId: String,
-    val userName: String,
-    val text: String,
-    val timestamp: Long = System.currentTimeMillis(),
-) {
-    val formattedTime: String
-        get() = LocalDateTime.ofInstant(
-            Instant.ofEpochMilli(timestamp),
-            ZoneId.systemDefault()
-        ).format(DateTimeFormatter.ofPattern("HH:mm"))
-}
 
 data class PlayItemRequest(
     val itemId: String,
@@ -74,11 +57,6 @@ class SyncPlayViewModel @Inject constructor(
 
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
     val navigateToPlayer = _navigateToPlayer.asStateFlow()
-
-    private val _chatMessages = MutableStateFlow<List<ChatMessageEntry>>(emptyList())
-    val chatMessages = _chatMessages.asStateFlow()
-
-    private val chatBuffer = ArrayDeque<ChatMessageEntry>(200)
 
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
@@ -121,7 +99,7 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = true
                     loadCurrentGroup()
-                    startCommandListener()
+                    startEventListener()
                     val group = syncPlayManager.currentGroup
                     val playingId = group?.playingItemId
                     if (!playingId.isNullOrBlank()) {
@@ -145,8 +123,6 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     isInGroup = false
                     currentGroup = null
-                    chatBuffer.clear()
-                    _chatMessages.value = emptyList()
                     commandJob?.cancel()
                     lastHandledPlayingItemId = null
                     loadGroups()
@@ -186,34 +162,34 @@ class SyncPlayViewModel @Inject constructor(
         _navigateToPlayer.value = null
     }
 
-    private fun startCommandListener() {
+    private fun startEventListener() {
         commandJob?.cancel()
         commandJob = viewModelScope.launch {
-            syncPlayManager.commands.collect { command ->
-                when (command) {
-                    is SyncPlayCommand.PlayQueueUpdate -> {
+            syncPlayManager.events.collect { event ->
+                when (event) {
+                    is SyncPlayEvent.PlayQueueUpdate -> {
                         val current = currentGroup
-                        if (command.playingItemId.isNotBlank() && lastHandledPlayingItemId != command.playingItemId) {
+                        if (event.data.playingItemId.isNotBlank() && lastHandledPlayingItemId != event.data.playingItemId) {
                             _navigateToPlayer.value = PlayItemRequest(
-                                itemId = command.playingItemId,
-                                positionTicks = command.positionTicks,
+                                itemId = event.data.playingItemId,
+                                positionTicks = event.data.startPositionTicks,
                             )
-                            lastHandledPlayingItemId = command.playingItemId
+                            lastHandledPlayingItemId = event.data.playingItemId
                         }
                         currentGroup = (current ?: SyncPlayGroupInfo(
                             groupId = "",
                             groupName = "",
                         )).copy(
-                            playingItemId = command.playingItemId,
-                            isPlaying = command.isPlaying,
-                            positionTicks = command.positionTicks,
+                            playingItemId = event.data.playingItemId,
+                            isPlaying = event.data.isPlaying,
+                            positionTicks = event.data.startPositionTicks,
                         )
                     }
-                    is SyncPlayCommand.StateUpdate -> {
-                        currentGroup = currentGroup?.copy(isPlaying = command.isPlaying)
+                    is SyncPlayEvent.StateUpdate -> {
+                        currentGroup = currentGroup?.copy(isPlaying = event.isPlaying)
                     }
-                    is SyncPlayCommand.GroupUpdate -> {
-                        if (command.groupName.isBlank() && command.participantCount == 0) {
+                    is SyncPlayEvent.GroupUpdate -> {
+                        if (event.groupName.isBlank() && event.participantCount == 0) {
                             isInGroup = false
                             currentGroup = null
                             commandJob?.cancel()
@@ -221,17 +197,8 @@ class SyncPlayViewModel @Inject constructor(
                             loadCurrentGroup()
                         }
                     }
-                    is SyncPlayCommand.ChatMessage -> {
-                        chatBuffer.addLast(ChatMessageEntry(
-                            userId = command.userId,
-                            userName = command.userName,
-                            text = command.text,
-                        ))
-                        if (chatBuffer.size > 200) chatBuffer.removeFirst()
-                        _chatMessages.value = chatBuffer.toList()
-                    }
-                    is SyncPlayCommand.Notification -> {
-                        _notifications.tryEmit(command.message)
+                    is SyncPlayEvent.Notification -> {
+                        _notifications.tryEmit(event.message)
                     }
                     else -> {}
                 }
@@ -282,11 +249,6 @@ class SyncPlayViewModel @Inject constructor(
 
     fun updateShowCreateDialog(show: Boolean) {
         showCreateDialog = show
-    }
-
-    fun sendChatMessage(text: String) {
-        if (text.isBlank()) return
-        syncPlayManager.sendChatMessage(text.trim())
     }
 
     fun refreshGroups() {

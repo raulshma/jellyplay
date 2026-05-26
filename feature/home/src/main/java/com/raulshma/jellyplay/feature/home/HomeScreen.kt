@@ -69,20 +69,23 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.ToggleFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.rememberScrollState
@@ -421,14 +424,15 @@ fun HomeScreen(
             result
         }
 
-        var isSearchExpanded by remember { mutableStateOf(false) }
+        var isFabExpanded by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
+        val isSearchFocused by remember { derivedStateOf { viewModel.searchQuery.isNotBlank() } }
 
-        BackHandler(enabled = isSearchExpanded) {
-            if (viewModel.searchQuery.isNotBlank()) {
+        BackHandler(enabled = isFabExpanded || isSearchFocused) {
+            if (isFabExpanded) {
+                isFabExpanded = false
+            } else if (viewModel.searchQuery.isNotBlank()) {
                 viewModel.clearSearch()
-            } else {
-                isSearchExpanded = false
                 focusManager.clearFocus()
             }
         }
@@ -668,63 +672,118 @@ fun HomeScreen(
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
             val dockScale = 1f - (0.04f * scrollFraction)
 
-            AnimatedContent(
-                targetState = isSearchExpanded,
-                transitionSpec = {
-                    fadeIn(tween(300, easing = AlphaEasing)) togetherWith fadeOut(tween(200, easing = AlphaEasing))
-                },
-                label = "headerSearchToggle",
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding(),
-            ) { searchMode ->
-                if (searchMode) {
-                    val searchFocusRequester = remember { FocusRequester() }
-                    LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
+                    .statusBarsPadding()
+                    .padding(
+                        horizontal = (16f * scrollFraction).dp,
+                        vertical = (8f * scrollFraction).dp
+                    )
+                    .graphicsLayer {
+                        scaleX = dockScale
+                        scaleY = dockScale
+                    }
+                    .clip(
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
+                    )
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                    )
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = borderAlpha * 2f),
+                                    Color.White.copy(alpha = borderAlpha * 0.5f),
+                                )
+                            )
+                        ),
+                        AbsoluteSmoothCornerShape(
+                            cornerRadius = (28f * scrollFraction).dp,
+                            smoothnessAsPercent = 60
+                        )
+                    )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ModeSwitch(
+                        currentMode = viewModel.homeMode,
+                        onModeChange = onModeChange,
+                    )
+                    HeaderStatusIndicator(
+                        status = headerStatus,
+                        modifier = Modifier.padding(start = 8.dp),
+                        tint = appBarIconColorFaded,
+                    )
 
                     @OptIn(ExperimentalMaterial3Api::class)
-                    DockedSearchBar(
-                        inputField = {
-                            SearchBarDefaults.InputField(
-                                query = viewModel.searchQuery,
-                                onQueryChange = { viewModel.updateSearchQuery(it) },
-                                onSearch = { },
-                                expanded = true,
-                                onExpandedChange = { expanded ->
-                                    if (!expanded) {
-                                        if (viewModel.searchQuery.isNotBlank()) viewModel.clearSearch()
-                                        else isSearchExpanded = false
-                                    }
-                                },
-                                placeholder = { Text("Search movies, shows, music...") },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                trailingIcon = {
-                                    ExpressiveIconButton(
-                                        onClick = {
-                                            if (viewModel.searchQuery.isNotBlank()) viewModel.clearSearch()
-                                            else isSearchExpanded = false
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = "Close search",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.focusRequester(searchFocusRequester),
+                    val searchTextFieldColors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = appBarIconColor,
+                    )
+                    TextField(
+                        value = viewModel.searchQuery,
+                        onValueChange = { viewModel.updateSearchQuery(it) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                            .height(48.dp),
+                        placeholder = {
+                            Text(
+                                "Search movies, shows, music...",
+                                color = appBarIconColor.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         },
-                        expanded = viewModel.searchQuery.isNotBlank(),
-                        onExpandedChange = { },
+                        colors = searchTextFieldColors,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = appBarIconColor,
+                        ),
+                        singleLine = true,
+                    )
+
+                    if (viewModel.searchQuery.isNotEmpty()) {
+                        ExpressiveIconButton(
+                            onClick = {
+                                viewModel.clearSearch()
+                                focusManager.clearFocus()
+                            },
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear search",
+                                tint = appBarIconColorFaded,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+
+                if (viewModel.searchQuery.isNotBlank()) {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        shape = ShapeCache.smooth28,
-                        colors = SearchBarDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
-                        ),
+                            .padding(top = 64.dp)
+                            .heightIn(max = 400.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+                                ShapeCache.smooth28,
+                            )
+                            .clip(ShapeCache.smooth28),
                     ) {
                         HomeSearchResultsOverlay(
                             jellyfinResults = viewModel.searchJellyfinResults,
@@ -732,162 +791,120 @@ fun HomeScreen(
                             isSearching = viewModel.isSearching,
                             getImageUrl = { viewModel.getImageUrl(it) },
                             onJellyfinClick = { item ->
-                                isSearchExpanded = false
                                 viewModel.clearSearch()
+                                focusManager.clearFocus()
                                 onItemClick(item.id)
                             },
                             onSeerrClick = { item ->
-                                isSearchExpanded = false
                                 viewModel.clearSearch()
+                                focusManager.clearFocus()
                                 onSearchSeerrClick(item.id, item.mediaType)
                             },
                         )
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                horizontal = (16f * scrollFraction).dp,
-                                vertical = (8f * scrollFraction).dp
-                            )
-                            .graphicsLayer {
-                                scaleX = dockScale
-                                scaleY = dockScale
-                            }
-                            .clip(
-                                AbsoluteSmoothCornerShape(
-                                    cornerRadius = (28f * scrollFraction).dp,
-                                    smoothnessAsPercent = 60
-                                )
-                            )
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
-                            )
-                            .border(
-                                BorderStroke(
-                                    1.dp,
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = borderAlpha * 2f),
-                                            Color.White.copy(alpha = borderAlpha * 0.5f),
-                                        )
-                                    )
-                                ),
-                                AbsoluteSmoothCornerShape(
-                                    cornerRadius = (28f * scrollFraction).dp,
-                                    smoothnessAsPercent = 60
-                                )
-                            )
+                }
+            }
+
+            FloatingActionButtonMenu(
+                expanded = isFabExpanded,
+                button = {
+                    ToggleFloatingActionButton(
+                        checked = isFabExpanded,
+                        onCheckedChange = { isFabExpanded = it },
+                        containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                            initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            finalColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                     ) {
-                        androidx.compose.foundation.layout.Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                ModeSwitch(
-                                    currentMode = viewModel.homeMode,
-                                    onModeChange = onModeChange,
-                                )
-                                HeaderStatusIndicator(
-                                    status = headerStatus,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                    tint = appBarIconColorFaded,
-                                )
-                            }
-
-                            Spacer(Modifier.weight(1f))
-
-                            androidx.compose.foundation.layout.Box(
-                                modifier = Modifier
-                                    .clip(ShapeCache.smooth20)
-                                    .padding(horizontal = 4.dp),
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    ExpressiveIconButton(
-                                        onClick = { isSearchExpanded = true },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Search,
-                                            contentDescription = "Search",
-                                            tint = appBarIconColorFaded,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    ExpressiveIconButton(
-                                        onClick = {
-                                            showSurprise = !showSurprise
-                                            if (!showSurprise) autoRotateEnabled = true
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.AutoAwesome,
-                                            contentDescription = "Surprise Me",
-                                            tint = if (showSurprise) MaterialTheme.colorScheme.primary else appBarIconColorFaded,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    ExpressiveIconButton(
-                                        onClick = {
-                                            onSyncPlayClick()
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Group,
-                                            contentDescription = "SyncPlay",
-                                            tint = appBarIconColorFaded,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    BadgedBox(
-                                        badge = {
-                                            if (activeDownloadCount > 0) {
-                                                Badge {
-                                                    Text(activeDownloadCount.toString())
-                                                }
-                                            }
-                                        }
-                                    ) {
-                                        ExpressiveIconButton(
-                                            onClick = {
-                                                onDownloadsClick()
-                                            },
-                                            modifier = Modifier.size(40.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Download,
-                                                contentDescription = "Downloads",
-                                                tint = appBarIconColorFaded,
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                        }
-                                    }
-                                    ExpressiveIconButton(
-                                        onClick = {
-                                            onSettingsClick()
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Settings,
-                                            contentDescription = "Settings",
-                                            tint = appBarIconColorFaded,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
+                        Icon(
+                            if (isFabExpanded) Icons.Default.Close else Icons.Default.MoreVert,
+                            contentDescription = if (isFabExpanded) "Close menu" else "More options",
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 16.dp,
+                        bottom = 16.dp,
+                    ),
+            ) {
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        showSurprise = !showSurprise
+                        if (!showSurprise) autoRotateEnabled = true
+                    },
+                    text = { Text("Surprise Me") },
+                    icon = {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onSyncPlayClick()
+                    },
+                    text = { Text("SyncPlay") },
+                    icon = {
+                        Icon(
+                            Icons.Default.Group,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onDownloadsClick()
+                    },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Downloads")
+                            if (activeDownloadCount > 0) {
+                                Badge(
+                                    modifier = Modifier.padding(start = 6.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                ) {
+                                    Text(
+                                        activeDownloadCount.toString(),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    icon = {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                FloatingActionButtonMenuItem(
+                    onClick = {
+                        isFabExpanded = false
+                        onSettingsClick()
+                    },
+                    text = { Text("Settings") },
+                    icon = {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
             }
         }
         }

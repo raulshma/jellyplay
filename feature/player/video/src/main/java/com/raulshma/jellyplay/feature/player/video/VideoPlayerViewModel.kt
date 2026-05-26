@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
@@ -87,9 +89,6 @@ class VideoPlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _syncPlayPrefs = MutableStateFlow(com.raulshma.jellyplay.core.model.UserPreferences())
-    private val syncPlayPrefs: StateFlow<com.raulshma.jellyplay.core.model.UserPreferences> = _syncPlayPrefs.asStateFlow()
-
     private val playerSessionManager = PlayerSessionManager(
         context = context,
         scope = viewModelScope,
@@ -119,9 +118,8 @@ class VideoPlayerViewModel @Inject constructor(
         getMediaEngine = { playerSessionManager.engine },
         onAutoSkip = { segment -> skipSegment(segment) },
     )
-    private val syncPlayController = SyncPlayController(
+    private val syncPlayBridge = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
-        viewModel = this,
         uiState = _uiState,
         getMediaEngine = { playerSessionManager.engine },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
@@ -132,7 +130,7 @@ class VideoPlayerViewModel @Inject constructor(
                 playerSessionManager.engine?.seekTo(positionTicks / 10_000)
             }
         },
-        preferencesFlow = syncPlayPrefs,
+        scope = viewModelScope,
     )
 
     private var engineCollectionJob: Job? = null
@@ -140,8 +138,6 @@ class VideoPlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
-                _syncPlayPrefs.value = prefs
-
                 if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
                     _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
                     playerSessionManager.engine?.let {
@@ -158,7 +154,7 @@ class VideoPlayerViewModel @Inject constructor(
                 _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
             }
         }
-        syncPlayController.start()
+        syncPlayBridge.start()
 
         // Sync UI state with Session Manager
         viewModelScope.launch {
@@ -201,7 +197,7 @@ class VideoPlayerViewModel @Inject constructor(
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
                                 _uiState.update { s -> s.copy(isPlaying = isPlaying) }
-                                syncPlayController.onIsPlayingChanged(isPlaying)
+                                syncPlayBridge.onIsPlayingChanged(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
                                 _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
@@ -212,7 +208,7 @@ class VideoPlayerViewModel @Inject constructor(
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
                                 }
-                                syncPlayController.onPlaybackStateChanged(stateInt)
+                                syncPlayBridge.onPlaybackStateChanged(stateInt)
                             } }
                             launch { engine.currentCues.collect { cues ->
                                 val subtitleText = cues.joinToString("\n").takeIf { it.isNotBlank() }
@@ -296,7 +292,7 @@ class VideoPlayerViewModel @Inject constructor(
         trickplayManager.clear()
 
         if (wasInSyncPlay) {
-            syncPlayController.reattachSession()
+            syncPlayBridge.reattachSession()
         }
 
         viewModelScope.launch {
@@ -306,9 +302,9 @@ class VideoPlayerViewModel @Inject constructor(
                 try {
                     val matchingEntry = currentGroup.playlistItemMap.entries.find { it.value == itemId }
                     if (matchingEntry != null) {
-                        syncPlayManager.setPlaylistItem(matchingEntry.key)
+                        syncPlayManager.syncPlayController.setPlaylistItem(matchingEntry.key)
                     } else {
-                        syncPlayManager.setNewQueue(
+                        syncPlayManager.syncPlayController.setNewQueue(
                             itemIds = listOf(itemId),
                             playingItemId = itemId,
                             mediaSourceId = mediaSourceId,
@@ -504,7 +500,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(subtitleStyle = style) }
         // We can just update preferences, and let the session manager or viewmodel push it
         // Or we can manually push the update:
-        val prefs = _syncPlayPrefs.value
+        val prefs = runBlocking { preferencesStore.preferences.first() }
         val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
             decoderMode = _uiState.value.decoderMode,
             audioPassthrough = _uiState.value.audioPassthrough,
@@ -740,7 +736,7 @@ class VideoPlayerViewModel @Inject constructor(
                 nightModeEnabled = state.nightModeEnabled,
                 nightModeStrength = state.nightModeStrength,
                 equalizerEnabled = equalizerEnabled,
-                equalizerSettings = _syncPlayPrefs.value.equalizerSettings,
+                equalizerSettings = runBlocking(Dispatchers.IO) { preferencesStore.preferences.first().equalizerSettings },
                 audioNormalizationMode = state.audioNormalizationMode,
                 audioNormalizationEnabled = state.audioNormalizationEnabled,
                 channelMixMode = state.channelMixMode,
@@ -771,7 +767,7 @@ class VideoPlayerViewModel @Inject constructor(
                 val currentPlaylistItemId = group?.playingPlaylistItemId
                 val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
                 if (currentPlaylistItemId != null && nextExistsInQueue) {
-                    syncPlayController.sendNextItem(currentPlaylistItemId)
+                    syncPlayBridge.sendNextItem(currentPlaylistItemId)
                     return@launch
                 }
             }
@@ -782,13 +778,13 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
         viewModelScope.launch {
-            syncPlayManager.setRepeatMode(mode)
+            syncPlayManager.syncPlayController.setRepeatMode(mode)
         }
     }
 
     fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
         viewModelScope.launch {
-            syncPlayManager.setShuffleMode(mode)
+            syncPlayManager.syncPlayController.setShuffleMode(mode)
         }
     }
 
@@ -929,52 +925,34 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun joinSyncPlay(groupId: String) {
-        syncPlayController.joinGroup(groupId)
+        syncPlayBridge.joinGroup(groupId)
     }
 
     fun leaveSyncPlay() {
-        syncPlayController.leaveGroup()
+        syncPlayBridge.leaveGroup()
     }
 
     fun syncPlayTogglePlayPause() {
-        viewModelScope.launch {
-            if (playerSessionManager.engine?.isPlaying?.value == true) {
-                playerSessionManager.engine?.pause()
-                _uiState.update { it.copy(isPlaying = false) }
-                syncPlayManager.sendPause()
-            } else {
-                syncPlayManager.sendUnpause()
-            }
-        }
+        syncPlayBridge.togglePlayPause()
     }
 
     fun syncPlaySeekTo(positionMs: Long) {
-        viewModelScope.launch {
-            playerSessionManager.engine?.seekTo(positionMs)
-            syncPlayManager.sendSeek(positionMs * 10_000)
-        }
+        syncPlayBridge.seekTo(positionMs)
     }
 
     fun syncPlaySetIgnoreWait(ignore: Boolean) {
-        syncPlayController.setIgnoreWait(ignore)
+        syncPlayBridge.setIgnoreWait(ignore)
     }
 
     fun syncPlayStop() {
-        syncPlayController.sendStop()
+        syncPlayBridge.sendStop()
     }
 
     val syncPlayNotifications: kotlinx.coroutines.flow.SharedFlow<String>
-        get() = syncPlayController.notifications
+        get() = syncPlayBridge.notifications
 
     val syncPlayIgnoreWait: kotlinx.coroutines.flow.StateFlow<Boolean>
-        get() = syncPlayController.ignoreWait
-
-    val syncPlayChatMessages: kotlinx.coroutines.flow.StateFlow<List<com.raulshma.jellyplay.core.model.SyncPlayChatMessage>>
-        get() = syncPlayController.chatMessages
-
-    fun syncPlaySendChatMessage(text: String) {
-        syncPlayController.sendChatMessage(text)
-    }
+        get() = syncPlayBridge.ignoreWait
 
     val isCastAvailable: Boolean
         get() = castManager.isCastAvailable
@@ -987,7 +965,7 @@ class VideoPlayerViewModel @Inject constructor(
         get() = castManager.sessionEvents
 
     val isInSyncPlaySession: Boolean
-        get() = syncPlayController.isInSession
+        get() = syncPlayBridge.isInSession
 
     fun castToDevice() {
         val state = _uiState.value
@@ -1225,7 +1203,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     private fun releaseInternals() {
         progressReporter.cancelJobs()
-        syncPlayController.reset()
+        syncPlayBridge.reset()
         releaseVideoMediaSession()
         playerSessionManager.release()
         playerLifecycleManager.activeCallbacks = null

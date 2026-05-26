@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Pause
@@ -46,7 +45,6 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Shuffle
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.model.SyncPlayChatMessage
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,9 +63,6 @@ fun SyncPlayPlayerSheet(
     onStop: () -> Unit,
     onLeave: () -> Unit,
     onIgnoreWaitChange: (Boolean) -> Unit,
-    chatMessages: List<SyncPlayChatMessage> = emptyList(),
-    onSendChatMessage: (String) -> Unit = {},
-    onToggleChatOverlay: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     PlayerModalBottomSheet(
@@ -268,32 +263,6 @@ fun SyncPlayPlayerSheet(
                     onCheckedChange = onIgnoreWaitChange,
                     modifier = Modifier.tvFocusable(),
                 )
-            }
-
-            FilledTonalButton(
-                onClick = onToggleChatOverlay,
-                modifier = Modifier.fillMaxWidth().tvFocusable(),
-                shape = ShapeCache.smoothPill,
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Toggle Chat Overlay")
-            }
-
-            if (chatMessages.isNotEmpty()) {
-                Surface(
-                    shape = ShapeCache.smooth16,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                ) {
-                    SyncPlayChatPanel(
-                        messages = chatMessages,
-                        onSendMessage = onSendChatMessage,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .padding(12.dp),
-                    )
-                }
             }
 
             FilledTonalButton(

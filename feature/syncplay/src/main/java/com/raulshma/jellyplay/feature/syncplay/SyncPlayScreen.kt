@@ -36,14 +36,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.People
@@ -223,16 +220,14 @@ fun SyncPlayScreen(
                         label = "activeGroup",
                     ) { group ->
                         ActiveGroupView(
-                            groupInfo = group,
-                            chatMessages = viewModel.chatMessages.collectAsStateWithLifecycle().value,
-                            onTogglePlayback = { viewModel.togglePlayback() },
-                            onStop = { viewModel.stop() },
-                            onLeave = { viewModel.leaveGroup() },
-                            onSetRepeatMode = { viewModel.setRepeatMode(it) },
-                            onSetShuffleMode = { viewModel.setShuffleMode(it) },
-                            onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
-                            onSendChat = { viewModel.sendChatMessage(it) },
-                        )
+                             groupInfo = group,
+                             onTogglePlayback = { viewModel.togglePlayback() },
+                             onStop = { viewModel.stop() },
+                             onLeave = { viewModel.leaveGroup() },
+                             onSetRepeatMode = { viewModel.setRepeatMode(it) },
+                             onSetShuffleMode = { viewModel.setShuffleMode(it) },
+                             onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
+                         )
                     }
                 }
 
@@ -363,25 +358,14 @@ private fun SyncPlayGroupCard(
 @Composable
 private fun ActiveGroupView(
     groupInfo: com.raulshma.jellyplay.core.model.SyncPlayGroupInfo,
-    chatMessages: List<ChatMessageEntry>,
     onTogglePlayback: () -> Unit,
     onStop: () -> Unit,
     onLeave: () -> Unit,
     onSetRepeatMode: (SyncPlayRepeatMode) -> Unit,
     onSetShuffleMode: (SyncPlayShuffleMode) -> Unit,
     onSetIgnoreWait: (Boolean) -> Unit,
-    onSendChat: (String) -> Unit,
 ) {
     var ignoreWait by remember { mutableStateOf(false) }
-    var chatText by remember { mutableStateOf("") }
-    var showChat by remember { mutableStateOf(false) }
-    val chatListState = rememberLazyListState()
-
-    LaunchedEffect(chatMessages.size) {
-        if (chatMessages.isNotEmpty()) {
-            chatListState.animateScrollToItem(chatMessages.size - 1)
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -571,132 +555,6 @@ private fun ActiveGroupView(
                             if (participant.isConnected) "Connected" else "Disconnected",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (participant.isConnected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Chat section
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Chat",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            FilledTonalButton(
-                onClick = { showChat = !showChat },
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            ) {
-                Icon(
-                    Icons.Default.Chat,
-                    contentDescription = if (showChat) "Hide chat" else "Show chat",
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(if (showChat) "Hide" else "Show", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showChat,
-            enter = expandVertically(tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing)) + fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
-            exit = shrinkVertically(tween(AnimationTokens.QuickDuration, easing = FancyTransitionEasing)) + fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
-                ) {
-                    if (chatMessages.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "No messages yet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            state = chatListState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            items(
-                                items = chatMessages,
-                                key = { it.timestamp },
-                                contentType = { "chatMessage" },
-                            ) { message ->
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        "${message.userName} ",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Text(
-                                        message.text,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        message.formattedTime,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.padding(start = 4.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = chatText,
-                        onValueChange = { chatText = it },
-                        placeholder = { Text("Type a message…") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smooth24,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            if (chatText.isNotBlank()) {
-                                onSendChat(chatText)
-                                chatText = ""
-                            }
-                        },
-                        enabled = chatText.isNotBlank(),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = if (chatText.isNotBlank()) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outline,
                         )
                     }
