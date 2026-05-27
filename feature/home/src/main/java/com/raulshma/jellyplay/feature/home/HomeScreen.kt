@@ -670,18 +670,19 @@ fun HomeScreen(
                 }
             }
 
-            val borderAlpha = 0.12f * scrollFraction
+            val borderAlpha = 0.08f + (0.04f * scrollFraction)
             val appBarIconColor = lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollFraction)
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
             val dockScale = 1f - (0.04f * scrollFraction)
+            val dockCornerRadius = 16f + (12f * scrollFraction)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(
-                        horizontal = (16f * scrollFraction).dp,
-                        vertical = (8f * scrollFraction).dp
+                        horizontal = (4f + 12f * scrollFraction).dp,
+                        vertical = (4f + 4f * scrollFraction).dp
                     )
                     .graphicsLayer {
                         scaleX = dockScale
@@ -689,12 +690,16 @@ fun HomeScreen(
                     }
                     .clip(
                         AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
+                            cornerRadius = dockCornerRadius.dp,
                             smoothnessAsPercent = 60
                         )
                     )
                     .background(
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+                        lerp(
+                            Color.Black.copy(alpha = 0.3f),
+                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+                            scrollFraction
+                        )
                     )
                     .border(
                         BorderStroke(
@@ -707,7 +712,7 @@ fun HomeScreen(
                             )
                         ),
                         AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
+                            cornerRadius = dockCornerRadius.dp,
                             smoothnessAsPercent = 60
                         )
                     )

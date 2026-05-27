@@ -399,7 +399,7 @@ fun SeerrMediaCard(
             Text(
                 text = item.displayName,
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLoading) 0.5f else 0.9f),
             )
