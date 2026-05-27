@@ -33,12 +33,15 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.tv.material3.NavigationDrawer
@@ -317,7 +320,7 @@ private fun MainContent(
                                             NavIcon(route, label)
                                         },
                                         label = { Text(label) },
-                                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                        colors = NavigationBarItemDefaults.colors(
                                             indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                             selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                             selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -348,6 +351,13 @@ private fun MainContent(
                                                 NavIcon(route, label)
                                             },
                                             label = { Text(label) },
+                                            colors = NavigationRailItemDefaults.colors(
+                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            ),
                                         )
                                     }
                                 }

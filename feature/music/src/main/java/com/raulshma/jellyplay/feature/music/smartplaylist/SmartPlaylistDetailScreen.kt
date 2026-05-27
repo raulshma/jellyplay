@@ -16,15 +16,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -40,10 +42,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
+import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SmartPlaylistDetailScreen(
     playlistId: String,
@@ -63,25 +66,31 @@ fun SmartPlaylistDetailScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text(playlist?.name ?: "Smart Playlist") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    TooltipIconButton(
+                        onClick = onBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tooltipText = "Back",
+                    )
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
         floatingActionButton = {
             val firstTrack = viewModel.generatedItems.firstOrNull()
             if (firstTrack != null) {
-                FloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { onTrackClick(firstTrack.id) },
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play All")
-                }
+                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                    text = { Text("Play All") },
+                )
             }
         },
     ) { padding ->
@@ -91,7 +100,7 @@ fun SmartPlaylistDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator()
+                    ContainedLoadingIndicator()
                 }
             }
             viewModel.error != null -> {

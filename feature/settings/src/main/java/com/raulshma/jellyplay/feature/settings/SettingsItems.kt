@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -74,34 +76,8 @@ internal fun SettingListItem(
 
     val shape = expressiveListShape(index, count)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = pressAlpha
-            }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconColor,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+    ListItem(
+        headlineContent = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -110,6 +86,8 @@ internal fun SettingListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        },
+        supportingContent = {
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
@@ -119,24 +97,54 @@ internal fun SettingListItem(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-        if (trailingText != null) {
-            Text(
-                text = trailingText,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(end = 4.dp),
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp),
             )
-        }
-        Icon(
-            Icons.AutoMirrored.Filled.NavigateNext,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-            modifier = Modifier.size(18.dp),
-        )
-    }
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (trailingText != null) {
+                    Text(
+                        text = trailingText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.NavigateNext,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = pressAlpha
+            }
+            .clip(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+    )
 }
 
 @Composable
@@ -172,33 +180,8 @@ internal fun SettingToggleItem(
 
     val shape = expressiveListShape(index, count)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = pressAlpha
-            }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-            ) { onClick?.invoke() ?: onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconColor,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+    ListItem(
+        headlineContent = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -207,6 +190,8 @@ internal fun SettingToggleItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        },
+        supportingContent = {
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
@@ -216,12 +201,39 @@ internal fun SettingToggleItem(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
-    }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = pressAlpha
+            }
+            .clip(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) { onClick?.invoke() ?: onCheckedChange(!checked) },
+    )
 }
 
 @Composable
@@ -234,33 +246,35 @@ internal fun SettingInfoItem(
 ) {
     val shape = expressiveListShape(index, count)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+    ListItem(
+        headlineContent = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+        },
+        supportingContent = {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape),
+    )
 }

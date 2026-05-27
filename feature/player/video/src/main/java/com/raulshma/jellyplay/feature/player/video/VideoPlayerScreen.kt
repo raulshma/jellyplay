@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -1280,7 +1280,7 @@ private fun PlayerSheetRouter(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OcrResultSheet(
     ocrText: String?,
@@ -1305,7 +1305,7 @@ private fun OcrResultSheet(
             )
             Spacer(Modifier.height(12.dp))
             if (isOcrRunning) {
-                CircularProgressIndicator(
+                ContainedLoadingIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             } else if (ocrText != null) {

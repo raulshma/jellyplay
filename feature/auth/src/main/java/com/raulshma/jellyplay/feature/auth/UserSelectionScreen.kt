@@ -24,16 +24,17 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -49,9 +51,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)@Composable
 fun UserSelectionScreen(
     serverId: String,
     serverAddress: String,
@@ -71,21 +73,29 @@ fun UserSelectionScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text(serverName) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    TooltipIconButton(
+                        onClick = onBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tooltipText = "Back",
+                    )
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddUser) {
-                Icon(Icons.Default.Add, contentDescription = "Add User")
-            }
+            ExtendedFloatingActionButton(
+                onClick = onAddUser,
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Add User") },
+            )
         },
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -102,7 +112,7 @@ fun UserSelectionScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    CircularProgressIndicator()
+                    androidx.compose.material3.ContainedLoadingIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Loading users...")
                 }
@@ -184,7 +194,7 @@ private fun UserCard(
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusable().clickable(onClick = onClick),

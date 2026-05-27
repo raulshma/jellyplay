@@ -50,12 +50,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,7 +97,7 @@ import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
     onItemClick: (String) -> Unit,
@@ -265,7 +266,7 @@ fun SearchScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // ── Search field (glass style) ──
+                // ── Search field (MD3 expressive DockedSearchBar) ──
                 AnimatedVisibility(
                     visible = headerVisible,
                     enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
@@ -273,86 +274,90 @@ fun SearchScreen(
                         initialOffsetY = { 40 },
                     ),
                 ) {
-                    TextField(
-                        value = query,
-                        onValueChange = { viewModel.search(it) },
-                        placeholder = {
-                            Text(
-                                "Search movies, shows, music...",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    DockedSearchBar(
+                        inputField = {
+                            SearchBarDefaults.InputField(
+                                query = query,
+                                onQueryChange = { viewModel.search(it) },
+                                onSearch = { },
+                                expanded = false,
+                                onExpandedChange = { },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onFocusEvent { isSearchFocused = it.isFocused }
+                                    .tvFocusable(),
+                                placeholder = {
+                                    Text(
+                                        "Search movies, shows, music...",
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (query.isNotBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(ShapeCache.smooth8)
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                                .tvFocusable().clickable { viewModel.search("") },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear search",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(ShapeCache.smooth8)
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                                .tvFocusable().clickable {
+                                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                                        putExtra(
+                                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                                        )
+                                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
+                                                    }
+                                                    speechLauncher.launch(intent)
+                                                },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Voice search",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         },
+                        expanded = false,
+                        onExpandedChange = { },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .focusRequester(focusRequester)
-                            .onFocusEvent { isSearchFocused = it.isFocused }
-                            .tvFocusable(),
-                        singleLine = true,
+                            .padding(horizontal = 24.dp),
                         shape = ShapeCache.smooth16,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                            cursorColor = MaterialTheme.colorScheme.primary,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
+                        colors = SearchBarDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         ),
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
-                        trailingIcon = {
-                            if (query.isNotBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(ShapeCache.smooth8)
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                        .tvFocusable().clickable { viewModel.search("") },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear search",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(ShapeCache.smooth8)
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                        .tvFocusable().clickable {
-                                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                                putExtra(
-                                                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                                )
-                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
-                                            }
-                                            speechLauncher.launch(intent)
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = "Voice search",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        },
-                    )
+                    ) { }
                 }
 
                 // ── Active filters bar (dismissible glass tags) ──

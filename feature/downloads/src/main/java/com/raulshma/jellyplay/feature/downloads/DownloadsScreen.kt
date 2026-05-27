@@ -35,7 +35,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +43,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +70,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
@@ -87,8 +89,10 @@ fun DownloadsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        MediumTopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Downloads")
@@ -103,6 +107,7 @@ fun DownloadsScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                 }
             },
+            scrollBehavior = scrollBehavior,
         )
 
         if (viewModel.totalStorageBytes > 0) {
@@ -192,7 +197,7 @@ private fun DownloadItemRow(
         label = "downloadProgress",
     )
 
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusable().clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
