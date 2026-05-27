@@ -81,8 +81,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LocalContentColor
 
 
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -426,6 +427,7 @@ private fun DetailContent(
     }
 
     val contentFocusRequester = remember { FocusRequester() }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     LaunchedEffect(isTv, contentVisible) {
         if (isTv && contentVisible) {
@@ -795,7 +797,7 @@ private fun DetailContent(
                 .fillMaxWidth()
                 .background(animatedContainerColor)
         ) {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Text(
                         text = item?.name ?: "",
@@ -869,6 +871,7 @@ private fun DetailContent(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 modifier = Modifier.statusBarsPadding(),
+                scrollBehavior = scrollBehavior,
             )
         }
     }

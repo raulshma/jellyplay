@@ -23,7 +23,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +90,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import java.text.NumberFormat
 import java.util.*
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrDetailScreen(
     tmdbId: Int,
@@ -133,7 +149,7 @@ fun SeerrDetailScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading && movieDetail == null && tvDetail == null -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 error != null && movieDetail == null && tvDetail == null -> {
                     Column(
@@ -290,6 +306,7 @@ private fun SeerrDetailContent(
 
     val contentFocusRequester = remember { FocusRequester() }
     val hasContent = movieDetail != null || tvDetail != null
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     LaunchedEffect(isTv, hasContent) {
         if (isTv && hasContent) {
@@ -553,7 +570,7 @@ private fun SeerrDetailContent(
             appBarColor,
         )
 
-        TopAppBar(
+        MediumTopAppBar(
             title = {
                 AnimatedVisibility(
                     visible = scrollFraction > 0.7f,
@@ -605,7 +622,8 @@ private fun SeerrDetailContent(
                 containerColor = animatedContainerColor,
                 navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
-            )
+            ),
+            scrollBehavior = scrollBehavior,
         )
     }
 }

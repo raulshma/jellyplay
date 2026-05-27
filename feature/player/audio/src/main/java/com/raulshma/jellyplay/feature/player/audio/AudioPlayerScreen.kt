@@ -80,6 +80,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -978,6 +979,7 @@ private fun LyricsSearchSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LyricsOverlay(
     lyrics: List<com.raulshma.jellyplay.core.model.LyricsLine>,
@@ -1018,10 +1020,8 @@ private fun LyricsOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(16.dp),
             ) {
-                CircularProgressIndicator(
+                ContainedLoadingIndicator(
                     modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White.copy(alpha = 0.8f),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
