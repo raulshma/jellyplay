@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -66,10 +65,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 private const val TAG = "SeerrRequestDialog"
 
@@ -245,8 +242,8 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = requestSuccess == true,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -272,8 +269,8 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = requestError != null,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -299,8 +296,8 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = isRequesting,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         LinearWavyProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),

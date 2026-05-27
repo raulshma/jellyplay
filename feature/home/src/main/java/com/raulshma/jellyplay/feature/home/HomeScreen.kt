@@ -10,7 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
+
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -348,7 +348,7 @@ fun HomeScreen(
         }
         val backgroundColor by animateColorAsState(
             targetValue = targetBackgroundColor,
-            animationSpec = tween(600, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
             label = "backgroundColor",
         )
 
@@ -536,7 +536,7 @@ fun HomeScreen(
 
                                 val sectionAnimation by animateFloatAsState(
                                     targetValue = if (hasBeenVisible) 1f else 0f,
-                                    animationSpec = tween(350, easing = AlphaEasing),
+                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                                     label = "sectionAnimation",
                                 )
 
@@ -759,11 +759,12 @@ fun HomeScreen(
                     )
 
                     if (viewModel.searchQuery.isNotEmpty()) {
-                        ExpressiveIconButton(
+                        IconButton(
                             onClick = {
                                 viewModel.clearSearch()
                                 focusManager.clearFocus()
                             },
+                            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
                             modifier = Modifier.size(40.dp),
                         ) {
                             Icon(
@@ -828,8 +829,8 @@ fun HomeScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
-                        end = 16.dp,
-                        bottom = 16.dp,
+                        end = 8.dp,
+                        bottom = 8.dp,
                     ),
             ) {
                 FloatingActionButtonMenuItem(
@@ -962,25 +963,21 @@ private fun AnimatedHeroHeader(
         }
     }
 
+    val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+    val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     AnimatedContent(
         targetState = featuredItem,
         transitionSpec = {
             fadeIn(
-                animationSpec = tween(520, easing = AlphaEasing),
+                animationSpec = slowEffects,
             ) + scaleIn(
                 initialScale = 1.02f,
-                animationSpec = tween(700, easing = FancyTransitionEasing),
-            ) + slideInHorizontally(
-                initialOffsetX = { it / 20 },
-                animationSpec = tween(600, easing = FancyTransitionEasing),
+                animationSpec = slowEffects,
             ) togetherWith fadeOut(
-                animationSpec = tween(320, easing = AlphaEasing),
+                animationSpec = defaultEffects,
             ) + scaleOut(
                 targetScale = 0.985f,
-                animationSpec = tween(320, easing = PointToPointEasing),
-            ) + slideOutHorizontally(
-                targetOffsetX = { -it / 36 },
-                animationSpec = tween(320, easing = FancyTransitionEasing),
+                animationSpec = defaultEffects,
             )
         },
         label = "heroRotation",
@@ -1022,21 +1019,21 @@ private fun HeroHeader(
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(150, easing = FastInvokeEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "heroPress",
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "playButtonScale",
     )
     val detailsInteractionSource = remember { MutableInteractionSource() }
     val isDetailsPressed by detailsInteractionSource.collectIsPressedAsState()
     val detailsScale by animateFloatAsState(
         targetValue = if (isDetailsPressed) 0.95f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "detailsButtonScale",
     )
 
@@ -1591,7 +1588,7 @@ private fun SearchItemRow(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "searchItemScale",
     )
 
@@ -1600,7 +1597,7 @@ private fun SearchItemRow(
 
     val animationProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(250, delayMillis = (index % 10) * 25, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "searchItemAnim",
     )
 
@@ -1669,38 +1666,6 @@ private fun SearchItemRow(
     }
 }
 
-@Composable
-fun ExpressiveIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.82f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "expressive_btn_scale"
-    )
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
-}
-
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContinueWatchingRow(
@@ -1765,12 +1730,12 @@ private fun WideMediaCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardCombinedScale",
     )
     val elevation by animateFloatAsState(
@@ -1779,12 +1744,12 @@ private fun WideMediaCard(
             tvFocusState.isFocused -> 16f
             else -> 4f
         },
-        animationSpec = tween(200, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardBrightness",
     )
 
@@ -2003,6 +1968,7 @@ private fun HomeMediaRow(
                 } else 0f,
                 blurHash = item.blurHashes.primary,
                 onPlayClick = onPlayClick?.let { { it(item) } },
+                sharedElementKey = "poster_${item.id}",
             )
         }
     }

@@ -66,7 +66,7 @@ fun ArtistCard(
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(AnimationTokens.QuickDuration, easing = AlphaEasing),
+        animationSpec = tween(150, easing = AlphaEasing),
         label = "artistCardBrightness",
     )
 

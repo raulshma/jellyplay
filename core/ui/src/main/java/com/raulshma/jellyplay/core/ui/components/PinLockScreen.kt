@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,7 +41,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
+import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import androidx.compose.ui.unit.dp
 
@@ -90,13 +90,13 @@ fun PinLockScreen(
                 val filled = index < pin.length
                 val dotSize by animateDpAsState(
                     targetValue = if (filled) 20.dp else 16.dp,
-                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 500f),
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                     label = "dotSize$index",
                 )
                 val dotColor by animateColorAsState(
                     targetValue = if (filled) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outlineVariant,
-                    animationSpec = tween(200),
+                    animationSpec = fastEffectsSpec(),
                     label = "dotColor$index",
                 )
                 Box(
@@ -139,7 +139,7 @@ fun PinLockScreen(
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(
                                 targetValue = if (isPressed) AnimationTokens.ButtonPressScale else 1f,
-                                animationSpec = lessSpringySpec(),
+                                animationSpec = defaultSpatialSpec<Float>(),
                                 label = "backspaceScale",
                             )
 
@@ -204,13 +204,13 @@ private fun PinKeyButton(
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) AnimationTokens.ButtonPressScale else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "pinKeyScale_$key",
     )
     val surfaceColor by animateColorAsState(
         targetValue = if (pressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
         else MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = tween(AnimationTokens.FastDuration, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "pinKeyColor_$key",
     )
 

@@ -204,8 +204,8 @@ internal fun PlayerControls(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.topControlsEnter,
-            exit = PlayerAnimations.topControlsExit,
+            enter = playerTopControlsEnter(),
+            exit = playerTopControlsExit(),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Box(
@@ -271,8 +271,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.playButtonEnter,
-            exit = PlayerAnimations.playButtonExit,
+            enter = playerPlayButtonEnter(),
+            exit = playerPlayButtonExit(),
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
@@ -334,8 +334,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.bottomControlsEnter,
-            exit = PlayerAnimations.bottomControlsExit,
+            enter = playerBottomControlsEnter(),
+            exit = playerBottomControlsExit(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Column(
@@ -627,12 +627,12 @@ private fun TvControllableSeekBar(
     val isActive = isPressed || isDragging || (isTv && isSeekBarFocused)
     val trackHeight by animateDpAsState(
         targetValue = if (isActive) 5.dp else 3.dp,
-        animationSpec = PlayerAnimations.seekbarDpSpec,
+        animationSpec = playerSeekbarDpSpec(),
         label = "trackH",
     )
     val thumbRadiusDp by animateDpAsState(
         targetValue = if (isActive) 7.dp else 5.dp,
-        animationSpec = PlayerAnimations.seekbarDpSpec,
+        animationSpec = playerSeekbarDpSpec(),
         label = "thumbR",
     )
 

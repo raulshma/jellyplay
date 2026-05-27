@@ -121,9 +121,9 @@ fun QuickConnectScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
                 ),
             ) {
                 when (val state = quickConnectState) {

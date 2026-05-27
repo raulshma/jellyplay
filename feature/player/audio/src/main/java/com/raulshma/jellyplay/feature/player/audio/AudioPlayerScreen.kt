@@ -163,7 +163,7 @@ fun AudioPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        contentAlpha.animateTo(1f, tween(AnimationTokens.ExtendedDuration, delayMillis = 200, easing = AlphaEasing))
+        contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
     }
 
     BackHandler {
@@ -697,7 +697,7 @@ private fun AnimatedQueueItem(
     )
     val alpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
+        animationSpec = tween(50),
         label = "queueItemAlpha",
     )
     val isCurrentItem = index == currentIndex
@@ -1087,7 +1087,7 @@ private fun LyricsOverlay(
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
                             animationSpec = tween(
-                                durationMillis = AnimationTokens.MediumDuration,
+                                durationMillis = 300,
                                 easing = AlphaEasing,
                             ),
                             label = "lyricAlpha$index",
@@ -1095,7 +1095,7 @@ private fun LyricsOverlay(
                         val animatedScale by animateFloatAsState(
                             targetValue = targetScale,
                             animationSpec = tween(
-                                durationMillis = AnimationTokens.MediumDuration,
+                                durationMillis = 300,
                                 easing = PointToPointEasing,
                             ),
                             label = "lyricScale$index",
@@ -1113,7 +1113,7 @@ private fun LyricsOverlay(
                             },
                             color = Color.White.copy(alpha = finalAlpha),
                             modifier = Modifier
-                                .animateContentSize(animationSpec = tween(AnimationTokens.MediumDuration))
+                                .animateContentSize(animationSpec = tween(300))
                                 .graphicsLayer {
                                     scaleX = finalScale
                                     scaleY = finalScale
@@ -2015,6 +2015,7 @@ private fun PixelPlayPauseButton(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun IconButtonWithPressAnimation(
     onClick: () -> Unit,
@@ -2027,7 +2028,7 @@ private fun IconButtonWithPressAnimation(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 600f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "transportScale",
     )
 
@@ -2037,6 +2038,8 @@ private fun IconButtonWithPressAnimation(
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable(),
+        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+        interactionSource = interactionSource,
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides tint

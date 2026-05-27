@@ -100,9 +100,9 @@ fun LoginScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
                 ),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -125,9 +125,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedTextField(
@@ -147,9 +147,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 150, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 150, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedTextField(
@@ -169,7 +169,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 AnimatedVisibility(
                     visible = error != null,
-                    enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                    enter = fadeIn(tween(200, easing = AlphaEasing)),
                 ) {
                     Text(
                         error!!,
@@ -183,9 +183,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 250, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 250, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 250, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 250, easing = FancyTransitionEasing),
                 ),
             ) {
                 Button(
@@ -222,9 +222,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 300, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 300, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 300, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 300, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedButton(

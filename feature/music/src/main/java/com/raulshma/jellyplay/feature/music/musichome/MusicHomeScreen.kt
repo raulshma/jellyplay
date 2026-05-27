@@ -216,10 +216,10 @@ fun MusicHomeScreen(
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(350, delayMillis = index * 80)
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 12 },
-                                        animationSpec = tween(350, delayMillis = index * 80, easing = FastOutSlowInEasing),
+                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     ),
                                 ) {
                                     MusicSectionRow(
@@ -747,7 +747,7 @@ private fun ExpressiveCategoryButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "cat_btn_scale"
     )
 
@@ -826,12 +826,12 @@ private fun QuickAccessRow(
             }
             val slideOffset by animateFloatAsState(
                 targetValue = if (visible) 0f else 60f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 label = "stagger"
             )
             val alphaState by animateFloatAsState(
                 targetValue = if (visible) 1f else 0f,
-                animationSpec = tween(300),
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                 label = "stagger_alpha"
             )
             ExpressiveCategoryButton(
@@ -955,37 +955,5 @@ private fun TrackItem(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-fun ExpressiveIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.82f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "expressive_btn_scale"
-    )
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
     }
 }

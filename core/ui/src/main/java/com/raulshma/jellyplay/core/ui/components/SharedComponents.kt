@@ -73,14 +73,14 @@ import coil3.size.Size as CoilSize
 import androidx.palette.graphics.Palette
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
+import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -151,12 +151,12 @@ fun PlayButtonWithProgress(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = fastEffectsSpec(),
         label = "playBtnScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = fastEffectsSpec(),
         label = "playBtnCombinedScale",
     )
 
@@ -288,6 +288,7 @@ fun PosterCard(
     progressPercent: Float = 0f,
     blurHash: String? = null,
     onPlayClick: (() -> Unit)? = null,
+    sharedElementKey: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState()
@@ -295,12 +296,12 @@ fun PosterCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "cardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "cardCombinedScale",
     )
     val elevation by animateDpAsState(
@@ -310,21 +311,35 @@ fun PosterCard(
             isTv -> 12.dp
             else -> 4.dp
         },
-        animationSpec = tween(200, easing = FancyTransitionEasing),
+        animationSpec = fastEffectsSpec(),
         label = "cardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(150, easing = AlphaEasing),
+        animationSpec = fastEffectsSpec(),
         label = "cardBrightness",
     )
 
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+
+    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+    val sharedImageModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = sharedElementKey),
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    } else Modifier
+
     val imageModifier = Modifier
         .fillMaxWidth()
         .aspectRatio(2f / 3f)
+        .then(sharedImageModifier)
 
     Column(modifier = modifier) {
         Card(
@@ -669,7 +684,7 @@ fun PressScaleBox(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = tween(120, easing = FastInvokeEasing),
+        animationSpec = fastEffectsSpec(),
         label = "pressScale",
     )
     Box(

@@ -7,9 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -54,6 +52,8 @@ import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
@@ -212,8 +212,8 @@ fun SearchScreen(
                 // ── Title + action row ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                        tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                    enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                        tween(500, easing = FancyTransitionEasing),
                         initialOffsetY = { -40 },
                     ),
                 ) {
@@ -243,7 +243,7 @@ fun SearchScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box {
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = { viewModel.toggleShowFilters() },
                                     icon = Icons.Default.FilterList,
                                     contentDescription = "Filters",
@@ -269,8 +269,8 @@ fun SearchScreen(
                 // ── Search field (MD3 expressive DockedSearchBar) ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
-                        tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                    enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                        tween(500, delayMillis = 100, easing = FancyTransitionEasing),
                         initialOffsetY = { 40 },
                     ),
                 ) {
@@ -363,8 +363,8 @@ fun SearchScreen(
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
-                    enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + expandVertically(),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(),
+                    enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
+                    exit = fadeOut(tween(200, easing = AlphaEasing)) + shrinkVertically(),
                 ) {
                     FlowRow(
                         modifier = Modifier
@@ -409,7 +409,7 @@ fun SearchScreen(
                 // ── Result count ──
                 AnimatedVisibility(
                     visible = headerVisible && pagedResults.itemCount > 0,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                    enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                 ) {
                     Text(
                         text = "${pagedResults.itemCount} results",
@@ -565,6 +565,7 @@ fun SearchScreen(
                                                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                                                 } else 0f,
                                                 blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
                                             )
                                         }
                                     }
@@ -690,26 +691,31 @@ fun SearchScreen(
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun GlassIconButton(
+private fun ExpressiveToolbarIconButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(ShapeCache.smooth10)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .tvFocusable().clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+    val tint = if (highlighted) MaterialTheme.colorScheme.primary
+               else MaterialTheme.colorScheme.onSurfaceVariant
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
+        modifier = Modifier.size(36.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onSurface.copy(
+                alpha = if (highlighted) 0.18f else 0.08f
+            ),
+        ),
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            tint = tint,
         )
     }
 }
@@ -723,7 +729,7 @@ private fun GlassDismissTag(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "tagScale",
     )
 
@@ -768,7 +774,7 @@ private fun AnimatedSearchItem(
 
     val animationProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "searchItemAnimation",
     )
 

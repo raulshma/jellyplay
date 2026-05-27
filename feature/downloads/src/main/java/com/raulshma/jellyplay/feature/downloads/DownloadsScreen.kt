@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -146,10 +145,10 @@ fun DownloadsScreen(
                     AnimatedVisibility(
                         visible = visible.value,
                         enter = fadeIn(
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = AlphaEasing)
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
                             initialOffsetY = { it / 10 },
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = FancyTransitionEasing),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         ),
                     ) {
                         DownloadItemRow(
@@ -193,7 +192,7 @@ private fun DownloadItemRow(
     } else 0f
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
-        animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "downloadProgress",
     )
 

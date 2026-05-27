@@ -196,8 +196,8 @@ private fun SeekCircleOverlay(
 
     AnimatedVisibility(
         visible = true,
-        enter = PlayerAnimations.gestureFeedbackEnter,
-        exit = PlayerAnimations.gestureFeedbackExit,
+        enter = playerGestureFeedbackEnter(),
+        exit = playerGestureFeedbackExit(),
         modifier = modifier,
     ) {
         Box(
@@ -266,8 +266,8 @@ private fun EdgeBarOverlay(
 ) {
     AnimatedVisibility(
         visible = true,
-        enter = PlayerAnimations.edgeBarEnter,
-        exit = PlayerAnimations.edgeBarExit,
+        enter = playerEdgeBarEnter(),
+        exit = playerEdgeBarExit(),
         modifier = modifier,
     ) {
         Column(

@@ -1,10 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,12 +55,12 @@ internal fun SettingListItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "settingItemScale",
     )
     val pressAlpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "settingItemAlpha",
     )
 
@@ -163,18 +160,18 @@ internal fun SettingToggleItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "toggleItemScale",
     )
     val pressAlpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "toggleItemAlpha",
     )
     val iconColor by animateColorAsState(
         targetValue = if (checked) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "toggleIconColor",
     )
 

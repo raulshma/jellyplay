@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -146,10 +144,10 @@ fun ServerManagementScreen(
                     AnimatedVisibility(
                         visible = visible.value,
                         enter = fadeIn(
-                            animationSpec = tween(300, delayMillis = index * 60)
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
                             initialOffsetY = { it / 10 },
-                            animationSpec = tween(300, delayMillis = index * 60, easing = FastOutSlowInEasing),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         ),
                     ) {
                         ServerCard(

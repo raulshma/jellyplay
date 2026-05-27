@@ -72,18 +72,22 @@ fun rememberTvFocusState(
     val isTv = LocalTvMode.current
     var isFocused by remember { mutableStateOf(false) }
 
+    val motionScheme = MaterialTheme.motionScheme
     val animatedScale by animateFloatAsState(
         targetValue = if (isFocused) focusedScale else 1f,
+        animationSpec = motionScheme.fastSpatialSpec(),
         label = "tvFocusScale",
     )
 
     val animatedBorder by animateDpAsState(
         targetValue = if (isFocused && isTv) focusedBorderWidth else 0.dp,
+        animationSpec = motionScheme.fastSpatialSpec(),
         label = "tvFocusBorder",
     )
 
     val animatedGlowElevation by animateDpAsState(
         targetValue = if (isFocused && isTv) TvFocusDefaults.GlowElevation else 0.dp,
+        animationSpec = motionScheme.fastSpatialSpec(),
         label = "tvFocusGlow",
     )
 

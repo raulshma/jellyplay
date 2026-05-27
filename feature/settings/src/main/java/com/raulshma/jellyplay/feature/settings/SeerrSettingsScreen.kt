@@ -204,8 +204,8 @@ fun SeerrSettingsScreen(
             item {
                 AnimatedVisibility(
                     visible = connectionStatus is ConnectionStatus.Connected || connectionStatus is ConnectionStatus.Error,
-                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + expandVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
                 ) {
                     when (connectionStatus) {
                         is ConnectionStatus.Connected -> ConnectionStatusCard(

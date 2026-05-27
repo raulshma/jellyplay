@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1234,8 +1231,8 @@ fun SettingsScreen(
                     )
                     AnimatedVisibility(
                         visible = pinError != null,
-                        enter = expandVertically(animationSpec = tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing)),
-                        exit = shrinkVertically(animationSpec = tween(AnimationTokens.QuickDuration, easing = FancyTransitionEasing)),
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
                     ) {
                         pinError?.let { error ->
                             Text(
@@ -1815,12 +1812,9 @@ private fun AnimatedSettingsEntrance(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(250, delayMillis = index * AnimationTokens.StaggerDelayPerItem),
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         ) + expandVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         ),
     ) {
         content()

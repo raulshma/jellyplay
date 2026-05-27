@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -292,7 +291,7 @@ private fun SeerrDetailContent(
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
 
@@ -301,7 +300,7 @@ private fun SeerrDetailContent(
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "appBarColor",
     )
 
@@ -575,8 +574,8 @@ private fun SeerrDetailContent(
             title = {
                 AnimatedVisibility(
                     visible = scrollFraction > 0.7f,
-                    enter = fadeIn(tween(300, easing = AlphaEasing)) + slideInVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 },
-                    exit = fadeOut(tween(300, easing = AlphaEasing)) + slideOutVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 }
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 },
+                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 }
                 ) {
                     Text(
                         text = title,
@@ -820,12 +819,12 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) +
+                enter = fadeIn(tween(400, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                            animationSpec = tween(400, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+                exit = fadeOut(tween(150, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
@@ -837,12 +836,12 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = AlphaEasing)) +
+                enter = fadeIn(tween(400, delayMillis = 60, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = FancyTransitionEasing),
+                            animationSpec = tween(400, delayMillis = 60, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+                exit = fadeOut(tween(150, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Similar",

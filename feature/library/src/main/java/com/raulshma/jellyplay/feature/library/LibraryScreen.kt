@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -40,8 +38,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,6 +68,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -80,7 +82,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
-import com.raulshma.jellyplay.feature.library.components.ShimmerLoadingGrid
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
@@ -138,7 +139,7 @@ fun LibraryScreen(
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
 
@@ -192,8 +193,8 @@ fun LibraryScreen(
                     // ── Title + action row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                            tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                        enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                            tween(500, easing = FancyTransitionEasing),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -222,24 +223,24 @@ fun LibraryScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = onSmartPlaylistsClick,
                                     icon = Icons.Default.AutoAwesome,
                                     contentDescription = "Smart Playlists",
                                 )
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = onMoodPlaylistsClick,
                                     icon = Icons.Default.Mood,
                                     contentDescription = "Mood Playlists",
                                 )
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = onPlaylistsClick,
                                     icon = Icons.AutoMirrored.Filled.PlaylistPlay,
                                     contentDescription = "Playlists",
                                 )
                                 // Filter button with active-dot badge
                                 Box {
-                                    GlassIconButton(
+                                    ExpressiveToolbarIconButton(
                                         onClick = { viewModel.toggleShowFilters() },
                                         icon = Icons.Default.FilterList,
                                         contentDescription = "Filters",
@@ -265,8 +266,8 @@ fun LibraryScreen(
                     // ── Folder chips (glass pill style, like season badges) ──
                     AnimatedVisibility(
                         visible = headerVisible && folders.size > 1,
-                        enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
-                            tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                        enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                            tween(500, delayMillis = 100, easing = FancyTransitionEasing),
                             initialOffsetY = { 40 },
                         ),
                     ) {
@@ -295,8 +296,8 @@ fun LibraryScreen(
                     // ── Active filters bar (dismissible glass tags) ──
                     AnimatedVisibility(
                         visible = hasActiveFilters,
-                        enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + expandVertically(),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(),
+                        enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
+                        exit = fadeOut(tween(200, easing = AlphaEasing)) + shrinkVertically(),
                     ) {
                         FlowRow(
                             modifier = Modifier
@@ -374,7 +375,7 @@ fun LibraryScreen(
                     // ── Item count ──
                     AnimatedVisibility(
                         visible = headerVisible && pagedItems.itemCount > 0,
-                        enter = fadeIn(tween(400, delayMillis = 200)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Text(
                             text = "${pagedItems.itemCount} items",
@@ -394,7 +395,7 @@ fun LibraryScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (pagedItems.loadState.refresh) {
                         is LoadState.Loading -> {
-                            ShimmerLoadingGrid(contentPadding = gridPadding)
+                            LoadingScreen()
                         }
 
                         is LoadState.Error -> {
@@ -465,6 +466,7 @@ fun LibraryScreen(
                                                         ?: 0f) / item.runTimeTicks!!.toFloat()
                                                 } else 0f,
                                                 blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
                                             )
                                         }
                                     }
@@ -537,13 +539,9 @@ fun LibraryScreen(
 // ── Subcomponents (matching MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Semi-transparent icon button matching the detail screen's glass icon buttons.
- * Uses [Color.White.copy(alpha = 0.15f)] backgrounds like the detail screen's
- * action buttons (favorite, download, etc.)
- */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun GlassIconButton(
+private fun ExpressiveToolbarIconButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
@@ -551,47 +549,31 @@ private fun GlassIconButton(
 ) {
     val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.15f)
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1f,
-        label = "iconBtnPressedScale"
-    )
-    val scale = baseScale * focusState.scale
-
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
-    val glassBg = if (isLight) Color.Black.copy(alpha = if (highlighted) 0.10f else 0.05f)
-                  else Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f)
-    val iconTint = if (highlighted) MaterialTheme.colorScheme.primary
-                   else if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.8f)
-    val shape = ShapeCache.smooth10
+    val tint = if (highlighted) MaterialTheme.colorScheme.primary
+               else MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
-            .size(36.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(shape)
-            .background(glassBg)
             .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center,
+            .tvFocusIndicator(focusState, ShapeCache.smooth10),
     ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(18.dp),
-            tint = iconTint,
-        )
+        IconButton(
+            onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(36.dp),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.onSurface.copy(
+                    alpha = if (highlighted) 0.18f else 0.08f
+                ),
+            ),
+        ) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(18.dp),
+                tint = tint,
+            )
+        }
     }
 }
 
@@ -642,7 +624,7 @@ private fun GlassPill(
                 indication = null,
                 onClick = onClick
             )
-            .animateContentSizeNoClip(spring(stiffness = Spring.StiffnessMediumLow)),
+            .animateContentSizeNoClip(MaterialTheme.motionScheme.slowSpatialSpec()),
         color = surfaceColor,
         contentColor = contentColor,
     ) {

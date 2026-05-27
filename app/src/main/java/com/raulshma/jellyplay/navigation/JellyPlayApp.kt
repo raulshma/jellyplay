@@ -239,7 +239,7 @@ private fun MainContent(
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
     val animatedNavBarColor by animateColorAsState(
         targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainer,
-        animationSpec = tween(400, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "navBarColor",
     )
 
@@ -618,6 +618,12 @@ private fun MainNavDisplay(
         )
     }
 
+    val motionScheme = MaterialTheme.motionScheme
+    val defaultEffects = motionScheme.defaultEffectsSpec<Float>()
+    val fastEffects = motionScheme.fastEffectsSpec<Float>()
+    val defaultSpatial = motionScheme.defaultSpatialSpec<Float>()
+    val defaultSpatialOffset = motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+
     NavDisplay(
                 backStack = currentBackStack,
                 onBack = { navigator.goBack() },
@@ -640,50 +646,44 @@ private fun MainNavDisplay(
                     when {
                         isModalRoute -> {
                             fadeIn(
-                                tween(300, easing = AlphaEasing)
+                                defaultEffects
                             ) + slideInVertically(
                                 initialOffsetY = { it / 4 },
-                                animationSpec = tween(400, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             ) togetherWith fadeOut(
-                                tween(180, easing = AlphaEasing)
+                                fastEffects
                             )
                         }
                         isModalPop -> {
-                            fadeIn(tween(200, easing = AlphaEasing)) togetherWith fadeOut(
-                                tween(200, easing = AlphaEasing)
+                            fadeIn(fastEffects) togetherWith fadeOut(
+                                fastEffects
                             ) + slideOutVertically(
                                 targetOffsetY = { it / 4 },
-                                animationSpec = tween(280, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             )
                         }
                         isTabSwitch -> {
-                            fadeIn(tween(200, easing = AlphaEasing)) togetherWith fadeOut(
-                                tween(200, easing = AlphaEasing)
+                            fadeIn(fastEffects) togetherWith fadeOut(
+                                fastEffects
                             )
                         }
                         else -> {
                             fadeIn(
-                                animationSpec = tween(300, easing = AlphaEasing),
+                                animationSpec = defaultEffects,
                             ) + slideInHorizontally(
                                 initialOffsetX = { it / 8 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleIn(
                                 initialScale = 0.985f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                ),
+                                animationSpec = defaultSpatial,
                             ) togetherWith fadeOut(
-                                animationSpec = tween(180, easing = AlphaEasing),
+                                animationSpec = fastEffects,
                             ) + slideOutHorizontally(
                                 targetOffsetX = { -it / 18 },
-                                animationSpec = tween(220, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleOut(
                                 targetScale = 1.015f,
-                                animationSpec = tween(220, easing = PointToPointEasing),
+                                animationSpec = defaultEffects,
                             )
                         }
                     }
@@ -695,61 +695,49 @@ private fun MainNavDisplay(
                             initialLast == Route.SyncPlay ||
                             initialLast == Route.SeerrSettings
                     if (isModalPop) {
-                        fadeIn(tween(200, easing = AlphaEasing)) togetherWith fadeOut(
-                            tween(200, easing = AlphaEasing)
+                        fadeIn(fastEffects) togetherWith fadeOut(
+                            fastEffects
                         ) + slideOutVertically(
                                 targetOffsetY = { it / 4 },
-                                animationSpec = tween(280, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             )
                     } else {
                         fadeIn(
-                                animationSpec = tween(260, easing = AlphaEasing),
+                                animationSpec = defaultEffects,
                             ) + slideInHorizontally(
                                 initialOffsetX = { -it / 12 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleIn(
                                 initialScale = 1.015f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                ),
+                                animationSpec = defaultSpatial,
                             ) togetherWith fadeOut(
-                                animationSpec = tween(220, easing = AlphaEasing),
+                                animationSpec = fastEffects,
                             ) + slideOutHorizontally(
                                 targetOffsetX = { it / 10 },
-                                animationSpec = tween(280, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleOut(
                                 targetScale = 0.985f,
-                                animationSpec = tween(280, easing = PointToPointEasing),
+                                animationSpec = defaultEffects,
                             )
                     }
                 },
                 predictivePopTransitionSpec = { _ ->
                     fadeIn(
-                                animationSpec = tween(260, easing = AlphaEasing),
+                                animationSpec = defaultEffects,
                             ) + slideInHorizontally(
                                 initialOffsetX = { -it / 12 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium,
-                                ),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleIn(
                                 initialScale = 1.015f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                ),
+                                animationSpec = defaultSpatial,
                             ) togetherWith fadeOut(
-                                animationSpec = tween(220, easing = AlphaEasing),
+                                animationSpec = fastEffects,
                             ) + slideOutHorizontally(
                                 targetOffsetX = { it / 10 },
-                                animationSpec = tween(280, easing = FancyTransitionEasing),
+                                animationSpec = defaultSpatialOffset,
                             ) + scaleOut(
                                 targetScale = 0.985f,
-                                animationSpec = tween(280, easing = PointToPointEasing),
+                                animationSpec = defaultEffects,
                             )
                 },
         entryProvider = entryProvider {

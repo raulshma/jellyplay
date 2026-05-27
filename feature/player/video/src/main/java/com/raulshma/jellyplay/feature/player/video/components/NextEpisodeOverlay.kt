@@ -95,8 +95,8 @@ fun NextEpisodeOverlay(
 
     AnimatedVisibility(
         visible = show,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing), initialOffsetY = { it }),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing), targetOffsetY = { it }),
+        enter = fadeIn(tween(150, easing = AlphaEasing)) + slideInVertically(animationSpec = tween(400, easing = FancyTransitionEasing), initialOffsetY = { it }),
+        exit = fadeOut(tween(200, easing = AlphaEasing)) + slideOutVertically(animationSpec = tween(400, easing = FancyTransitionEasing), targetOffsetY = { it }),
         modifier = modifier,
     ) {
         Surface(
