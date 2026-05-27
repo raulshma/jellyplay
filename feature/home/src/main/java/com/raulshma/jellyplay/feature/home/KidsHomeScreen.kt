@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -310,6 +312,7 @@ internal fun SurpriseMeCard(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun KidsSection(
     title: String,
@@ -330,19 +333,20 @@ private fun KidsSection(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = contentPadding, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { items.size },
+            itemWidth = cardWidth,
+            itemSpacing = spacing,
             contentPadding = PaddingValues(horizontal = contentPadding),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
-        ) {
-            items(items, key = { it.id }, contentType = { "mediaItem" }) { item ->
-                KidsPosterCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = { onItemClick(item.id) },
-                    cardWidth = cardWidth,
-                )
-            }
+        ) { index ->
+            val item = items[index]
+            KidsPosterCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                fallbackUrls = fallbackImageUrlBuilder(item),
+                onClick = { onItemClick(item.id) },
+                cardWidth = cardWidth,
+            )
         }
     }
 }

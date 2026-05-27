@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -858,6 +860,7 @@ private data class CategoryItem(
     val contentColor: Color
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MusicSectionRow(
     section: MusicHomeSection,
@@ -871,39 +874,44 @@ private fun MusicSectionRow(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { section.items.size },
+            itemWidth = when (section.items.firstOrNull()?.mediaType) {
+                MediaType.ARTIST -> 120.dp
+                MediaType.AUDIO -> 280.dp
+                else -> 160.dp
+            },
+            itemSpacing = 8.dp,
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(section.items, key = { "${section.title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
-                when (section.items.firstOrNull()?.mediaType) {
-                    MediaType.ARTIST -> {
-                        ArtistCard(
-                            name = item.name,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                            blurHash = item.blurHashes.primary,
-                            modifier = Modifier.width(120.dp),
-                        )
-                    }
-                    MediaType.AUDIO -> {
-                        TrackItem(
-                            item = item,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                        )
-                    }
-                    else -> {
-                        AlbumCard(
-                            name = item.name,
-                            artist = item.albumArtist,
-                            year = item.year,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                            blurHash = item.blurHashes.primary,
-                            modifier = Modifier.width(160.dp),
-                        )
-                    }
+        ) { index ->
+            val item = section.items[index]
+            when (section.items.firstOrNull()?.mediaType) {
+                MediaType.ARTIST -> {
+                    ArtistCard(
+                        name = item.name,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                        blurHash = item.blurHashes.primary,
+                        modifier = Modifier.width(120.dp),
+                    )
+                }
+                MediaType.AUDIO -> {
+                    TrackItem(
+                        item = item,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                    )
+                }
+                else -> {
+                    AlbumCard(
+                        name = item.name,
+                        artist = item.albumArtist,
+                        year = item.year,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                        blurHash = item.blurHashes.primary,
+                        modifier = Modifier.width(160.dp),
+                    )
                 }
             }
         }

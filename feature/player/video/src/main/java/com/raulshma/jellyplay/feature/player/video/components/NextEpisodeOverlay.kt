@@ -33,7 +33,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NextEpisodeOverlay(
     isVisible: Boolean,
@@ -229,12 +231,11 @@ fun NextEpisodeOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            LinearProgressIndicator(
+                            LinearWavyProgressIndicator(
                                 progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(3.dp)
-                                    .clip(ShapeCache.smoothPill),
+                                    .height(3.dp),
                                 color = MaterialTheme.colorScheme.primary,
                                 trackColor = Color.White.copy(alpha = 0.1f),
                             )
