@@ -149,7 +149,6 @@ fun VideoMiniPlayer(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            fontSize = 13.sp,
                         )
                         if (subtitle.isNotBlank()) {
                             Text(

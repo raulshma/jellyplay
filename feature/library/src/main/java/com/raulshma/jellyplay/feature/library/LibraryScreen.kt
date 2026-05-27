@@ -32,7 +32,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
@@ -567,7 +566,7 @@ private fun GlassIconButton(
                   else Color.White.copy(alpha = if (highlighted) 0.18f else 0.08f)
     val iconTint = if (highlighted) MaterialTheme.colorScheme.primary
                    else if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.8f)
-    val shape = RoundedCornerShape(10.dp)
+    val shape = ShapeCache.smooth10
 
     Box(
         modifier = Modifier

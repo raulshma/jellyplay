@@ -44,7 +44,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -255,7 +255,7 @@ fun SearchScreen(
                                             .align(Alignment.TopEnd)
                                             .padding(4.dp)
                                             .size(8.dp)
-                                            .clip(RoundedCornerShape(50))
+                                            .clip(CircleShape)
                                             .background(MaterialTheme.colorScheme.primary),
                                     )
                                 }
@@ -700,7 +700,7 @@ private fun GlassIconButton(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(ShapeCache.smooth10)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
             .tvFocusable().clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

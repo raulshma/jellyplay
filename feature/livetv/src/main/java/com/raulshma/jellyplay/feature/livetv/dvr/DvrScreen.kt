@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -145,7 +144,7 @@ fun DvrScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(ShapeCache.smooth10)
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                         .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,

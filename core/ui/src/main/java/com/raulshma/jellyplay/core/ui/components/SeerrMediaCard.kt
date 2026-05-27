@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
@@ -280,7 +282,7 @@ fun SeerrMediaCard(
                             Text(
                                 text = "★",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFFFC107),
+                                color = RatingColors.star,
                             )
                             Text(
                                 text = "%.1f".format(item.voteAverage),
@@ -335,9 +337,9 @@ fun SeerrMediaCard(
 
                 if (!isLoading) {
                     val badgeColor = when {
-                        isAvailable -> Color(0xFF4CAF50)
-                        isPending -> Color(0xFFFFA726)
-                        hasRequest -> Color(0xFF42A5F5)
+                        isAvailable -> StatusColors.available
+                        isPending -> StatusColors.pending
+                        hasRequest -> StatusColors.requested
                         else -> Color.Transparent
                     }
 

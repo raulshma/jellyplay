@@ -126,6 +126,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -337,7 +338,7 @@ fun HomeScreen(
         } else null
         val baseOverlayColor = artworkColors?.darkMuted
             ?: artworkColors?.dominant
-            ?: if (isLightTheme) MaterialTheme.colorScheme.background else Color(0xFF1A1A2E)
+            ?: if (isLightTheme) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background
         val targetBackgroundColor = if (isLightTheme) {
             MaterialTheme.colorScheme.background
         } else {
@@ -1610,7 +1611,7 @@ private fun SearchItemRow(
                 alpha = animationProgress
                 translationY = (1f - animationProgress) * 8f
             }
-            .clip(RoundedCornerShape(12.dp))
+            .clip(ShapeCache.smooth12)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1870,7 +1871,7 @@ private fun WideMediaCard(
                             Text(
                                 text = "★",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFFFC107),
+                                color = RatingColors.star,
                             )
                             Text(
                                 text = "%.1f".format(item.communityRating),

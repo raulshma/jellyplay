@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.music.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -75,7 +75,7 @@ fun GraphicEqVisualizer(
                 modifier = Modifier
                     .width(barWidth)
                     .fillMaxHeight(scale)
-                    .clip(RoundedCornerShape(percent = 50))
+                    .clip(CircleShape)
                     .background(color)
             )
         }

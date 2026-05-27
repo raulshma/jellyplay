@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -213,7 +214,7 @@ fun SeerrSettingsScreen(
                             icon = Icons.Default.Check,
                             title = "Connected",
                             subtitle = if (connectionStatus.version.isNotBlank()) "Version ${connectionStatus.version}" else "Seerr server reached",
-                            color = Color(0xFF4CAF50),
+                            color = StatusColors.success,
                         )
                         is ConnectionStatus.Error -> ConnectionStatusCard(
                             icon = Icons.Default.Close,

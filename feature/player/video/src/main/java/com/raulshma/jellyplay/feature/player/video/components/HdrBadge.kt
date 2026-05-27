@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
@@ -37,13 +38,13 @@ fun HdrBadge(
     val isDolby = hdrType.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi")
 
     val bgColor = if (isDolby) {
-        Color(0xFF1A1A1A).copy(alpha = 0.85f)
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
     }
 
     val borderColor = if (isDolby) {
-        Color(0xFFB8860B).copy(alpha = 0.6f)
+        HdrColors.hdr10Gold.copy(alpha = 0.6f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     }
@@ -59,7 +60,7 @@ fun HdrBadge(
     ) {
         Text(
             text = label,
-            color = if (isDolby) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
+            color = if (isDolby) HdrColors.dolbyVisionGold else MaterialTheme.colorScheme.primary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,

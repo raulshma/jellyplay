@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -207,7 +207,7 @@ private fun ImageCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,
     ) {
@@ -224,7 +224,7 @@ private fun ImageCard(
                             else -> 2f / 3f
                         }
                     )
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(ShapeCache.smooth16),
                 contentScale = ContentScale.Crop,
             )
             Column(
@@ -310,7 +310,7 @@ private fun ImageUploadSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(ShapeCache.smooth12),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -344,7 +344,7 @@ private fun ImageUploadSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(ShapeCache.smooth12),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -509,7 +509,7 @@ private fun RemoteImageCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Box {
@@ -519,7 +519,7 @@ private fun RemoteImageCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(ShapeCache.smooth12),
                 contentScale = ContentScale.Crop,
             )
             Column(

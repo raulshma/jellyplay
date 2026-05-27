@@ -95,7 +95,7 @@ import kotlinx.coroutines.withContext
 private val dominantColorCache = android.util.LruCache<String, Color>(100)
 
 @Composable
-fun rememberDominantColor(imageUrl: String?, fallback: Color = Color(0xFF2A2A3E)): Color {
+fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer): Color {
     val context = LocalContext.current
     val cached = imageUrl?.let { dominantColorCache.get(it) }
     var color by remember { mutableStateOf(cached ?: fallback) }

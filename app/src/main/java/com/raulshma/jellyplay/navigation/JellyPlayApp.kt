@@ -21,10 +21,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
@@ -33,17 +31,12 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
@@ -60,7 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,10 +68,9 @@ import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveLayout
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.adaptive.classifyWindow
+import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
@@ -253,8 +245,7 @@ private fun MainContent(
 
     val isTv = context.isTv()
 
-    val configuration = LocalConfiguration.current
-    val adaptiveInfo = classifyWindow(configuration.screenWidthDp, configuration.screenHeightDp)
+    val adaptiveInfo = rememberAdaptiveInfo()
 
     val tvTypography = if (isTv) TvTypography else null
 
@@ -305,77 +296,47 @@ private fun MainContent(
                 }
                 }
             } else {
-                Scaffold(
-                    bottomBar = {
-                        if (!isPlayerScreen && !isExpanded) {
-                            NavigationBar(
-                                containerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
-                                tonalElevation = 0.dp,
-                            ) {
-                                activeTopLevelRoutes.forEach { (route, label) ->
-                                    NavigationBarItem(
-                                        selected = route == currentTopLevel,
-                                        onClick = { navigator.navigate(route) },
-                                        icon = {
-                                            NavIcon(route, label)
-                                        },
-                                        label = { Text(label) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                    )
-                                }
+                val noPadding = PaddingValues(0.dp)
+                if (!isPlayerScreen) {
+                    NavigationSuiteScaffold(
+                        navigationItems = {
+                            activeTopLevelRoutes.forEach { (route, label) ->
+                                NavigationSuiteItem(
+                                    selected = route == currentTopLevel,
+                                    onClick = { navigator.navigate(route) },
+                                    icon = { NavIcon(route, label) },
+                                    label = { Text(label) },
+                                )
                             }
-                        }
-                    },
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
+                        },
+                        navigationSuiteColors = NavigationSuiteDefaults.colors(
+                            navigationBarContainerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
+                            navigationRailContainerColor = animatedNavBarColor,
+                        ),
                     ) {
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            if (!isPlayerScreen && isExpanded) {
-                                NavigationRail(
-                                    containerColor = animatedNavBarColor,
-                                ) {
-                                    activeTopLevelRoutes.forEach { (route, label) ->
-                                        NavigationRailItem(
-                                            selected = route == currentTopLevel,
-                                            onClick = { navigator.navigate(route) },
-                                            icon = {
-                                                NavIcon(route, label)
-                                            },
-                                            label = { Text(label) },
-                                            colors = NavigationRailItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            ),
-                                        )
-                                    }
-                                }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                MainNavDisplay(
+                                    navigationState = navigationState,
+                                    navigator = navigator,
+                                    onLogout = onLogout,
+                                    homeMode = homeMode,
+                                    onModeChange = onModeChange,
+                                    enterPip = enterPip,
+                                    enterVideoMiniMode = enterVideoMiniMode,
+                                    innerPadding = noPadding,
+                                )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    MainNavDisplay(
-                                        navigationState = navigationState,
-                                        navigator = navigator,
-                                        onLogout = onLogout,
-                                        homeMode = homeMode,
-                                        onModeChange = onModeChange,
-                                        enterPip = enterPip,
-                                        enterVideoMiniMode = enterVideoMiniMode,
-                                        innerPadding = innerPadding,
-                                    )
-                                }
-                                if (showMiniPlayer && isExpanded) {
+                            if (showMiniPlayer && isExpanded) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 2.dp)
+                                ) {
                                     MiniPlayer(
                                         isVisible = true,
                                         title = audioTitle,
@@ -399,40 +360,77 @@ private fun MainContent(
                                     )
                                 }
                             }
-                        }
-
-                        // Floating MiniPlayer for phone aligned above the navigation bar
-                        if (!isPlayerScreen && !isExpanded) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = innerPadding.calculateBottomPadding() + 2.dp)
-                            ) {
-                                MiniPlayer(
-                                    isVisible = showMiniPlayer,
-                                    title = audioTitle,
-                                    artist = audioArtist,
-                                    artworkUri = audioArtworkUrl,
-                                    isPlaying = isAudioPlaying,
+                            if (!isExpanded && showMiniPlayer) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 2.dp)
+                                ) {
+                                    MiniPlayer(
+                                        isVisible = true,
+                                        title = audioTitle,
+                                        artist = audioArtist,
+                                        artworkUri = audioArtworkUrl,
+                                        isPlaying = isAudioPlaying,
+                                        onClick = {
+                                            val itemId = audioItemId ?: return@MiniPlayer
+                                            navigator.navigate(Route.AudioPlayer(itemId))
+                                        },
+                                        onClose = {
+                                            audioPlaybackManager.stopAndRelease()
+                                            isMiniPlayerDismissed = true
+                                        },
+                                        onPlayPause = {
+                                            audioPlaybackManager.togglePlayPause()
+                                        },
+                                        onSkipNext = {
+                                            audioPlaybackManager.skipToNext()
+                                        },
+                                    )
+                                }
+                            }
+                            if (isVideoMiniMode) {
+                                VideoMiniPlayer(
+                                    isVisible = true,
+                                    engine = videoMiniPlayerState.engine,
+                                    title = videoMiniTitle,
+                                    subtitle = videoMiniSubtitle,
+                                    isPlaying = videoMiniIsPlaying,
                                     onClick = {
-                                        val itemId = audioItemId ?: return@MiniPlayer
-                                        navigator.navigate(Route.AudioPlayer(itemId))
+                                        val itemId = videoMiniItemId ?: return@VideoMiniPlayer
+                                        navigator.navigate(Route.VideoPlayer(itemId))
                                     },
                                     onClose = {
-                                        audioPlaybackManager.stopAndRelease()
-                                        isMiniPlayerDismissed = true
+                                        videoMiniPlayerState.release()
                                     },
                                     onPlayPause = {
-                                        audioPlaybackManager.togglePlayPause()
+                                        videoMiniPlayerState.togglePlayPause()
                                     },
-                                    onSkipNext = {
-                                        audioPlaybackManager.skipToNext()
-                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(end = 8.dp, bottom = 8.dp)
+                                        .fillMaxWidth(0.45f),
                                 )
                             }
                         }
-
-                        if (isVideoMiniMode && !isPlayerScreen) {
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        MainNavDisplay(
+                            navigationState = navigationState,
+                            navigator = navigator,
+                            onLogout = onLogout,
+                            homeMode = homeMode,
+                            onModeChange = onModeChange,
+                            enterPip = enterPip,
+                            enterVideoMiniMode = enterVideoMiniMode,
+                            innerPadding = noPadding,
+                        )
+                        if (isVideoMiniMode) {
                             VideoMiniPlayer(
                                 isVisible = true,
                                 engine = videoMiniPlayerState.engine,
@@ -451,7 +449,7 @@ private fun MainContent(
                                 },
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(end = 8.dp, bottom = innerPadding.calculateBottomPadding() + 8.dp)
+                                    .padding(end = 8.dp, bottom = 8.dp)
                                     .fillMaxWidth(0.45f),
                             )
                         }

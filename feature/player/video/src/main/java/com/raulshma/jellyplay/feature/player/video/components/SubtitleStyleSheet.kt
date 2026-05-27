@@ -40,7 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
 import kotlin.math.roundToLong
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
@@ -201,7 +201,7 @@ fun SubtitleStyleSheet(
                                     SubtitleEdgeType.RAISED -> "Raised"
                                     SubtitleEdgeType.DEPRESSED -> "Depressed"
                                 },
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             )
                         },
@@ -314,7 +314,7 @@ fun SubtitleStyleSheet(
                         verticalPosition = default.verticalPosition
                         onStyleChange(default)
                     },
-                    label = { Text("Reset", fontSize = 12.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
                     shape = ShapeCache.smoothPill,
                 )
             }
