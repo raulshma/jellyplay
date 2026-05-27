@@ -5,15 +5,16 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
@@ -22,7 +23,7 @@ fun shapeByInteraction(
     shape: Shape,
     pressedShape: Shape,
     interactionSource: InteractionSource?,
-    animationSpec: FiniteAnimationSpec<Float> = lessSpringySpec(),
+    animationSpec: FiniteAnimationSpec<Float> = MaterialTheme.motionScheme.fastSpatialSpec(),
     enabled: Boolean = true,
 ): Shape {
     if (!enabled || interactionSource == null) return shape

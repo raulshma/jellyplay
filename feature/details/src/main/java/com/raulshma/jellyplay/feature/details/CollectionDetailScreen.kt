@@ -26,7 +26,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,15 +77,18 @@ fun CollectionDetailScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text(collectionDetail?.item?.name ?: "Collection") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -107,9 +112,9 @@ fun CollectionDetailScreen(
                     collectionDetail?.let { detail ->
                         AnimatedVisibility(
                             visible = backdropVisible.value,
-                            enter = fadeIn(tween(AnimationTokens.ExtendedDuration, easing = AlphaEasing)) + slideInVertically(
+                            enter = fadeIn(tween(600, easing = AlphaEasing)) + slideInVertically(
                                 initialOffsetY = { -it / 6 },
-                                animationSpec = tween(AnimationTokens.ExtendedDuration, easing = FancyTransitionEasing),
+                                animationSpec = tween(600, easing = FancyTransitionEasing),
                             ),
                         ) {
                             Box(
@@ -131,7 +136,7 @@ fun CollectionDetailScreen(
 
                     AnimatedVisibility(
                         visible = contentVisible.value,
-                        enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                        enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                     ) {
                         val adaptiveInfo = LocalAdaptiveInfo.current
                         val isTv = LocalTvMode.current
@@ -155,10 +160,10 @@ fun CollectionDetailScreen(
                                 AnimatedVisibility(
                                     visible = itemVisible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 40, easing = AlphaEasing)
+                                        animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = AlphaEasing)
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 8 },
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 40, easing = FancyTransitionEasing),
+                                        animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = FancyTransitionEasing),
                                     ),
                                 ) {
                                     PosterCard(
@@ -169,6 +174,7 @@ fun CollectionDetailScreen(
                                         progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
                                             (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                                         } else 0f,
+                                        sharedElementKey = "poster_${item.id}",
                                     )
                                 }
                             }

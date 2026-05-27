@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarViewWeek
@@ -129,8 +128,8 @@ fun EpgScreen(
                     // ── Title + action row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                            tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                        enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                            tween(500, easing = FancyTransitionEasing),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -145,7 +144,7 @@ fun EpgScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(ShapeCache.smooth10)
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                         .tvFocusable().clickable(onClick = onBack),
                                     contentAlignment = Alignment.Center,
@@ -176,7 +175,7 @@ fun EpgScreen(
                     // ── Program count ──
                     AnimatedVisibility(
                         visible = headerVisible && viewModel.programs.isNotEmpty(),
-                        enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                        enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                     ) {
                         Text(
                             text = "${viewModel.programs.size} programs",

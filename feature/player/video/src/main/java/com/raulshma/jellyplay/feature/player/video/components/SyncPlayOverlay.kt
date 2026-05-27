@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -42,15 +43,15 @@ fun SyncPlayOverlay(
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     val statusColor = when {
-        isSynced -> Color(0xFF4CAF50)
-        isSyncing -> Color(0xFF2196F3)
-        else -> Color(0xFFFFC107)
+        isSynced -> SyncStatusColors.synced
+        isSyncing -> SyncStatusColors.syncing
+        else -> SyncStatusColors.else_
     }
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         Surface(

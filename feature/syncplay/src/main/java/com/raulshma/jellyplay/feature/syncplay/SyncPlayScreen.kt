@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,7 +54,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +66,9 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -86,11 +88,12 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SyncPlayScreen(
     onBack: () -> Unit,
@@ -146,14 +149,17 @@ fun SyncPlayScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(data)
             }
         },
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("SyncPlay")
@@ -164,30 +170,37 @@ fun SyncPlayScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    TooltipIconButton(
+                        onClick = onBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tooltipText = "Back",
+                    )
                 },
                 actions = {
                     if (isInGroup) {
-                        IconButton(onClick = { viewModel.leaveGroup() }) {
-                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Leave group")
-                        }
+                        TooltipIconButton(
+                            onClick = { viewModel.leaveGroup() },
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Leave group",
+                            tooltipText = "Leave group",
+                        )
                     }
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
         floatingActionButton = {
             AnimatedVisibility(
                 visible = !isInGroup,
-                enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideOutVertically(targetOffsetY = { it }),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
             ) {
-                FloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create group")
-                }
+                    icon = { Icon(Icons.Default.Add, contentDescription = "Create group") },
+                    text = { Text("Create group") },
+                )
             }
         },
     ) { innerPadding ->
@@ -211,11 +224,12 @@ fun SyncPlayScreen(
                 }
 
                 isInGroup && currentGroup != null -> {
+                    val defaultEffectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                     AnimatedContent(
                         targetState = currentGroup,
                         transitionSpec = {
-                            (fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + slideInHorizontally(initialOffsetX = { it }))
-                                .togetherWith(fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutHorizontally(targetOffsetX = { -it }))
+                            (fadeIn(defaultEffectsSpec) + slideInHorizontally(initialOffsetX = { it }))
+                                .togetherWith(fadeOut(defaultEffectsSpec) + slideOutHorizontally(targetOffsetX = { -it }))
                         },
                         label = "activeGroup",
                     ) { group ->
@@ -268,10 +282,10 @@ fun SyncPlayScreen(
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = AlphaEasing)
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 10 },
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = FancyTransitionEasing),
+                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     ),
                                 ) {
                                     SyncPlayGroupCard(

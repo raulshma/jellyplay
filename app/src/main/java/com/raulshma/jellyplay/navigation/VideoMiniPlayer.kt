@@ -71,22 +71,22 @@ fun VideoMiniPlayer(
         enter = slideInVertically(
             initialOffsetY = { it },
             animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
+        ) + fadeIn(tween(300, easing = AlphaEasing)),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(AnimationTokens.DefaultDuration, easing = FancyTransitionEasing),
-        ) + fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+            animationSpec = tween(200, easing = FancyTransitionEasing),
+        ) + fadeOut(tween(150, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         val navBarColorState = LocalNavigationBarColor.current
         val animatedColor by animateColorAsState(
             targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-            animationSpec = tween(AnimationTokens.StandardDuration),
+            animationSpec = tween(400),
             label = "videoMiniPlayerColor",
         )
         val contentAlpha by animateFloatAsState(
             targetValue = 1f,
-            animationSpec = tween(AnimationTokens.StandardDuration),
+            animationSpec = tween(400),
             label = "videoMiniContentAlpha",
         )
 
@@ -149,7 +149,6 @@ fun VideoMiniPlayer(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            fontSize = 13.sp,
                         )
                         if (subtitle.isNotBlank()) {
                             Text(
@@ -180,6 +179,7 @@ fun VideoMiniPlayer(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun IconButtonWithPressAnimation(
     onClick: () -> Unit,
@@ -190,7 +190,7 @@ private fun IconButtonWithPressAnimation(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 600f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "videoMiniButtonScale",
     )
 
@@ -200,6 +200,8 @@ private fun IconButtonWithPressAnimation(
             .size(size)
             .padding(4.dp)
             .scale(scale),
+        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+        interactionSource = interactionSource,
     ) {
         content()
     }

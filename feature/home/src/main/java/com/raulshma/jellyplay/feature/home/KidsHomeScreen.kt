@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -48,8 +50,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,7 +81,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun KidsHomeScreen(
     sections: List<HomeSection>,
@@ -126,9 +130,11 @@ fun KidsHomeScreen(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
     ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -156,6 +162,7 @@ fun KidsHomeScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                 ),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -305,6 +312,7 @@ internal fun SurpriseMeCard(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun KidsSection(
     title: String,
@@ -325,19 +333,20 @@ private fun KidsSection(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = contentPadding, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { items.size },
+            itemWidth = cardWidth,
+            itemSpacing = spacing,
             contentPadding = PaddingValues(horizontal = contentPadding),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
-        ) {
-            items(items, key = { it.id }, contentType = { "mediaItem" }) { item ->
-                KidsPosterCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = { onItemClick(item.id) },
-                    cardWidth = cardWidth,
-                )
-            }
+        ) { index ->
+            val item = items[index]
+            KidsPosterCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                fallbackUrls = fallbackImageUrlBuilder(item),
+                onClick = { onItemClick(item.id) },
+                cardWidth = cardWidth,
+            )
         }
     }
 }

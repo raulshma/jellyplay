@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,7 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -38,7 +37,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -66,9 +65,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 
 private const val TAG = "SeerrRequestDialog"
 
@@ -78,7 +76,7 @@ private const val TAG = "SeerrRequestDialog"
  * For movies: shows destination server, quality profile, root folder, tags.
  * For TV: shows all of the above plus season selection.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrRequestDialog(
     item: SeerrSearchItem,
@@ -244,8 +242,8 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = requestSuccess == true,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -254,14 +252,14 @@ fun SeerrRequestDialog(
                             Icon(
                                 Icons.Default.Check,
                                 contentDescription = null,
-                                tint = Color(0xFF4CAF50),
+                                tint = StatusColors.success,
                                 modifier = Modifier.size(24.dp),
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
                                 text = "Request submitted successfully!",
                                 style = typography.bodyMedium,
-                                color = Color(0xFF4CAF50),
+                                color = StatusColors.success,
                             )
                         }
                     }
@@ -271,8 +269,8 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = requestError != null,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -298,10 +296,10 @@ fun SeerrRequestDialog(
                 item {
                     AnimatedVisibility(
                         visible = isRequesting,
-                        enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
-                        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
                             color = colorScheme.primary,
                         )
@@ -318,10 +316,8 @@ fun SeerrRequestDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center,
                             ) {
-                                CircularProgressIndicator(
+                                CircularWavyProgressIndicator(
                                     modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                    color = colorScheme.primary,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
@@ -508,7 +504,7 @@ fun SeerrRequestDialog(
                         } else if (isLoadingServices) {
                             // Show loading while services/seasons are being fetched
                             item {
-                                LinearProgressIndicator(
+                                LinearWavyProgressIndicator(
                                     modifier = Modifier.fillMaxWidth(),
                                     color = colorScheme.primary,
                                 )
@@ -570,10 +566,8 @@ fun SeerrRequestDialog(
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                             ) {
                                 if (isRequesting) {
-                                    CircularProgressIndicator(
+                                    CircularWavyProgressIndicator(
                                         modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = colorScheme.onPrimary,
                                     )
                                     Spacer(Modifier.width(8.dp))
                                 }

@@ -18,16 +18,18 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,16 +38,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
     serverAddress: String,
@@ -64,15 +68,21 @@ fun LoginScreen(
         contentVisible = true
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text("Sign In") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    TooltipIconButton(
+                        onClick = onBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tooltipText = "Back",
+                    )
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -90,9 +100,9 @@ fun LoginScreen(
         ) {
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, easing = FancyTransitionEasing),
                 ),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -115,9 +125,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedTextField(
@@ -137,9 +147,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 150, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 150, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedTextField(
@@ -159,7 +169,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 AnimatedVisibility(
                     visible = error != null,
-                    enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+                    enter = fadeIn(tween(200, easing = AlphaEasing)),
                 ) {
                     Text(
                         error!!,
@@ -173,9 +183,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 250, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 250, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 250, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 250, easing = FancyTransitionEasing),
                 ),
             ) {
                 Button(
@@ -199,9 +209,8 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (isLoggingIn) {
-                        CircularProgressIndicator(
+                        CircularWavyProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -213,9 +222,9 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = contentVisible,
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 300, easing = AlphaEasing)) + slideInVertically(
+                enter = fadeIn(tween(400, delayMillis = 300, easing = AlphaEasing)) + slideInVertically(
                     initialOffsetY = { it / 20 },
-                    animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 300, easing = FancyTransitionEasing),
+                    animationSpec = tween(400, delayMillis = 300, easing = FancyTransitionEasing),
                 ),
             ) {
                 OutlinedButton(

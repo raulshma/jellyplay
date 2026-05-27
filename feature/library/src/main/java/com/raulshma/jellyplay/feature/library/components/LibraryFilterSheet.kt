@@ -71,7 +71,7 @@ fun LibraryFilterSheet(
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else Color(0xFF1A1A1A)
+    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

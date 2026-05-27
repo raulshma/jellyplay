@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.auth
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -41,11 +40,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,6 +59,7 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DiscoveredServer
@@ -65,6 +67,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -88,15 +91,21 @@ fun AddServerScreen(
         viewModel.startDiscovery()
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text("Add Server") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    TooltipIconButton(
+                        onClick = onBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tooltipText = "Back",
+                    )
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -118,9 +127,9 @@ fun AddServerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(tween(400, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                        animationSpec = tween(400, easing = FancyTransitionEasing),
                     ),
                 ) {
                     Column(
@@ -153,9 +162,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                        animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
                     ),
                 ) {
                     DiscoverySection(
@@ -175,7 +184,7 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 150, easing = AlphaEasing)),
+                    enter = fadeIn(tween(400, delayMillis = 150, easing = AlphaEasing)),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -204,9 +213,9 @@ fun AddServerScreen(
             item {
                 AnimatedVisibility(
                     visible = contentVisible,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)) + slideInVertically(
+                    enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)) + slideInVertically(
                         initialOffsetY = { it / 20 },
-                        animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = FancyTransitionEasing),
+                        animationSpec = tween(400, delayMillis = 200, easing = FancyTransitionEasing),
                     ),
                 ) {
                     ManualEntrySection(
@@ -238,7 +247,7 @@ private fun DiscoverySection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(animationSpec = spring()),
+            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
     ) {
         when {
             uiState.discoveryFailed -> {
@@ -302,7 +311,7 @@ private fun ServerCountRow(
     var expanded by remember { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(300, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chevron",
     )
 
@@ -357,10 +366,10 @@ private fun ServerCountRow(
         AnimatedVisibility(
             visible = expanded,
             enter = expandVertically(
-                animationSpec = spring(),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 expandFrom = Alignment.Top,
-            ) + fadeIn(tween(200, easing = AlphaEasing)),
-            exit = shrinkVertically(animationSpec = spring()) + fadeOut(tween(150, easing = AlphaEasing)),
+            ) + fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+            exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
         ) {
             Column(
                 modifier = Modifier.padding(top = 8.dp),

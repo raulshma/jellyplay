@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -22,9 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 /**
  * Represents the status to display in the header indicator area.
@@ -67,10 +64,11 @@ fun HeaderStatusIndicator(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
+    val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     AnimatedContent(
         targetState = status,
         transitionSpec = {
-            (fadeIn(animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) togetherWith fadeOut(animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)))
+            (fadeIn(animationSpec = fadeSpec) togetherWith fadeOut(animationSpec = fadeSpec))
         },
         label = "headerStatus",
         modifier = modifier.semantics {

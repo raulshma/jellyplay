@@ -96,6 +96,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -203,8 +204,8 @@ internal fun PlayerControls(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.topControlsEnter,
-            exit = PlayerAnimations.topControlsExit,
+            enter = playerTopControlsEnter(),
+            exit = playerTopControlsExit(),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Box(
@@ -270,8 +271,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.playButtonEnter,
-            exit = PlayerAnimations.playButtonExit,
+            enter = playerPlayButtonEnter(),
+            exit = playerPlayButtonExit(),
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
@@ -333,8 +334,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = PlayerAnimations.bottomControlsEnter,
-            exit = PlayerAnimations.bottomControlsExit,
+            enter = playerBottomControlsEnter(),
+            exit = playerBottomControlsExit(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Column(
@@ -541,9 +542,9 @@ private fun SyncPlayHeaderIndicator(
     onClick: () -> Unit,
 ) {
     val statusColor = when {
-        isSynced -> Color(0xFF4CAF50)
-        isSyncing -> Color(0xFF2196F3)
-        else -> Color(0xFFFFC107)
+        isSynced -> SyncStatusColors.synced
+        isSyncing -> SyncStatusColors.syncing
+        else -> SyncStatusColors.else_
     }
 
     Surface(
@@ -626,12 +627,12 @@ private fun TvControllableSeekBar(
     val isActive = isPressed || isDragging || (isTv && isSeekBarFocused)
     val trackHeight by animateDpAsState(
         targetValue = if (isActive) 5.dp else 3.dp,
-        animationSpec = PlayerAnimations.seekbarDpSpec,
+        animationSpec = playerSeekbarDpSpec(),
         label = "trackH",
     )
     val thumbRadiusDp by animateDpAsState(
         targetValue = if (isActive) 7.dp else 5.dp,
-        animationSpec = PlayerAnimations.seekbarDpSpec,
+        animationSpec = playerSeekbarDpSpec(),
         label = "thumbR",
     )
 

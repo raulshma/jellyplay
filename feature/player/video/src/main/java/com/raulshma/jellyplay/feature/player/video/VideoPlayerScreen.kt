@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -644,8 +644,8 @@ fun VideoPlayerScreen(
         // Trickplay overlay for seek gestures
         AnimatedVisibility(
             visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+            enter = fadeIn(tween(150, easing = AlphaEasing)),
+            exit = fadeOut(tween(200, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.Center),
         ) {
             TrickplayOverlay(
@@ -838,8 +838,8 @@ fun VideoPlayerScreen(
 
         AnimatedVisibility(
             visible = uiState.trickplayEnabled && showControls && isSeeking,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+            enter = fadeIn(tween(150, easing = AlphaEasing)),
+            exit = fadeOut(tween(200, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
             TrickplayOverlay(
@@ -1058,8 +1058,8 @@ private fun BoxScope.AutoAspectRatioBadge(
 
     AnimatedVisibility(
         visible = showBadge,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier
             .align(Alignment.TopCenter)
             .padding(top = 60.dp),
@@ -1280,7 +1280,7 @@ private fun PlayerSheetRouter(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OcrResultSheet(
     ocrText: String?,
@@ -1305,7 +1305,7 @@ private fun OcrResultSheet(
             )
             Spacer(Modifier.height(12.dp))
             if (isOcrRunning) {
-                CircularProgressIndicator(
+                ContainedLoadingIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             } else if (ocrText != null) {
