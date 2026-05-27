@@ -96,6 +96,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -541,9 +542,9 @@ private fun SyncPlayHeaderIndicator(
     onClick: () -> Unit,
 ) {
     val statusColor = when {
-        isSynced -> Color(0xFF4CAF50)
-        isSyncing -> Color(0xFF2196F3)
-        else -> Color(0xFFFFC107)
+        isSynced -> SyncStatusColors.synced
+        isSyncing -> SyncStatusColors.syncing
+        else -> SyncStatusColors.else_
     }
 
     Surface(

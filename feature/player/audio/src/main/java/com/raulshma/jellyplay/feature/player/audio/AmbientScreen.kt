@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 
@@ -114,10 +115,10 @@ private fun AmbientBackground(colors: List<Color>) {
 
         val blobColors = colors.ifEmpty {
             listOf(
-                Color(0xFF1a237e),
-                Color(0xFF4a148c),
-                Color(0xFF004d40),
-                Color(0xFFb71c1c),
+                AmbientColors.deepIndigo,
+                AmbientColors.deepPurple,
+                AmbientColors.deepTeal,
+                AmbientColors.deepRed,
             )
         }
 

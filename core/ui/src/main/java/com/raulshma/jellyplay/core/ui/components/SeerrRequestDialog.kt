@@ -68,6 +68,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 private const val TAG = "SeerrRequestDialog"
@@ -254,14 +255,14 @@ fun SeerrRequestDialog(
                             Icon(
                                 Icons.Default.Check,
                                 contentDescription = null,
-                                tint = Color(0xFF4CAF50),
+                                tint = StatusColors.success,
                                 modifier = Modifier.size(24.dp),
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
                                 text = "Request submitted successfully!",
                                 style = typography.bodyMedium,
-                                color = Color(0xFF4CAF50),
+                                color = StatusColors.success,
                             )
                         }
                     }

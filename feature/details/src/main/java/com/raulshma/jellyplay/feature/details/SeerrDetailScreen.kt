@@ -74,6 +74,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -749,7 +750,7 @@ private fun SeerrDetailBody(
                         keywords.take(10).forEach { keyword ->
                             SuggestionChip(
                                 onClick = { },
-                                label = { Text(keyword.name, fontSize = 12.sp) },
+                                label = { Text(keyword.name, style = MaterialTheme.typography.labelSmall) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -919,8 +920,8 @@ private fun ExternalLinksRow(
             onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
             label = { Text("TMDB", fontWeight = FontWeight.Bold) },
             colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = Color(0xFF01B4E4).copy(alpha = 0.2f),
-                labelColor = Color(0xFF01B4E4)
+                containerColor = BrandColors.tmdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.tmdb
             ),
             border = null
         )
@@ -930,8 +931,8 @@ private fun ExternalLinksRow(
                 onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
                 label = { Text("IMDb", fontWeight = FontWeight.Bold) },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color(0xFFF5C518).copy(alpha = 0.2f),
-                    labelColor = Color(0xFFF5C518)
+                containerColor = BrandColors.imdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.imdb
                 ),
                 border = null
             )
@@ -942,8 +943,8 @@ private fun ExternalLinksRow(
                 onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
                 label = { Text("TVDB", fontWeight = FontWeight.Bold) },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color(0xFF32A852).copy(alpha = 0.2f),
-                    labelColor = Color(0xFF32A852)
+                containerColor = BrandColors.tvdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.tvdb
                 ),
                 border = null
             )
@@ -1224,7 +1225,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFF5C518), ShapeCache.smooth4)
+                            .background(BrandColors.imdb, ShapeCache.smooth4)
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Text(

@@ -44,7 +44,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
@@ -737,7 +736,7 @@ private fun AnimatedQueueItem(
             Text(
                 "\u25B6",
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(end = 8.dp),
             )
         }
@@ -959,7 +958,7 @@ private fun LyricsSearchSheet(
                                         modifier = Modifier
                                             .background(
                                                 MaterialTheme.colorScheme.primaryContainer,
-                                                RoundedCornerShape(8.dp),
+                                                ShapeCache.smooth8,
                                             )
                                             .padding(horizontal = 8.dp, vertical = 2.dp),
                                     )
@@ -1162,7 +1161,7 @@ private fun LyricsOverlay(
                         }
                         if (sourceLabel.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = ShapeCache.smooth8,
                                 color = Color.Black.copy(alpha = 0.4f),
                                 modifier = Modifier.height(20.dp),
                             ) {
@@ -1182,7 +1181,7 @@ private fun LyricsOverlay(
                             .size(28.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.4f),
-                                RoundedCornerShape(8.dp),
+                                ShapeCache.smooth8,
                             ),
                     ) {
                         Icon(
@@ -2011,7 +2010,7 @@ private fun PixelPlayPauseButton(
             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
             if (isPlaying) "Pause" else "Play",
             modifier = Modifier.size(36.dp),
-            tint = Color(0xFF1A1A1A),
+            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
 }
@@ -2160,14 +2159,14 @@ private fun SwipeTrackCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = Color.Black.copy(alpha = 0.85f),
         ),
         modifier = modifier
             .width(260.dp)
             .height(80.dp)
-            .shadow(12.dp, RoundedCornerShape(16.dp)),
+            .shadow(12.dp, ShapeCache.smooth16),
     ) {
         Row(
             modifier = Modifier
@@ -2195,7 +2194,7 @@ private fun SwipeTrackCard(
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(ShapeCache.smooth8)
                     .background(Color.White.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {

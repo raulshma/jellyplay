@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -83,7 +84,7 @@ fun SyncPlayPlayerSheet(
                 ),
             )
 
-            val statusColor = if (isSynced) Color(0xFF4CAF50) else Color(0xFFFFC107)
+            val statusColor = if (isSynced) SyncStatusColors.synced else SyncStatusColors.else_
             Surface(
                 shape = ShapeCache.smooth16,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
