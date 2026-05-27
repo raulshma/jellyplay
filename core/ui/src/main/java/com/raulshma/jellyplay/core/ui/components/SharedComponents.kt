@@ -466,7 +466,7 @@ fun PosterCard(
             Text(
                 text = item.name,
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
             )
