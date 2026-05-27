@@ -244,10 +244,10 @@ internal class SyncPlayBridge(
     }
 
     // PlaybackCoreCallbacks implementation
-    override fun localPlay() { getMediaEngine()?.play() }
-    override fun localPause() { getMediaEngine()?.pause() }
-    override fun localSeek(positionMs: Long) { getMediaEngine()?.seekTo(positionMs) }
-    override fun setPlaybackRate(rate: Float) { getMediaEngine()?.setPlaybackSpeed(rate) }
+    override fun localPlay() { scope.launch { getMediaEngine()?.play() } }
+    override fun localPause() { scope.launch { getMediaEngine()?.pause() } }
+    override fun localSeek(positionMs: Long) { scope.launch { getMediaEngine()?.seekTo(positionMs) } }
+    override fun setPlaybackRate(rate: Float) { scope.launch { getMediaEngine()?.setPlaybackSpeed(rate) } }
     override fun currentPositionMs(): Long = getMediaEngine()?.currentPositionMs ?: 0L
     override fun durationMs(): Long = getMediaEngine()?.durationMs ?: 0L
     override fun isPlaying(): Boolean = getMediaEngine()?.isPlaying?.value ?: false
