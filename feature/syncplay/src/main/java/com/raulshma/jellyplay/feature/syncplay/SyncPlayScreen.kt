@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -194,8 +193,8 @@ fun SyncPlayScreen(
         floatingActionButton = {
             AnimatedVisibility(
                 visible = !isInGroup,
-                enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + slideOutVertically(targetOffsetY = { it }),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
@@ -225,11 +224,12 @@ fun SyncPlayScreen(
                 }
 
                 isInGroup && currentGroup != null -> {
+                    val defaultEffectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                     AnimatedContent(
                         targetState = currentGroup,
                         transitionSpec = {
-                            (fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + slideInHorizontally(initialOffsetX = { it }))
-                                .togetherWith(fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + slideOutHorizontally(targetOffsetX = { -it }))
+                            (fadeIn(defaultEffectsSpec) + slideInHorizontally(initialOffsetX = { it }))
+                                .togetherWith(fadeOut(defaultEffectsSpec) + slideOutHorizontally(targetOffsetX = { -it }))
                         },
                         label = "activeGroup",
                     ) { group ->
@@ -282,10 +282,10 @@ fun SyncPlayScreen(
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = AlphaEasing)
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 10 },
-                                        animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = index * 80, easing = FancyTransitionEasing),
+                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     ),
                                 ) {
                                     SyncPlayGroupCard(

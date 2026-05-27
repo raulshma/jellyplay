@@ -14,7 +14,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,6 +21,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -69,6 +70,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -119,7 +121,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
@@ -304,7 +308,7 @@ fun MediaDetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DetailContent(
     itemId: String,
@@ -392,7 +396,7 @@ private fun DetailContent(
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
 
@@ -402,13 +406,13 @@ private fun DetailContent(
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "contentAlpha",
     )
 
     val scrollCollapsed by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scrollCollapsed",
     )
 
@@ -456,19 +460,21 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
+            val slowEffectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+            val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
             AnimatedContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
                     fadeIn(
-                        animationSpec = tween(460, easing = AlphaEasing),
+                        animationSpec = slowEffectsSpec,
                     ) + scaleIn(
                         initialScale = 1.035f,
-                        animationSpec = tween(620, easing = FancyTransitionEasing),
+                        animationSpec = slowEffectsSpec,
                     ) togetherWith fadeOut(
-                        animationSpec = tween(260, easing = AlphaEasing),
+                        animationSpec = fastEffectsSpec,
                     ) + scaleOut(
                         targetScale = 0.99f,
-                        animationSpec = tween(260, easing = FancyTransitionEasing),
+                        animationSpec = fastEffectsSpec,
                     )
                 },
                 label = "detailBackdrop",
@@ -545,17 +551,17 @@ private fun DetailContent(
                         AnimatedVisibility(
                             visible = contentVisible,
                             enter = fadeIn(
-                                animationSpec = tween(420, delayMillis = 80, easing = AlphaEasing),
+                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                             ) + slideInVertically(
                                 initialOffsetY = { it / 8 },
-                                animationSpec = tween(420, delayMillis = 80, easing = FancyTransitionEasing),
+                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                             ) + scaleIn(
                                 initialScale = 0.96f,
-                                animationSpec = tween(420, delayMillis = 80, easing = PointToPointEasing),
+                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                             ),
-                            exit = fadeOut(tween(160, easing = AlphaEasing)) + scaleOut(
+                            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
                                 targetScale = 0.98f,
-                                animationSpec = tween(160, easing = PointToPointEasing),
+                                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                             ),
                         ) {
                             Column(
@@ -571,7 +577,22 @@ private fun DetailContent(
                                         .fillMaxWidth()
                                         .aspectRatio(2f / 3f)
                                         .clip(ShapeCache.smooth12)
-                                        .graphicsLayer { alpha = contentAlpha },
+                                        .graphicsLayer { alpha = contentAlpha }
+                                        .then(
+                                            if (itemId != null) {
+                                                val sharedTransitionScope = LocalSharedTransitionScope.current
+                                                val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                                                @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+                                                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                                    with(sharedTransitionScope) {
+                                                        Modifier.sharedElement(
+                                                            rememberSharedContentState(key = "poster_$itemId"),
+                                                            animatedVisibilityScope = animatedVisibilityScope,
+                                                        )
+                                                    }
+                                                } else Modifier
+                                            } else Modifier
+                                        ),
                                     contentScale = ContentScale.Crop,
                                 )
                                 if (detail != null && item != null) {
@@ -606,14 +627,14 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) +
+                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                         slideInVertically(
                                             initialOffsetY = { it / 12 },
-                                            animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
+                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                                         ),
-                                exit = fadeOut(tween(180, easing = AlphaEasing)) + slideOutVertically(
+                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
                                     targetOffsetY = { -it / 24 },
-                                    animationSpec = tween(180, easing = FancyTransitionEasing),
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                                 ),
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -690,17 +711,17 @@ private fun DetailContent(
                                 AnimatedVisibility(
                                     visible = contentVisible,
                                     enter = fadeIn(
-                                        animationSpec = tween(420, delayMillis = 80, easing = AlphaEasing),
+                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 8 },
-                                        animationSpec = tween(420, delayMillis = 80, easing = FancyTransitionEasing),
+                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                                     ) + scaleIn(
                                         initialScale = 0.96f,
-                                        animationSpec = tween(420, delayMillis = 80, easing = PointToPointEasing),
+                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
                                     ),
-                                    exit = fadeOut(tween(160, easing = AlphaEasing)) + scaleOut(
+                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
                                         targetScale = 0.98f,
-                                        animationSpec = tween(160, easing = PointToPointEasing),
+                                        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                                     ),
                                 ) {
                                     val posterWidth = when {
@@ -728,14 +749,14 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(tween(400, delayMillis = 100, easing = AlphaEasing)) +
+                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                         slideInVertically(
                                             initialOffsetY = { it / 12 },
-                                            animationSpec = tween(400, delayMillis = 100, easing = FancyTransitionEasing),
+                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                                         ),
-                                exit = fadeOut(tween(180, easing = AlphaEasing)) + slideOutVertically(
+                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
                                     targetOffsetY = { -it / 24 },
-                                    animationSpec = tween(180, easing = FancyTransitionEasing),
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                                 ),
                             ) {
                                 DetailContentBody(
@@ -945,21 +966,21 @@ private fun StaggeredDetailSection(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(300, delayMillis = delayIndex * 40, easing = AlphaEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         ) + slideInVertically(
             initialOffsetY = { it / 16 },
-            animationSpec = tween(300, delayMillis = delayIndex * 40, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         ),
-        exit = fadeOut(tween(160, easing = AlphaEasing)) + slideOutVertically(
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
             targetOffsetY = { -it / 24 },
-            animationSpec = tween(180, easing = FancyTransitionEasing),
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         ),
     ) {
         content()
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MediaInfoSection(
     mediaStreams: List<MediaStream>,
@@ -1115,7 +1136,7 @@ private fun MediaInfoSection(
                             val isOptionPressed by optionInteractionSource.collectIsPressedAsState()
                             val optionScale by animateFloatAsState(
                                 targetValue = if (isOptionPressed) 0.97f else 1f,
-                                animationSpec = tween(150, easing = PointToPointEasing),
+                                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                                 label = "optionScale",
                             )
                             val optionFocusState = rememberTvFocusState(focusedScale = 1.03f)
@@ -1273,12 +1294,12 @@ private fun SubtitleChip(
     val bgColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-        animationSpec = tween(200, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "subtitleChipBg",
     )
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-        animationSpec = tween(200, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "subtitleChipContent",
     )
     val isTv = LocalTvMode.current
@@ -1367,28 +1388,28 @@ private fun DetailActionButtons(
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "playButtonScale",
     )
     val markInteractionSource = remember { MutableInteractionSource() }
     val isMarkPressed by markInteractionSource.collectIsPressedAsState()
     val markScale by animateFloatAsState(
         targetValue = if (isMarkPressed) 0.9f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "markButtonScale",
     )
     val favoriteInteractionSource = remember { MutableInteractionSource() }
     val isFavoritePressed by favoriteInteractionSource.collectIsPressedAsState()
     val favoriteScale by animateFloatAsState(
         targetValue = if (isFavoritePressed) 0.9f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "favoriteButtonScale",
     )
     val downloadInteractionSource = remember { MutableInteractionSource() }
     val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
     val downloadScale by animateFloatAsState(
         targetValue = if (isDownloadPressed) 0.9f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "downloadButtonScale",
     )
 
@@ -2198,6 +2219,7 @@ private fun SeerrItemsRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SeasonsSection(
     seriesItem: MediaItem,
@@ -2254,12 +2276,12 @@ private fun SeasonsSection(
                 val targetContentColor = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
                 val surfaceColor by animateColorAsState(
                     targetValue = targetColor,
-                    animationSpec = tween(250, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                     label = "seasonColor",
                 )
                 val contentColor by animateColorAsState(
                     targetValue = targetContentColor,
-                    animationSpec = tween(250, easing = FancyTransitionEasing),
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                     label = "seasonContentColor",
                 )
                 val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -2289,20 +2311,16 @@ private fun SeasonsSection(
         val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
         val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
 
+        val defaultEffectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
         AnimatedContent(
             targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
             transitionSpec = {
                 val direction = if (targetState.first >= initialState.first) 1 else -1
                 fadeIn(
-                    animationSpec = tween(300, easing = AlphaEasing),
-                ) + slideInHorizontally(
-                    initialOffsetX = { direction * it / 10 },
-                    animationSpec = tween(320, easing = FancyTransitionEasing),
+                    animationSpec = defaultEffectsSpec,
                 ) togetherWith fadeOut(
-                    animationSpec = tween(170, easing = AlphaEasing),
-                ) + slideOutHorizontally(
-                    targetOffsetX = { -direction * it / 12 },
-                    animationSpec = tween(220, easing = FancyTransitionEasing),
+                    animationSpec = fastEffectsSpec,
                 )
             },
             label = "seasonEpisodes",
@@ -2313,14 +2331,13 @@ private fun SeasonsSection(
 
             when {
                 currentIsLoading -> {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        userScrollEnabled = false,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        items(3, contentType = { "shimmer" }) {
-                            EpisodeCardSkeleton()
-                        }
+                        androidx.compose.material3.ContainedLoadingIndicator()
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
@@ -2357,76 +2374,10 @@ private fun SeasonsSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EpisodeCardSkeleton() {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerAlpha by transition.animateFloat(
-        initialValue = 0.08f,
-        targetValue = 0.20f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = AlphaEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shimmerAlpha",
-    )
-
-    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)
-
-    Column(
-        modifier = Modifier
-            .width(280.dp)
-            .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .background(shimmerColor)
-        )
-        Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .height(16.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(shimmerColor)
-            )
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.35f)
-                    .height(12.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(shimmerColor)
-            )
-            Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(shimmerColor)
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .height(10.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(shimmerColor)
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(10.dp)
-                    .clip(ShapeCache.smooth4)
-                    .background(shimmerColor)
-            )
-        }
-    }
+    androidx.compose.material3.ContainedLoadingIndicator()
 }
 
 @Composable
@@ -2441,14 +2392,14 @@ private fun EpisodeCard(
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
     val cardScale by animateFloatAsState(
         targetValue = if (isCardPressed) 0.96f else 1f,
-        animationSpec = tween(150, easing = PointToPointEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "episodeCardScale",
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
     val playScale by animateFloatAsState(
         targetValue = if (isPlayPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "episodePlayScale",
     )
 
@@ -2598,7 +2549,7 @@ private fun PersonItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "personScale",
     )
 
@@ -2657,7 +2608,7 @@ private fun AlbumTrackItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(150),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "trackScale",
     )
 

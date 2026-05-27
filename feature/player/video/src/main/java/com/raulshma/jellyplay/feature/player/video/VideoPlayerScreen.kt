@@ -644,8 +644,8 @@ fun VideoPlayerScreen(
         // Trickplay overlay for seek gestures
         AnimatedVisibility(
             visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+            enter = fadeIn(tween(150, easing = AlphaEasing)),
+            exit = fadeOut(tween(200, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.Center),
         ) {
             TrickplayOverlay(
@@ -838,8 +838,8 @@ fun VideoPlayerScreen(
 
         AnimatedVisibility(
             visible = uiState.trickplayEnabled && showControls && isSeeking,
-            enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-            exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+            enter = fadeIn(tween(150, easing = AlphaEasing)),
+            exit = fadeOut(tween(200, easing = AlphaEasing)),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         ) {
             TrickplayOverlay(
@@ -1058,8 +1058,8 @@ private fun BoxScope.AutoAspectRatioBadge(
 
     AnimatedVisibility(
         visible = showBadge,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier
             .align(Alignment.TopCenter)
             .padding(top = 60.dp),

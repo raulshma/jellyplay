@@ -50,8 +50,8 @@ fun SyncPlayOverlay(
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = modifier,
     ) {
         Surface(

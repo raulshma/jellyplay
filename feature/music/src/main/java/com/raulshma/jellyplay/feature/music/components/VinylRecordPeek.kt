@@ -27,10 +27,7 @@ fun VinylRecordPeek(
 ) {
     val slideFraction by animateFloatAsState(
         targetValue = if (isHoveredOrFocused) 0.35f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "vinylSlide"
     )
 

@@ -35,7 +35,10 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -134,8 +137,8 @@ fun ChannelsScreen(
                     // ── Title + action row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                            tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                        enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                            tween(500, easing = FancyTransitionEasing),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -164,12 +167,12 @@ fun ChannelsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = onDvrClick,
                                     icon = Icons.Default.FiberManualRecord,
                                     contentDescription = "Recordings",
                                 )
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = onGuideClick,
                                     icon = Icons.Default.CalendarViewWeek,
                                     contentDescription = "Program Guide",
@@ -181,7 +184,7 @@ fun ChannelsScreen(
                     // ── Channel count ──
                     AnimatedVisibility(
                         visible = headerVisible && viewModel.channels.isNotEmpty(),
-                        enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                        enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                     ) {
                         Text(
                             text = "${viewModel.channels.size} channels",
@@ -346,26 +349,31 @@ private fun ChannelCard(
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun GlassIconButton(
+private fun ExpressiveToolbarIconButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .tvFocusable().clickable(onClick = onClick),
-         contentAlignment = Alignment.Center,
+    val tint = if (highlighted) MaterialTheme.colorScheme.primary
+               else MaterialTheme.colorScheme.onSurfaceVariant
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
+        modifier = Modifier.size(36.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onSurface.copy(
+                alpha = if (highlighted) 0.18f else 0.08f
+            ),
+        ),
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            tint = tint,
         )
     }
 }

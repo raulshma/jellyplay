@@ -128,8 +128,8 @@ fun EpgScreen(
                     // ── Title + action row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                            tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                        enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                            tween(500, easing = FancyTransitionEasing),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -175,7 +175,7 @@ fun EpgScreen(
                     // ── Program count ──
                     AnimatedVisibility(
                         visible = headerVisible && viewModel.programs.isNotEmpty(),
-                        enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                        enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                     ) {
                         Text(
                             text = "${viewModel.programs.size} programs",

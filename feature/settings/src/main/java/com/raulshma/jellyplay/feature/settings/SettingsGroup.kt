@@ -2,10 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -63,16 +60,13 @@ internal fun SettingsGroup(
     val iconColor by animateColorAsState(
         targetValue = if (expanded) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(AnimationTokens.DefaultDuration, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "groupIconColor",
     )
 
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "chevronRotation",
     )
 
@@ -81,7 +75,7 @@ internal fun SettingsGroup(
     val headerPressed by headerInteractionSource.collectIsPressedAsState()
     val headerScale by animateFloatAsState(
         targetValue = if (headerPressed) 0.98f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "headerPressScale",
     )
 
@@ -150,20 +144,14 @@ internal fun SettingsGroup(
         AnimatedVisibility(
             visible = expanded,
             enter = fadeIn(
-                animationSpec = tween(AnimationTokens.MediumDuration, easing = FancyTransitionEasing),
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             ) + expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             ),
             exit = fadeOut(
-                animationSpec = tween(AnimationTokens.QuickDuration),
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
             ) + shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessHigh,
-                ),
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
             ),
         ) {
             Column(

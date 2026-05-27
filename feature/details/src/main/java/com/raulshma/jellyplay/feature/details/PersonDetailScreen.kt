@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -110,10 +108,10 @@ fun PersonDetailScreen(
                         AnimatedVisibility(
                             visible = visible.value,
                             enter = fadeIn(
-                                animationSpec = tween(300, delayMillis = (index % 12) * 40)
+                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                             ) + slideInVertically(
                                 initialOffsetY = { it / 8 },
-                                animationSpec = tween(300, delayMillis = (index % 12) * 40, easing = FastOutSlowInEasing),
+                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                             ),
                         ) {
                             PosterCard(

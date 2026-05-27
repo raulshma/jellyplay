@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -163,10 +161,10 @@ fun UserSelectionScreen(
                         AnimatedVisibility(
                             visible = visible.value,
                             enter = fadeIn(
-                                animationSpec = tween(300, delayMillis = index * 50)
+                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                             ) + slideInVertically(
                                 initialOffsetY = { it / 10 },
-                                animationSpec = tween(300, delayMillis = index * 50, easing = FastOutSlowInEasing),
+                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             ),
                         ) {
                             UserCard(

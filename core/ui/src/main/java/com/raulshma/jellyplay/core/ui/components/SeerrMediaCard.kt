@@ -52,7 +52,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
+import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -75,11 +76,12 @@ fun SeerrMediaCard(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val pulseScale = remember { Animatable(1f) }
+    val pulseSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(isLoading) {
         if (isLoading) {
             pulseScale.animateTo(
                 targetValue = 0.97f,
-                animationSpec = tween(300, easing = FancyTransitionEasing),
+                animationSpec = pulseSpec,
             )
         } else {
             pulseScale.snapTo(1f)
@@ -88,18 +90,18 @@ fun SeerrMediaCard(
 
     val baseScale by animateFloatAsState(
         targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "seerrCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "seerrCardCombinedScale",
     )
 
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed && !isLoading) 0.08f else 0f,
-        animationSpec = tween(150, easing = AlphaEasing),
+        animationSpec = fastEffectsSpec(),
         label = "seerrCardBrightness",
     )
 
