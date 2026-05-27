@@ -39,7 +39,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -249,7 +249,7 @@ private fun DownloadItemRow(
                 Spacer(Modifier.height(2.dp))
                 when (item.status) {
                     DownloadStatus.DOWNLOADING -> {
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             progress = { animatedProgress },
                             modifier = Modifier.fillMaxWidth(),
                         )

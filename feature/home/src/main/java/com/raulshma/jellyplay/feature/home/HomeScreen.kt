@@ -57,6 +57,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -1699,6 +1701,7 @@ fun ExpressiveIconButton(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContinueWatchingRow(
     title: String,
@@ -1727,26 +1730,22 @@ private fun ContinueWatchingRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { items.size },
+            itemWidth = cardWidth,
+            itemSpacing = spacing,
             contentPadding = PaddingValues(horizontal = contentPad),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.tvFocusRestorer(),
-        ) {
-            items(
-                count = items.size,
-                key = { items[it].id },
-                contentType = { "continueWatchingCard" },
-            ) { index ->
-                val item = items[index]
-                WideMediaCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    backdropUrl = backdropUrlBuilder(item),
-                    onClick = { onItemClick(item) },
-                    onPlayClick = onPlayClick?.let { { it(item) } },
-                    cardWidth = cardWidth,
-                )
-            }
+        ) { index ->
+            val item = items[index]
+            WideMediaCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                backdropUrl = backdropUrlBuilder(item),
+                onClick = { onItemClick(item) },
+                onPlayClick = onPlayClick?.let { { it(item) } },
+                cardWidth = cardWidth,
+            )
         }
     }
 }
@@ -1959,6 +1958,7 @@ private fun WideMediaCard(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun HomeMediaRow(
     title: String,
@@ -1983,31 +1983,27 @@ private fun HomeMediaRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { items.size },
+            itemWidth = cardWidth,
+            itemSpacing = spacing,
             contentPadding = PaddingValues(horizontal = contentPad),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = Modifier.tvFocusRestorer(),
-        ) {
-            items(
-                count = items.size,
-                key = { items[it].id },
-                contentType = { "homePosterCard" },
-            ) { index ->
-                val item = items[index]
-                PosterCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
-                    onClick = { onItemClick(item) },
-                    modifier = Modifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                        (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                    } else 0f,
-                    blurHash = item.blurHashes.primary,
-                    onPlayClick = onPlayClick?.let { { it(item) } },
-                )
-            }
+        ) { index ->
+            val item = items[index]
+            PosterCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                fallbackUrls = fallbackImageUrlBuilder(item),
+                onClick = { onItemClick(item) },
+                modifier = Modifier.width(cardWidth),
+                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
+                } else 0f,
+                blurHash = item.blurHashes.primary,
+                onPlayClick = onPlayClick?.let { { it(item) } },
+            )
         }
     }
 }

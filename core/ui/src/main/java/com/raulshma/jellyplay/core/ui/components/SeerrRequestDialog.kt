@@ -30,7 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -38,7 +38,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -79,7 +79,7 @@ private const val TAG = "SeerrRequestDialog"
  * For movies: shows destination server, quality profile, root folder, tags.
  * For TV: shows all of the above plus season selection.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrRequestDialog(
     item: SeerrSearchItem,
@@ -302,7 +302,7 @@ fun SeerrRequestDialog(
                         enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)),
                         exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)),
                     ) {
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
                             color = colorScheme.primary,
                         )
@@ -319,10 +319,8 @@ fun SeerrRequestDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center,
                             ) {
-                                CircularProgressIndicator(
+                                CircularWavyProgressIndicator(
                                     modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                    color = colorScheme.primary,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
@@ -509,7 +507,7 @@ fun SeerrRequestDialog(
                         } else if (isLoadingServices) {
                             // Show loading while services/seasons are being fetched
                             item {
-                                LinearProgressIndicator(
+                                LinearWavyProgressIndicator(
                                     modifier = Modifier.fillMaxWidth(),
                                     color = colorScheme.primary,
                                 )
@@ -571,10 +569,8 @@ fun SeerrRequestDialog(
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                             ) {
                                 if (isRequesting) {
-                                    CircularProgressIndicator(
+                                    CircularWavyProgressIndicator(
                                         modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = colorScheme.onPrimary,
                                     )
                                     Spacer(Modifier.width(8.dp))
                                 }

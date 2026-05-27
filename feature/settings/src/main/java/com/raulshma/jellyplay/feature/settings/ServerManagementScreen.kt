@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -266,9 +266,8 @@ private fun ServerCard(
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             } else if (isSwitching) {
-                CircularProgressIndicator(
+                CircularWavyProgressIndicator(
                     modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
                 )
             } else {
                 IconButton(onClick = onDelete) {
