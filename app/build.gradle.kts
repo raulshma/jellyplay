@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.compose.material3.adaptive)
     implementation(libs.compose.material3.adaptive.layout)
     implementation(libs.compose.material3.adaptive.navigation)
+    implementation(libs.compose.material3.adaptive.navigation.suite)
     implementation("androidx.compose.animation:animation-android")
 
     // Android TV

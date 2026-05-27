@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,7 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
@@ -74,21 +73,21 @@ fun MiniPlayer(
     val sharedTransitionScope = LocalSharedTransitionScope.current
 
     val enterTransition = if (sharedTransitionScope != null) {
-        fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing))
+        fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec())
     } else {
         slideInVertically(
             initialOffsetY = { it },
-            animationSpec = spring(stiffness = 400f),
-        ) + fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing))
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        ) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec())
     }
 
     val exitTransition = if (sharedTransitionScope != null) {
-        fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing))
+        fadeOut(MaterialTheme.motionScheme.fastEffectsSpec())
     } else {
         slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(AnimationTokens.DefaultDuration),
-        ) + fadeOut(tween(AnimationTokens.FastDuration, easing = AlphaEasing))
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        ) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec())
     }
 
     AnimatedVisibility(
@@ -111,7 +110,7 @@ fun MiniPlayer(
         )
         val animatedColor by animateColorAsState(
             targetValue = pixelTint,
-            animationSpec = tween(AnimationTokens.StandardDuration),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             label = "miniPlayerColor",
         )
 
@@ -123,6 +122,7 @@ fun MiniPlayer(
         val fallbackIconBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         val fallbackIconTint = MaterialTheme.colorScheme.onSurfaceVariant
 
+        val boundsSpec = MaterialTheme.motionScheme.slowSpatialSpec<androidx.compose.ui.geometry.Rect>()
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         val sharedContainerModifier = if (sharedTransitionScope != null) {
             with(sharedTransitionScope) {
@@ -130,10 +130,7 @@ fun MiniPlayer(
                     rememberSharedContentState(key = "audio_player_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
                     boundsTransform = androidx.compose.animation.BoundsTransform { _, _ ->
-                        spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
-                        )
+                        boundsSpec
                     }
                 )
             }
@@ -208,7 +205,6 @@ fun MiniPlayer(
                         color = contentTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 14.sp,
                     )
                     Text(
                         text = artist,
@@ -216,7 +212,6 @@ fun MiniPlayer(
                         color = contentTextColorSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 12.sp,
                     )
                 }
 
@@ -285,6 +280,7 @@ fun MiniPlayer(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AnimatedIconButton(
     onClick: () -> Unit,
@@ -296,11 +292,12 @@ private fun AnimatedIconButton(
     iconSize: Dp,
     modifier: Modifier = Modifier,
 ) {
+    val motionScheme = MaterialTheme.motionScheme
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 600f),
+        animationSpec = motionScheme.fastSpatialSpec(),
         label = "miniPlayerButtonScale",
     )
 
@@ -319,6 +316,8 @@ private fun AnimatedIconButton(
         IconButton(
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
+            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+            interactionSource = interactionSource,
         ) {
             Icon(
                 imageVector = iconVector,

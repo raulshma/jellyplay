@@ -7,9 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -44,18 +42,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,7 +97,7 @@ import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
     onItemClick: (String) -> Unit,
@@ -211,8 +212,8 @@ fun SearchScreen(
                 // ── Title + action row ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                        tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                    enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                        tween(500, easing = FancyTransitionEasing),
                         initialOffsetY = { -40 },
                     ),
                 ) {
@@ -242,7 +243,7 @@ fun SearchScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box {
-                                GlassIconButton(
+                                ExpressiveToolbarIconButton(
                                     onClick = { viewModel.toggleShowFilters() },
                                     icon = Icons.Default.FilterList,
                                     contentDescription = "Filters",
@@ -254,7 +255,7 @@ fun SearchScreen(
                                             .align(Alignment.TopEnd)
                                             .padding(4.dp)
                                             .size(8.dp)
-                                            .clip(RoundedCornerShape(50))
+                                            .clip(CircleShape)
                                             .background(MaterialTheme.colorScheme.primary),
                                     )
                                 }
@@ -265,101 +266,105 @@ fun SearchScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // ── Search field (glass style) ──
+                // ── Search field (MD3 expressive DockedSearchBar) ──
                 AnimatedVisibility(
                     visible = headerVisible,
-                    enter = fadeIn(tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
-                        tween(AnimationTokens.SlowDuration, delayMillis = 100, easing = FancyTransitionEasing),
+                    enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
+                        tween(500, delayMillis = 100, easing = FancyTransitionEasing),
                         initialOffsetY = { 40 },
                     ),
                 ) {
-                    TextField(
-                        value = query,
-                        onValueChange = { viewModel.search(it) },
-                        placeholder = {
-                            Text(
-                                "Search movies, shows, music...",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    DockedSearchBar(
+                        inputField = {
+                            SearchBarDefaults.InputField(
+                                query = query,
+                                onQueryChange = { viewModel.search(it) },
+                                onSearch = { },
+                                expanded = false,
+                                onExpandedChange = { },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onFocusEvent { isSearchFocused = it.isFocused }
+                                    .tvFocusable(),
+                                placeholder = {
+                                    Text(
+                                        "Search movies, shows, music...",
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (query.isNotBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(ShapeCache.smooth8)
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                                .tvFocusable().clickable { viewModel.search("") },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear search",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(ShapeCache.smooth8)
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                                .tvFocusable().clickable {
+                                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                                        putExtra(
+                                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                                        )
+                                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
+                                                    }
+                                                    speechLauncher.launch(intent)
+                                                },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Voice search",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         },
+                        expanded = false,
+                        onExpandedChange = { },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .focusRequester(focusRequester)
-                            .onFocusEvent { isSearchFocused = it.isFocused }
-                            .tvFocusable(),
-                        singleLine = true,
+                            .padding(horizontal = 24.dp),
                         shape = ShapeCache.smooth16,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                            cursorColor = MaterialTheme.colorScheme.primary,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
+                        colors = SearchBarDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         ),
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
-                        trailingIcon = {
-                            if (query.isNotBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(ShapeCache.smooth8)
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                        .tvFocusable().clickable { viewModel.search("") },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear search",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(ShapeCache.smooth8)
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                        .tvFocusable().clickable {
-                                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                                putExtra(
-                                                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                                )
-                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for movies, shows, music...")
-                                            }
-                                            speechLauncher.launch(intent)
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mic,
-                                        contentDescription = "Voice search",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        },
-                    )
+                    ) { }
                 }
 
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
-                    enter = fadeIn(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + expandVertically(),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(),
+                    enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
+                    exit = fadeOut(tween(200, easing = AlphaEasing)) + shrinkVertically(),
                 ) {
                     FlowRow(
                         modifier = Modifier
@@ -404,7 +409,7 @@ fun SearchScreen(
                 // ── Result count ──
                 AnimatedVisibility(
                     visible = headerVisible && pagedResults.itemCount > 0,
-                    enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 200, easing = AlphaEasing)),
+                    enter = fadeIn(tween(400, delayMillis = 200, easing = AlphaEasing)),
                 ) {
                     Text(
                         text = "${pagedResults.itemCount} results",
@@ -560,6 +565,7 @@ fun SearchScreen(
                                                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                                                 } else 0f,
                                                 blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
                                             )
                                         }
                                     }
@@ -685,26 +691,31 @@ fun SearchScreen(
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun GlassIconButton(
+private fun ExpressiveToolbarIconButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (highlighted) 0.18f else 0.08f))
-            .tvFocusable().clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+    val tint = if (highlighted) MaterialTheme.colorScheme.primary
+               else MaterialTheme.colorScheme.onSurfaceVariant
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
+        modifier = Modifier.size(36.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onSurface.copy(
+                alpha = if (highlighted) 0.18f else 0.08f
+            ),
+        ),
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            tint = tint,
         )
     }
 }
@@ -718,7 +729,7 @@ private fun GlassDismissTag(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(stiffness = 500f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "tagScale",
     )
 
@@ -763,7 +774,7 @@ private fun AnimatedSearchItem(
 
     val animationProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(300, delayMillis = (index % 12) * 30, easing = FastOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "searchItemAnimation",
     )
 

@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SubtitleDownloadSheet(
     subtitles: List<RemoteSubtitleInfo>,
@@ -77,7 +77,7 @@ fun SubtitleDownloadSheet(
             Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
-                CircularProgressIndicator(
+                ContainedLoadingIndicator(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(24.dp),

@@ -1,83 +1,90 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 
-object PlayerAnimations {
+@Composable
+fun playerTopControlsEnter() = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+    slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { -it }
 
-    val topControlsEnter = fadeIn(tween(350, easing = FancyTransitionEasing)) +
-        slideInVertically(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) { -it }
-    val topControlsExit = fadeOut(tween(250, easing = FastInvokeEasing)) +
-        slideOutVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)) { -it }
+@Composable
+fun playerTopControlsExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+    slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it }
 
-    val playButtonEnter = fadeIn(tween(200)) + scaleIn(
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        initialScale = 0.85f,
-    )
-    val playButtonExit = fadeOut(tween(150)) + scaleOut(
-        animationSpec = tween(200, easing = FastInvokeEasing),
-        targetScale = 0.85f,
-    )
+@Composable
+fun playerPlayButtonEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
+    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+    initialScale = 0.85f,
+)
 
-    val bottomControlsEnter = fadeIn(tween(300, easing = AlphaEasing)) +
-        slideInVertically(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) { it }
-    val bottomControlsExit = fadeOut(tween(250, easing = AlphaEasing)) +
-        slideOutVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)) { it }
+@Composable
+fun playerPlayButtonExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
+    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+    targetScale = 0.85f,
+)
 
-    val skipButtonEnter = fadeIn(tween(200)) + scaleIn(
-        animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh),
-        initialScale = 0.8f,
-    )
-    val skipButtonExit = fadeOut(tween(200, easing = AlphaEasing)) + scaleOut(
-        animationSpec = tween(200, easing = PointToPointEasing),
-        targetScale = 0.8f,
-    )
+@Composable
+fun playerBottomControlsEnter() = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+    slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it }
 
-    val gestureFeedbackEnter = fadeIn(tween(100)) + scaleIn(
-        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
-        initialScale = 0.7f,
-    )
-    val gestureFeedbackExit = fadeOut(tween(200, easing = AlphaEasing)) + scaleOut(
-        animationSpec = tween(200, easing = PointToPointEasing),
-        targetScale = 0.8f,
-    )
+@Composable
+fun playerBottomControlsExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+    slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it }
 
-    val edgeBarEnter = fadeIn(tween(80)) + scaleIn(
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        initialScale = 0.85f,
-    )
-    val edgeBarExit = fadeOut(tween(150, easing = AlphaEasing))
+@Composable
+fun playerSkipButtonEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
+    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+    initialScale = 0.8f,
+)
 
-    val buttonPressSpec: AnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium,
-    )
+@Composable
+fun playerSkipButtonExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
+    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+    targetScale = 0.8f,
+)
 
-    val seekbarDpSpec: AnimationSpec<Dp> = spring(
-        dampingRatio = Spring.DampingRatioLowBouncy,
-        stiffness = Spring.StiffnessHigh,
-    )
+@Composable
+fun playerGestureFeedbackEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
+    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+    initialScale = 0.7f,
+)
 
-    val seekbarSpec: AnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioLowBouncy,
-        stiffness = Spring.StiffnessHigh,
-    )
+@Composable
+fun playerGestureFeedbackExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
+    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+    targetScale = 0.8f,
+)
 
-    val crossfadeSpec: AnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium,
-    )
-}
+@Composable
+fun playerEdgeBarEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(
+    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+    initialScale = 0.85f,
+)
+
+@Composable
+fun playerEdgeBarExit() = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec())
+
+@Composable
+fun playerButtonPressSpec(): AnimationSpec<Float> =
+    MaterialTheme.motionScheme.defaultSpatialSpec()
+
+@Composable
+fun playerSeekbarDpSpec(): AnimationSpec<Dp> =
+    MaterialTheme.motionScheme.fastSpatialSpec()
+
+@Composable
+fun playerSeekbarSpec(): AnimationSpec<Float> =
+    MaterialTheme.motionScheme.fastSpatialSpec()
+
+@Composable
+fun playerCrossfadeSpec(): AnimationSpec<Float> =
+    MaterialTheme.motionScheme.defaultSpatialSpec()

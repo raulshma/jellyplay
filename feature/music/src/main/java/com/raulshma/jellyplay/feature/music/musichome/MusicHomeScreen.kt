@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,7 +45,17 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -204,10 +216,10 @@ fun MusicHomeScreen(
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
-                                        animationSpec = tween(350, delayMillis = index * 80)
+                                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                                     ) + slideInVertically(
                                         initialOffsetY = { it / 12 },
-                                        animationSpec = tween(350, delayMillis = index * 80, easing = FastOutSlowInEasing),
+                                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     ),
                                 ) {
                                     MusicSectionRow(
@@ -735,7 +747,7 @@ private fun ExpressiveCategoryButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "cat_btn_scale"
     )
 
@@ -814,12 +826,12 @@ private fun QuickAccessRow(
             }
             val slideOffset by animateFloatAsState(
                 targetValue = if (visible) 0f else 60f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 label = "stagger"
             )
             val alphaState by animateFloatAsState(
                 targetValue = if (visible) 1f else 0f,
-                animationSpec = tween(300),
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                 label = "stagger_alpha"
             )
             ExpressiveCategoryButton(
@@ -848,6 +860,7 @@ private data class CategoryItem(
     val contentColor: Color
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MusicSectionRow(
     section: MusicHomeSection,
@@ -861,39 +874,44 @@ private fun MusicSectionRow(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
-        LazyRow(
+        HorizontalUncontainedCarousel(
+            state = rememberCarouselState { section.items.size },
+            itemWidth = when (section.items.firstOrNull()?.mediaType) {
+                MediaType.ARTIST -> 120.dp
+                MediaType.AUDIO -> 280.dp
+                else -> 160.dp
+            },
+            itemSpacing = 8.dp,
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(section.items, key = { "${section.title}_${it.id}" }, contentType = { "mediaItem" }) { item ->
-                when (section.items.firstOrNull()?.mediaType) {
-                    MediaType.ARTIST -> {
-                        ArtistCard(
-                            name = item.name,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                            blurHash = item.blurHashes.primary,
-                            modifier = Modifier.width(120.dp),
-                        )
-                    }
-                    MediaType.AUDIO -> {
-                        TrackItem(
-                            item = item,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                        )
-                    }
-                    else -> {
-                        AlbumCard(
-                            name = item.name,
-                            artist = item.albumArtist,
-                            year = item.year,
-                            imageUrl = imageUrlBuilder(item),
-                            onClick = { onItemClick(item) },
-                            blurHash = item.blurHashes.primary,
-                            modifier = Modifier.width(160.dp),
-                        )
-                    }
+        ) { index ->
+            val item = section.items[index]
+            when (section.items.firstOrNull()?.mediaType) {
+                MediaType.ARTIST -> {
+                    ArtistCard(
+                        name = item.name,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                        blurHash = item.blurHashes.primary,
+                        modifier = Modifier.width(120.dp),
+                    )
+                }
+                MediaType.AUDIO -> {
+                    TrackItem(
+                        item = item,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                    )
+                }
+                else -> {
+                    AlbumCard(
+                        name = item.name,
+                        artist = item.albumArtist,
+                        year = item.year,
+                        imageUrl = imageUrlBuilder(item),
+                        onClick = { onItemClick(item) },
+                        blurHash = item.blurHashes.primary,
+                        modifier = Modifier.width(160.dp),
+                    )
                 }
             }
         }
@@ -937,37 +955,5 @@ private fun TrackItem(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-fun ExpressiveIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.82f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "expressive_btn_scale"
-    )
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
     }
 }

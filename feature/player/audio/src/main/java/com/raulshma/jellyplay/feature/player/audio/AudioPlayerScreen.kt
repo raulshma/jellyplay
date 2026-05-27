@@ -44,7 +44,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
@@ -80,6 +79,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -163,7 +163,7 @@ fun AudioPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        contentAlpha.animateTo(1f, tween(AnimationTokens.ExtendedDuration, delayMillis = 200, easing = AlphaEasing))
+        contentAlpha.animateTo(1f, tween(600, delayMillis = 200, easing = AlphaEasing))
     }
 
     BackHandler {
@@ -697,7 +697,7 @@ private fun AnimatedQueueItem(
     )
     val alpha by animateFloatAsState(
         targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(AnimationTokens.InstantDuration),
+        animationSpec = tween(50),
         label = "queueItemAlpha",
     )
     val isCurrentItem = index == currentIndex
@@ -736,7 +736,7 @@ private fun AnimatedQueueItem(
             Text(
                 "\u25B6",
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(end = 8.dp),
             )
         }
@@ -958,7 +958,7 @@ private fun LyricsSearchSheet(
                                         modifier = Modifier
                                             .background(
                                                 MaterialTheme.colorScheme.primaryContainer,
-                                                RoundedCornerShape(8.dp),
+                                                ShapeCache.smooth8,
                                             )
                                             .padding(horizontal = 8.dp, vertical = 2.dp),
                                     )
@@ -978,6 +978,7 @@ private fun LyricsSearchSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LyricsOverlay(
     lyrics: List<com.raulshma.jellyplay.core.model.LyricsLine>,
@@ -1018,10 +1019,8 @@ private fun LyricsOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(16.dp),
             ) {
-                CircularProgressIndicator(
+                ContainedLoadingIndicator(
                     modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White.copy(alpha = 0.8f),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1088,7 +1087,7 @@ private fun LyricsOverlay(
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
                             animationSpec = tween(
-                                durationMillis = AnimationTokens.MediumDuration,
+                                durationMillis = 300,
                                 easing = AlphaEasing,
                             ),
                             label = "lyricAlpha$index",
@@ -1096,7 +1095,7 @@ private fun LyricsOverlay(
                         val animatedScale by animateFloatAsState(
                             targetValue = targetScale,
                             animationSpec = tween(
-                                durationMillis = AnimationTokens.MediumDuration,
+                                durationMillis = 300,
                                 easing = PointToPointEasing,
                             ),
                             label = "lyricScale$index",
@@ -1114,7 +1113,7 @@ private fun LyricsOverlay(
                             },
                             color = Color.White.copy(alpha = finalAlpha),
                             modifier = Modifier
-                                .animateContentSize(animationSpec = tween(AnimationTokens.MediumDuration))
+                                .animateContentSize(animationSpec = tween(300))
                                 .graphicsLayer {
                                     scaleX = finalScale
                                     scaleY = finalScale
@@ -1162,7 +1161,7 @@ private fun LyricsOverlay(
                         }
                         if (sourceLabel.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = ShapeCache.smooth8,
                                 color = Color.Black.copy(alpha = 0.4f),
                                 modifier = Modifier.height(20.dp),
                             ) {
@@ -1182,7 +1181,7 @@ private fun LyricsOverlay(
                             .size(28.dp)
                             .background(
                                 Color.Black.copy(alpha = 0.4f),
-                                RoundedCornerShape(8.dp),
+                                ShapeCache.smooth8,
                             ),
                     ) {
                         Icon(
@@ -2011,11 +2010,12 @@ private fun PixelPlayPauseButton(
             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
             if (isPlaying) "Pause" else "Play",
             modifier = Modifier.size(36.dp),
-            tint = Color(0xFF1A1A1A),
+            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun IconButtonWithPressAnimation(
     onClick: () -> Unit,
@@ -2028,7 +2028,7 @@ private fun IconButtonWithPressAnimation(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(stiffness = 600f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "transportScale",
     )
 
@@ -2038,6 +2038,8 @@ private fun IconButtonWithPressAnimation(
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .tvFocusable(),
+        shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+        interactionSource = interactionSource,
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides tint
@@ -2160,14 +2162,14 @@ private fun SwipeTrackCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = Color.Black.copy(alpha = 0.85f),
         ),
         modifier = modifier
             .width(260.dp)
             .height(80.dp)
-            .shadow(12.dp, RoundedCornerShape(16.dp)),
+            .shadow(12.dp, ShapeCache.smooth16),
     ) {
         Row(
             modifier = Modifier
@@ -2195,7 +2197,7 @@ private fun SwipeTrackCard(
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(ShapeCache.smooth8)
                     .background(Color.White.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {

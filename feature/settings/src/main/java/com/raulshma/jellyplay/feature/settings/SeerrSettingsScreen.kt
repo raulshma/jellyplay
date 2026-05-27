@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -40,7 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -54,8 +55,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,7 +78,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrSettingsScreen(
     onBack: () -> Unit,
@@ -87,9 +89,11 @@ fun SeerrSettingsScreen(
     val isTesting = viewModel.isTesting
     val isConnected = connectionStatus is ConnectionStatus.Connected
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text("Seerr") },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
@@ -99,6 +103,7 @@ fun SeerrSettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                 ),
+                scrollBehavior = scrollBehavior,
             )
         },
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
@@ -172,10 +177,8 @@ fun SeerrSettingsScreen(
                         shape = ShapeCache.smooth12,
                     ) {
                         if (isTesting) {
-                            CircularProgressIndicator(
+                            CircularWavyProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
                             )
                             Spacer(Modifier.width(8.dp))
                         }
@@ -201,15 +204,15 @@ fun SeerrSettingsScreen(
             item {
                 AnimatedVisibility(
                     visible = connectionStatus is ConnectionStatus.Connected || connectionStatus is ConnectionStatus.Error,
-                    enter = fadeIn(tween(AnimationTokens.MediumDuration, easing = AlphaEasing)) + expandVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
-                    exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + shrinkVertically(animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing)),
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
                 ) {
                     when (connectionStatus) {
                         is ConnectionStatus.Connected -> ConnectionStatusCard(
                             icon = Icons.Default.Check,
                             title = "Connected",
                             subtitle = if (connectionStatus.version.isNotBlank()) "Version ${connectionStatus.version}" else "Seerr server reached",
-                            color = Color(0xFF4CAF50),
+                            color = StatusColors.success,
                         )
                         is ConnectionStatus.Error -> ConnectionStatusCard(
                             icon = Icons.Default.Close,

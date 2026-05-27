@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -32,7 +32,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -70,7 +70,7 @@ import com.raulshma.jellyplay.feature.editor.EditorViewModel
 
 private val IMAGE_TYPES = listOf("Primary", "Art", "Backdrop", "Banner", "Box", "BoxRear", "Disc", "Logo", "Menu", "Thumb")
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ImagesTab(
     viewModel: EditorViewModel,
@@ -83,7 +83,7 @@ fun ImagesTab(
 
     if (state.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            ContainedLoadingIndicator()
         }
         return
     }
@@ -207,7 +207,7 @@ private fun ImageCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = ShapeCache.smooth16,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,
     ) {
@@ -224,7 +224,7 @@ private fun ImageCard(
                             else -> 2f / 3f
                         }
                     )
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(ShapeCache.smooth16),
                 contentScale = ContentScale.Crop,
             )
             Column(
@@ -310,7 +310,7 @@ private fun ImageUploadSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(ShapeCache.smooth12),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -344,7 +344,7 @@ private fun ImageUploadSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(ShapeCache.smooth12),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -509,7 +509,7 @@ private fun RemoteImageCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Box {
@@ -519,7 +519,7 @@ private fun RemoteImageCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(ShapeCache.smooth12),
                 contentScale = ContentScale.Crop,
             )
             Column(

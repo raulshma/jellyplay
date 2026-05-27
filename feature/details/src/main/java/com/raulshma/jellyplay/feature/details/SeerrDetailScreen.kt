@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -23,7 +22,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +73,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -75,6 +90,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import java.text.NumberFormat
 import java.util.*
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrDetailScreen(
     tmdbId: Int,
@@ -133,7 +149,7 @@ fun SeerrDetailScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading && movieDetail == null && tvDetail == null -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 error != null && movieDetail == null && tvDetail == null -> {
                     Column(
@@ -275,7 +291,7 @@ private fun SeerrDetailContent(
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = tween(600, easing = FancyTransitionEasing),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
 
@@ -284,12 +300,13 @@ private fun SeerrDetailContent(
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "appBarColor",
     )
 
     val contentFocusRequester = remember { FocusRequester() }
     val hasContent = movieDetail != null || tvDetail != null
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     LaunchedEffect(isTv, hasContent) {
         if (isTv && hasContent) {
@@ -553,12 +570,12 @@ private fun SeerrDetailContent(
             appBarColor,
         )
 
-        TopAppBar(
+        MediumTopAppBar(
             title = {
                 AnimatedVisibility(
                     visible = scrollFraction > 0.7f,
-                    enter = fadeIn(tween(300, easing = AlphaEasing)) + slideInVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 },
-                    exit = fadeOut(tween(300, easing = AlphaEasing)) + slideOutVertically(tween(300, easing = FancyTransitionEasing)) { it / 2 }
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 },
+                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 }
                 ) {
                     Text(
                         text = title,
@@ -605,7 +622,8 @@ private fun SeerrDetailContent(
                 containerColor = animatedContainerColor,
                 navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
-            )
+            ),
+            scrollBehavior = scrollBehavior,
         )
     }
 }
@@ -731,7 +749,7 @@ private fun SeerrDetailBody(
                         keywords.take(10).forEach { keyword ->
                             SuggestionChip(
                                 onClick = { },
-                                label = { Text(keyword.name, fontSize = 12.sp) },
+                                label = { Text(keyword.name, style = MaterialTheme.typography.labelSmall) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -801,12 +819,12 @@ private fun SeerrDetailBody(
             // Recommendations
             AnimatedVisibility(
                 visible = recommendations.isNotEmpty(),
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, easing = AlphaEasing)) +
+                enter = fadeIn(tween(400, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(AnimationTokens.StandardDuration, easing = FancyTransitionEasing),
+                            animationSpec = tween(400, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+                exit = fadeOut(tween(150, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Recommendations",
@@ -818,12 +836,12 @@ private fun SeerrDetailBody(
             // Similar
             AnimatedVisibility(
                 visible = similar.isNotEmpty(),
-                enter = fadeIn(tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = AlphaEasing)) +
+                enter = fadeIn(tween(400, delayMillis = 60, easing = AlphaEasing)) +
                         slideInVertically(
                             initialOffsetY = { it / 16 },
-                            animationSpec = tween(AnimationTokens.StandardDuration, delayMillis = 60, easing = FancyTransitionEasing),
+                            animationSpec = tween(400, delayMillis = 60, easing = FancyTransitionEasing),
                         ),
-                exit = fadeOut(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)),
+                exit = fadeOut(tween(150, easing = AlphaEasing)),
             ) {
                 SeerrHorizontalSection(
                     title = "Similar",
@@ -901,8 +919,8 @@ private fun ExternalLinksRow(
             onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
             label = { Text("TMDB", fontWeight = FontWeight.Bold) },
             colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = Color(0xFF01B4E4).copy(alpha = 0.2f),
-                labelColor = Color(0xFF01B4E4)
+                containerColor = BrandColors.tmdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.tmdb
             ),
             border = null
         )
@@ -912,8 +930,8 @@ private fun ExternalLinksRow(
                 onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
                 label = { Text("IMDb", fontWeight = FontWeight.Bold) },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color(0xFFF5C518).copy(alpha = 0.2f),
-                    labelColor = Color(0xFFF5C518)
+                containerColor = BrandColors.imdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.imdb
                 ),
                 border = null
             )
@@ -924,8 +942,8 @@ private fun ExternalLinksRow(
                 onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
                 label = { Text("TVDB", fontWeight = FontWeight.Bold) },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color(0xFF32A852).copy(alpha = 0.2f),
-                    labelColor = Color(0xFF32A852)
+                containerColor = BrandColors.tvdb.copy(alpha = 0.2f),
+                labelColor = BrandColors.tvdb
                 ),
                 border = null
             )
@@ -1206,7 +1224,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFF5C518), ShapeCache.smooth4)
+                            .background(BrandColors.imdb, ShapeCache.smooth4)
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Text(

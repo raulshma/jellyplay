@@ -122,24 +122,24 @@ object ArtworkColorExtractor {
         }
         val onTertiaryContainer = bestContrast(tertiaryContainer, Color.White, Color.Black)
 
-        val surface = if (oledMode) Color.Black else if (darkTheme) Color(0xFF141218) else Color(0xFFFFFBFE)
+        val surface = if (oledMode) oled_theme_surface else if (darkTheme) md_theme_dark_surface else md_theme_light_surface
         val background = surface
-        val onSurface = if (darkTheme) Color(0xFFE6E1E5) else Color(0xFF1C1B1F)
+        val onSurface = if (darkTheme) md_theme_dark_onSurface else md_theme_light_onSurface
         val onBackground = onSurface
-        val surfaceVariant = if (darkTheme) Color(0xFF49454F) else Color(0xFFE7E0EC)
-        val onSurfaceVariant = if (darkTheme) Color(0xFFCAC4D0) else Color(0xFF49454F)
-        val outline = if (darkTheme) Color(0xFF938F99) else Color(0xFF79747E)
-        val outlineVariant = if (darkTheme) Color(0xFF49454F) else Color(0xFFCAC4D0)
-        val error = if (darkTheme) Color(0xFFF2B8B5) else Color(0xFFB3261E)
-        val onError = if (darkTheme) Color(0xFF601410) else Color.White
-        val errorContainer = if (darkTheme) Color(0xFF8C1D18) else Color(0xFFF9DEDC)
-        val onErrorContainer = if (darkTheme) Color(0xFFF9DEDC) else Color(0xFF410E0B)
+        val surfaceVariant = if (darkTheme) md_theme_dark_surfaceVariant else md_theme_light_surfaceVariant
+        val onSurfaceVariant = if (darkTheme) md_theme_dark_onSurfaceVariant else md_theme_light_onSurfaceVariant
+        val outline = if (darkTheme) md_theme_dark_outline else md_theme_light_outline
+        val outlineVariant = if (darkTheme) md_theme_dark_outlineVariant else md_theme_light_outlineVariant
+        val error = if (darkTheme) md_theme_dark_error else md_theme_light_error
+        val onError = if (darkTheme) md_theme_dark_onError else md_theme_light_onError
+        val errorContainer = if (darkTheme) md_theme_dark_errorContainer else md_theme_light_errorContainer
+        val onErrorContainer = if (darkTheme) md_theme_dark_onErrorContainer else md_theme_light_onErrorContainer
 
-        val surfaceContainerLowest = if (oledMode) Color.Black else if (darkTheme) Color(0xFF0F0D13) else Color(0xFFFFFFFF)
-        val surfaceContainerLow = if (oledMode) Color(0xFF0A0A0A) else if (darkTheme) Color(0xFF1D1B20) else Color(0xFFF7F2FA)
-        val surfaceContainer = if (oledMode) Color(0xFF111111) else if (darkTheme) Color(0xFF211F26) else Color(0xFFF3EDF7)
-        val surfaceContainerHigh = if (oledMode) Color(0xFF1A1A1A) else if (darkTheme) Color(0xFF2B2930) else Color(0xFFECE6F0)
-        val surfaceContainerHighest = if (oledMode) Color(0xFF222222) else if (darkTheme) Color(0xFF36343B) else Color(0xFFE6E0E9)
+        val surfaceContainerLowest = if (oledMode) oled_theme_surfaceContainerLowest else if (darkTheme) md_theme_dark_surfaceContainerLowest else md_theme_light_surfaceContainerLowest
+        val surfaceContainerLow = if (oledMode) oled_theme_surfaceContainerLow else if (darkTheme) md_theme_dark_surfaceContainerLow else md_theme_light_surfaceContainerLow
+        val surfaceContainer = if (oledMode) oled_theme_surfaceContainer else if (darkTheme) md_theme_dark_surfaceContainer else md_theme_light_surfaceContainer
+        val surfaceContainerHigh = if (oledMode) oled_theme_surfaceContainerHigh else if (darkTheme) md_theme_dark_surfaceContainerHigh else md_theme_light_surfaceContainerHigh
+        val surfaceContainerHighest = if (oledMode) oled_theme_surfaceContainerHighest else if (darkTheme) md_theme_dark_surfaceContainerHighest else md_theme_light_surfaceContainerHighest
 
         return if (darkTheme) {
             darkColorScheme(

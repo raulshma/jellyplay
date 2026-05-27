@@ -88,8 +88,8 @@ private fun SkipButtonOverlay(
     val skipFocusState = rememberTvFocusState(focusedScale = 1.06f)
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(AnimationTokens.QuickDuration, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(AnimationTokens.QuickDuration, easing = PointToPointEasing)) + slideInHorizontally(animationSpec = tween(AnimationTokens.StandardDuration, easing = PointToPointEasing), initialOffsetX = { it / 3 }),
-        exit = fadeOut(tween(AnimationTokens.DefaultDuration, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(AnimationTokens.DefaultDuration, easing = PointToPointEasing)) + slideOutHorizontally(animationSpec = tween(AnimationTokens.StandardDuration, easing = PointToPointEasing), targetOffsetX = { it / 3 }),
+        enter = fadeIn(tween(150, easing = AlphaEasing)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150, easing = PointToPointEasing)) + slideInHorizontally(animationSpec = tween(400, easing = PointToPointEasing), initialOffsetX = { it / 3 }),
+        exit = fadeOut(tween(200, easing = AlphaEasing)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200, easing = PointToPointEasing)) + slideOutHorizontally(animationSpec = tween(400, easing = PointToPointEasing), targetOffsetX = { it / 3 }),
         modifier = modifier,
     ) {
         Row(

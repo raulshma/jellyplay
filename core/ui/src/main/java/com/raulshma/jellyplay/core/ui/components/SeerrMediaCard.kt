@@ -24,8 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,9 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
+import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -73,11 +76,12 @@ fun SeerrMediaCard(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val pulseScale = remember { Animatable(1f) }
+    val pulseSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(isLoading) {
         if (isLoading) {
             pulseScale.animateTo(
                 targetValue = 0.97f,
-                animationSpec = tween(300, easing = FancyTransitionEasing),
+                animationSpec = pulseSpec,
             )
         } else {
             pulseScale.snapTo(1f)
@@ -86,18 +90,18 @@ fun SeerrMediaCard(
 
     val baseScale by animateFloatAsState(
         targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "seerrCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = lessSpringySpec(),
+        animationSpec = defaultSpatialSpec<Float>(),
         label = "seerrCardCombinedScale",
     )
 
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed && !isLoading) 0.08f else 0f,
-        animationSpec = tween(150, easing = AlphaEasing),
+        animationSpec = fastEffectsSpec(),
         label = "seerrCardBrightness",
     )
 
@@ -155,7 +159,7 @@ fun SeerrMediaCard(
         .aspectRatio(2f / 3f)
 
     Column(modifier = modifier) {
-        Card(
+        ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(tvFocusState.focusModifier)
@@ -280,7 +284,7 @@ fun SeerrMediaCard(
                             Text(
                                 text = "★",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFFFC107),
+                                color = RatingColors.star,
                             )
                             Text(
                                 text = "%.1f".format(item.voteAverage),
@@ -335,9 +339,9 @@ fun SeerrMediaCard(
 
                 if (!isLoading) {
                     val badgeColor = when {
-                        isAvailable -> Color(0xFF4CAF50)
-                        isPending -> Color(0xFFFFA726)
-                        hasRequest -> Color(0xFF42A5F5)
+                        isAvailable -> StatusColors.available
+                        isPending -> StatusColors.pending
+                        hasRequest -> StatusColors.requested
                         else -> Color.Transparent
                     }
 

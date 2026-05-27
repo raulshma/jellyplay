@@ -4,18 +4,14 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 
-/**
- * Expressive motion scheme for Material Design 3 Expressive.
- *
- * Uses bouncier springs for spatial animations (position, size, shape)
- * and snappier tweens for effects (alpha, color) to create fluid,
- * lively motion throughout the app.
- */
 @Suppress("UNCHECKED_CAST")
 internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
-    // Spatial specs — bouncier for expressive feel
     private val defaultSpatialSpec = spring<Any>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
@@ -31,7 +27,6 @@ internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
         stiffness = 800f
     )
 
-    // Effects specs — snappy tweens with expressive easing
     private val defaultEffectsSpec = tween<Any>(
         durationMillis = 350,
         easing = FancyTransitionEasing
@@ -65,3 +60,30 @@ internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
     override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> =
         slowEffectsSpec as FiniteAnimationSpec<T>
 }
+
+@Composable
+fun defaultSpatialSpring() = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+
+@Composable
+fun fastSpatialSpring() = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+
+@Composable
+fun slowSpatialSpring() = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+
+@Composable
+fun defaultEffectsTween() = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+
+@Composable
+fun fastEffectsTween() = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+
+@Composable
+fun slowEffectsTween() = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+
+@Composable
+fun defaultSpatialSpringDp() = MaterialTheme.motionScheme.defaultSpatialSpec<Dp>()
+
+@Composable
+fun fastSpatialSpringDp() = MaterialTheme.motionScheme.fastSpatialSpec<Dp>()
+
+@Composable
+fun defaultContentSizeSpec() = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()

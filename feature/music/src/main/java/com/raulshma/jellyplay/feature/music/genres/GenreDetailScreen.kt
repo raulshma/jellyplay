@@ -78,8 +78,8 @@ fun GenreDetailScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = headerVisible,
-                enter = fadeIn(tween(AnimationTokens.SlowDuration, easing = AlphaEasing)) + slideInVertically(
-                    tween(AnimationTokens.SlowDuration, easing = FancyTransitionEasing),
+                enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
+                    tween(500, easing = FancyTransitionEasing),
                     initialOffsetY = { -40 },
                 ),
             ) {

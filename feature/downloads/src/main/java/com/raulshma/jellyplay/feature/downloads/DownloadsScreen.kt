@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -35,15 +34,17 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +69,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
@@ -87,8 +88,10 @@ fun DownloadsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        MediumTopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Downloads")
@@ -103,6 +106,7 @@ fun DownloadsScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                 }
             },
+            scrollBehavior = scrollBehavior,
         )
 
         if (viewModel.totalStorageBytes > 0) {
@@ -141,10 +145,10 @@ fun DownloadsScreen(
                     AnimatedVisibility(
                         visible = visible.value,
                         enter = fadeIn(
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = AlphaEasing)
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
                             initialOffsetY = { it / 10 },
-                            animationSpec = tween(AnimationTokens.MediumDuration, delayMillis = (index % 12) * 50, easing = FancyTransitionEasing),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         ),
                     ) {
                         DownloadItemRow(
@@ -188,11 +192,11 @@ private fun DownloadItemRow(
     } else 0f
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
-        animationSpec = tween(AnimationTokens.MediumDuration, easing = AlphaEasing),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "downloadProgress",
     )
 
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusable().clickable(enabled = item.status == DownloadStatus.COMPLETED, onClick = onClick),
@@ -244,7 +248,7 @@ private fun DownloadItemRow(
                 Spacer(Modifier.height(2.dp))
                 when (item.status) {
                     DownloadStatus.DOWNLOADING -> {
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             progress = { animatedProgress },
                             modifier = Modifier.fillMaxWidth(),
                         )
