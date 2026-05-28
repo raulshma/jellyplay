@@ -105,6 +105,7 @@ import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerShee
 import com.raulshma.jellyplay.feature.player.video.components.TapToTranslateSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
+import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
 import com.raulshma.jellyplay.feature.player.video.findActivity
 import com.raulshma.jellyplay.feature.player.video.subtitle.VttTagParser
 import kotlinx.coroutines.delay
@@ -184,6 +185,7 @@ fun VideoPlayerScreen(
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     val mpvSubtitleText = uiState.currentSubtitleText
         ?.takeIf { uiState.usesSubtitleOverlay && it.isNotBlank() }
 
@@ -780,6 +782,7 @@ fun VideoPlayerScreen(
                 if (duration > 0) doSeekTo(seekPositionMs)
             },
             onSeekPositionChange = { positionMs -> seekPositionMs = positionMs },
+            tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
             onBack = onBack,
             onSpeedClick = { currentSheet = PlayerSheet.Speed },
             onAudioClick = { currentSheet = PlayerSheet.Audio },
@@ -832,6 +835,9 @@ fun VideoPlayerScreen(
             sleepTimerActive = uiState.sleepTimerActive,
             sleepTimerDisplayText = if (uiState.sleepTimerEndOfEpisode) "End of episode" else formatDuration(uiState.sleepTimerRemainingMs),
             onSleepTimerClick = { currentSheet = PlayerSheet.SleepTimer },
+            supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
+            videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig(),
+            onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
             onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
@@ -878,6 +884,14 @@ fun VideoPlayerScreen(
             delay(1000)
             gestureTrickplayVisible = false
             gestureTrickplayBitmap = null
+        }
+    }
+
+    LaunchedEffect(isTv, isSeeking, seekPositionMs) {
+        if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            tvTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
+        } else if (!isSeeking) {
+            tvTrickplayBitmap = null
         }
     }
 
@@ -1273,6 +1287,13 @@ private fun PlayerSheetRouter(
                 onSelectDuration = { viewModel.startSleepTimer(it) },
                 onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
                 onCancel = { viewModel.cancelSleepTimer() },
+                onDismiss = dismissSheet,
+            )
+        }
+        is PlayerSheet.VideoFilter -> {
+            VideoFilterSheet(
+                currentEffects = uiState.videoEffects,
+                onEffectsChange = { viewModel.setVideoEffects(it) },
                 onDismiss = dismissSheet,
             )
         }

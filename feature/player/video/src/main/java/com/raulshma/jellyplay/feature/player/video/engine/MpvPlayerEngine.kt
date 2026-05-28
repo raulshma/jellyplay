@@ -70,6 +70,7 @@ class MpvPlayerEngine(
         supportsNightMode = true,
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
+        supportsVideoFilters = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -396,7 +397,9 @@ class MpvPlayerEngine(
             } else {
                 mpvView?.mpv?.command("af", "clr", "")
             }
-            
+
+            applyVideoFilters(config.videoEffects)
+
             val sid = audioSessionId
             if (sid != 0) {
                 dialogueBoost.attach(sid)
@@ -414,6 +417,30 @@ class MpvPlayerEngine(
                 channelMix.attach(sid)
                 channelMix.setMode(config.audioEffects.channelMixMode)
                 channelMix.setEnabled(config.audioEffects.channelMixEnabled)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun applyVideoFilters(effects: VideoEffectsConfig) {
+        try {
+            val filters = mutableListOf<String>()
+            val hasBrightness = effects.brightness != 0f
+            val hasContrast = effects.contrast != 1f
+            val hasSaturation = effects.saturation != 1f
+            if (hasBrightness || hasContrast || hasSaturation) {
+                val eqParts = mutableListOf<String>()
+                if (hasBrightness) eqParts.add("brightness=${effects.brightness}")
+                if (hasContrast) eqParts.add("contrast=${effects.contrast}")
+                if (hasSaturation) eqParts.add("saturation=${effects.saturation}")
+                filters.add("eq=${eqParts.joinToString(":")}")
+            }
+            if (effects.sharpness > 0f) {
+                filters.add("unsharp=5:5:${(effects.sharpness * 1.5f).coerceIn(0.5f, 3.0f)}")
+            }
+            if (filters.isNotEmpty()) {
+                mpvView?.mpv?.setPropertyString("vf", filters.joinToString(","))
+            } else {
+                mpvView?.mpv?.command("vf", "clr", "")
             }
         } catch (_: Exception) {}
     }

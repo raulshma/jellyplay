@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 class TrickplayManager(
@@ -30,12 +31,33 @@ class TrickplayManager(
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
+    private var localCacheDir: File? = null
+    private var persistDir: File? = null
 
     fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
+        this.localCacheDir = null
+        this.persistDir = null
+    }
+
+    fun initializeWithCache(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
+        clear()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        this.itemId = itemId
+        this.info = trickplayInfo
+        this.localCacheDir = null
+        this.persistDir = cacheDir.apply { mkdirs() }
+    }
+
+    fun initializeLocal(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
+        clear()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        this.itemId = itemId
+        this.info = trickplayInfo
+        this.localCacheDir = cacheDir
     }
 
     suspend fun getThumbnail(positionMs: Long): Bitmap? {
@@ -81,8 +103,24 @@ class TrickplayManager(
         return mutex.withLock {
             spriteSheetCache.get(sheetIndex)?.let { return@withLock it }
 
-            val data = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
-                ?: return@withLock null
+            val localDir = localCacheDir
+            val localFile = if (localDir != null) File(localDir, "trickplay_${sheetIndex}.jpg") else null
+            val persistDirectory = persistDir
+            val data = if (localFile != null && localFile.exists()) {
+                localFile.readBytes()
+            } else {
+                val fetched = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
+                    ?: return@withLock null
+                if (persistDirectory != null) {
+                    scope.launch {
+                        try {
+                            persistDirectory.mkdirs()
+                            File(persistDirectory, "trickplay_${sheetIndex}.jpg").writeBytes(fetched)
+                        } catch (_: Exception) { }
+                    }
+                }
+                fetched
+            }
 
             val options = BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.RGB_565
@@ -138,20 +176,18 @@ class TrickplayManager(
         preloadJob?.cancel()
         preloadJob = null
 
-        val it = thumbnailCache.snapshot().values.iterator()
-        while (it.hasNext()) {
-            it.next().recycle()
-        }
+        val thumbnails = thumbnailCache.snapshot().values.toList()
         thumbnailCache.evictAll()
+        thumbnails.forEach { it.recycle() }
 
-        val it2 = spriteSheetCache.snapshot().values.iterator()
-        while (it2.hasNext()) {
-            it2.next().recycle()
-        }
+        val sheets = spriteSheetCache.snapshot().values.toList()
         spriteSheetCache.evictAll()
+        sheets.forEach { it.recycle() }
 
         info = null
         itemId = null
+        localCacheDir = null
+        persistDir = null
         sheetMutexes.clear()
         scope.cancel()
     }

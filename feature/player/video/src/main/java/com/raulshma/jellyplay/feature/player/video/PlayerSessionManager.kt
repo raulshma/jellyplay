@@ -39,6 +39,7 @@ data class PlayerSessionState(
     val playMethodString: String = "Direct Play",
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
     val isReady: Boolean = false,
+    val offlineTrickplayDir: java.io.File? = null,
 )
 
 class PlayerSessionManager(
@@ -125,7 +126,15 @@ class PlayerSessionManager(
             )
 
             initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
-            _sessionState.update { it.copy(isReady = true, mediaDetail = detail) }
+
+            val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
+                .getLocalTrickplayDir(localDownload.downloadPath)
+
+            _sessionState.update { it.copy(
+                isReady = true,
+                mediaDetail = detail,
+                offlineTrickplayDir = trickplayDir,
+            ) }
             return
         }
 

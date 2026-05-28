@@ -100,11 +100,18 @@ fun VideoStatsOverlay(
             if (stats.estimatedBandwidthBps > 0) {
                 StatsRow("Est. Bandwidth", formatBandwidth(stats.estimatedBandwidthBps))
             }
+            StatsRow("Stream Bitrate", formatBitrate(
+                stats.videoBitrate ?: (stats.audioBitrate ?: 0)
+            ))
         }
 
         if (stats.droppedFrames > 0) {
             StatsSection("Performance") {
                 StatsRow("Dropped Frames", "${stats.droppedFrames}")
+            }
+        } else {
+            StatsSection("Performance") {
+                StatsRow("Dropped Frames", "0")
             }
         }
 

@@ -19,4 +19,5 @@ sealed class PlayerSheet {
     data object SyncPlay : PlayerSheet()
     data object Quality : PlayerSheet()
     data object SleepTimer : PlayerSheet()
+    data object VideoFilter : PlayerSheet()
 }

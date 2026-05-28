@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 data class VideoPlayerUiState(
     val title: String = "",
     val subtitle: String = "",
@@ -103,6 +104,7 @@ data class VideoPlayerUiState(
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerLastUsedDurationMs: Long = 0L,
+    val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
 ) {
 
     companion object {
