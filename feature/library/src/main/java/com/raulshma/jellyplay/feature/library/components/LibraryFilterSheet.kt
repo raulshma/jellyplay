@@ -367,6 +367,7 @@ private fun GlassFilterChip(
 private fun MediaType.displayName(): String = when (this) {
     MediaType.MOVIE -> "Movies"
     MediaType.SERIES -> "TV Shows"
+    MediaType.SEASON -> "Seasons"
     MediaType.EPISODE -> "Episodes"
     MediaType.MUSIC -> "Music"
     MediaType.AUDIO -> "Audio"

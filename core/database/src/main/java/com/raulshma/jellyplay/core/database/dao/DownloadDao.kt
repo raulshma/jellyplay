@@ -50,4 +50,22 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET totalSizeBytes = :totalSize WHERE id = :id")
     suspend fun updateTotalSize(id: String, totalSize: Long)
+
+    @Query("SELECT * FROM downloads WHERE seriesId = :seriesId AND status = 'COMPLETED'")
+    fun getCompletedDownloadsForSeries(seriesId: String): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads WHERE seasonId = :seasonId AND status = 'COMPLETED'")
+    fun getCompletedDownloadsForSeason(seasonId: String): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId AND status = 'COMPLETED'")
+    suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE status = :status")
+    fun getDownloadsByStatus(status: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
+    suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE seasonId = :seasonId")
+    suspend fun getDownloadsForSeason(seasonId: String): List<DownloadEntity>
 }

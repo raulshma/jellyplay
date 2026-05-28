@@ -139,6 +139,8 @@ dependencies {
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
 
+    implementation(libs.work.runtime.ktx)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)

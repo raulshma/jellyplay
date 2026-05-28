@@ -64,6 +64,7 @@ fun ServerListScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             MediumTopAppBar(title = { Text("JellyPlay") }, scrollBehavior = scrollBehavior)
         },

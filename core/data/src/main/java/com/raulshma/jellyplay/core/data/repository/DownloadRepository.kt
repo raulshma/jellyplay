@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.flow.Flow
 
 interface DownloadRepository {
@@ -21,6 +22,12 @@ interface DownloadRepository {
         downloadUrl: String,
         imageUrl: String?,
         imageBlurHash: String? = null,
+        seriesId: String? = null,
+        seasonId: String? = null,
+        seriesName: String? = null,
+        seasonName: String? = null,
+        episodeNumber: Int? = null,
+        seasonNumber: Int? = null,
     ): Result<DownloadItem>
 
     suspend fun cancelDownload(id: String): Result<Unit>
@@ -34,4 +41,11 @@ interface DownloadRepository {
     suspend fun retryDownload(id: String): Result<Unit>
 
     suspend fun getTotalDownloadedBytes(): Long
+
+    suspend fun saveOfflineMediaItem(item: com.raulshma.jellyplay.core.model.MediaItem, imageUrl: String?, backdropUrl: String?)
+
+    suspend fun downloadSeries(
+        seriesId: String,
+        seasonIds: List<String>? = null,
+    ): Result<List<String>>
 }

@@ -5,6 +5,7 @@ import android.net.Uri
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -46,6 +47,7 @@ class PlayerSessionManager(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
     private val preferencesStore: UserPreferencesStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
@@ -78,6 +80,54 @@ class PlayerSessionManager(
 
     suspend fun loadMedia(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
+
+        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+        val localFile = localDownload?.let {
+            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
+        }
+
+        if (localDownload != null && localFile != null &&
+            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
+        ) {
+            val offlineItem = offlineRepository.getOfflineItem(itemId)
+            val title = offlineItem?.name ?: localDownload.name
+            val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
+            val url = Uri.fromFile(localFile).toString()
+
+            _sessionState.update {
+                it.copy(
+                    title = title,
+                    subtitle = subtitle,
+                    playMethodString = "Offline",
+                    playMethod = PlayMethod.DIRECT_PLAY,
+                )
+            }
+
+            val prefs = preferencesStore.preferences.first()
+            val playerType = prefs.preferredPlayer
+
+            if (playerType == PlayerType.EXTERNAL) {
+                _sessionState.update { it.copy(isReady = true) }
+                return
+            }
+
+            val detail = com.raulshma.jellyplay.core.model.MediaDetail(
+                item = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = itemId,
+                    name = title,
+                    mediaType = localDownload.mediaType,
+                    overview = offlineItem?.overview,
+                    seriesName = offlineItem?.seriesName,
+                    runTimeTicks = offlineItem?.runTimeTicks,
+                ),
+                mediaSources = emptyList(),
+                chapters = emptyList(),
+            )
+
+            initializeEngine(playerType, detail, null, url, startPositionTicks, prefs)
+            _sessionState.update { it.copy(isReady = true, mediaDetail = detail) }
+            return
+        }
 
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
@@ -117,23 +167,11 @@ class PlayerSessionManager(
             )
         }
 
-        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-        val file = localDownload?.let {
-            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
-        }
-        
-        val url = if (localDownload != null && file != null &&
-            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-        ) {
-            _sessionState.update { it.copy(playMethodString = "Offline", playMethod = PlayMethod.DIRECT_PLAY) }
-            Uri.fromFile(file).toString()
-        } else {
-            playbackRepository.getStreamUrl(
-                itemId,
-                source?.id ?: "",
-                startPositionTicks,
-            )
-        }
+        val url = playbackRepository.getStreamUrl(
+            itemId,
+            source?.id ?: "",
+            startPositionTicks,
+        )
 
         val prefs = preferencesStore.preferences.first()
         val playerType = prefs.preferredPlayer

@@ -77,6 +77,51 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN seriesId TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN seasonId TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN seriesName TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN seasonName TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN episodeNumber INTEGER")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN seasonNumber INTEGER")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS offline_media (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    mediaType TEXT NOT NULL,
+                    overview TEXT,
+                    year INTEGER,
+                    communityRating REAL,
+                    officialRating TEXT,
+                    runTimeTicks INTEGER,
+                    parentId TEXT,
+                    seriesId TEXT,
+                    seasonId TEXT,
+                    seriesName TEXT,
+                    seasonName TEXT,
+                    episodeNumber INTEGER,
+                    seasonNumber INTEGER,
+                    indexNumber INTEGER,
+                    childCount INTEGER,
+                    posterPath TEXT,
+                    backdropPath TEXT,
+                    blurHashPrimary TEXT,
+                    blurHashBackdrop TEXT,
+                    premiereDate TEXT,
+                    genres TEXT,
+                    createdAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_parentId ON offline_media(parentId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seriesId ON offline_media(seriesId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seasonId ON offline_media(seasonId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_mediaType ON offline_media(mediaType)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(
@@ -86,7 +131,7 @@ object DatabaseModule {
         JellyPlayDatabase::class.java,
         "jellyplay.db",
     )
-        .addMigrations(MIGRATION_2_3, MIGRATION_4_5, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+        .addMigrations(MIGRATION_2_3, MIGRATION_4_5, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
         .fallbackToDestructiveMigration(true)
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .build()
@@ -102,4 +147,7 @@ object DatabaseModule {
 
     @Provides
     fun provideLyricsCacheDao(database: JellyPlayDatabase) = database.lyricsCacheDao()
+
+    @Provides
+    fun provideOfflineMediaDao(database: JellyPlayDatabase) = database.offlineMediaDao()
 }

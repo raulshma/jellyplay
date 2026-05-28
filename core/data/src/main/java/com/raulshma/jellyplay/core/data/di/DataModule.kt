@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import dagger.Binds
@@ -33,4 +35,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindOfflineRepository(impl: OfflineRepositoryImpl): OfflineRepository
 }
