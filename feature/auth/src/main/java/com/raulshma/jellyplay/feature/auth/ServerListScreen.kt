@@ -23,7 +23,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -59,12 +59,12 @@ fun ServerListScreen(
     val servers by viewModel.servers.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(title = { Text("JellyPlay") }, scrollBehavior = scrollBehavior)
+            TopAppBar(title = { Text("JellyPlay") }, scrollBehavior = scrollBehavior)
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(

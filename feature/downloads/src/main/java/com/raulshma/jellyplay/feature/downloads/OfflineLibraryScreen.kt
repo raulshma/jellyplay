@@ -25,7 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
@@ -61,7 +61,7 @@ fun OfflineLibraryScreen(
 ) {
     val items by viewModel.offlineLibrary.collectAsStateWithLifecycle(initialValue = emptyList())
     val isLoading = viewModel.isLoading
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv = false)
 
@@ -71,7 +71,7 @@ fun OfflineLibraryScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         Column(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-            MediumTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = "Downloaded",

@@ -24,7 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -68,7 +68,7 @@ fun OfflineSeriesScreen(
     val seriesItem by viewModel.seriesItem.collectAsStateWithLifecycle(initialValue = null)
     val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv = false)
 
@@ -86,7 +86,7 @@ fun OfflineSeriesScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         Column(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-            MediumTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = seriesItem?.name ?: "Loading...",

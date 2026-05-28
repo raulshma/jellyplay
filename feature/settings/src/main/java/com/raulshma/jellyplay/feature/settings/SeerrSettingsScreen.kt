@@ -47,7 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -84,12 +84,12 @@ fun SeerrSettingsScreen(
     val isTesting = viewModel.isTesting
     val isConnected = connectionStatus is ConnectionStatus.Connected
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = { Text("Seerr") },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {

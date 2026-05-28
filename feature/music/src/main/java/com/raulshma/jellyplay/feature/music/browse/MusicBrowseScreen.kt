@@ -18,7 +18,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -67,12 +67,12 @@ fun MusicBrowseScreen(
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(title = { Text("Browse Music") }, scrollBehavior = scrollBehavior)
+            TopAppBar(title = { Text("Browse Music") }, scrollBehavior = scrollBehavior)
         },
     ) { padding ->
         Column(
