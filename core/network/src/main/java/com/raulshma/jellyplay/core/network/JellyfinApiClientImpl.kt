@@ -1,14 +1,20 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
+import com.raulshma.jellyplay.core.model.DeviceCapabilities
+import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -21,10 +27,18 @@ import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
+import com.raulshma.jellyplay.core.model.SessionPlayState
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.SystemInfo
+import com.raulshma.jellyplay.core.model.TaskExecutionInfo
+import com.raulshma.jellyplay.core.model.TaskState
+import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Dispatchers
@@ -1969,8 +1983,278 @@ class JellyfinApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun getSystemInfo(): Result<SystemInfo> = apiResult {
+        val dto = requireApi().systemApi.getSystemInfo().content
+        SystemInfo(
+            serverName = dto.serverName ?: "",
+            version = dto.version ?: "",
+            productName = dto.productName ?: "",
+            id = dto.id?.toString() ?: "",
+            localAddress = dto.localAddress ?: "",
+            wanAddress = "",
+            operatingSystem = dto.operatingSystem ?: "",
+            operatingSystemDisplayName = dto.operatingSystemDisplayName ?: "",
+            hasPendingRestart = dto.hasPendingRestart,
+            isShuttingDown = dto.isShuttingDown,
+            startupWizardCompleted = dto.startupWizardCompleted ?: true,
+            webSocketPortNumber = dto.webSocketPortNumber,
+            packageName = dto.packageName ?: "",
+            canSelfRestart = dto.canSelfRestart ?: false,
+            canLaunchWebBrowser = dto.canLaunchWebBrowser ?: false,
+            transcodingTempPath = dto.transcodingTempPath ?: "",
+            cachePath = dto.cachePath ?: "",
+            logPath = dto.logPath ?: "",
+            internalMetadataPath = dto.internalMetadataPath ?: "",
+        )
+    }
+
+    override suspend fun getItemCounts(): Result<ItemCounts> = apiResult {
+        val dto = requireApi().libraryApi.getItemCounts().content
+        ItemCounts(
+            movieCount = dto.movieCount.toLong(),
+            seriesCount = dto.seriesCount.toLong(),
+            episodeCount = dto.episodeCount.toLong(),
+            albumCount = dto.albumCount.toLong(),
+            songCount = dto.songCount.toLong(),
+            musicVideoCount = dto.musicVideoCount.toLong(),
+            bookCount = dto.bookCount.toLong(),
+            totalCount = dto.movieCount.toLong() + dto.seriesCount.toLong() +
+                    dto.episodeCount.toLong() + dto.albumCount.toLong() +
+                    dto.songCount.toLong() + dto.musicVideoCount.toLong() +
+                    dto.bookCount.toLong(),
+        )
+    }
+
+    override suspend fun restartServer(): Result<Unit> = apiResult {
+        requireApi().systemApi.restartApplication()
+    }
+
+    override suspend fun shutdownServer(): Result<Unit> = apiResult {
+        requireApi().systemApi.shutdownApplication()
+    }
+
+    override suspend fun getScheduledTasks(isHidden: Boolean?, isEnabled: Boolean?): Result<List<ScheduledTaskInfo>> = apiResult {
+        val response = requireApi().scheduledTasksApi.getTasks(
+            isHidden = isHidden,
+            isEnabled = isEnabled,
+        ).content ?: emptyList()
+        response.mapNotNull { dto ->
+            try { dto.toTaskModel() } catch (_: Exception) { null }
+        }
+    }
+
+    override suspend fun getScheduledTask(taskId: String): Result<ScheduledTaskInfo> = apiResult {
+        requireApi().scheduledTasksApi.getTask(taskId = taskId).content.toTaskModel()
+    }
+
+    override suspend fun startTask(taskId: String): Result<Unit> = apiResult {
+        requireApi().scheduledTasksApi.startTask(taskId = taskId)
+    }
+
+    override suspend fun cancelTask(taskId: String): Result<Unit> = apiResult {
+        requireApi().scheduledTasksApi.stopTask(taskId = taskId)
+    }
+
+    override suspend fun updateTaskTriggers(taskId: String, triggers: List<TaskTriggerInfo>): Result<Unit> = apiResult {
+        val sdkTriggers = triggers.map { trigger ->
+            org.jellyfin.sdk.model.api.TaskTriggerInfo(
+                type = org.jellyfin.sdk.model.api.TaskTriggerInfoType.entries.find { it.serialName.equals(trigger.type, ignoreCase = true) }
+                    ?: org.jellyfin.sdk.model.api.TaskTriggerInfoType.INTERVAL_TRIGGER,
+                timeOfDayTicks = trigger.timeOfDayTicks,
+                intervalTicks = trigger.intervalTicks,
+                dayOfWeek = trigger.dayOfWeek?.let { dow ->
+                    org.jellyfin.sdk.model.api.DayOfWeek.entries.find { it.serialName.equals(dow, ignoreCase = true) }
+                },
+                maxRuntimeTicks = trigger.maxRuntimeTicks,
+            )
+        }
+        requireApi().scheduledTasksApi.updateTask(taskId = taskId, data = sdkTriggers)
+    }
+
+    override suspend fun getDevices(userId: String?): Result<List<DeviceInfo>> = apiResult {
+        val response = requireApi().devicesApi.getDevices(
+            userId = userId?.toUUID(),
+        ).content
+        response.items.mapNotNull { dto ->
+            try { dto.toDeviceModel() } catch (_: Exception) { null }
+        }
+    }
+
+    override suspend fun getDeviceInfo(deviceId: String): Result<DeviceInfo> = apiResult {
+        requireApi().devicesApi.getDeviceInfo(id = deviceId).content.toDeviceModel()
+    }
+
+    override suspend fun updateDeviceOptions(deviceId: String, customName: String?): Result<Unit> = apiResult {
+        requireApi().devicesApi.updateDeviceOptions(
+            id = deviceId,
+            data = org.jellyfin.sdk.model.api.DeviceOptionsDto(
+                id = 0,
+                deviceId = deviceId,
+                customName = customName,
+            ),
+        )
+    }
+
+    override suspend fun deleteDevice(deviceId: String): Result<Unit> = apiResult {
+        requireApi().devicesApi.deleteDevice(
+            id = deviceId,
+        )
+    }
+
+    override suspend fun getLogFiles(): Result<List<LogFile>> = apiResult {
+        val logs = requireApi().systemApi.getServerLogs().content
+        logs.map { it.toLogFileModel() }
+    }
+
+    override suspend fun getLogFileContent(fileName: String): Result<String> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = "${server.address}/System/Logs/Log?name=${java.net.URLEncoder.encode(fileName, "UTF-8")}"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("Failed to get log file: ${response.code}")
+            response.body?.string() ?: ""
+        }
+    }
+
+    override suspend fun getActivityLogEntries(
+        startIndex: Int?,
+        limit: Int?,
+        minDate: String?,
+        hasUserId: Boolean?,
+    ): Result<List<ActivityLogEntry>> = apiResult {
+        val result = requireApi().activityLogApi.getLogEntries(
+            startIndex = startIndex,
+            limit = limit,
+            minDate = minDate?.let { java.time.LocalDateTime.parse(it) },
+            hasUserId = hasUserId,
+        ).content
+        result.items.map { it.toActivityModel() }
+    }
+
+    override suspend fun getSessions(): Result<List<SessionInfo>> = apiResult {
+        val sessions = requireApi().sessionApi.getSessions().content
+        sessions.map { it.toSessionModel() }
+    }
+
     private fun okHttp3MultipartBody(bytes: ByteArray): okhttp3.RequestBody =
         bytes.toRequestBody("image/*".toMediaType())
+
+    private fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskInfo(
+        id = id?.toString() ?: "",
+        name = name ?: "",
+        state = when (state) {
+            org.jellyfin.sdk.model.api.TaskState.RUNNING -> TaskState.RUNNING
+            org.jellyfin.sdk.model.api.TaskState.CANCELLING -> TaskState.CANCELLING
+            else -> TaskState.IDLE
+        },
+        isHidden = isHidden,
+        isEnabled = true,
+        triggers = triggers?.map { it.toTriggerModel() } ?: emptyList(),
+        lastExecutionResult = lastExecutionResult?.toExecutionModel(),
+        currentProgressPercentage = currentProgressPercentage,
+        description = description,
+        category = category,
+    )
+
+    private fun org.jellyfin.sdk.model.api.TaskTriggerInfo.toTriggerModel() = TaskTriggerInfo(
+        type = type.serialName,
+        timeOfDayTicks = timeOfDayTicks,
+        intervalTicks = intervalTicks,
+        dayOfWeek = dayOfWeek?.serialName,
+        maxRuntimeTicks = maxRuntimeTicks,
+    )
+
+    private fun org.jellyfin.sdk.model.api.TaskResult.toExecutionModel() = TaskExecutionInfo(
+        name = name ?: "",
+        key = key ?: "",
+        startTimeUtc = startTimeUtc.toString(),
+        endTimeUtc = endTimeUtc.toString(),
+        status = status.serialName,
+        errorMessage = errorMessage,
+    )
+
+    private fun org.jellyfin.sdk.model.api.DeviceInfoDto.toDeviceModel() = DeviceInfo(
+        id = id?.toString() ?: "",
+        name = name ?: "",
+        customName = customName,
+        appName = appName ?: "",
+        appVersion = appVersion ?: "",
+        lastUserName = lastUserName ?: "",
+        lastUserId = lastUserId?.toString() ?: "",
+        dateLastActivity = dateLastActivity?.toString() ?: "",
+        iconUrl = iconUrl,
+        capabilities = capabilities.let { it.toCapabilitiesModel() },
+    )
+
+    private fun org.jellyfin.sdk.model.api.ClientCapabilitiesDto.toCapabilitiesModel() = DeviceCapabilities(
+        playableMediaTypes = playableMediaTypes.map { it.serialName },
+        supportedCommands = supportedCommands.map { it.serialName },
+        supportsMediaControl = supportsMediaControl,
+        supportsContentUploading = false,
+    )
+
+    private fun org.jellyfin.sdk.model.api.LogFile.toLogFileModel() = LogFile(
+        name = name,
+        dateModified = dateModified.toString(),
+        size = size,
+        contentType = "text/plain",
+    )
+
+    private fun org.jellyfin.sdk.model.api.ActivityLogEntry.toActivityModel() = ActivityLogEntry(
+        id = id,
+        name = name,
+        type = type,
+        userId = userId.toString(),
+        overview = overview,
+        shortOverview = shortOverview,
+        itemId = itemId,
+        date = date.toString(),
+        severity = when (severity) {
+            org.jellyfin.sdk.model.api.LogLevel.TRACE -> ActivityLogSeverity.TRACE
+            org.jellyfin.sdk.model.api.LogLevel.DEBUG -> ActivityLogSeverity.DEBUG
+            org.jellyfin.sdk.model.api.LogLevel.WARNING -> ActivityLogSeverity.WARNING
+            org.jellyfin.sdk.model.api.LogLevel.ERROR -> ActivityLogSeverity.ERROR
+            org.jellyfin.sdk.model.api.LogLevel.CRITICAL -> ActivityLogSeverity.FATAL
+            else -> ActivityLogSeverity.INFORMATION
+        },
+    )
+
+    private fun org.jellyfin.sdk.model.api.SessionInfoDto.toSessionModel() = SessionInfo(
+        id = id?.toString() ?: "",
+        userId = userId.toString(),
+        userName = userName ?: "",
+        client = client ?: "",
+        lastActivityDate = lastActivityDate.toString(),
+        lastPlaybackCheckIn = lastPlaybackCheckIn?.toString(),
+        deviceName = deviceName ?: "",
+        deviceType = deviceType ?: "",
+        nowPlayingItem = nowPlayingItem?.toSessionItemModel(),
+        playState = playState?.toSessionPlayStateModel(),
+        isActive = isActive,
+        supportsRemoteControl = supportsRemoteControl,
+    )
+
+    private fun org.jellyfin.sdk.model.api.BaseItemDto.toSessionItemModel() = SessionNowPlayingItem(
+        id = id?.toString() ?: "",
+        name = name ?: "",
+        type = type.serialName,
+        mediaType = mediaType?.serialName,
+        runTimeTicks = runTimeTicks,
+        primaryImageTag = imageTags?.entries?.firstOrNull()?.value,
+    )
+
+    private fun org.jellyfin.sdk.model.api.PlayerStateInfo.toSessionPlayStateModel() = SessionPlayState(
+        positionTicks = positionTicks,
+        isPaused = isPaused,
+        isMuted = isMuted,
+        volumeLevel = volumeLevel,
+        repeatMode = repeatMode.serialName,
+        playMethod = playMethod?.serialName,
+    )
 }
 
 @kotlinx.serialization.Serializable
