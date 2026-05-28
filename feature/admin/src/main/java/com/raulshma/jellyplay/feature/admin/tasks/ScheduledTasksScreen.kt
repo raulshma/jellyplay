@@ -27,7 +27,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -107,7 +109,8 @@ fun ScheduledTasksScreen(
                     modifier = Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center,
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                    LoadingIndicator()
                 }
             }
             state.error != null -> {
@@ -285,7 +288,8 @@ private fun TaskItem(
                 val progress = task.currentProgressPercentage
                 if (progress != null) {
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
+                    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                    LinearWavyProgressIndicator(
                         progress = { (progress / 100).toFloat() },
                         modifier = Modifier
                             .fillMaxWidth()

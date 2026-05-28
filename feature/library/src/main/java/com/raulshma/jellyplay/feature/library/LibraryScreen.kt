@@ -487,7 +487,8 @@ fun LibraryScreen(
                                 .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            androidx.compose.material3.LinearProgressIndicator(
+                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                            androidx.compose.material3.LinearWavyProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth(0.4f)
                                     .clip(ShapeCache.smooth4),

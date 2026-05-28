@@ -55,9 +55,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1630,9 +1632,10 @@ private fun DetailActionButtons(
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                CircularProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                                LinearWavyProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp))
                             } else {
-                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                                LoadingIndicator(modifier = Modifier.size(22.dp))
                             }
                         } else if (isDownloadCompleted) {
                             Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1662,7 +1665,8 @@ private fun DetailActionButtons(
                             ) { onDownloadSeriesClick() }
                     ) {
                         if (isDownloadingSeries) {
-                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                            LoadingIndicator(modifier = Modifier.size(22.dp))
                         } else {
                             Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
@@ -1797,9 +1801,10 @@ private fun DetailActionButtons(
                 ) {
                     if (isDownloading || dlActive) {
                         if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
-                            CircularProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            LinearWavyProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp))
                         } else {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                            LoadingIndicator(modifier = Modifier.size(24.dp))
                         }
                     } else if (dlCompleted) {
                         Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1826,7 +1831,8 @@ private fun DetailActionButtons(
                         ) { onDownloadSeriesClick() }
                 ) {
                     if (isDownloadingSeries) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                        LoadingIndicator(modifier = Modifier.size(24.dp))
                     } else {
                         Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }

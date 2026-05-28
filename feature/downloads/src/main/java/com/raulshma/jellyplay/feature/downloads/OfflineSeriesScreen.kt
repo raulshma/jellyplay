@@ -18,11 +18,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
@@ -380,7 +381,8 @@ private fun OfflineEpisodeRow(
                 val progress = if (episode.totalSizeBytes > 0) {
                     episode.downloadedBytes.toFloat() / episode.totalSizeBytes
                 } else 0f
-                LinearProgressIndicator(
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                LinearWavyProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -400,9 +402,9 @@ private fun OfflineEpisodeRow(
                 )
             }
         } else if (episode.downloadStatus == DownloadStatus.DOWNLOADING) {
-            CircularProgressIndicator(
+            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+            LoadingIndicator(
                 modifier = Modifier.size(24.dp),
-                strokeWidth = 2.dp,
             )
         }
 

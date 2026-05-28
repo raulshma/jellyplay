@@ -28,7 +28,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
@@ -198,7 +200,8 @@ private fun LogFilesTab(
                 )
             }
             if (isLoadingContent) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
                 val listState = rememberLazyListState()
                 LazyColumn(
@@ -379,9 +382,9 @@ private fun ActivityLogTab(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        androidx.compose.material3.CircularProgressIndicator(
+                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                        LoadingIndicator(
                             modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
                         )
                     }
                 }

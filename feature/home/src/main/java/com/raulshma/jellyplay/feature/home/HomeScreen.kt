@@ -74,7 +74,6 @@ import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -1591,9 +1590,9 @@ private fun HomeSearchResultsOverlay(
                         .height(80.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator(
+                    @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+                    androidx.compose.material3.LoadingIndicator(
                         modifier = Modifier.size(28.dp),
-                        strokeWidth = 2.5.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -1711,9 +1710,9 @@ private fun HomeSearchResultsOverlay(
                                     .height(48.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                androidx.compose.material3.CircularProgressIndicator(
+                                @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+                                androidx.compose.material3.LoadingIndicator(
                                     modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                                 )
                             }
@@ -2308,7 +2307,8 @@ private fun OfflineHomeContent(
                             val progress = if (offlineItem.totalSizeBytes > 0) {
                                 offlineItem.downloadedBytes.toFloat() / offlineItem.totalSizeBytes
                             } else 0f
-                            LinearProgressIndicator(
+                            @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+                            androidx.compose.material3.LinearWavyProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier
                                     .fillMaxWidth()
