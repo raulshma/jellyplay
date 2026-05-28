@@ -14,7 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -126,7 +127,8 @@ private fun TaskItem(
                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 label = "taskProgress",
             )
-            LinearProgressIndicator(
+            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+            LinearWavyProgressIndicator(
                 progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()

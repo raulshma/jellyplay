@@ -182,9 +182,9 @@ fun ServerHeroHeader(
                     modifier = Modifier.weight(1f),
                 ) {
                     if (isRestarting) {
-                        androidx.compose.material3.CircularProgressIndicator(
+                        @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+                        androidx.compose.material3.ContainedLoadingIndicator(
                             modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
                         )
                         Spacer(Modifier.width(8.dp))
                     }

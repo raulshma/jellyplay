@@ -148,7 +148,8 @@ fun DevicesScreen(
                     modifier = Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center,
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+                    androidx.compose.material3.LoadingIndicator()
                 }
             }
             state.error != null -> {
