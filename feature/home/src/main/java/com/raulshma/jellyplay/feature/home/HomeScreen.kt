@@ -2125,32 +2125,6 @@ private fun OfflineHomeContent(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(
-                    Icons.Default.Download,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "Offline Mode",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = onGoOnline) {
-                    Text("Go Online")
-                }
-            }
-        }
-
         if (offlineLibrary.isEmpty()) {
             item {
                 Box(
@@ -2252,11 +2226,46 @@ private fun OfflineHomeContent(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (offlineItem.year != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp),
+                        ) {
+                            if (offlineItem.year != null) {
+                                Text(
+                                    text = offlineItem.year.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                            }
+                            if (offlineItem.communityRating != null && offlineItem.communityRating!! > 0) {
+                                if (offlineItem.year != null) {
+                                    Text(
+                                        text = " · ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                    )
+                                }
+                                Text(
+                                    text = "★ ${String.format("%.1f", offlineItem.communityRating)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                            }
+                            if (!offlineItem.officialRating.isNullOrBlank()) {
+                                Text(
+                                    text = " · ${offlineItem.officialRating}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                )
+                            }
+                        }
+                        if (offlineItem.genres.isNotEmpty()) {
                             Text(
-                                text = offlineItem.year.toString(),
+                                text = offlineItem.genres.take(3).joinToString(", "),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         if (offlineItem.downloadStatus == DownloadStatus.COMPLETED) {

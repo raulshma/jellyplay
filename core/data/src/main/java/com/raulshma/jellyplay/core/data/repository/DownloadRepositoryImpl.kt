@@ -70,8 +70,16 @@ class DownloadRepositoryImpl @Inject constructor(
         seasonNumber: Int?,
     ): Result<DownloadItem> = runCatching {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
-        if (existing != null && existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name) {
-            return@runCatching existing.toDownloadItem()
+        if (existing != null) {
+            val isCompleted = existing.status == DownloadStatus.COMPLETED.name
+            val fileExists = existing.downloadPath.isNotBlank() && java.io.File(existing.downloadPath).exists()
+            if (isCompleted && fileExists) {
+                return@runCatching existing.toDownloadItem()
+            }
+            if (existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name && !isCompleted) {
+                return@runCatching existing.toDownloadItem()
+            }
+            downloadDao.deleteDownloadById(existing.id)
         }
 
         val maxBytes = preferencesStore.preferences.first().maxCacheSizeMb.toLong() * 1024 * 1024

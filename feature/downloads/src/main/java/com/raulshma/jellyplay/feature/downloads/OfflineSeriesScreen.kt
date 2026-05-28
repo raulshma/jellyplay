@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -64,7 +65,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 @Composable
 fun OfflineSeriesScreen(
     seriesId: String,
-    onPlayOffline: (filePath: String, title: String) -> Unit,
+    onPlayOffline: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: OfflineLibraryViewModel = hiltViewModel(),
 ) {
@@ -105,6 +106,70 @@ fun OfflineSeriesScreen(
                 },
                 scrollBehavior = scrollBehavior,
             )
+
+            seriesItem?.let { series ->
+                Column(
+                    modifier = Modifier.padding(horizontal = contentPad, vertical = 4.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (series.year != null) {
+                            Text(
+                                text = series.year.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                        }
+                        if (series.communityRating != null && series.communityRating!! > 0) {
+                            if (series.year != null) {
+                                Text(
+                                    text = " · ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                )
+                            }
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.tertiary,
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = String.format("%.1f", series.communityRating),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                        }
+                        if (series.officialRating != null) {
+                            Text(
+                                text = " · ${series.officialRating}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
+                        if (series.childCount > 0) {
+                            Text(
+                                text = " · ${series.childCount} episodes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
+                    if (series.genres.isNotEmpty()) {
+                        Text(
+                            text = series.genres.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+            }
 
             seriesItem?.overview?.let { overview ->
                 if (overview.isNotBlank()) {
@@ -160,9 +225,7 @@ fun OfflineSeriesScreen(
                         OfflineEpisodeRow(
                             episode = episode,
                             onPlay = {
-                                if (episode.downloadPath != null) {
-                                    onPlayOffline(episode.downloadPath!!, episode.name)
-                                }
+                                onPlayOffline(episode.id)
                             },
                             onDelete = {
                                 viewModel.deleteEpisode(episode.id)
@@ -251,13 +314,72 @@ private fun OfflineEpisodeRow(
                 )
             }
 
-            if (episode.downloadStatus == DownloadStatus.COMPLETED) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                if (episode.runTimeTicks != null && episode.runTimeTicks!! > 0) {
+                    val runtimeMinutes = (episode.runTimeTicks!! / 600_000_000).toInt()
+                    if (runtimeMinutes > 0) {
+                        Text(
+                            text = "${runtimeMinutes}m",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        )
+                    }
+                }
+                if (episode.communityRating != null && episode.communityRating!! > 0) {
+                    if (episode.runTimeTicks != null && episode.runTimeTicks!! > 0) {
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        )
+                    }
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(10.dp),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                    )
+                    Spacer(Modifier.width(1.dp))
+                    Text(
+                        text = String.format("%.1f", episode.communityRating),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            }
+
+            if (!episode.overview.isNullOrBlank()) {
                 Text(
-                    text = "Downloaded",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 2.dp),
+                    text = episode.overview!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+
+            if (episode.downloadStatus == DownloadStatus.COMPLETED) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Downloaded",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             } else if (episode.downloadStatus == DownloadStatus.DOWNLOADING) {
                 val progress = if (episode.totalSizeBytes > 0) {
                     episode.downloadedBytes.toFloat() / episode.totalSizeBytes
