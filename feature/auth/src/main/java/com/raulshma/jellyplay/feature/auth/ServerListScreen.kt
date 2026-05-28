@@ -17,17 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -50,6 +46,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -61,16 +59,17 @@ fun ServerListScreen(
     val servers by viewModel.servers.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(title = { Text("JellyPlay") }, scrollBehavior = scrollBehavior)
+            TopAppBar(title = { Text("JellyPlay") }, scrollBehavior = scrollBehavior)
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddServer,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                 text = { Text("Add Server") },
             )
         },
@@ -102,7 +101,7 @@ fun ServerListScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Icon(
-                    Icons.Default.Dns,
+                    Tabler.Outline.Server,
                     contentDescription = null,
                     modifier = Modifier.size(64.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -120,7 +119,7 @@ fun ServerListScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 OutlinedButton(onClick = onAddServer) {
-                    Icon(Icons.Default.Add, contentDescription = null)
+                    Icon(Tabler.Outline.Plus, contentDescription = null)
                     Spacer(modifier = Modifier.size(8.dp))
                     Text("Add Server")
                 }
@@ -186,7 +185,7 @@ private fun ServerItem(
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    Icons.Default.Delete,
+                    Tabler.Outline.Trash,
                     contentDescription = "Remove server",
                     tint = MaterialTheme.colorScheme.error,
                 )

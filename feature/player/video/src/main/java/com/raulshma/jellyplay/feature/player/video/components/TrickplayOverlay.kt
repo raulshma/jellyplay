@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -40,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -145,7 +144,7 @@ fun TrickplayOverlay(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         ) {
                             Icon(
-                                imageVector = if (isForward) Icons.Default.FastForward else Icons.Default.FastRewind,
+                                imageVector = if (isForward) Tabler.Outline.PlayerTrackNext else Tabler.Outline.PlayerTrackPrev,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(14.dp),

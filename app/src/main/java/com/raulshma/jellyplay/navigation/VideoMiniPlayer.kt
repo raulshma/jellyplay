@@ -27,10 +27,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun VideoMiniPlayer(
@@ -121,7 +119,7 @@ fun VideoMiniPlayer(
                         size = 32.dp,
                     ) {
                         Icon(
-                            Icons.Default.Close,
+                            Tabler.Outline.X,
                             contentDescription = "Close",
                             modifier = Modifier.size(16.dp),
                             tint = Color.White,
@@ -167,7 +165,7 @@ fun VideoMiniPlayer(
                         size = 36.dp,
                     ) {
                         Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.onSurface,

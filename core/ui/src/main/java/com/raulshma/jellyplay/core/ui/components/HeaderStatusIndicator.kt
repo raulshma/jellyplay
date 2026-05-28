@@ -7,10 +7,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +18,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 /**
  * Represents the status to display in the header indicator area.
@@ -94,7 +92,7 @@ fun HeaderStatusIndicator(
             }
             is HeaderStatus.Error -> {
                 Icon(
-                    imageVector = Icons.Default.ErrorOutline,
+                    imageVector = Tabler.Outline.AlertCircle,
                     contentDescription = "Error",
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.error,
@@ -106,7 +104,7 @@ fun HeaderStatusIndicator(
                     modifier = Modifier.size(20.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.WifiOff,
+                        imageVector = Tabler.Outline.WifiOff,
                         contentDescription = "Local network, no internet",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.tertiary,
@@ -119,7 +117,7 @@ fun HeaderStatusIndicator(
                     modifier = Modifier.size(20.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CloudOff,
+                        imageVector = Tabler.Outline.CloudOff,
                         contentDescription = "Offline",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.error,

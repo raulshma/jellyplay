@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 import android.app.AlertDialog
 import android.content.Context
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cast
-import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -22,6 +19,8 @@ import androidx.mediarouter.media.MediaRouter
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 /**
  * A pure Compose cast button that avoids all [androidx.mediarouter.app] UI components
@@ -98,7 +97,7 @@ internal fun CastButton() {
         modifier = Modifier.size(40.dp),
     ) {
         Icon(
-            imageVector = if (isConnected) Icons.Default.CastConnected else Icons.Default.Cast,
+            imageVector = if (isConnected) Tabler.Outline.Cast else Tabler.Outline.Cast,
             contentDescription = if (isConnected) "Cast connected" else "Cast",
             tint = Color.White,
         )

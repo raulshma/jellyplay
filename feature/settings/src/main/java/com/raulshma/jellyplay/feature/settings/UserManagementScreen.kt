@@ -19,12 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -33,7 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -44,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +48,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -77,11 +74,12 @@ fun UserManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Switch User")
@@ -94,7 +92,7 @@ fun UserManagementScreen(
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = onBack,
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tooltipText = "Back",
                     )
@@ -105,7 +103,7 @@ fun UserManagementScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddUser,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                 text = { Text("Add User") },
             )
         },
@@ -122,7 +120,7 @@ fun UserManagementScreen(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        Icons.Default.Person,
+                        Tabler.Outline.User,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -205,7 +203,7 @@ private fun UserManagementCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
-                    Icons.Default.Person,
+                    Tabler.Outline.User,
                     contentDescription = null,
                     modifier = Modifier
                         .size(40.dp)
@@ -229,14 +227,14 @@ private fun UserManagementCard(
             }
             if (isCurrentUser) {
                 Icon(
-                    Icons.Default.Check,
+                    Tabler.Outline.Check,
                     contentDescription = "Current user",
                     tint = MaterialTheme.colorScheme.primary,
                 )
             } else {
                 IconButton(onClick = onRemove) {
                     Icon(
-                        Icons.Default.Delete,
+                        Tabler.Outline.Trash,
                         contentDescription = "Remove user",
                         tint = MaterialTheme.colorScheme.error,
                     )

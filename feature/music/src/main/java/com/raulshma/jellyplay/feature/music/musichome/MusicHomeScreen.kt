@@ -33,18 +33,6 @@ import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -104,6 +92,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import kotlinx.coroutines.launch
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun MusicHomeScreen(
@@ -314,7 +304,7 @@ fun MusicHomeScreen(
                         ),
                     ) {
                         Icon(
-                            if (isFabExpanded) Icons.Default.Close else Icons.Default.MoreVert,
+                            if (isFabExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
                             contentDescription = if (isFabExpanded) "Close menu" else "More options",
                         )
                     }
@@ -336,7 +326,7 @@ fun MusicHomeScreen(
                     text = { Text("Surprise Me") },
                     icon = {
                         Icon(
-                            Icons.Default.AutoAwesome,
+                            Tabler.Outline.Wand,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -351,7 +341,7 @@ fun MusicHomeScreen(
                     text = { Text("SyncPlay") },
                     icon = {
                         Icon(
-                            Icons.Default.Group,
+                            Tabler.Outline.Users,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -381,7 +371,7 @@ fun MusicHomeScreen(
                     },
                     icon = {
                         Icon(
-                            Icons.Default.Download,
+                            Tabler.Outline.Download,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -396,7 +386,7 @@ fun MusicHomeScreen(
                     text = { Text("Settings") },
                     icon = {
                         Icon(
-                            Icons.Default.Settings,
+                            Tabler.Outline.Settings,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -696,7 +686,7 @@ private fun MusicHeroHeader(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.PlayArrow,
+                                    Tabler.Outline.PlayerPlay,
                                     contentDescription = "Play Mix",
                                     tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier
@@ -806,11 +796,11 @@ private fun QuickAccessRow(
     onPlaylistsClick: () -> Unit,
 ) {
     val items = listOf(
-        CategoryItem("Artists", Icons.Default.Group, onArtistsClick, ShapeCache.smooth24, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
-        CategoryItem("Albums", Icons.Default.Album, onAlbumsClick, ShapeCache.smooth16, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
-        CategoryItem("Tracks", Icons.Default.MusicNote, onTracksClick, ShapeCache.smooth32, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
-        CategoryItem("Genres", Icons.Default.GraphicEq, onGenresClick, ShapeCache.smooth20, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant),
-        CategoryItem("Playlists", Icons.Default.QueueMusic, onPlaylistsClick, ShapeCache.smooth28, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface)
+        CategoryItem("Artists", Tabler.Outline.Users, onArtistsClick, ShapeCache.smooth24, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
+        CategoryItem("Albums", Tabler.Outline.Disc, onAlbumsClick, ShapeCache.smooth16, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
+        CategoryItem("Tracks", Tabler.Outline.Music, onTracksClick, ShapeCache.smooth32, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
+        CategoryItem("Genres", Tabler.Outline.WaveSine, onGenresClick, ShapeCache.smooth20, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant),
+        CategoryItem("Playlists", Tabler.Outline.Playlist, onPlaylistsClick, ShapeCache.smooth28, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface)
     )
 
     LazyRow(

@@ -53,7 +53,7 @@ class ModelSerializationTest {
         assertEquals(true, defaults.dynamicTheming)
         assertEquals(SubtitleStyle(), defaults.subtitleStyle)
         assertEquals(StreamingQuality.AUTO, defaults.streamingQuality)
-        assertEquals(500, defaults.maxCacheSizeMb)
+        assertEquals(0, defaults.maxCacheSizeMb)
         assertEquals(true, defaults.autoDeleteCache)
         assertEquals(false, defaults.pinLockEnabled)
         assertEquals(null, defaults.pinHash)

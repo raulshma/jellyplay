@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -38,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun TrackRow(
@@ -127,7 +126,7 @@ fun TrackRow(
         if (onAddToQueue != null) {
             IconButton(onClick = { showMenu = true }) {
                 Icon(
-                    Icons.Default.MoreVert,
+                    Tabler.Outline.DotsVertical,
                     contentDescription = "More options",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -145,7 +144,7 @@ fun TrackRow(
                     },
                     leadingIcon = {
                         Icon(
-                            Icons.Default.QueueMusic,
+                            Tabler.Outline.Playlist,
                             contentDescription = null,
                         )
                     },

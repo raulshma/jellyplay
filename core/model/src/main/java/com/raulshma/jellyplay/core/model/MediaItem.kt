@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 enum class MediaType {
     MOVIE,
     SERIES,
+    SEASON,
     EPISODE,
     MUSIC,
     AUDIO,

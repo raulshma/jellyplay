@@ -20,10 +20,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,6 +52,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -125,7 +124,7 @@ private fun AlbumDetailContent(
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
         MediaImage(
             url = getBackdropUrl(item.id),
             contentDescription = null,
@@ -157,7 +156,7 @@ private fun AlbumDetailContent(
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
+                        Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tint = Color.White,
                     )
@@ -215,7 +214,7 @@ private fun AlbumDetailContent(
                             enabled = tracks.isNotEmpty(),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Icon(Tabler.Outline.PlayerPlay, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
                             Text("Play All")
                         }
@@ -316,7 +315,7 @@ private fun TrackItem(
         if (onAddToQueue != null) {
             IconButton(onClick = { onAddToQueue() }) {
                 Icon(
-                    Icons.Default.QueueMusic,
+                    Tabler.Outline.Playlist,
                     contentDescription = "Add to Queue",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

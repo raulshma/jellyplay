@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import kotlinx.coroutines.delay
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun DreamSlideshow(
@@ -153,7 +153,7 @@ private fun DreamEmptyState() {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Movie,
+                imageVector = Tabler.Outline.Movie,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.3f),
                 modifier = Modifier.padding(bottom = 8.dp),

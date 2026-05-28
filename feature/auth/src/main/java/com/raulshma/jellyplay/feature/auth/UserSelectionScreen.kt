@@ -17,18 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -50,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)@Composable
 fun UserSelectionScreen(
@@ -71,16 +68,17 @@ fun UserSelectionScreen(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = { Text(serverName) },
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = onBack,
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tooltipText = "Back",
                     )
@@ -91,7 +89,7 @@ fun UserSelectionScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddUser,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                 text = { Text("Add User") },
             )
         },
@@ -125,7 +123,7 @@ fun UserSelectionScreen(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        Icons.Default.Person,
+                        Tabler.Outline.User,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -143,7 +141,7 @@ fun UserSelectionScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     androidx.compose.material3.OutlinedButton(onClick = onAddUser) {
-                        Icon(Icons.Default.Add, contentDescription = null)
+                        Icon(Tabler.Outline.Plus, contentDescription = null)
                         Spacer(modifier = Modifier.size(8.dp))
                         Text("Add User")
                     }
@@ -209,7 +207,7 @@ private fun UserCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
-                    Icons.Default.Person,
+                    Tabler.Outline.User,
                     contentDescription = null,
                     modifier = Modifier
                         .size(40.dp)
@@ -230,7 +228,7 @@ private fun UserCard(
             }
             IconButton(onClick = onRemove) {
                 Icon(
-                    Icons.Default.Delete,
+                    Tabler.Outline.Trash,
                     contentDescription = "Remove user",
                     tint = MaterialTheme.colorScheme.error,
                 )

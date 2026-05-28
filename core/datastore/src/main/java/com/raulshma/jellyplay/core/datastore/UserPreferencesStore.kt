@@ -119,6 +119,7 @@ class UserPreferencesStore @Inject constructor(
         val LR_BALANCE = stringPreferencesKey("lr_balance")
         val AUTO_EQ_BY_GENRE = stringPreferencesKey("auto_eq_by_genre")
         val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
+        val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -209,7 +210,7 @@ class UserPreferencesStore @Inject constructor(
             oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
-            maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 500,
+            maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 0,
             autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
             pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
             pinHash = prefs[Keys.PIN_HASH],
@@ -303,6 +304,7 @@ class UserPreferencesStore @Inject constructor(
             lrBalance = prefs[Keys.LR_BALANCE]?.toFloatOrNull() ?: 0f,
             autoEqByGenre = prefs[Keys.AUTO_EQ_BY_GENRE]?.toBoolean() ?: false,
             pitchSemitones = prefs[Keys.PITCH_SEMITONES]?.toFloatOrNull() ?: 0f,
+            downloadConnections = prefs[Keys.DOWNLOAD_CONNECTIONS]?.toIntOrNull() ?: 4,
         )
     }.distinctUntilChanged()
 
@@ -637,6 +639,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setPitchSemitones(semitones: Float) {
         context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones.toString() }
+    }
+
+    suspend fun setDownloadConnections(count: Int) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

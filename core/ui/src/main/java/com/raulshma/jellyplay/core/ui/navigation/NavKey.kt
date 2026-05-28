@@ -38,6 +38,10 @@ sealed class Route : NavKey {
 
     @Serializable data object Downloads : Route()
 
+    @Serializable data object OfflineLibrary : Route()
+
+    @Serializable data class OfflineSeries(val seriesId: String) : Route()
+
     @Serializable data object Settings : Route()
 
     @Serializable data object ServerManagement : Route()

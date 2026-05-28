@@ -26,14 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,7 +34,7 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -53,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -68,12 +61,14 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
-    onPlayOffline: (filePath: String, title: String) -> Unit,
+    onPlayOffline: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -88,10 +83,10 @@ fun DownloadsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        MediumTopAppBar(
+    Column(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+        TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Downloads")
@@ -103,7 +98,7 @@ fun DownloadsScreen(
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    Icon(Tabler.Outline.ArrowLeft, "Back")
                 }
             },
             scrollBehavior = scrollBehavior,
@@ -158,7 +153,7 @@ fun DownloadsScreen(
                             formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
                             onClick = {
                                 if (download.status == DownloadStatus.COMPLETED) {
-                                    onPlayOffline(download.downloadPath, download.name)
+                                    onPlayOffline(download.mediaItemId)
                                 }
                             },
                             onCancel = { viewModel.cancelDownload(download) },
@@ -228,8 +223,8 @@ private fun DownloadItemRow(
                         when (item.mediaType) {
                             com.raulshma.jellyplay.core.model.MediaType.AUDIO,
                             com.raulshma.jellyplay.core.model.MediaType.MUSIC,
-                            com.raulshma.jellyplay.core.model.MediaType.ALBUM -> Icons.Default.MusicNote
-                            else -> Icons.Default.Movie
+                            com.raulshma.jellyplay.core.model.MediaType.ALBUM -> Tabler.Outline.Music
+                            else -> Tabler.Outline.Movie
                         },
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
@@ -308,14 +303,14 @@ private fun DownloadItemRow(
                 DownloadStatus.DOWNLOADING -> {
                     IconButton(onClick = onPause) {
                         Icon(
-                            Icons.Default.Pause,
+                            Tabler.Outline.PlayerPause,
                             "Pause",
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                     IconButton(onClick = onCancel) {
                         Icon(
-                            Icons.Default.Delete,
+                            Tabler.Outline.Trash,
                             "Cancel",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -324,7 +319,7 @@ private fun DownloadItemRow(
                 DownloadStatus.PENDING -> {
                     IconButton(onClick = onCancel) {
                         Icon(
-                            Icons.Default.Delete,
+                            Tabler.Outline.Trash,
                             "Cancel",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -333,14 +328,14 @@ private fun DownloadItemRow(
                 DownloadStatus.PAUSED -> {
                     IconButton(onClick = onResume) {
                         Icon(
-                            Icons.Default.PlayArrow,
+                            Tabler.Outline.PlayerPlay,
                             "Resume",
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                     IconButton(onClick = onCancel) {
                         Icon(
-                            Icons.Default.Delete,
+                            Tabler.Outline.Trash,
                             "Cancel",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -349,7 +344,7 @@ private fun DownloadItemRow(
                 DownloadStatus.FAILED -> {
                     IconButton(onClick = onRetry) {
                         Icon(
-                            Icons.Default.Refresh,
+                            Tabler.Outline.Refresh,
                             "Retry",
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -358,7 +353,7 @@ private fun DownloadItemRow(
                 DownloadStatus.COMPLETED -> {
                     IconButton(onClick = onDelete) {
                         Icon(
-                            Icons.Default.Delete,
+                            Tabler.Outline.Trash,
                             "Delete",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

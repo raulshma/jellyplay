@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.os.Environment
 import android.os.StatFs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -52,20 +53,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,6 +62,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
@@ -150,7 +140,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MediaDetailScreen(
     itemId: String,
@@ -183,6 +176,31 @@ fun MediaDetailScreen(
 
     val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
 
+    var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel.seriesDownloadResult) {
+        viewModel.seriesDownloadResult?.let { result ->
+            val message = if (result.error != null) {
+                result.error
+            } else if (result.queuedCount > 0) {
+                "${result.queuedCount} episode${if (result.queuedCount != 1) "s" else ""} queued for download"
+            } else {
+                "No episodes could be queued"
+            }
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearSeriesDownloadResult()
+        }
+    }
+
+    LaunchedEffect(viewModel.downloadError) {
+        viewModel.downloadError?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearDownloadError()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     ArtworkThemeWrapper(
         imageUrl = backdropUrl,
         dynamicTheming = preferences.dynamicTheming,
@@ -231,6 +249,7 @@ fun MediaDetailScreen(
             getImageUrl = { viewModel.getImageUrl(it) },
             getBackdropUrl = { viewModel.getBackdropUrl(it) },
             isDownloading = viewModel.isDownloading,
+            isDownloadingSeries = viewModel.isDownloadingSeries,
             activeDownload = activeDownload,
             isLoading = isLoading,
             error = error,
@@ -246,6 +265,7 @@ fun MediaDetailScreen(
             },
             onAudioClick = { onAudioClick(itemId) },
             onDownloadClick = { viewModel.startDownload() },
+            onDownloadSeriesClick = { showSeriesDownloadSheet = true },
             onToggleFavorite = { viewModel.toggleFavorite() },
             onMarkPlayed = { viewModel.markPlayed() },
             onMarkUnplayed = { viewModel.markUnplayed() },
@@ -306,6 +326,35 @@ fun MediaDetailScreen(
         }
         } // CompositionLocalProvider
     }
+
+    val detailItem = detail?.item
+    if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
+        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
+            onDismissRequest = { showSeriesDownloadSheet = false },
+        ) {
+            SeriesDownloadSheet(
+                seasons = viewModel.seasons,
+                episodeCounts = viewModel.episodes.mapValues { it.value.size },
+                isDownloading = viewModel.isDownloadingSeries,
+                onDownload = { selectedSeasonIds ->
+                    showSeriesDownloadSheet = false
+                    viewModel.downloadSeries(selectedSeasonIds)
+                },
+                onDismiss = { showSeriesDownloadSheet = false },
+            )
+        }
+    }
+
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .padding(bottom = 80.dp),
+    ) { data ->
+        Snackbar(snackbarData = data)
+    }
+    } // Box
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -322,6 +371,7 @@ private fun DetailContent(
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     isDownloading: Boolean,
+    isDownloadingSeries: Boolean = false,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     isLoading: Boolean,
     error: String?,
@@ -329,6 +379,7 @@ private fun DetailContent(
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onDownloadClick: () -> Unit,
+    onDownloadSeriesClick: () -> Unit = {},
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
@@ -607,12 +658,14 @@ private fun DetailContent(
                                         isAlbum = isAlbum,
                                         albumTracks = albumTracks,
                                         isDownloading = isDownloading,
+                                        isDownloadingSeries = isDownloadingSeries,
                                         activeDownload = activeDownload,
                                         onPlayClick = onPlayClick,
                                         onAudioClick = onAudioClick,
                                         onPlayAlbumTrack = onPlayAlbumTrack,
                                         onNavigate = onNavigate,
                                         onDownloadClick = { showDownloadDialog = true },
+                                        onDownloadSeriesClick = onDownloadSeriesClick,
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
                                         onMarkUnplayed = onMarkUnplayed,
@@ -620,76 +673,6 @@ private fun DetailContent(
                                         contentFocusRequester = contentFocusRequester,
                                     )
                                 }
-                            }
-                        }
-
-                        // Right column: metadata content (no action buttons)
-                        if (detail != null && item != null) {
-                            AnimatedVisibility(
-                                visible = contentVisible,
-                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                        slideInVertically(
-                                            initialOffsetY = { it / 12 },
-                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                        ),
-                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
-                                    targetOffsetY = { -it / 24 },
-                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                ),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                DetailContentBody(
-                                    item = item,
-                                    detail = detail,
-                                    seasons = seasons,
-                                    episodes = episodes,
-                                    fetchedSeasonIds = fetchedSeasonIds,
-                                    smartPlayTarget = smartPlayTarget,
-                                    selectedSubtitleIndex = selectedSubtitleIndex,
-                                    selectedAudioIndex = selectedAudioIndex,
-                                    getImageUrl = getImageUrl,
-                                    isAudio = isAudio,
-                                    isAlbum = isAlbum,
-                                    albumTracks = albumTracks,
-                                    isDownloading = isDownloading,
-                                    activeDownload = activeDownload,
-                                    onPlayClick = onPlayClick,
-                                    onAudioClick = onAudioClick,
-                                    onDownloadClick = { showDownloadDialog = true },
-                                    onToggleFavorite = onToggleFavorite,
-                                    onMarkPlayed = onMarkPlayed,
-                                    onMarkUnplayed = onMarkUnplayed,
-                                    onSubtitleSelect = onSubtitleSelect,
-                                    onAudioSelect = onAudioSelect,
-                                    onItemClick = onItemClick,
-                                    onPersonClick = onPersonClick,
-                                    onNavigateToSeries = onNavigateToSeries,
-                                    onSeasonSelected = onSeasonSelected,
-                                    onLoadSeerrData = onLoadSeerrData,
-                                    modifier = Modifier,
-                                    contentAlignment = Alignment.TopStart,
-                                    showActionButtons = false,
-                                    showMediaInfo = true,
-                                    contentFocusRequester = contentFocusRequester,
-                                    seerrRecommendations = seerrRecommendations,
-                                    seerrSimilar = seerrSimilar,
-                                    isSeerrConnected = isSeerrConnected,
-                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
-                                    getSeerrPosterUrl = getSeerrPosterUrl,
-                                    onSeerrRequest = onSeerrRequest,
-                                    onNavigate = onNavigate,
-                                    onPlayAlbumTrack = onPlayAlbumTrack,
-                                )
-                            }
-                        } else if (isLoading) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                SkeletonDetailBody()
-                            }
-                        } else if (error != null) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = onRetry) { Text("Retry") }
                             }
                         }
                     }
@@ -773,10 +756,12 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     isDownloading = isDownloading,
+                                    isDownloadingSeries = isDownloadingSeries,
                                     activeDownload = activeDownload,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
                                     onDownloadClick = { showDownloadDialog = true },
+                                    onDownloadSeriesClick = onDownloadSeriesClick,
                                     onToggleFavorite = onToggleFavorite,
                                     onMarkPlayed = onMarkPlayed,
                                     onMarkUnplayed = onMarkUnplayed,
@@ -845,7 +830,7 @@ private fun DetailContent(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                Tabler.Outline.ArrowLeft,
                                 contentDescription = "Back",
                                 tint = backIconColor,
                                 modifier = Modifier.padding(8.dp),
@@ -863,7 +848,7 @@ private fun DetailContent(
                                 )
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                Tabler.Outline.ArrowLeft,
                                 contentDescription = "Back",
                                 tint = backIconColor,
                             )
@@ -883,7 +868,7 @@ private fun DetailContent(
                                 )
                         ) {
                             Icon(
-                                Icons.Filled.MoreVert,
+                                Tabler.Outline.DotsVertical,
                                 contentDescription = "Edit",
                                 tint = editIconColor,
                             )
@@ -902,7 +887,9 @@ private fun DetailContent(
         val fileSize = source?.size
         val context = LocalContext.current
         val availableBytes = remember {
-            val stat = StatFs(context.filesDir.absolutePath)
+            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                ?: context.filesDir
+            val stat = StatFs(downloadDir.absolutePath)
             stat.availableBlocksLong * stat.blockSizeLong
         }
         val fileSizeText = fileSize?.let { size ->
@@ -1035,7 +1022,7 @@ private fun MediaInfoSection(
             }
 
             QuickInfoPill(
-                icon = Icons.Default.HighQuality,
+                icon = Tabler.Outline.BadgeHd,
                 text = qualityLabel,
                 modifier = Modifier.weight(1f),
             )
@@ -1062,7 +1049,7 @@ private fun MediaInfoSection(
             }
 
             QuickInfoPill(
-                icon = Icons.Default.GraphicEq,
+                icon = Tabler.Outline.WaveSine,
                 text = audioLabel,
                 showTrailingIndicator = true,
                 onClick = { if (audioStreams.isNotEmpty()) picker = StreamPickerType.AUDIO },
@@ -1078,7 +1065,7 @@ private fun MediaInfoSection(
                 ?: "OFF"
 
             QuickInfoPill(
-                icon = Icons.Default.ClosedCaption,
+                icon = Tabler.Outline.Subtitles,
                 text = subtitleLabel,
                 showTrailingIndicator = subtitleStreams.isNotEmpty(),
                 onClick = { picker = StreamPickerType.SUBTITLE },
@@ -1184,7 +1171,7 @@ private fun MediaInfoSection(
                                 }
                                 if (isSelected) {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        imageVector = Tabler.Outline.Check,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.size(18.dp),
@@ -1253,7 +1240,7 @@ private fun QuickInfoPill(
         )
         if (showTrailingIndicator) {
             Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
+                imageVector = Tabler.Outline.ChevronDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
@@ -1343,12 +1330,14 @@ private fun DetailActionButtons(
     isAlbum: Boolean,
     albumTracks: List<MediaItem>,
     isDownloading: Boolean,
+    isDownloadingSeries: Boolean = false,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onPlayAlbumTrack: (Int) -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
     onDownloadClick: () -> Unit,
+    onDownloadSeriesClick: () -> Unit = {},
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
@@ -1478,7 +1467,7 @@ private fun DetailActionButtons(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(Modifier.size(6.dp))
                 Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
             }
@@ -1504,8 +1493,8 @@ private fun DetailActionButtons(
                 val favoriteTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 val downloadTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
-                IconButton(
-                    onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
@@ -1523,13 +1512,13 @@ private fun DetailActionButtons(
                         }
                 ) {
                     Icon(
-                        if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                         contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
                         tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                IconButton(
-                    onClick = onToggleFavorite,
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
@@ -1545,15 +1534,14 @@ private fun DetailActionButtons(
                         .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
-                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                         contentDescription = "Favorite",
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 if (!isAudio && detail.mediaSources.isNotEmpty()) {
-                    IconButton(
-                        onClick = onDownloadClick,
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
@@ -1566,7 +1554,11 @@ private fun DetailActionButtons(
                                 if (isTv) Modifier.tvFocusIndicator(downloadTvFocusState, ShapeCache.smooth12) else Modifier
                             )
                             .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                            .clickable(
+                                interactionSource = downloadInteractionSource,
+                                indication = null,
+                                enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
+                            ) { onDownloadClick() }
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
@@ -1575,9 +1567,36 @@ private fun DetailActionButtons(
                                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                             }
                         } else if (isDownloadCompleted) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(ShapeCache.smooth12)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                            .then(
+                                if (isTv) downloadTvFocusState.focusModifier else Modifier
+                            )
+                            .then(
+                                if (isTv) Modifier.tvFocusIndicator(downloadTvFocusState, ShapeCache.smooth12) else Modifier
+                            )
+                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
+                            .clickable(
+                                interactionSource = downloadInteractionSource,
+                                indication = null,
+                                enabled = !isDownloadingSeries,
+                            ) { onDownloadSeriesClick() }
+                    ) {
+                        if (isDownloadingSeries) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -1634,7 +1653,7 @@ private fun DetailActionButtons(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     Spacer(Modifier.size(8.dp))
                     Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
                 }
@@ -1643,8 +1662,8 @@ private fun DetailActionButtons(
             val markHFocusState = rememberTvFocusState(focusedScale = 1.08f)
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
-            IconButton(
-                onClick = { if (item.isPlayed) onMarkUnplayed() else onMarkPlayed() },
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth16)
@@ -1657,14 +1676,14 @@ private fun DetailActionButtons(
                     }
             ) {
                 Icon(
-                    if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                     contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
                     tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
 
-            IconButton(
-                onClick = onToggleFavorite,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth16)
@@ -1675,7 +1694,7 @@ private fun DetailActionButtons(
                     .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
             ) {
                 Icon(
-                    if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                     contentDescription = "Favorite",
                     tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
@@ -1693,9 +1712,8 @@ private fun DetailActionButtons(
 
                 val downloadHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
-                IconButton(
-                    onClick = onDownloadClick,
-                    enabled = !isDownloading && !dlActive && !dlCompleted,
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(ShapeCache.smooth16)
@@ -1703,7 +1721,11 @@ private fun DetailActionButtons(
                         .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
                         .then(if (isTv) downloadHFocusState.focusModifier else Modifier)
                         .then(if (isTv) Modifier.tvFocusIndicator(downloadHFocusState, ShapeCache.smooth16) else Modifier)
-                        .clickable(interactionSource = downloadInteractionSource, indication = null) { onDownloadClick() }
+                        .clickable(
+                            interactionSource = downloadInteractionSource,
+                            indication = null,
+                            enabled = !isDownloading && !dlActive && !dlCompleted,
+                        ) { onDownloadClick() }
                 ) {
                     if (isDownloading || dlActive) {
                         if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
@@ -1712,9 +1734,33 @@ private fun DetailActionButtons(
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         }
                     } else if (dlCompleted) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     } else {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
+                val downloadHFocusState = rememberTvFocusState(focusedScale = 1.08f)
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(ShapeCache.smooth16)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                        .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
+                        .then(if (isTv) downloadHFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(downloadHFocusState, ShapeCache.smooth16) else Modifier)
+                        .clickable(
+                            interactionSource = downloadInteractionSource,
+                            indication = null,
+                            enabled = !isDownloadingSeries,
+                        ) { onDownloadSeriesClick() }
+                ) {
+                    if (isDownloadingSeries) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
@@ -1737,12 +1783,14 @@ private fun DetailContentBody(
     isAlbum: Boolean,
     albumTracks: List<MediaItem>,
     isDownloading: Boolean,
+    isDownloadingSeries: Boolean = false,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onPlayAlbumTrack: (Int) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onDownloadClick: () -> Unit,
+    onDownloadSeriesClick: () -> Unit = {},
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
@@ -1908,7 +1956,7 @@ private fun DetailContentBody(
                     item.communityRating?.let { rating ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.Favorite,
+                                Tabler.Outline.Heart,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
@@ -1962,12 +2010,14 @@ private fun DetailContentBody(
                 isAlbum = isAlbum,
                 albumTracks = albumTracks,
                 isDownloading = isDownloading,
+                isDownloadingSeries = isDownloadingSeries,
                 activeDownload = activeDownload,
                 onPlayClick = onPlayClick,
                 onAudioClick = onAudioClick,
                 onPlayAlbumTrack = onPlayAlbumTrack,
                 onNavigate = onNavigate,
                 onDownloadClick = onDownloadClick,
+                onDownloadSeriesClick = onDownloadSeriesClick,
                 onToggleFavorite = onToggleFavorite,
                 onMarkPlayed = onMarkPlayed,
                 onMarkUnplayed = onMarkUnplayed,
@@ -2443,7 +2493,7 @@ private fun EpisodeCard(
             Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
@@ -2667,7 +2717,7 @@ private fun AlbumTrackItem(
 
         IconButton(onClick = onPlayClick) {
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
