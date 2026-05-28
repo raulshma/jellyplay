@@ -51,7 +51,7 @@ data class UserPreferences(
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val maxCacheSizeMb: Int = 500,
+    val maxCacheSizeMb: Int = 0,
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,

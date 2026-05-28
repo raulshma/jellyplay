@@ -904,10 +904,10 @@ fun SettingsScreen(
                         icon = Tabler.Outline.Database,
                         title = "Max Cache Size",
                         subtitle = "Maximum disk space for caching",
-                        trailingText = "${preferences.maxCacheSizeMb} MB",
+                        trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
                         index = 3, count = storageTotal,
                         onClick = {
-                            val sizes = listOf(250, 500, 1000, 2000, 5000)
+                            val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
                             val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
                             val nextIndex = (currentIndex + 1) % sizes.size
                             viewModel.setMaxCacheSize(sizes[nextIndex])
