@@ -89,6 +89,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
+import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.editor.navigation.editorSection
@@ -628,11 +629,19 @@ private fun MainNavDisplay(
                     val isModalRoute = targetLast == Route.Settings ||
                             targetLast == Route.Downloads ||
                             targetLast == Route.SyncPlay ||
-                            targetLast == Route.SeerrSettings
+                            targetLast == Route.SeerrSettings ||
+                            targetLast == Route.AdminDashboard ||
+                            targetLast == Route.ScheduledTasks ||
+                            targetLast == Route.Devices ||
+                            targetLast == Route.Logs
                     val isModalPop = initialLast == Route.Settings ||
                             initialLast == Route.Downloads ||
                             initialLast == Route.SyncPlay ||
-                            initialLast == Route.SeerrSettings
+                            initialLast == Route.SeerrSettings ||
+                            initialLast == Route.AdminDashboard ||
+                            initialLast == Route.ScheduledTasks ||
+                            initialLast == Route.Devices ||
+                            initialLast == Route.Logs
                     val isTabSwitch = targetLast is Route && initialLast is Route &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetLast as Route) &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialLast as Route)
@@ -687,7 +696,11 @@ private fun MainNavDisplay(
                     val isModalPop = initialLast == Route.Settings ||
                             initialLast == Route.Downloads ||
                             initialLast == Route.SyncPlay ||
-                            initialLast == Route.SeerrSettings
+                            initialLast == Route.SeerrSettings ||
+                            initialLast == Route.AdminDashboard ||
+                            initialLast == Route.ScheduledTasks ||
+                            initialLast == Route.Devices ||
+                            initialLast == Route.Logs
                     if (isModalPop) {
                         fadeIn(fastEffects) togetherWith fadeOut(
                             fastEffects
@@ -766,6 +779,7 @@ private fun MainNavDisplay(
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
             settingsSection(navigator, onLogout)
+            adminSection(navigator)
             musicSection(navigator)
             syncPlaySection(navigator)
         },

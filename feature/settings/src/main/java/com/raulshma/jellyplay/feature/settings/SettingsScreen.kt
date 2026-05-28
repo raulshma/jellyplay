@@ -100,6 +100,7 @@ fun SettingsScreen(
     onServerManagement: () -> Unit = {},
     onUserManagement: () -> Unit = {},
     onSeerrSettings: () -> Unit = {},
+    onAdminDashboard: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -252,6 +253,25 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(2) {
+                if (viewModel.currentUser?.isAdmin == true) {
+                    SettingsGroup(
+                        icon = Tabler.Outline.Server,
+                        title = "Administration",
+                        summary = { "Server management dashboard" },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Server,
+                            title = "Dashboard",
+                            subtitle = "Server info, tasks, devices, and logs",
+                            index = 0, count = 1,
+                            onClick = onAdminDashboard,
+                        )
+                    }
+                }
+            }
+
+            AnimatedSettingsEntrance(3) {
                 SettingsGroup(
                     icon = Tabler.Outline.Puzzle,
                     title = "Integrations",
