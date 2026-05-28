@@ -112,6 +112,7 @@ data class UserPreferences(
     val lrBalance: Float = 0f,
     val autoEqByGenre: Boolean = false,
     val pitchSemitones: Float = 0f,
+    val downloadConnections: Int = 4,
 )
 
 @Immutable
