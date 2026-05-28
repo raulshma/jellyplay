@@ -1,7 +1,7 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package com.raulshma.jellyplay.feature.music.musichome
 
-import androidx.compose.animation.AnimatedContent
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
@@ -9,10 +9,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -29,14 +26,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
@@ -44,13 +40,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,15 +80,15 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.BlobArtCollage
 import com.raulshma.jellyplay.feature.music.components.GraphicEqVisualizer
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
-import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -131,19 +128,13 @@ fun MusicHomeScreen(
         )
 
         val listState = rememberLazyListState()
-        val scrollOffset by remember {
-            derivedStateOf {
-                listState.firstVisibleItemScrollOffset.toFloat() +
-                        (listState.firstVisibleItemIndex * 1000f)
-            }
-        }
         val headerHeight = 380.dp
         val density = LocalDensity.current
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
         val headerHeightPx = with(density) { headerHeight.toPx() }
-        
+
         val transitionRange = 140.dp
         val transitionRangePx = with(density) { transitionRange.toPx() }
         val scrollFraction by remember {
@@ -156,8 +147,14 @@ fun MusicHomeScreen(
             }
         }
 
+        val scrollOffset by remember {
+            derivedStateOf {
+                listState.firstVisibleItemScrollOffset.toFloat() +
+                        (listState.firstVisibleItemIndex * 1000f)
+            }
+        }
+
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            // Ambient Fluid Mesh Gradient Backdrop
             AmbientMeshGradient(imageUrl = featuredImageUrl)
 
             when {
@@ -165,7 +162,21 @@ fun MusicHomeScreen(
                     ErrorScreen(message = error, onRetry = { viewModel.loadSections() })
                 }
                 else -> {
-                    if (sections.isEmpty()) {
+                    if (isLoading && sections.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                ContainedLoadingIndicator()
+                                Text(
+                                    "Loading your music...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    } else if (sections.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 "No music available. Check your Jellyfin libraries.",
@@ -191,7 +202,7 @@ fun MusicHomeScreen(
                             }
 
                             item {
-                                QuickAccessRow(
+                                ExpressiveQuickAccessRow(
                                     onArtistsClick = onArtistsClick,
                                     onAlbumsClick = onAlbumsClick,
                                     onTracksClick = onTracksClick,
@@ -202,7 +213,7 @@ fun MusicHomeScreen(
 
                             itemsIndexed(sections, key = { _, section -> section.title }, contentType = { _, _ -> "musicHomeSection" }) { index, section ->
                                 val visible = remember { mutableStateOf(false) }
-                                androidx.compose.runtime.LaunchedEffect(Unit) { visible.value = true }
+                                LaunchedEffect(Unit) { visible.value = true }
                                 AnimatedVisibility(
                                     visible = visible.value,
                                     enter = fadeIn(
@@ -212,7 +223,7 @@ fun MusicHomeScreen(
                                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                                     ),
                                 ) {
-                                    MusicSectionRow(
+                                    ExpressiveMusicSectionRow(
                                         section = section,
                                         imageUrlBuilder = { viewModel.getImageUrl(it.id) },
                                         onItemClick = { item ->
@@ -231,167 +242,26 @@ fun MusicHomeScreen(
                 }
             }
 
-            val borderAlpha = 0.12f * scrollFraction
-            val dockScale = 1f - (0.04f * scrollFraction)
-
-            var isFabExpanded by remember { mutableStateOf(false) }
+            ExpressiveScrollDock(
+                scrollFraction = scrollFraction,
+                homeMode = viewModel.homeMode,
+                onModeChange = onModeChange,
+                headerStatus = headerStatus,
+            )
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(
-                        horizontal = (16f * scrollFraction).dp,
-                        vertical = (8f * scrollFraction).dp
-                    )
-                    .graphicsLayer {
-                        scaleX = dockScale
-                        scaleY = dockScale
-                    }
-                    .clip(
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
-                    )
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 2f),
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 0.5f),
-                                )
-                            )
-                        ),
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = (28f * scrollFraction).dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ModeSwitch(
-                        currentMode = viewModel.homeMode,
-                        onModeChange = onModeChange,
-                    )
-                    HeaderStatusIndicator(
-                        status = headerStatus,
-                        modifier = Modifier.padding(start = 8.dp),
-                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
-                    )
-                }
-            }
-
-            FloatingActionButtonMenu(
-                expanded = isFabExpanded,
-                button = {
-                    ToggleFloatingActionButton(
-                        checked = isFabExpanded,
-                        onCheckedChange = { isFabExpanded = it },
-                        containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                            initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            finalColor = MaterialTheme.colorScheme.primaryContainer,
-                        ),
-                    ) {
-                        Icon(
-                            if (isFabExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
-                            contentDescription = if (isFabExpanded) "Close menu" else "More options",
-                        )
-                    }
-                },
-                modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(
-                        end = 16.dp,
-                        bottom = 16.dp,
-                    ),
+                    .padding(end = 16.dp, bottom = 16.dp)
             ) {
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        isFabExpanded = false
-                        viewModel.surpriseMe { trackId ->
-                            onItemClick(trackId)
-                        }
+                ExpressiveFABMenu(
+                    onSurpriseMe = {
+                        viewModel.surpriseMe { trackId -> onItemClick(trackId) }
                     },
-                    text = { Text("Surprise Me") },
-                    icon = {
-                        Icon(
-                            Tabler.Outline.Wand,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        isFabExpanded = false
-                        onSyncPlayClick()
-                    },
-                    text = { Text("SyncPlay") },
-                    icon = {
-                        Icon(
-                            Tabler.Outline.Users,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        isFabExpanded = false
-                        onDownloadsClick()
-                    },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Downloads")
-                            if (activeDownloadCount > 0) {
-                                Badge(
-                                    modifier = Modifier.padding(start = 6.dp),
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                ) {
-                                    Text(
-                                        activeDownloadCount.toString(),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    icon = {
-                        Icon(
-                            Tabler.Outline.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        isFabExpanded = false
-                        onSettingsClick()
-                    },
-                    text = { Text("Settings") },
-                    icon = {
-                        Icon(
-                            Tabler.Outline.Settings,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    onSyncPlayClick = onSyncPlayClick,
+                    onDownloadsClick = onDownloadsClick,
+                    onSettingsClick = onSettingsClick,
+                    activeDownloadCount = activeDownloadCount,
                 )
             }
         }
@@ -582,143 +452,237 @@ private fun MusicHeroHeader(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (featuredItem != null) {
-            val breathTransition = rememberInfiniteTransition(label = "blob_breath")
-            val breathScale by breathTransition.animateFloat(
-                initialValue = 0.97f,
-                targetValue = 1.03f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(2800, easing = FancyTransitionEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "breath"
+            ExpressiveFeaturedCard(
+                featuredItem = featuredItem,
+                artworkUrls = artworkUrls,
+                onClick = { onClick(featuredItem.id) },
             )
+        }
+    }
+}
 
-            val playSpinAngle by rememberInfiniteTransition(label = "vinyl_spin").animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(5000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "spin"
-            )
+@Composable
+private fun ExpressiveFeaturedCard(
+    featuredItem: MediaItem,
+    artworkUrls: List<String>,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(ShapeCache.smooth28)
-                    .clickable { onClick(featuredItem.id) },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.48f)
-                ),
-                border = BorderStroke(
-                    1.dp,
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
-                        )
-                    )
+    val breathTransition = rememberInfiniteTransition(label = "blob_breath")
+    val breathScale by breathTransition.animateFloat(
+        initialValue = 0.97f,
+        targetValue = 1.03f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = FancyTransitionEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breath"
+    )
+
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "card_press"
+    )
+
+    val playSpinAngle by rememberInfiniteTransition(label = "vinyl_spin").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spin"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .clip(ShapeCache.smooth28)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        shape = ShapeCache.smooth28,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.48f)
+        ),
+        border = BorderStroke(
+            1.dp,
+            Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
                 )
-            ) {
-                Row(
+            )
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
+                            ShapeCache.smoothPill
+                        )
+                        .border(
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                            ShapeCache.smoothPill
+                        )
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Box(
+                    Text(
+                        text = "RECOMMENDED",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Your Daily Mix",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-0.5).sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Based on your recent listening",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .graphicsLayer { rotationZ = playSpinAngle },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Tabler.Outline.PlayerPlay,
+                            contentDescription = "Play Mix",
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier
-                                .background(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
-                                    ShapeCache.smoothPill
-                                )
-                                .border(
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                                    ShapeCache.smoothPill
-                                )
-                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "RECOMMENDED",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "Your Daily Mix",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = (-0.5).sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
+                                .size(24.dp)
+                                .graphicsLayer { rotationZ = -playSpinAngle }
                         )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = "Based on your recent listening",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                                    .graphicsLayer { rotationZ = playSpinAngle },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Tabler.Outline.PlayerPlay,
-                                    contentDescription = "Play Mix",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .graphicsLayer { rotationZ = -playSpinAngle }
-                                )
-                            }
-
-                            GraphicEqVisualizer(
-                                color = MaterialTheme.colorScheme.primary,
-                                barCount = 4,
-                                barWidth = 3.dp,
-                                maxBarHeight = 16.dp,
-                                spacing = 3.dp
-                            )
-                        }
                     }
 
-                    if (artworkUrls.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .padding(start = 12.dp)
-                                .scale(breathScale)
-                        ) {
-                            BlobArtCollage(
-                                imageUrls = artworkUrls,
-                                modifier = Modifier.size(width = 160.dp, height = 120.dp)
-                            )
-                        }
-                    }
+                    GraphicEqVisualizer(
+                        color = MaterialTheme.colorScheme.primary,
+                        barCount = 4,
+                        barWidth = 3.dp,
+                        maxBarHeight = 16.dp,
+                        spacing = 3.dp
+                    )
                 }
             }
+
+            if (artworkUrls.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .scale(breathScale)
+                ) {
+                    BlobArtCollage(
+                        imageUrls = artworkUrls,
+                        modifier = Modifier.size(width = 160.dp, height = 120.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpressiveQuickAccessRow(
+    onArtistsClick: () -> Unit,
+    onAlbumsClick: () -> Unit,
+    onTracksClick: () -> Unit,
+    onGenresClick: () -> Unit,
+    onPlaylistsClick: () -> Unit,
+) {
+    data class CategoryItem(
+        val label: String,
+        val icon: ImageVector,
+        val onClick: () -> Unit,
+        val shape: androidx.compose.ui.graphics.Shape,
+        val containerColor: Color,
+        val contentColor: Color,
+    )
+
+    val items = listOf(
+        CategoryItem("Artists", Tabler.Outline.Users, onArtistsClick, ShapeCache.smooth24, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
+        CategoryItem("Albums", Tabler.Outline.Disc, onAlbumsClick, ShapeCache.smooth16, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
+        CategoryItem("Tracks", Tabler.Outline.Music, onTracksClick, ShapeCache.smooth32, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
+        CategoryItem("Genres", Tabler.Outline.WaveSine, onGenresClick, ShapeCache.smooth20, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant),
+        CategoryItem("Playlists", Tabler.Outline.Playlist, onPlaylistsClick, ShapeCache.smooth28, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface),
+    )
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.padding(vertical = 12.dp)
+    ) {
+        itemsIndexed(items) { index, item ->
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(index * 60L)
+                visible = true
+            }
+            val slideOffset by animateFloatAsState(
+                targetValue = if (visible) 0f else 60f,
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "stagger"
+            )
+            val alphaState by animateFloatAsState(
+                targetValue = if (visible) 1f else 0f,
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                label = "stagger_alpha"
+            )
+            ExpressiveCategoryButton(
+                label = item.label,
+                icon = item.icon,
+                onClick = item.onClick,
+                shape = item.shape,
+                containerColor = item.containerColor,
+                contentColor = item.contentColor,
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationX = slideOffset
+                        alpha = alphaState
+                    }
+            )
         }
     }
 }
@@ -788,71 +752,7 @@ private fun ExpressiveCategoryButton(
 }
 
 @Composable
-private fun QuickAccessRow(
-    onArtistsClick: () -> Unit,
-    onAlbumsClick: () -> Unit,
-    onTracksClick: () -> Unit,
-    onGenresClick: () -> Unit,
-    onPlaylistsClick: () -> Unit,
-) {
-    val items = listOf(
-        CategoryItem("Artists", Tabler.Outline.Users, onArtistsClick, ShapeCache.smooth24, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
-        CategoryItem("Albums", Tabler.Outline.Disc, onAlbumsClick, ShapeCache.smooth16, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
-        CategoryItem("Tracks", Tabler.Outline.Music, onTracksClick, ShapeCache.smooth32, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
-        CategoryItem("Genres", Tabler.Outline.WaveSine, onGenresClick, ShapeCache.smooth20, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant),
-        CategoryItem("Playlists", Tabler.Outline.Playlist, onPlaylistsClick, ShapeCache.smooth28, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface)
-    )
-
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.padding(vertical = 12.dp)
-    ) {
-        itemsIndexed(items) { index, item ->
-            var visible by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) {
-                delay(index * 60L)
-                visible = true
-            }
-            val slideOffset by animateFloatAsState(
-                targetValue = if (visible) 0f else 60f,
-                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                label = "stagger"
-            )
-            val alphaState by animateFloatAsState(
-                targetValue = if (visible) 1f else 0f,
-                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                label = "stagger_alpha"
-            )
-            ExpressiveCategoryButton(
-                label = item.label,
-                icon = item.icon,
-                onClick = item.onClick,
-                shape = item.shape,
-                containerColor = item.containerColor,
-                contentColor = item.contentColor,
-                modifier = Modifier
-                    .graphicsLayer {
-                        translationX = slideOffset
-                        alpha = alphaState
-                    }
-            )
-        }
-    }
-}
-
-private data class CategoryItem(
-    val label: String,
-    val icon: ImageVector,
-    val onClick: () -> Unit,
-    val shape: androidx.compose.ui.graphics.Shape,
-    val containerColor: Color,
-    val contentColor: Color
-)
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun MusicSectionRow(
+private fun ExpressiveMusicSectionRow(
     section: MusicHomeSection,
     imageUrlBuilder: (MediaItem) -> String,
     onItemClick: (MediaItem) -> Unit,
@@ -861,7 +761,9 @@ private fun MusicSectionRow(
     Column(modifier = modifier) {
         Text(
             text = section.title,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+            ),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
         HorizontalUncontainedCarousel(
@@ -886,7 +788,7 @@ private fun MusicSectionRow(
                     )
                 }
                 MediaType.AUDIO -> {
-                    TrackItem(
+                    ExpressiveTrackItem(
                         item = item,
                         imageUrl = imageUrlBuilder(item),
                         onClick = { onItemClick(item) },
@@ -909,15 +811,33 @@ private fun MusicSectionRow(
 }
 
 @Composable
-private fun TrackItem(
+private fun ExpressiveTrackItem(
     item: MediaItem,
     imageUrl: String,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "track_scale"
+    )
+
     Row(
         modifier = Modifier
-            .width(280.dp)
-            .tvFocusable().clickable(onClick = onClick)
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(ShapeCache.smooth12)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -928,7 +848,8 @@ private fun TrackItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(48.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, ShapeCache.smooth4),
+                .clip(ShapeCache.smooth8)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
         )
         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
             Text(
@@ -938,12 +859,185 @@ private fun TrackItem(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = listOfNotNull(item.albumArtist, item.album).joinToString(" · "),
+                text = listOfNotNull(item.albumArtist, item.album).joinToString(" \u00b7 "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+private fun ExpressiveScrollDock(
+    scrollFraction: Float,
+    homeMode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
+    headerStatus: com.raulshma.jellyplay.core.ui.components.HeaderStatus,
+) {
+    val borderAlpha = 0.12f * scrollFraction
+    val dockScale = 1f - (0.04f * scrollFraction)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(
+                horizontal = (16f * scrollFraction).dp,
+                vertical = (8f * scrollFraction).dp
+            )
+            .graphicsLayer {
+                scaleX = dockScale
+                scaleY = dockScale
+            }
+            .clip(
+                AbsoluteSmoothCornerShape(
+                    cornerRadius = (28f * scrollFraction).dp,
+                    smoothnessAsPercent = 60
+                )
+            )
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f * scrollFraction)
+            )
+            .border(
+                BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 2f),
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = borderAlpha * 0.5f),
+                        )
+                    )
+                ),
+                AbsoluteSmoothCornerShape(
+                    cornerRadius = (28f * scrollFraction).dp,
+                    smoothnessAsPercent = 60
+                )
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ModeSwitch(
+                currentMode = homeMode,
+                onModeChange = onModeChange,
+            )
+            HeaderStatusIndicator(
+                status = headerStatus,
+                modifier = Modifier.padding(start = 8.dp),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpressiveFABMenu(
+    onSurpriseMe: () -> Unit,
+    onSyncPlayClick: () -> Unit,
+    onDownloadsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    activeDownloadCount: Int,
+) {
+    var isFabExpanded by remember { mutableStateOf(false) }
+
+    FloatingActionButtonMenu(
+        expanded = isFabExpanded,
+        button = {
+            ToggleFloatingActionButton(
+                checked = isFabExpanded,
+                onCheckedChange = { isFabExpanded = it },
+                containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                    initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    finalColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Icon(
+                    if (isFabExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
+                    contentDescription = if (isFabExpanded) "Close menu" else "More options",
+                )
+            }
+        },
+    ) {
+        FloatingActionButtonMenuItem(
+            onClick = {
+                isFabExpanded = false
+                onSurpriseMe()
+            },
+            text = { Text("Surprise Me") },
+            icon = {
+                Icon(
+                    Tabler.Outline.Wand,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        )
+        FloatingActionButtonMenuItem(
+            onClick = {
+                isFabExpanded = false
+                onSyncPlayClick()
+            },
+            text = { Text("SyncPlay") },
+            icon = {
+                Icon(
+                    Tabler.Outline.Users,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        )
+        FloatingActionButtonMenuItem(
+            onClick = {
+                isFabExpanded = false
+                onDownloadsClick()
+            },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Downloads")
+                    if (activeDownloadCount > 0) {
+                        Badge(
+                            modifier = Modifier.padding(start = 6.dp),
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ) {
+                            Text(
+                                activeDownloadCount.toString(),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
+                    }
+                }
+            },
+            icon = {
+                Icon(
+                    Tabler.Outline.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        )
+        FloatingActionButtonMenuItem(
+            onClick = {
+                isFabExpanded = false
+                onSettingsClick()
+            },
+            text = { Text("Settings") },
+            icon = {
+                Icon(
+                    Tabler.Outline.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        )
     }
 }
