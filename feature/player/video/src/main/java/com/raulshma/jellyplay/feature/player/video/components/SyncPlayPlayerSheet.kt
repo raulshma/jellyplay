@@ -12,12 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -42,11 +36,11 @@ import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Shuffle
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +105,7 @@ fun SyncPlayPlayerSheet(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.Group,
+                                Tabler.Outline.Users,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -150,7 +144,7 @@ fun SyncPlayPlayerSheet(
                     shape = ShapeCache.smoothPill,
                 ) {
                     Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -162,7 +156,7 @@ fun SyncPlayPlayerSheet(
                     modifier = Modifier.tvFocusable(),
                     shape = ShapeCache.smoothPill,
                 ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
+                    Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -177,7 +171,7 @@ fun SyncPlayPlayerSheet(
                         modifier = Modifier.fillMaxWidth().tvFocusable(),
                         shape = ShapeCache.smoothPill,
                     ) {
-                        Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         val label = when (repeatMode) {
                             SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
@@ -214,7 +208,7 @@ fun SyncPlayPlayerSheet(
                         modifier = Modifier.fillMaxWidth().tvFocusable(),
                         shape = ShapeCache.smoothPill,
                     ) {
-                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         val label = when (shuffleMode) {
                             SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
@@ -271,7 +265,7 @@ fun SyncPlayPlayerSheet(
                 modifier = Modifier.fillMaxWidth().tvFocusable(),
                 shape = ShapeCache.smoothPill,
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Tabler.Outline.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Leave Group")
             }

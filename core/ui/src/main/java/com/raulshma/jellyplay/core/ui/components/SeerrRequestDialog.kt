@@ -20,11 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -67,6 +62,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 private const val TAG = "SeerrRequestDialog"
 
@@ -213,7 +210,7 @@ fun SeerrRequestDialog(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
-                            imageVector = if (isTv) Icons.Default.Tv else Icons.Default.Movie,
+                            imageVector = if (isTv) Tabler.Outline.DeviceTv else Tabler.Outline.Movie,
                             contentDescription = null,
                             tint = colorScheme.primary,
                             modifier = Modifier.size(24.dp),
@@ -250,7 +247,7 @@ fun SeerrRequestDialog(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
-                                Icons.Default.Check,
+                                Tabler.Outline.Check,
                                 contentDescription = null,
                                 tint = StatusColors.success,
                                 modifier = Modifier.size(24.dp),
@@ -277,7 +274,7 @@ fun SeerrRequestDialog(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
-                                Icons.Default.Close,
+                                Tabler.Outline.X,
                                 contentDescription = null,
                                 tint = colorScheme.error,
                                 modifier = Modifier.size(24.dp),

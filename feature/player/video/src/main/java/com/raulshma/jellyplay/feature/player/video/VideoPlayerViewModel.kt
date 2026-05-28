@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
@@ -75,6 +76,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
@@ -95,6 +97,7 @@ class VideoPlayerViewModel @Inject constructor(
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
         downloadRepository = downloadRepository,
+        offlineRepository = offlineRepository,
         preferencesStore = preferencesStore,
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,

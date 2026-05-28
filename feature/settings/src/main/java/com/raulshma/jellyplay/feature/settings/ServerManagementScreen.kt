@@ -17,13 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
@@ -34,7 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -45,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -54,6 +48,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -72,20 +68,21 @@ fun ServerManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = { Text("Server Management") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Tabler.Outline.ArrowLeft, "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = onAddServer) {
-                        Icon(Icons.Default.Add, "Add Server")
+                        Icon(Tabler.Outline.Plus, "Add Server")
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -102,7 +99,7 @@ fun ServerManagementScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.Dns,
+                        Tabler.Outline.Server,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -116,7 +113,7 @@ fun ServerManagementScreen(
                         onClick = onAddServer,
                         modifier = Modifier.padding(top = 16.dp),
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
+                        Icon(Tabler.Outline.Plus, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Add Server")
                     }
@@ -200,7 +197,7 @@ private fun ServerCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
-                    Icons.Default.Dns,
+                    Tabler.Outline.Server,
                     contentDescription = null,
                     tint = if (isActive) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -233,7 +230,7 @@ private fun ServerCard(
                             modifier = Modifier.padding(top = 2.dp),
                         ) {
                             Icon(
-                                Icons.Default.Person,
+                                Tabler.Outline.User,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = if (isActive) {
@@ -259,7 +256,7 @@ private fun ServerCard(
 
             if (isActive) {
                 Icon(
-                    Icons.Default.Check,
+                    Tabler.Outline.Check,
                     contentDescription = "Active",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -270,7 +267,7 @@ private fun ServerCard(
             } else {
                 IconButton(onClick = onDelete) {
                     Icon(
-                        Icons.Default.Delete,
+                        Tabler.Outline.Trash,
                         contentDescription = "Remove",
                         tint = MaterialTheme.colorScheme.error,
                     )

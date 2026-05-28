@@ -125,7 +125,8 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.iconsExtended)
+    implementation(libs.tabler.icons.outline)
+    implementation(libs.tabler.icons.filled)
     implementation(libs.compose.material3.adaptive)
     implementation(libs.compose.material3.adaptive.layout)
     implementation(libs.compose.material3.adaptive.navigation)
@@ -138,6 +139,8 @@ dependencies {
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
+
+    implementation(libs.work.runtime.ktx)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)

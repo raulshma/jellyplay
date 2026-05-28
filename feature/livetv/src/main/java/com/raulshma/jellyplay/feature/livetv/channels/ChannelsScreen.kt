@@ -28,12 +28,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.CalendarViewWeek
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -68,6 +62,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -169,12 +165,12 @@ fun ChannelsScreen(
                             ) {
                                 ExpressiveToolbarIconButton(
                                     onClick = onDvrClick,
-                                    icon = Icons.Default.FiberManualRecord,
+                                    icon = Tabler.Outline.Circle,
                                     contentDescription = "Recordings",
                                 )
                                 ExpressiveToolbarIconButton(
                                     onClick = onGuideClick,
-                                    icon = Icons.Default.CalendarViewWeek,
+                                    icon = Tabler.Outline.Calendar,
                                     contentDescription = "Program Guide",
                                 )
                             }
@@ -211,7 +207,7 @@ fun ChannelsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(
-                                Icons.Default.LiveTv,
+                                Tabler.Outline.DeviceTv,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
@@ -284,7 +280,7 @@ private fun ChannelCard(
                 )
             } else {
                 Icon(
-                    Icons.Default.LiveTv,
+                    Tabler.Outline.DeviceTv,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
@@ -335,7 +331,7 @@ private fun ChannelCard(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Watch",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),

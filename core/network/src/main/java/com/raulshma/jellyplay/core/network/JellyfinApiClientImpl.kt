@@ -1476,6 +1476,7 @@ class JellyfinApiClientImpl @Inject constructor(
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {
         org.jellyfin.sdk.model.api.BaseItemKind.MOVIE -> MediaType.MOVIE
         org.jellyfin.sdk.model.api.BaseItemKind.SERIES -> MediaType.SERIES
+        org.jellyfin.sdk.model.api.BaseItemKind.SEASON -> MediaType.SEASON
         org.jellyfin.sdk.model.api.BaseItemKind.EPISODE -> MediaType.EPISODE
         org.jellyfin.sdk.model.api.BaseItemKind.MUSIC_ALBUM -> MediaType.ALBUM
         org.jellyfin.sdk.model.api.BaseItemKind.AUDIO -> MediaType.AUDIO
@@ -1489,6 +1490,7 @@ class JellyfinApiClientImpl @Inject constructor(
     private fun MediaType.toBaseItemKind(): org.jellyfin.sdk.model.api.BaseItemKind? = when (this) {
         MediaType.MOVIE -> org.jellyfin.sdk.model.api.BaseItemKind.MOVIE
         MediaType.SERIES -> org.jellyfin.sdk.model.api.BaseItemKind.SERIES
+        MediaType.SEASON -> org.jellyfin.sdk.model.api.BaseItemKind.SEASON
         MediaType.EPISODE -> org.jellyfin.sdk.model.api.BaseItemKind.EPISODE
         MediaType.ALBUM -> org.jellyfin.sdk.model.api.BaseItemKind.MUSIC_ALBUM
         MediaType.AUDIO -> org.jellyfin.sdk.model.api.BaseItemKind.AUDIO

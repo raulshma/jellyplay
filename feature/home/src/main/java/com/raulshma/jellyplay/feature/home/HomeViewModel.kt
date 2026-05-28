@@ -10,6 +10,8 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -21,6 +23,8 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
@@ -52,6 +56,8 @@ class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
+    private val offlineModeManager: OfflineModeManager,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -81,6 +87,10 @@ class HomeViewModel @Inject constructor(
     var dynamicTheming by mutableStateOf(true)
         private set
     var oledMode by mutableStateOf(false)
+        private set
+    var offlineMode by mutableStateOf(OfflineMode.ONLINE)
+        private set
+    var offlineLibrary by mutableStateOf<List<OfflineMediaItem>>(emptyList())
         private set
 
     // Seerr Discover state
@@ -148,6 +158,25 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            offlineModeManager.offlineMode.collect { mode ->
+                val wasOffline = offlineMode != OfflineMode.ONLINE
+                offlineMode = mode
+                if (mode != OfflineMode.ONLINE && !wasOffline) {
+                    sections = emptyList()
+                    discoverSections = emptyMap()
+                } else if (mode == OfflineMode.ONLINE && wasOffline) {
+                    fetchAndUpdateSections()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            offlineRepository.getOfflineLibrary().collect { items ->
+                offlineLibrary = items
+            }
+        }
         
         // Finally, load initial data
         loadInitial()
@@ -191,6 +220,13 @@ class HomeViewModel @Inject constructor(
     private suspend fun fetchAndUpdateSections() {
         if (!refreshMutex.tryLock()) return
         try {
+            offlineModeManager.checkNetworkAndAutoDetect()
+
+            if (offlineModeManager.isOffline) {
+                lastRefreshTime = System.currentTimeMillis()
+                return
+            }
+
             lastRefreshTime = System.currentTimeMillis()
             val prefs = preferencesStore.preferences.first()
             mediaRepository.getHomeSections()
@@ -331,6 +367,10 @@ class HomeViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+
+    fun toggleOfflineMode() {
+        offlineModeManager.toggleManualOffline()
+    }
 
     fun getHomeScrollPosition(): HomeScrollPosition = homeScrollPosition
 

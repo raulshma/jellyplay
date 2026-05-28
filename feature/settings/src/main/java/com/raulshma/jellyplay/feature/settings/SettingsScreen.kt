@@ -28,52 +28,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.NavigateNext
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Brightness6
-import androidx.compose.material.icons.filled.Cached
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Gesture
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.ChildCare
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.OndemandVideo
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.QueuePlayNext
-import androidx.compose.material.icons.filled.ScreenLockLandscape
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Swipe
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.SurroundSound
-import androidx.compose.material.icons.filled.Waves
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -83,7 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -95,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -134,6 +89,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -192,11 +149,12 @@ fun SettingsScreen(
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
                     Box(
@@ -209,7 +167,7 @@ fun SettingsScreen(
                             .clickable(onClick = onBack),
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            Tabler.Outline.ArrowLeft,
                             contentDescription = "Back",
                             modifier = Modifier
                                 .padding(12.dp)
@@ -259,28 +217,28 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(1) {
                 SettingsGroup(
-                    icon = Icons.Default.Person,
+                    icon = Tabler.Outline.User,
                     title = "Account",
                     summary = { "Signed in as $userName" },
                     initiallyExpanded = true,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     SettingListItem(
-                        icon = Icons.Default.Dns,
+                        icon = Tabler.Outline.Server,
                         title = "Servers",
                         subtitle = "Manage your Jellyfin servers",
                         index = 0, count = 3,
                         onClick = onServerManagement,
                     )
                     SettingListItem(
-                        icon = Icons.Default.Person,
+                        icon = Tabler.Outline.User,
                         title = "Switch User",
                         subtitle = userName.ifBlank { "Manage users" },
                         index = 1, count = 3,
                         onClick = onUserManagement,
                     )
                     SettingListItem(
-                        icon = Icons.AutoMirrored.Filled.Logout,
+                        icon = Tabler.Outline.Logout,
                         title = "Sign Out",
                         subtitle = "Log out of current account",
                         index = 2, count = 3,
@@ -295,13 +253,13 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(2) {
                 SettingsGroup(
-                    icon = Icons.Default.Extension,
+                    icon = Tabler.Outline.Puzzle,
                     title = "Integrations",
                     summary = { "Seerr" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     SettingListItem(
-                        icon = Icons.Default.Extension,
+                        icon = Tabler.Outline.Puzzle,
                         title = "Seerr",
                         subtitle = "Media request and discovery manager",
                         index = 0, count = 1,
@@ -312,7 +270,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(3) {
                 SettingsGroup(
-                    icon = Icons.Default.PlayCircle,
+                    icon = Tabler.Outline.PlayerPlay,
                     title = "Video Player",
                     summary = { "Player Engine: ${preferences.preferredPlayer.displayName}" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -336,7 +294,7 @@ fun SettingsScreen(
                     val total = videoItems.size
 
                     SettingListItem(
-                        icon = Icons.Default.PlayCircle,
+                        icon = Tabler.Outline.PlayerPlay,
                         title = "Player Engine",
                         subtitle = "Choose media playback engine",
                         trailingText = preferences.preferredPlayer.displayName,
@@ -344,7 +302,7 @@ fun SettingsScreen(
                         onClick = { showPlayerPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.FastForward,
+                        icon = Tabler.Outline.PlayerTrackNext,
                         title = "Seek Duration",
                         subtitle = "Double-tap to seek",
                         trailingText = "${preferences.videoSeekDurationMs / 1000}s",
@@ -352,7 +310,7 @@ fun SettingsScreen(
                         onClick = { showVideoSeekDurationPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.ScreenLockLandscape,
+                        icon = Tabler.Outline.DeviceMobileRotated,
                         title = "Orientation",
                         subtitle = "Default screen orientation",
                         trailingText = preferences.videoDefaultOrientation.displayName,
@@ -360,7 +318,7 @@ fun SettingsScreen(
                         onClick = { showOrientationPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Timer,
+                        icon = Tabler.Outline.Stopwatch,
                         title = "Controls Timeout",
                         subtitle = "Auto-hide player controls",
                         trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
@@ -368,7 +326,7 @@ fun SettingsScreen(
                         onClick = { showControlsTimeoutPicker = true },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.Gesture,
+                        icon = Tabler.Outline.HandMove,
                         title = "Gestures",
                         subtitle = if (preferences.videoGesturesEnabled) "Swipe & tap controls active" else "Touch gestures disabled",
                         checked = preferences.videoGesturesEnabled,
@@ -376,7 +334,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Speed,
+                        icon = Tabler.Outline.Gauge,
                         title = "Default Speed",
                         subtitle = if (preferences.videoDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.videoDefaultSpeed}x playback",
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
@@ -384,7 +342,7 @@ fun SettingsScreen(
                         onClick = { showVideoSpeedPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.AspectRatio,
+                        icon = Tabler.Outline.AspectRatio,
                         title = "Default Aspect",
                         subtitle = "Video aspect ratio mode",
                         trailingText = preferences.videoDefaultAspectRatio,
@@ -392,7 +350,7 @@ fun SettingsScreen(
                         onClick = { showAspectRatioPicker = true },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.QueuePlayNext,
+                        icon = Tabler.Outline.PlaylistAdd,
                         title = "Auto-play Next",
                         subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
                         checked = preferences.videoAutoplayNext,
@@ -400,7 +358,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.VideoLibrary,
+                        icon = Tabler.Outline.Video,
                         title = "Episode Browser",
                         subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
                         checked = preferences.videoEpisodeBrowserEnabled,
@@ -408,7 +366,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Swipe,
+                        icon = Tabler.Outline.HandFinger,
                         title = "Swipe Seek Range",
                         subtitle = "Maximum seek distance",
                         trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
@@ -416,7 +374,7 @@ fun SettingsScreen(
                         onClick = { showSwipeSeekPicker = true },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.Brightness6,
+                        icon = Tabler.Outline.BrightnessHalf,
                         title = "Remember Brightness",
                         subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                         checked = preferences.videoRememberBrightness,
@@ -424,7 +382,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.OndemandVideo,
+                        icon = Tabler.Outline.Video,
                         title = "Trickplay Preview",
                         subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
                         checked = preferences.trickplayEnabled,
@@ -432,7 +390,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.TouchApp,
+                        icon = Tabler.Outline.HandClick,
                         title = "Trickplay on Gestures",
                         subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
                         checked = preferences.trickplayOnSeekGesture,
@@ -440,7 +398,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Cached,
+                        icon = Tabler.Outline.Refresh,
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during playback",
                         trailingText = preferences.videoPreloadBufferSize.displayName,
@@ -452,7 +410,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(4) {
                 SettingsGroup(
-                    icon = Icons.Default.FastForward,
+                    icon = Tabler.Outline.PlayerTrackNext,
                     title = "Media Segments",
                     summary = {
                         val autoCount = preferences.segmentBehaviors.count { it.value == com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP }
@@ -467,7 +425,7 @@ fun SettingsScreen(
                         val behavior = preferences.segmentBehaviors[type]
                             ?: com.raulshma.jellyplay.core.model.SegmentBehavior.IGNORE
                         SettingListItem(
-                            icon = Icons.Default.FastForward,
+                            icon = Tabler.Outline.PlayerTrackNext,
                             title = type.displayName,
                             subtitle = type.description,
                             trailingText = behavior.displayName,
@@ -485,7 +443,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(5) {
                 SettingsGroup(
-                    icon = Icons.Default.HighQuality,
+                    icon = Tabler.Outline.BadgeHd,
                     title = "Advanced Video",
                     summary = { "Decoder: ${preferences.decoderMode.displayName}" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -504,7 +462,7 @@ fun SettingsScreen(
 
                     var idx = 0
                     SettingToggleItem(
-                        icon = Icons.Default.RecordVoiceOver,
+                        icon = Tabler.Outline.Microphone2,
                         title = "Dialogue Boost",
                         subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
                         checked = preferences.dialogueBoostEnabled,
@@ -513,7 +471,7 @@ fun SettingsScreen(
                     )
                     if (preferences.dialogueBoostEnabled) {
                         SettingListItem(
-                            icon = Icons.Default.Audiotrack,
+                            icon = Tabler.Outline.Music,
                             title = "Dialogue Boost Strength",
                             subtitle = preferences.dialogueBoostStrength.displayName,
                             trailingText = preferences.dialogueBoostStrength.displayName,
@@ -527,7 +485,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingListItem(
-                        icon = Icons.Default.HighQuality,
+                        icon = Tabler.Outline.BadgeHd,
                         title = "Decoder",
                         subtitle = preferences.decoderMode.displayName,
                         trailingText = preferences.decoderMode.displayName.split(" ").first(),
@@ -540,7 +498,7 @@ fun SettingsScreen(
                         },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.Movie,
+                        icon = Tabler.Outline.Movie,
                         title = "Audio Passthrough",
                         subtitle = if (preferences.audioPassthrough) "Direct audio to receiver" else "Software audio processing",
                         checked = preferences.audioPassthrough,
@@ -548,7 +506,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setAudioPassthrough(it) },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.Fullscreen,
+                        icon = Tabler.Outline.Maximize,
                         title = "Frame Rate Match",
                         subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
                         checked = preferences.frameRateMatching,
@@ -556,7 +514,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setFrameRateMatching(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.HighQuality,
+                        icon = Tabler.Outline.BadgeHd,
                         title = "Streaming Quality",
                         subtitle = streamingQualityLabel(preferences.streamingQuality),
                         trailingText = streamingQualityShort(preferences.streamingQuality),
@@ -569,7 +527,7 @@ fun SettingsScreen(
                         },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Audiotrack,
+                        icon = Tabler.Outline.Music,
                         title = "Audio Delay",
                         subtitle = if (preferences.audioDelayMs == 0L) "No audio delay" else "${preferences.audioDelayMs}ms delay",
                         trailingText = if (preferences.audioDelayMs == 0L) "Off" else "${preferences.audioDelayMs}ms",
@@ -581,7 +539,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(6) {
                 SettingsGroup(
-                    icon = Icons.Default.Group,
+                    icon = Tabler.Outline.Users,
                     title = "SyncPlay",
                     summary = { "Watch together with friends" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -591,7 +549,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(7) {
                 SettingsGroup(
-                    icon = Icons.Default.LibraryMusic,
+                    icon = Tabler.Outline.Music,
                     title = "Audio Player",
                     summary = { "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -609,7 +567,7 @@ fun SettingsScreen(
                     }
 
                     SettingListItem(
-                        icon = Icons.Default.Speed,
+                        icon = Tabler.Outline.Gauge,
                         title = "Default Speed",
                         subtitle = if (preferences.audioDefaultSpeed == 1.0f) "Normal playback speed" else "${preferences.audioDefaultSpeed}x playback",
                         trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
@@ -617,7 +575,7 @@ fun SettingsScreen(
                         onClick = { showAudioSpeedPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.LibraryMusic,
+                        icon = Tabler.Outline.Music,
                         title = "Night Mode Volume",
                         subtitle = "Maximum volume level at night",
                         trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
@@ -625,7 +583,7 @@ fun SettingsScreen(
                         onClick = { showNightModeVolumePicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Tune,
+                        icon = Tabler.Outline.Adjustments,
                         title = "Night Mode Gain",
                         subtitle = "Loudness compensation",
                         trailingText = "${preferences.audioNightModeGain}",
@@ -633,7 +591,7 @@ fun SettingsScreen(
                         onClick = { showNightModeGainPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.SkipNext,
+                        icon = Tabler.Outline.PlayerSkipForward,
                         title = "Skip Prev Threshold",
                         subtitle = "Restart song if past this point",
                         trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
@@ -641,7 +599,7 @@ fun SettingsScreen(
                         onClick = { showSkipPrevThresholdPicker = true },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.QueuePlayNext,
+                        icon = Tabler.Outline.PlaylistAdd,
                         title = "Auto-play Next",
                         subtitle = if (preferences.audioAutoplayNext) "Automatically plays next track" else "Manual track selection",
                         checked = preferences.audioAutoplayNext,
@@ -649,7 +607,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.QueuePlayNext,
+                        icon = Tabler.Outline.PlaylistAdd,
                         title = "Gapless Playback",
                         subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
                         checked = preferences.audioGaplessEnabled,
@@ -657,7 +615,7 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setGaplessEnabled(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Audiotrack,
+                        icon = Tabler.Outline.Music,
                         title = "Crossfade Duration",
                         subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
                         trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
@@ -665,7 +623,7 @@ fun SettingsScreen(
                         onClick = { showCrossfadePicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Cached,
+                        icon = Tabler.Outline.Refresh,
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during audio playback",
                         trailingText = preferences.audioPreloadBufferSize.displayName,
@@ -673,7 +631,7 @@ fun SettingsScreen(
                         onClick = { showAudioPreloadBufferPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Tune,
+                        icon = Tabler.Outline.Adjustments,
                         title = "Volume Normalization",
                         subtitle = when (preferences.audioNormalizationMode) {
                             AudioNormalizationMode.NONE -> "Off"
@@ -694,7 +652,7 @@ fun SettingsScreen(
                         preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
                     ) {
                         SettingListItem(
-                            icon = Icons.Default.Tune,
+                            icon = Tabler.Outline.Adjustments,
                             title = "ReplayGain Pre-Amp",
                             subtitle = "Fine-tune target loudness",
                             trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
@@ -703,7 +661,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
-                        icon = Icons.Default.Tune,
+                        icon = Tabler.Outline.Adjustments,
                         title = "Equalizer",
                         subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
                         checked = preferences.equalizerEnabled,
@@ -713,7 +671,7 @@ fun SettingsScreen(
                     )
                     if (preferences.equalizerEnabled) {
                         SettingToggleItem(
-                            icon = Icons.Default.RecordVoiceOver,
+                            icon = Tabler.Outline.Microphone2,
                             title = "Dialogue Boost",
                             subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
                             checked = preferences.dialogueBoostEnabled,
@@ -723,7 +681,7 @@ fun SettingsScreen(
                     }
                     if (preferences.dialogueBoostEnabled) {
                         SettingListItem(
-                            icon = Icons.Default.Audiotrack,
+                            icon = Tabler.Outline.Music,
                             title = "Dialogue Boost Strength",
                             subtitle = preferences.dialogueBoostStrength.displayName,
                             trailingText = preferences.dialogueBoostStrength.displayName,
@@ -737,7 +695,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
-                        icon = Icons.Default.Speed,
+                        icon = Tabler.Outline.Gauge,
                         title = "Night Mode",
                         subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
                         checked = preferences.nightModeEnabled,
@@ -746,7 +704,7 @@ fun SettingsScreen(
                     )
                     if (preferences.nightModeEnabled) {
                         SettingListItem(
-                            icon = Icons.Default.Nightlight,
+                            icon = Tabler.Outline.Moon,
                             title = "Night Mode Strength",
                             subtitle = preferences.nightModeStrength.displayName,
                             trailingText = preferences.nightModeStrength.displayName,
@@ -760,7 +718,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
-                        icon = Icons.Default.GraphicEq,
+                        icon = Tabler.Outline.WaveSine,
                         title = "Bass Boost",
                         subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else "Off",
                         checked = preferences.bassBoostEnabled,
@@ -769,7 +727,7 @@ fun SettingsScreen(
                     )
                     if (preferences.bassBoostEnabled) {
                         SettingListItem(
-                            icon = Icons.Default.GraphicEq,
+                            icon = Tabler.Outline.WaveSine,
                             title = "Bass Boost Strength",
                             subtitle = preferences.bassBoostStrength.displayName,
                             trailingText = preferences.bassBoostStrength.displayName,
@@ -783,7 +741,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
-                        icon = Icons.Default.SurroundSound,
+                        icon = Tabler.Outline.Speakerphone,
                         title = "Virtualizer / Spatial Audio",
                         subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}% strength" else "Off",
                         checked = preferences.virtualizerEnabled,
@@ -792,7 +750,7 @@ fun SettingsScreen(
                     )
                     if (preferences.virtualizerEnabled) {
                         SettingListItem(
-                            icon = Icons.Default.SurroundSound,
+                            icon = Tabler.Outline.Speakerphone,
                             title = "Virtualizer Strength",
                             subtitle = "${preferences.virtualizerStrength / 10}%",
                             trailingText = "${preferences.virtualizerStrength / 10}%",
@@ -806,7 +764,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingListItem(
-                        icon = Icons.Default.Waves,
+                        icon = Tabler.Outline.WaveSine,
                         title = "Reverb",
                         subtitle = preferences.reverbPreset.displayName,
                         trailingText = preferences.reverbPreset.displayName,
@@ -819,7 +777,7 @@ fun SettingsScreen(
                         },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.AutoAwesome,
+                        icon = Tabler.Outline.Wand,
                         title = "Auto-EQ by Genre",
                         subtitle = if (preferences.autoEqByGenre) "Automatically applies EQ preset based on genre" else "Off",
                         checked = preferences.autoEqByGenre,
@@ -831,13 +789,13 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(8) {
                 SettingsGroup(
-                    icon = Icons.Default.Language,
+                    icon = Tabler.Outline.Language,
                     title = "Language",
                     summary = { "Audio: ${preferences.preferredAudioLanguage ?: "Default"}" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     SettingListItem(
-                        icon = Icons.Default.Language,
+                        icon = Tabler.Outline.Language,
                         title = "Audio Language",
                         subtitle = "Preferred audio track language",
                         trailingText = preferences.preferredAudioLanguage ?: "Default",
@@ -845,7 +803,7 @@ fun SettingsScreen(
                         onClick = { showAudioLanguagePicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.ClosedCaption,
+                        icon = Tabler.Outline.Subtitles,
                         title = "Subtitle Language",
                         subtitle = "Preferred subtitle language",
                         trailingText = preferences.preferredSubtitleLanguage ?: "Default",
@@ -857,14 +815,14 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(9) {
                 SettingsGroup(
-                    icon = Icons.Default.ClosedCaption,
+                    icon = Tabler.Outline.Subtitles,
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     val subTotal = 6
                     SettingListItem(
-                        icon = Icons.Default.TextFields,
+                        icon = Tabler.Outline.Typography,
                         title = "Font Size",
                         subtitle = "Subtitle text size",
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
@@ -872,7 +830,7 @@ fun SettingsScreen(
                         onClick = { showSubtitleFontPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Palette,
+                        icon = Tabler.Outline.Palette,
                         title = "Text Color",
                         subtitle = "Subtitle font color",
                         trailingText = preferences.subtitleStyle.fontColor.name,
@@ -880,14 +838,14 @@ fun SettingsScreen(
                         onClick = { showSubtitleColorPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.ClosedCaption,
+                        icon = Tabler.Outline.Subtitles,
                         title = "Background",
                         subtitle = "${preferences.subtitleStyle.backgroundColor.name} \u2022 ${(preferences.subtitleStyle.backgroundOpacity * 100).toInt()}%",
                         index = 2, count = subTotal,
                         onClick = { showSubtitleBgColorPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.TextFields,
+                        icon = Tabler.Outline.Typography,
                         title = "Edge Style",
                         subtitle = "Text outline effect",
                         trailingText = preferences.subtitleStyle.edgeType.name,
@@ -895,7 +853,7 @@ fun SettingsScreen(
                         onClick = { showSubtitleEdgePicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Timer,
+                        icon = Tabler.Outline.Stopwatch,
                         title = "Sync Offset",
                         subtitle = "Subtitle timing adjustment",
                         trailingText = "${preferences.subtitleStyle.offsetMs}ms",
@@ -903,7 +861,7 @@ fun SettingsScreen(
                         onClick = { showSubtitleOffsetPicker = true },
                     )
                     SettingListItem(
-                        icon = Icons.Default.ClosedCaption,
+                        icon = Tabler.Outline.Subtitles,
                         title = "Position",
                         subtitle = "Vertical placement on screen",
                         trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
@@ -915,27 +873,27 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(10) {
                 SettingsGroup(
-                    icon = Icons.Default.Storage,
+                    icon = Tabler.Outline.Database,
                     title = "Storage",
                     summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     val storageTotal = 4
                     SettingInfoItem(
-                        icon = Icons.Default.Storage,
+                        icon = Tabler.Outline.Database,
                         title = "Cache Used",
                         subtitle = "${viewModel.cacheSizeMb} MB",
                         index = 0, count = storageTotal,
                     )
                     SettingListItem(
-                        icon = Icons.Default.Delete,
+                        icon = Tabler.Outline.Trash,
                         title = "Clear Cache",
                         subtitle = "Free up storage space",
                         index = 1, count = storageTotal,
                         onClick = { viewModel.clearCache() },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.Cached,
+                        icon = Tabler.Outline.Refresh,
                         title = "Auto-delete Cache",
                         subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
                         checked = preferences.autoDeleteCache,
@@ -943,13 +901,13 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setAutoDeleteCache(it) },
                     )
                     SettingListItem(
-                        icon = Icons.Default.Storage,
+                        icon = Tabler.Outline.Database,
                         title = "Max Cache Size",
                         subtitle = "Maximum disk space for caching",
-                        trailingText = "${preferences.maxCacheSizeMb} MB",
+                        trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
                         index = 3, count = storageTotal,
                         onClick = {
-                            val sizes = listOf(250, 500, 1000, 2000, 5000)
+                            val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
                             val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
                             val nextIndex = (currentIndex + 1) % sizes.size
                             viewModel.setMaxCacheSize(sizes[nextIndex])
@@ -960,7 +918,7 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(11) {
                 SettingsGroup(
-                    icon = Icons.Default.Palette,
+                    icon = Tabler.Outline.Palette,
                     title = "Appearance",
                     summary = {
                         val parts = mutableListOf<String>()
@@ -981,7 +939,7 @@ fun SettingsScreen(
                     if (isAndroid12) {
                         val baseCount = if (isDarkActive) 4 else 3
                         SettingListItem(
-                            icon = Icons.Default.Nightlight,
+                            icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
                             subtitle = when (preferences.themeMode) {
                                 ThemeMode.SYSTEM -> "Follow system setting"
@@ -1000,7 +958,7 @@ fun SettingsScreen(
                             },
                         )
                         SettingToggleItem(
-                            icon = Icons.Default.OndemandVideo,
+                            icon = Tabler.Outline.Video,
                             title = "Dynamic Theming",
                             subtitle = "Colors extracted from artwork",
                             checked = preferences.dynamicTheming,
@@ -1009,7 +967,7 @@ fun SettingsScreen(
                         )
                         if (isDarkActive) {
                             SettingToggleItem(
-                                icon = Icons.Default.Brightness6,
+                                icon = Tabler.Outline.BrightnessHalf,
                                 title = "OLED Mode",
                                 subtitle = "Pure black backgrounds for AMOLED displays",
                                 checked = preferences.oledMode,
@@ -1018,7 +976,7 @@ fun SettingsScreen(
                             )
                         }
                         SettingListItem(
-                            icon = Icons.Default.Home,
+                            icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
@@ -1030,7 +988,7 @@ fun SettingsScreen(
                         )
                     } else {
                         SettingToggleItem(
-                            icon = Icons.Default.OndemandVideo,
+                            icon = Tabler.Outline.Video,
                             title = "Dynamic Theming",
                             subtitle = "Colors extracted from artwork",
                             checked = preferences.dynamicTheming,
@@ -1038,7 +996,7 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.setDynamicTheming(it) },
                         )
                         SettingListItem(
-                            icon = Icons.Default.Home,
+                            icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
@@ -1055,7 +1013,7 @@ fun SettingsScreen(
             if (isTv) {
                 AnimatedSettingsEntrance(12) {
                     SettingsGroup(
-                        icon = Icons.Default.Nightlight,
+                        icon = Tabler.Outline.Moon,
                         title = "Screensaver",
                         summary = {
                             val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
@@ -1065,7 +1023,7 @@ fun SettingsScreen(
                     ) {
                         val dreamTotal = 5
                         SettingToggleItem(
-                            icon = Icons.Default.TextFields,
+                            icon = Tabler.Outline.Typography,
                             title = "Show Title",
                             subtitle = if (preferences.dreamShowTitle) "Display media title" else "Hide media title",
                             checked = preferences.dreamShowTitle,
@@ -1073,7 +1031,7 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.setDreamShowTitle(it) },
                         )
                         SettingListItem(
-                            icon = Icons.Default.Movie,
+                            icon = Tabler.Outline.Movie,
                             title = "Categories",
                             subtitle = "Choose which library types appear",
                             trailingText = preferences.dreamImageCategories.joinToString(", ") {
@@ -1098,7 +1056,7 @@ fun SettingsScreen(
                             },
                         )
                         SettingListItem(
-                            icon = Icons.Default.Timer,
+                            icon = Tabler.Outline.Stopwatch,
                             title = "Slideshow Interval",
                             subtitle = "Time between image transitions",
                             trailingText = "${(preferences.dreamSlideshowIntervalMs / 1000)}s",
@@ -1111,7 +1069,7 @@ fun SettingsScreen(
                             },
                         )
                         SettingToggleItem(
-                            icon = Icons.Default.Swipe,
+                            icon = Tabler.Outline.HandFinger,
                             title = "Ken Burns Effect",
                             subtitle = if (preferences.dreamKenBurnsEnabled) "Gentle pan and zoom" else "Static images",
                             checked = preferences.dreamKenBurnsEnabled,
@@ -1119,7 +1077,7 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
                         )
                         SettingListItem(
-                            icon = Icons.AutoMirrored.Filled.NavigateNext,
+                            icon = Tabler.Outline.ChevronRight,
                             title = "Transition Style",
                             subtitle = "How images transition between each other",
                             trailingText = preferences.dreamTransitionStyle.name,
@@ -1137,14 +1095,14 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(if (isTv) 13 else 12) {
                 SettingsGroup(
-                    icon = Icons.Default.Lock,
+                    icon = Tabler.Outline.Lock,
                     title = "Security",
                     summary = { if (preferences.pinLockEnabled) "PIN lock: On" else "PIN lock: Off" },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     val secTotal = 2
                     SettingToggleItem(
-                        icon = if (preferences.pinLockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                        icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = "PIN Lock",
                         subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
                         checked = preferences.pinLockEnabled,
@@ -1159,7 +1117,7 @@ fun SettingsScreen(
                         },
                     )
                     SettingToggleItem(
-                        icon = Icons.Default.ChildCare,
+                        icon = Tabler.Outline.BabyCarriage,
                         title = "Kids Mode",
                         subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
                         checked = preferences.kidsModeEnabled,
@@ -1177,7 +1135,7 @@ fun SettingsScreen(
             AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     SettingInfoItem(
-                        icon = Icons.Default.OndemandVideo,
+                        icon = Tabler.Outline.Video,
                         title = "Version",
                         subtitle = "JellyPlay v${viewModel.appVersion}",
                         index = 0, count = 1,
@@ -1776,7 +1734,7 @@ private fun SettingsProfileBanner(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Person,
+                Tabler.Outline.User,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(28.dp),

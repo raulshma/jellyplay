@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -10,6 +8,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 class PlayerControlButtonsTest {
 
@@ -22,7 +22,7 @@ class PlayerControlButtonsTest {
             MaterialTheme {
                 PlayerIconButton(
                     onClick = {},
-                    icon = Icons.Default.Audiotrack,
+                    icon = Tabler.Outline.Music,
                     contentDescription = "Audio",
                 )
             }
@@ -37,7 +37,7 @@ class PlayerControlButtonsTest {
             MaterialTheme {
                 PlayerIconButton(
                     onClick = { clicked = true },
-                    icon = Icons.Default.Audiotrack,
+                    icon = Tabler.Outline.Music,
                     contentDescription = "Audio",
                 )
             }
@@ -53,7 +53,7 @@ class PlayerControlButtonsTest {
             MaterialTheme {
                 PlayerIconButton(
                     onClick = { clicked = true },
-                    icon = Icons.Default.Audiotrack,
+                    icon = Tabler.Outline.Music,
                     contentDescription = "Audio",
                     enabled = false,
                 )

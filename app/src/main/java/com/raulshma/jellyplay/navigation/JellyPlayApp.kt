@@ -25,12 +25,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -109,6 +103,8 @@ import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import kotlinx.coroutines.launch
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun JellyPlayApp(
@@ -175,7 +171,6 @@ private fun MainContent(
     val currentRoute = navigator.currentRoute()
 
     val isPlayerScreen = currentRoute is Route.VideoPlayer ||
-            currentRoute is Route.OfflinePlayer ||
             currentRoute is Route.LiveTvChannelPlayer
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
@@ -567,11 +562,11 @@ private fun TvMainLayout(
 @Composable
 private fun NavIcon(route: Route, label: String, tint: Color = MaterialTheme.colorScheme.onSurface) {
     when (route) {
-        Route.Home -> Icon(Icons.Default.Home, contentDescription = label, tint = tint)
-        Route.Library -> Icon(Icons.Default.LibraryMusic, contentDescription = label, tint = tint)
-        Route.Search -> Icon(Icons.Default.Search, contentDescription = label, tint = tint)
-        Route.LiveTv -> Icon(Icons.Default.LiveTv, contentDescription = label, tint = tint)
-        Route.MusicBrowse -> Icon(Icons.Default.Album, contentDescription = label, tint = tint)
+        Route.Home -> Icon(Tabler.Outline.Home, contentDescription = label, tint = tint)
+        Route.Library -> Icon(Tabler.Outline.Music, contentDescription = label, tint = tint)
+        Route.Search -> Icon(Tabler.Outline.Search, contentDescription = label, tint = tint)
+        Route.LiveTv -> Icon(Tabler.Outline.DeviceTv, contentDescription = label, tint = tint)
+        Route.MusicBrowse -> Icon(Tabler.Outline.Disc, contentDescription = label, tint = tint)
         else -> {}
     }
 }
@@ -599,7 +594,6 @@ private fun MainNavDisplay(
                 val contentKey = entry.contentKey.toString()
                 val isPlayer = contentKey.contains("AudioPlayer") ||
                         contentKey.contains("VideoPlayer") ||
-                        contentKey.contains("OfflinePlayer") ||
                         contentKey.contains("LiveTvChannelPlayer") ||
                         contentKey.contains("Ambient")
 

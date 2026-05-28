@@ -32,12 +32,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -90,6 +86,8 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 // ─── Dominant color cache ────────────────────────────────────────────────────
 private val dominantColorCache = android.util.LruCache<String, Color>(100)
@@ -267,7 +265,7 @@ fun PlayButtonWithProgress(
 
         // Play icon
         Icon(
-            Icons.Default.PlayArrow,
+            Tabler.Outline.PlayerPlay,
             contentDescription = "Play",
             modifier = Modifier.size(buttonSize * 0.55f),
             tint = Color.White,
@@ -466,7 +464,7 @@ fun PosterCard(
             Text(
                 text = item.name,
                 style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
             )

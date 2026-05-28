@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -14,6 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 internal fun PipButton(
@@ -33,7 +33,7 @@ internal fun PipButton(
         ),
     ) {
         Icon(
-            Icons.Default.PictureInPictureAlt,
+            Tabler.Outline.PictureInPicture,
             contentDescription = "Picture in Picture",
             modifier = Modifier.size(IconButtonDefaults.smallIconSize),
         )

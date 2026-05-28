@@ -31,7 +31,8 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.iconsExtended)
+    implementation(libs.tabler.icons.outline)
+    implementation(libs.tabler.icons.filled)
 
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)

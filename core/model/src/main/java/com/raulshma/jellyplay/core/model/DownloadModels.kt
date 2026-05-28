@@ -19,6 +19,12 @@ data class DownloadItem(
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
     val imageBlurHash: String? = null,
+    val seriesId: String? = null,
+    val seasonId: String? = null,
+    val seriesName: String? = null,
+    val seasonName: String? = null,
+    val episodeNumber: Int? = null,
+    val seasonNumber: Int? = null,
 )
 
 @Immutable
@@ -45,7 +51,7 @@ data class UserPreferences(
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val maxCacheSizeMb: Int = 500,
+    val maxCacheSizeMb: Int = 0,
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,
@@ -106,6 +112,7 @@ data class UserPreferences(
     val lrBalance: Float = 0f,
     val autoEqByGenre: Boolean = false,
     val pitchSemitones: Float = 0f,
+    val downloadConnections: Int = 4,
 )
 
 @Immutable

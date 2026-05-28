@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -59,6 +60,7 @@ class AudioPlaybackManager @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) {
@@ -360,19 +362,40 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
-        val detail = mediaRepository.getMediaDetail(queueItem.id).getOrNull() ?: return null
-        val source = detail.mediaSources.firstOrNull()
+        val detail = mediaRepository.getMediaDetail(queueItem.id).getOrNull()
         val localDownload = downloadRepository.getDownloadByMediaItemId(queueItem.id)
         val file = localDownload?.let { dl ->
             java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
         }
-        val url = if (localDownload != null && file != null &&
+
+        if (localDownload != null && file != null &&
             localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
         ) {
-            Uri.fromFile(file).toString()
-        } else {
-            playbackRepository.getStreamUrl(queueItem.id, source?.id ?: "", if (startPositionMs > 0) startPositionMs * 10_000 else 0L)
+            val name = detail?.item?.name ?: queueItem.name
+            val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: queueItem.artist
+            val album = detail?.item?.album ?: queueItem.album ?: ""
+            val artUri = try {
+                Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
+            } catch (_: Exception) {
+                null
+            }
+            return MediaItem.Builder()
+                .setMediaId(queueItem.id)
+                .setUri(Uri.fromFile(file).toString())
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(name)
+                        .setArtist(artist)
+                        .setAlbumTitle(album)
+                        .setArtworkUri(artUri)
+                        .build()
+                )
+                .build()
         }
+
+        if (detail == null) return null
+        val source = detail.mediaSources.firstOrNull()
+        val url = playbackRepository.getStreamUrl(queueItem.id, source?.id ?: "", if (startPositionMs > 0) startPositionMs * 10_000 else 0L)
         val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
         return MediaItem.Builder()
             .setMediaId(queueItem.id)
@@ -405,114 +428,157 @@ class AudioPlaybackManager @Inject constructor(
         val player = getOrCreatePlayer()
 
         scope.launch {
-            mediaRepository.getMediaDetail(itemId)
-                .onSuccess { detail ->
-                    _currentPlayingItemId.value = itemId
-                    _title.value = detail.item.name
-                    _artist.value = detail.item.albumArtist
-                        ?: detail.item.artistItems.firstOrNull()?.name
-                        ?: ""
-                    _album.value = detail.item.album ?: ""
-                    _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
+            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detail = detailResult.getOrNull()
 
-                    val source = detail.mediaSources.firstOrNull()
-                    val resumeTicks = detail.item.playbackPositionTicks ?: 0L
-                    val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
+            if (detail != null) {
+                _currentPlayingItemId.value = itemId
+                _title.value = detail.item.name
+                _artist.value = detail.item.albumArtist
+                    ?: detail.item.artistItems.firstOrNull()?.name
+                    ?: ""
+                _album.value = detail.item.album ?: ""
+                _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
 
-                    val q = _queue.value
-                    val currentIdx = _currentIndex.value
-                    val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
+                val source = detail.mediaSources.firstOrNull()
+                val resumeTicks = detail.item.playbackPositionTicks ?: 0L
+                val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
 
-                    if (!isInQueue) {
-                        val queueItem = AudioQueueItem(
-                            id = itemId,
-                            name = _title.value,
-                            artist = _artist.value,
-                            album = _album.value,
-                            imageUrl = _albumArtUrl.value,
-                            mediaSourceId = source?.id,
-                            durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                            normalizationGain = detail.item.normalizationGain,
-                        )
-                        _queue.value = _queue.value + queueItem
-                        _currentIndex.value = _queue.value.lastIndex
-                    }
+                val q = _queue.value
+                val currentIdx = _currentIndex.value
+                val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
 
-                    val queueItems = _queue.value
-                    val playIndex = _currentIndex.value
-
-                    val clickedItem = queueItems.getOrNull(playIndex)
-                    if (clickedItem != null) {
-                        val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
-                        if (clickedMediaItem != null) {
-                            player.setMediaItem(clickedMediaItem, startPositionMs)
-                            player.prepare()
-                            player.playWhenReady = true
-                        }
-
-                        // Load the remaining items in a background job so the first track starts playing instantly!
-                        queueLoadingJob?.cancel()
-                        queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                            val mediaItemsBefore = mutableListOf<MediaItem>()
-                            val mediaItemsAfter = mutableListOf<MediaItem>()
-
-                            // Build media items after current item
-                            for (i in (playIndex + 1) until queueItems.size) {
-                                val qi = queueItems[i]
-                                val cached = mediaItemCache.get(qi.id)
-                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                                if (mediaItem != null) {
-                                    mediaItemsAfter.add(mediaItem)
-                                    mediaItemCache.put(qi.id, mediaItem)
-                                }
-                            }
-
-                            // Build media items before current item
-                            for (i in 0 until playIndex) {
-                                val qi = queueItems[i]
-                                val cached = mediaItemCache.get(qi.id)
-                                val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                                if (mediaItem != null) {
-                                    mediaItemsBefore.add(mediaItem)
-                                    mediaItemCache.put(qi.id, mediaItem)
-                                }
-                            }
-
-                            // Apply to ExoPlayer on main thread
-                            launch(kotlinx.coroutines.Dispatchers.Main) {
-                                if (exoPlayer == player) {
-                                    if (mediaItemsAfter.isNotEmpty()) {
-                                        player.addMediaItems(mediaItemsAfter)
-                                    }
-                                    if (mediaItemsBefore.isNotEmpty()) {
-                                        player.addMediaItems(0, mediaItemsBefore)
-                                        _currentIndex.value = playIndex
-                                    }
-                                }
-                                queueLoadingJob = null
-                            }
-                        }
-                    }
-
-                    playbackRepository.reportPlaybackStart(
-                        PlaybackStartInfo(
-                            itemId = itemId,
-                            sessionId = playSessionId,
-                            mediaSourceId = source?.id,
-                        )
+                if (!isInQueue) {
+                    val queueItem = AudioQueueItem(
+                        id = itemId,
+                        name = _title.value,
+                        artist = _artist.value,
+                        album = _album.value,
+                        imageUrl = _albumArtUrl.value,
+                        mediaSourceId = source?.id,
+                        durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                        normalizationGain = detail.item.normalizationGain,
                     )
-
-                    fetchLyrics(
-                        itemId = itemId,
-                        artistName = detail.item.albumArtist
-                            ?: detail.item.artistItems.firstOrNull()?.name,
-                        trackName = detail.item.name,
-                        durationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
-                    )
-                    applyReplayGain(detail.item.normalizationGain)
-                    startPositionTracking()
-                    startProgressReporting()
+                    _queue.value = _queue.value + queueItem
+                    _currentIndex.value = _queue.value.lastIndex
                 }
+
+                val queueItems = _queue.value
+                val playIndex = _currentIndex.value
+
+                val clickedItem = queueItems.getOrNull(playIndex)
+                if (clickedItem != null) {
+                    val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
+                    if (clickedMediaItem != null) {
+                        player.setMediaItem(clickedMediaItem, startPositionMs)
+                        player.prepare()
+                        player.playWhenReady = true
+                    }
+
+                    queueLoadingJob?.cancel()
+                    queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        val mediaItemsBefore = mutableListOf<MediaItem>()
+                        val mediaItemsAfter = mutableListOf<MediaItem>()
+
+                        for (i in (playIndex + 1) until queueItems.size) {
+                            val qi = queueItems[i]
+                            val cached = mediaItemCache.get(qi.id)
+                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                            if (mediaItem != null) {
+                                mediaItemsAfter.add(mediaItem)
+                                mediaItemCache.put(qi.id, mediaItem)
+                            }
+                        }
+
+                        for (i in 0 until playIndex) {
+                            val qi = queueItems[i]
+                            val cached = mediaItemCache.get(qi.id)
+                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
+                            if (mediaItem != null) {
+                                mediaItemsBefore.add(mediaItem)
+                                mediaItemCache.put(qi.id, mediaItem)
+                            }
+                        }
+
+                        launch(kotlinx.coroutines.Dispatchers.Main) {
+                            if (exoPlayer == player) {
+                                if (mediaItemsAfter.isNotEmpty()) {
+                                    player.addMediaItems(mediaItemsAfter)
+                                }
+                                if (mediaItemsBefore.isNotEmpty()) {
+                                    player.addMediaItems(0, mediaItemsBefore)
+                                    _currentIndex.value = playIndex
+                                }
+                            }
+                            queueLoadingJob = null
+                        }
+                    }
+                }
+
+                playbackRepository.reportPlaybackStart(
+                    PlaybackStartInfo(
+                        itemId = itemId,
+                        sessionId = playSessionId,
+                        mediaSourceId = source?.id,
+                    )
+                )
+
+                fetchLyrics(
+                    itemId = itemId,
+                    artistName = detail.item.albumArtist
+                        ?: detail.item.artistItems.firstOrNull()?.name,
+                    trackName = detail.item.name,
+                    durationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
+                )
+                applyReplayGain(detail.item.normalizationGain)
+                startPositionTracking()
+                startProgressReporting()
+            } else {
+                val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
+                if (localDownload != null && localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                    val file = java.io.File(localDownload.downloadPath)
+                    if (file.exists()) {
+                        val offlineItem = offlineRepository.getOfflineItem(itemId)
+                        _currentPlayingItemId.value = itemId
+                        _title.value = offlineItem?.name ?: localDownload.name
+                        _artist.value = offlineItem?.seriesName ?: ""
+                        _album.value = ""
+
+                        val q = _queue.value
+                        val currentIdx = _currentIndex.value
+                        val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
+
+                        if (!isInQueue) {
+                            val queueItem = AudioQueueItem(
+                                id = itemId,
+                                name = _title.value,
+                                artist = _artist.value,
+                                album = "",
+                                imageUrl = null,
+                                mediaSourceId = localDownload.mediaSourceId,
+                            )
+                            _queue.value = _queue.value + queueItem
+                            _currentIndex.value = _queue.value.lastIndex
+                        }
+
+                        val mediaItem = MediaItem.Builder()
+                            .setMediaId(itemId)
+                            .setUri(Uri.fromFile(file).toString())
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle(_title.value)
+                                    .setArtist(_artist.value)
+                                    .build()
+                            )
+                            .build()
+
+                        player.setMediaItem(mediaItem)
+                        player.prepare()
+                        player.playWhenReady = true
+                        startPositionTracking()
+                    }
+                }
+            }
             isLoadingItem = false
         }
     }
