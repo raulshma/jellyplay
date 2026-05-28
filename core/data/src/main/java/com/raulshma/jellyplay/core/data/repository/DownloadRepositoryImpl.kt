@@ -82,10 +82,13 @@ class DownloadRepositoryImpl @Inject constructor(
             downloadDao.deleteDownloadById(existing.id)
         }
 
-        val maxBytes = preferencesStore.preferences.first().maxCacheSizeMb.toLong() * 1024 * 1024
-        val currentBytes = downloadDao.getTotalDownloadedBytes()
-        if (currentBytes >= maxBytes) {
-            throw IllegalStateException("Download limit reached (${preferencesStore.preferences.first().maxCacheSizeMb} MB). Delete some downloads first.")
+        val prefs = preferencesStore.preferences.first()
+        val maxBytes = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
+        if (maxBytes > 0) {
+            val currentBytes = downloadDao.getTotalDownloadedBytes()
+            if (currentBytes >= maxBytes) {
+                throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
+            }
         }
 
         val id = UUID.randomUUID().toString()

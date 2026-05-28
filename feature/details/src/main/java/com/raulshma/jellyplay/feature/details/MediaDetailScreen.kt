@@ -193,6 +193,13 @@ fun MediaDetailScreen(
         }
     }
 
+    LaunchedEffect(viewModel.downloadError) {
+        viewModel.downloadError?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearDownloadError()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
     ArtworkThemeWrapper(
         imageUrl = backdropUrl,
