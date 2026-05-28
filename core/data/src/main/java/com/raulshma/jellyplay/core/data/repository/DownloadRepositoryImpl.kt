@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -146,6 +147,8 @@ class DownloadRepositoryImpl @Inject constructor(
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         val file = File(entity.downloadPath)
         if (file.exists()) file.delete()
+        val trickplayDir = File(file.parentFile, "trickplay")
+        if (trickplayDir.exists()) trickplayDir.deleteRecursively()
         downloadDao.deleteDownloadById(id)
         offlineMediaDao.deleteById(entity.mediaItemId)
     }
@@ -256,6 +259,11 @@ class DownloadRepositoryImpl @Inject constructor(
                                 preloadImageToCache(epImageUrl)
                                 enqueueDownloadWorker(download.id)
                                 downloadIds.add(download.id)
+                                source?.trickplayInfo?.let { info ->
+                                    try {
+                                        downloadTrickplayData(episode.id, info, download.downloadPath)
+                                    } catch (_: Exception) { }
+                                }
                             }
                         }
                     } catch (_: Exception) {
@@ -268,6 +276,40 @@ class DownloadRepositoryImpl @Inject constructor(
             }
 
             downloadIds
+        }
+    }
+
+    override suspend fun downloadTrickplayData(
+        itemId: String,
+        trickplayInfo: TrickplayInfo,
+        downloadPath: String,
+    ) {
+        withContext(Dispatchers.IO) {
+            try {
+                val parentDir = File(downloadPath).parentFile ?: return@withContext
+                val trickplayDir = File(parentDir, "trickplay").apply { mkdirs() }
+                val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
+                val totalSheets = (trickplayInfo.thumbnailCount + thumbnailsPerSheet - 1) / thumbnailsPerSheet
+
+                for (sheetIndex in 0 until totalSheets) {
+                    val data = playbackRepository.getTrickplayTileImage(
+                        itemId,
+                        trickplayInfo.width,
+                        sheetIndex,
+                    ) ?: continue
+                    File(trickplayDir, "trickplay_${sheetIndex}.jpg").writeBytes(data)
+                }
+
+                File(trickplayDir, "meta.json").writeText(buildString {
+                    appendLine("{\"width\":${trickplayInfo.width},")
+                    appendLine("\"height\":${trickplayInfo.height},")
+                    appendLine("\"tileWidth\":${trickplayInfo.tileWidth},")
+                    appendLine("\"tileHeight\":${trickplayInfo.tileHeight},")
+                    appendLine("\"thumbnailCount\":${trickplayInfo.thumbnailCount},")
+                    appendLine("\"interval\":${trickplayInfo.interval},")
+                    appendLine("\"bandwidth\":${trickplayInfo.bandwidth}}")
+                })
+            } catch (_: Exception) { }
         }
     }
 

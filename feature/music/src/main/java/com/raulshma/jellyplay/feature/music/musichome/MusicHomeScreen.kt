@@ -55,7 +55,12 @@ fun MusicHomeScreen(
 
     var currentTab by remember { mutableStateOf(MusicNavItem.HOME) }
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+    ) {
         when {
             error != null && sections.isEmpty() -> {
                 ErrorScreen(message = error, onRetry = { viewModel.loadSections() })
@@ -92,7 +97,9 @@ fun MusicHomeScreen(
                     LazyColumn(
                         state = rememberLazyListState(),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 100.dp),
+                        contentPadding = PaddingValues(
+                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp
+                        ),
                     ) {
                         // Header
                         item {
@@ -160,26 +167,6 @@ fun MusicHomeScreen(
                     }
                 }
             }
-        }
-
-        // Bottom Navigation
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            BottomMusicNavigation(
-                currentTab = currentTab,
-                onTabClick = { tab ->
-                    currentTab = tab
-                    when (tab) {
-                        MusicNavItem.HOME -> { /* Already on home */ }
-                        MusicNavItem.LIBRARY -> onAlbumsClick()
-                        MusicNavItem.SEARCH -> onTracksClick()
-                    }
-                },
-            )
         }
     }
 }

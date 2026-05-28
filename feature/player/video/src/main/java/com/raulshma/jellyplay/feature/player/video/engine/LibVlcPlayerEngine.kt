@@ -62,6 +62,7 @@ class LibVlcPlayerEngine(
         supportsNightMode = true,
         supportsAudioNormalization = true,
         supportsChannelMixing = true,
+        supportsVideoFilters = true,
     )
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
@@ -375,6 +376,26 @@ class LibVlcPlayerEngine(
 
             if (oldConfig.subtitleStyle != config.subtitleStyle) {
                 reloadMediaForSubtitleStyleChange()
+            }
+
+            if (oldConfig.videoEffects != config.videoEffects) {
+                applyVideoFilters(config.videoEffects)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun applyVideoFilters(effects: VideoEffectsConfig) {
+        try {
+            val mp = mediaPlayer ?: return
+            val hasAdjust = effects.brightness != 0f || effects.contrast != 1f || effects.saturation != 1f
+            if (hasAdjust) {
+                val brightnessVal = (1.0f + effects.brightness).coerceIn(0.0f, 2.0f)
+                val contrastVal = effects.contrast.coerceIn(0.0f, 2.0f)
+                val saturationVal = effects.saturation.coerceIn(0.0f, 3.0f)
+                val media = mp.media
+                media?.addOption(":brightness=${(brightnessVal * 100).toInt()}")
+                media?.addOption(":contrast=${(contrastVal * 100).toInt()}")
+                media?.addOption(":saturation=${(saturationVal * 100).toInt()}")
             }
         } catch (_: Exception) {}
     }
