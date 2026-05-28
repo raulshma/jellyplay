@@ -210,7 +210,7 @@ class UserPreferencesStore @Inject constructor(
             oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
-            maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 500,
+            maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 0,
             autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
             pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
             pinHash = prefs[Keys.PIN_HASH],
