@@ -113,6 +113,15 @@ class DetailViewModel @Inject constructor(
         private set
     var isDownloading by mutableStateOf(false)
         private set
+    var isDownloadingSeries by mutableStateOf(false)
+        private set
+
+    var seriesDownloadResult by mutableStateOf<SeriesDownloadResult?>(null)
+        private set
+
+    fun clearSeriesDownloadResult() {
+        seriesDownloadResult = null
+    }
 
     var smartPlayTarget by mutableStateOf<SmartPlayTarget?>(null)
         private set
@@ -487,9 +496,14 @@ class DetailViewModel @Inject constructor(
                     imageBlurHash = item.blurHashes.primary,
                 ).onSuccess { downloadItem ->
                     enqueueDownloadWorker(downloadItem.id)
+                    try {
+                        val backdropUrl = playbackRepository.getBackdropUrl(item.id, maxWidth = 1280)
+                        downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
+                    } catch (_: Exception) {
+                    }
+                }.onFailure {
                 }
             } catch (_: Exception) {
-                // Download initiation failed silently
             }
             isDownloading = false
         }
@@ -497,6 +511,29 @@ class DetailViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    fun downloadSeries(seasonIds: List<String>? = null) {
+        val detail = _detail.value ?: return
+        val item = detail.item
+        if (item.mediaType != MediaType.SERIES) return
+
+        viewModelScope.launch {
+            isDownloadingSeries = true
+            seriesDownloadResult = null
+            downloadRepository.downloadSeries(item.id, seasonIds)
+                .onSuccess { downloadIds ->
+                    seriesDownloadResult = SeriesDownloadResult(
+                        queuedCount = downloadIds.size,
+                    )
+                }
+                .onFailure { error ->
+                    seriesDownloadResult = SeriesDownloadResult(
+                        error = error.message ?: "Failed to queue downloads",
+                    )
+                }
+            isDownloadingSeries = false
+        }
+    }
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
@@ -688,5 +725,11 @@ class DetailViewModel @Inject constructor(
 data class SeerrRequestResult(
     val isLoading: Boolean = false,
     val success: Boolean? = null,
+    val error: String? = null,
+)
+
+@Immutable
+data class SeriesDownloadResult(
+    val queuedCount: Int = 0,
     val error: String? = null,
 )

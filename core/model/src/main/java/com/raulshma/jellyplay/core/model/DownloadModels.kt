@@ -19,6 +19,12 @@ data class DownloadItem(
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
     val imageBlurHash: String? = null,
+    val seriesId: String? = null,
+    val seasonId: String? = null,
+    val seriesName: String? = null,
+    val seasonName: String? = null,
+    val episodeNumber: Int? = null,
+    val seasonNumber: Int? = null,
 )
 
 @Immutable

@@ -28,6 +28,7 @@ enum class HomeSectionType {
     LATEST_MEDIA,
     FAVORITES,
     LIVE_TV,
+    DOWNLOADED,
 }
 
 @Immutable
