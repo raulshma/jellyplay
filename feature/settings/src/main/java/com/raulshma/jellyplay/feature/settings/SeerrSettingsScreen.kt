@@ -29,14 +29,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -78,6 +70,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -99,7 +93,7 @@ fun SeerrSettingsScreen(
                 title = { Text("Seerr") },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -134,7 +128,7 @@ fun SeerrSettingsScreen(
                     label = { Text("Server URL") },
                     placeholder = { Text("http://localhost:5055") },
                     leadingIcon = {
-                        Icon(Icons.Default.Link, contentDescription = null)
+                        Icon(Tabler.Outline.Link, contentDescription = null)
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -153,7 +147,7 @@ fun SeerrSettingsScreen(
                     label = { Text("API Key") },
                     placeholder = { Text("Enter your Seerr API key") },
                     leadingIcon = {
-                        Icon(Icons.Default.VpnKey, contentDescription = null)
+                        Icon(Tabler.Outline.Key, contentDescription = null)
                     },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -211,13 +205,13 @@ fun SeerrSettingsScreen(
                 ) {
                     when (connectionStatus) {
                         is ConnectionStatus.Connected -> ConnectionStatusCard(
-                            icon = Icons.Default.Check,
+                            icon = Tabler.Outline.Check,
                             title = "Connected",
                             subtitle = if (connectionStatus.version.isNotBlank()) "Version ${connectionStatus.version}" else "Seerr server reached",
                             color = StatusColors.success,
                         )
                         is ConnectionStatus.Error -> ConnectionStatusCard(
-                            icon = Icons.Default.Close,
+                            icon = Tabler.Outline.X,
                             title = "Connection Failed",
                             subtitle = connectionStatus.message,
                             color = MaterialTheme.colorScheme.error,
@@ -236,7 +230,7 @@ fun SeerrSettingsScreen(
 
                 item {
                     FeatureToggle(
-                        icon = Icons.Default.Extension,
+                        icon = Tabler.Outline.Puzzle,
                         title = "Enable Seerr Integration",
                         subtitle = "Connect your Seerr server with JellyPlay",
                         checked = preferences.enabled,
@@ -246,7 +240,7 @@ fun SeerrSettingsScreen(
 
                 item {
                     FeatureToggle(
-                        icon = Icons.Default.Search,
+                        icon = Tabler.Outline.Search,
                         title = "Search Integration",
                         subtitle = "Request media directly from app search",
                         checked = preferences.searchEnabled,
@@ -257,7 +251,7 @@ fun SeerrSettingsScreen(
 
                 item {
                     FeatureToggle(
-                        icon = Icons.Default.Extension,
+                        icon = Tabler.Outline.Puzzle,
                         title = "Recommendations & Similar",
                         subtitle = "Show Seerr recommendations on media detail screens",
                         checked = preferences.recommendationsEnabled,
@@ -268,7 +262,7 @@ fun SeerrSettingsScreen(
 
                 item {
                     FeatureToggle(
-                        icon = Icons.Default.Extension,
+                        icon = Tabler.Outline.Puzzle,
                         title = "Advance Discover",
                         subtitle = "Show Trending, Popular & Upcoming content on the home screen",
                         checked = preferences.discoverEnabled,
@@ -285,7 +279,7 @@ fun SeerrSettingsScreen(
                             .padding(start = 32.dp),
                         ) {
                             FeatureToggle(
-                                icon = Icons.Default.Extension,
+                                icon = Tabler.Outline.Puzzle,
                                 title = "Trending",
                                 subtitle = "Trending movies and series",
                                 checked = preferences.discoverTrending,
@@ -293,7 +287,7 @@ fun SeerrSettingsScreen(
                                 featureEnabled = preferences.discoverEnabled,
                             )
                             FeatureToggle(
-                                icon = Icons.Default.Extension,
+                                icon = Tabler.Outline.Puzzle,
                                 title = "Popular Movies",
                                 subtitle = "Popular movies on TMDB",
                                 checked = preferences.discoverPopularMovies,
@@ -301,7 +295,7 @@ fun SeerrSettingsScreen(
                                 featureEnabled = preferences.discoverEnabled,
                             )
                             FeatureToggle(
-                                icon = Icons.Default.Extension,
+                                icon = Tabler.Outline.Puzzle,
                                 title = "Popular Series",
                                 subtitle = "Popular TV series on TMDB",
                                 checked = preferences.discoverPopularTv,
@@ -309,7 +303,7 @@ fun SeerrSettingsScreen(
                                 featureEnabled = preferences.discoverEnabled,
                             )
                             FeatureToggle(
-                                icon = Icons.Default.Extension,
+                                icon = Tabler.Outline.Puzzle,
                                 title = "Upcoming Movies",
                                 subtitle = "Movies coming soon to theaters",
                                 checked = preferences.discoverUpcomingMovies,
@@ -317,7 +311,7 @@ fun SeerrSettingsScreen(
                                 featureEnabled = preferences.discoverEnabled,
                             )
                             FeatureToggle(
-                                icon = Icons.Default.Extension,
+                                icon = Tabler.Outline.Puzzle,
                                 title = "Upcoming Series",
                                 subtitle = "TV series coming soon",
                                 checked = preferences.discoverUpcomingTv,

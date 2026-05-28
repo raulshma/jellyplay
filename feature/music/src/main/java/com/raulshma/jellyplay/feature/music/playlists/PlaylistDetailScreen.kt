@@ -19,11 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,6 +55,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -95,7 +92,7 @@ fun PlaylistDetailScreen(
                 title = { Text(resolvedPlaylistName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -208,7 +205,7 @@ private fun PlaylistTrackRow(
         if (onAddToQueue != null) {
             IconButton(onClick = { showMenu = true }) {
                 Icon(
-                    Icons.Default.MoreVert,
+                    Tabler.Outline.DotsVertical,
                     contentDescription = "More options",
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                 )
@@ -226,7 +223,7 @@ private fun PlaylistTrackRow(
                     },
                     leadingIcon = {
                         Icon(
-                            Icons.Default.QueueMusic,
+                            Tabler.Outline.Playlist,
                             contentDescription = null,
                         )
                     },
@@ -235,7 +232,7 @@ private fun PlaylistTrackRow(
         }
         IconButton(onClick = onClick) {
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )

@@ -63,20 +63,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material.icons.Icons
 import androidx.activity.compose.BackHandler
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.WifiOff
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -170,6 +157,8 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import kotlinx.coroutines.delay
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun HomeScreen(
@@ -825,7 +814,7 @@ fun HomeScreen(
                             modifier = Modifier.size(40.dp),
                         ) {
                             Icon(
-                                Icons.Default.Download,
+                                Tabler.Outline.Download,
                                 contentDescription = "Go online",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp),
@@ -877,7 +866,7 @@ fun HomeScreen(
                             modifier = Modifier.size(40.dp),
                         ) {
                             Icon(
-                                Icons.Default.Close,
+                                Tabler.Outline.X,
                                 contentDescription = "Clear search",
                                 tint = appBarIconColorFaded,
                                 modifier = Modifier.size(20.dp),
@@ -930,7 +919,7 @@ fun HomeScreen(
                         ),
                     ) {
                         Icon(
-                            if (isFabExpanded) Icons.Default.Close else Icons.Default.MoreVert,
+                            if (isFabExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
                             contentDescription = if (isFabExpanded) "Close menu" else "More options",
                         )
                     }
@@ -951,7 +940,7 @@ fun HomeScreen(
                     text = { Text("Surprise Me") },
                     icon = {
                         Icon(
-                            Icons.Default.AutoAwesome,
+                            Tabler.Outline.Wand,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -966,7 +955,7 @@ fun HomeScreen(
                     text = { Text("SyncPlay") },
                     icon = {
                         Icon(
-                            Icons.Default.Group,
+                            Tabler.Outline.Users,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -996,7 +985,7 @@ fun HomeScreen(
                     },
                     icon = {
                         Icon(
-                            Icons.Default.Download,
+                            Tabler.Outline.Download,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -1013,7 +1002,7 @@ fun HomeScreen(
                     },
                     icon = {
                         Icon(
-                            if (viewModel.offlineMode != OfflineMode.ONLINE) Icons.Default.Wifi else Icons.Default.WifiOff,
+                            if (viewModel.offlineMode != OfflineMode.ONLINE) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -1032,7 +1021,7 @@ fun HomeScreen(
                     text = { Text("Settings") },
                     icon = {
                         Icon(
-                            Icons.Default.Settings,
+                            Tabler.Outline.Settings,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                         )
@@ -1378,7 +1367,7 @@ private fun HeroHeader(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.Favorite,
+                                Tabler.Outline.Heart,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
@@ -1493,7 +1482,7 @@ private fun HeroHeader(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.PlayArrow,
+                                Tabler.Outline.PlayerPlay,
                                 contentDescription = null,
                                 modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.onPrimary,
@@ -1767,7 +1756,7 @@ private fun SearchItemRow(
                 )
             } else {
                 Icon(
-                    Icons.Default.Search,
+                    Tabler.Outline.Search,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
@@ -2135,7 +2124,7 @@ private fun OfflineHomeContent(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            Icons.Default.Download,
+                            Tabler.Outline.Download,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
@@ -2274,7 +2263,7 @@ private fun OfflineHomeContent(
                                 modifier = Modifier.padding(top = 4.dp),
                             ) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    Tabler.Outline.Check,
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.primary,

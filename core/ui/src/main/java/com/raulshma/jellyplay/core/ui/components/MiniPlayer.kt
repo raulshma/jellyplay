@@ -23,13 +23,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +48,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun MiniPlayer(
@@ -184,7 +179,7 @@ fun MiniPlayer(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.MusicNote,
+                            Tabler.Outline.Music,
                             contentDescription = null,
                             tint = fallbackIconTint,
                             modifier = Modifier.size(22.dp),
@@ -220,7 +215,7 @@ fun MiniPlayer(
                         onClick = onAddToQueue,
                         size = 36.dp,
                         contentColor = MaterialTheme.colorScheme.onSurface,
-                        iconVector = Icons.Default.QueueMusic,
+                        iconVector = Tabler.Outline.Playlist,
                         iconDescription = "Add to Queue",
                         iconSize = 20.dp,
                     )
@@ -251,7 +246,7 @@ fun MiniPlayer(
                     size = 40.dp,
                     containerColor = iconButtonContainer,
                     contentColor = iconButtonContent,
-                    iconVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    iconVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                     iconDescription = if (isPlaying) "Pause" else "Play",
                     iconSize = 22.dp,
                     modifier = sharedPlayPauseModifier,
@@ -261,7 +256,7 @@ fun MiniPlayer(
                     onClick = onSkipNext,
                     size = 36.dp,
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    iconVector = Icons.Default.SkipNext,
+                    iconVector = Tabler.Outline.PlayerSkipForward,
                     iconDescription = "Skip Next",
                     iconSize = 20.dp,
                     modifier = sharedSkipNextModifier,
@@ -271,7 +266,7 @@ fun MiniPlayer(
                     onClick = onClose,
                     size = 36.dp,
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    iconVector = Icons.Default.Close,
+                    iconVector = Tabler.Outline.X,
                     iconDescription = "Close",
                     iconSize = 20.dp,
                 )

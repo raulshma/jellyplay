@@ -10,12 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -42,6 +36,8 @@ import com.raulshma.jellyplay.feature.editor.components.ImagesTab
 import com.raulshma.jellyplay.feature.editor.components.MetadataTab
 import com.raulshma.jellyplay.feature.editor.components.SubtitlesTab
 import kotlinx.coroutines.launch
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -71,7 +67,7 @@ fun EditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -81,7 +77,7 @@ fun EditorScreen(
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Check,
+                            Tabler.Outline.Check,
                             contentDescription = "Save",
                             tint = if (uiState.isDirty) {
                                 MaterialTheme.colorScheme.onPrimary
@@ -110,19 +106,19 @@ fun EditorScreen(
                     selected = pagerState.currentPage == 0,
                     onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                     text = { Text("Metadata") },
-                    icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    icon = { Icon(Tabler.Outline.Edit, contentDescription = null) },
                 )
                 Tab(
                     selected = pagerState.currentPage == 1,
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                     text = { Text("Images") },
-                    icon = { Icon(Icons.Filled.Image, contentDescription = null) },
+                    icon = { Icon(Tabler.Outline.Photo, contentDescription = null) },
                 )
                 Tab(
                     selected = pagerState.currentPage == 2,
                     onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                     text = { Text("Subtitles") },
-                    icon = { Icon(Icons.Filled.Subtitles, contentDescription = null) },
+                    icon = { Icon(Tabler.Outline.Subtitles, contentDescription = null) },
                 )
             }
 

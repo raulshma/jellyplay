@@ -24,13 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,6 +67,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +96,7 @@ fun AddServerScreen(
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = onBack,
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tooltipText = "Back",
                     )
@@ -138,7 +133,7 @@ fun AddServerScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
-                            Icons.Default.Dns,
+                            Tabler.Outline.Server,
                             contentDescription = null,
                             modifier = Modifier.size(72.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -336,7 +331,7 @@ private fun ServerCountRow(
                 Spacer(modifier = Modifier.width(12.dp))
             } else {
                 Icon(
-                    Icons.Default.Wifi,
+                    Tabler.Outline.Wifi,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -355,7 +350,7 @@ private fun ServerCountRow(
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                Icons.Default.ExpandMore,
+                Tabler.Outline.ChevronDown,
                 contentDescription = if (expanded) "Collapse" else "Expand",
                 modifier = Modifier
                     .size(20.dp)
@@ -405,7 +400,7 @@ private fun DiscoveryFailedRow(onRetry: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Icon(
-            Icons.Default.WifiOff,
+            Tabler.Outline.WifiOff,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.error,
@@ -470,7 +465,7 @@ private fun DiscoveredServerItem(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Dns,
+                Tabler.Outline.Server,
                 contentDescription = null,
                 modifier = Modifier.size(22.dp),
                 tint = MaterialTheme.colorScheme.primary,
@@ -490,7 +485,7 @@ private fun DiscoveredServerItem(
             )
         }
         Icon(
-            Icons.Default.CheckCircle,
+            Tabler.Outline.CircleCheck,
             contentDescription = "Connect",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),

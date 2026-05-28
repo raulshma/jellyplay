@@ -23,13 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,6 +60,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import kotlinx.coroutines.delay
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,7 +202,7 @@ fun OfflinePlayerScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                            Icon(Tabler.Outline.ArrowLeft, "Back", tint = Color.White)
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
@@ -232,7 +228,7 @@ fun OfflinePlayerScreen(
                         exoPlayer.seekTo(newPos)
                     }) {
                         Icon(
-                            Icons.Default.SkipPrevious, "Rewind",
+                            Tabler.Outline.PlayerSkipBack, "Rewind",
                             tint = Color.White, modifier = Modifier.size(36.dp)
                         )
                     }
@@ -241,7 +237,7 @@ fun OfflinePlayerScreen(
                         if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                     }) {
                         Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             if (isPlaying) "Pause" else "Play",
                             tint = Color.White,
                             modifier = Modifier.size(64.dp),
@@ -253,7 +249,7 @@ fun OfflinePlayerScreen(
                         exoPlayer.seekTo(newPos)
                     }) {
                         Icon(
-                            Icons.Default.SkipNext, "Forward",
+                            Tabler.Outline.PlayerSkipForward, "Forward",
                             tint = Color.White, modifier = Modifier.size(36.dp)
                         )
                     }

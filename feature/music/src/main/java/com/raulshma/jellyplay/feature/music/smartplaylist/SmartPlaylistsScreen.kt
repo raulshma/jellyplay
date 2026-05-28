@@ -14,13 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun SmartPlaylistsScreen(
@@ -81,7 +76,7 @@ fun SmartPlaylistsScreen(
                 title = { Text("Smart Playlists") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -132,11 +127,11 @@ private fun PlaylistCard(
     onClick: () -> Unit,
 ) {
     val icon = when (playlist.id) {
-        "top_rated" -> Icons.Default.Star
-        "recently_added" -> Icons.Default.NewReleases
-        "unplayed" -> Icons.Default.History
-        "favorites" -> Icons.Default.Favorite
-        else -> Icons.Default.AutoAwesome
+        "top_rated" -> Tabler.Outline.Star
+        "recently_added" -> Tabler.Outline.Certificate
+        "unplayed" -> Tabler.Outline.History
+        "favorites" -> Tabler.Outline.Heart
+        else -> Tabler.Outline.Wand
     }
 
     Card(

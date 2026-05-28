@@ -35,6 +35,7 @@ libvlc = "3.7.0"
 okhttp = "5.3.2"
 smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
+tablerIcons = "2.2.1"
 
 [libraries]
 # AndroidX Core
@@ -52,7 +53,8 @@ compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling
 compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
-compose-material-iconsExtended = { group = "androidx.compose.material", name = "material-icons-extended" }
+tabler-icons-outline = { group = "com.composables", name = "icons-tabler-outline-cmp", version.ref = "tablerIcons" }
+tabler-icons-filled = { group = "com.composables", name = "icons-tabler-filled-cmp", version.ref = "tablerIcons" }
 compose-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "composeMaterial3Adaptive" }
 compose-material3-adaptive-layout = { group = "androidx.compose.material3.adaptive", name = "adaptive-layout", version.ref = "composeMaterial3Adaptive" }
 compose-material3-adaptive-navigation = { group = "androidx.compose.material3.adaptive", name = "adaptive-navigation", version.ref = "composeMaterial3Adaptive" }

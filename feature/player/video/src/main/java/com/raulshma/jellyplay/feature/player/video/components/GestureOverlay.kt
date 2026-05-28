@@ -32,12 +32,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.BrightnessHigh
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -63,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 internal fun GestureOverlay(
@@ -153,7 +149,7 @@ internal fun GestureOverlay(
         if (brightnessValue >= 0f) {
             EdgeBarOverlay(
                 value = brightnessValue,
-                icon = Icons.Default.BrightnessHigh,
+                icon = Tabler.Outline.BrightnessUp,
                 label = "${(brightnessValue * 100).toInt()}%",
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -164,7 +160,7 @@ internal fun GestureOverlay(
         if (volumeValue >= 0f) {
             EdgeBarOverlay(
                 value = volumeValue,
-                icon = if (volumeValue == 0f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                icon = if (volumeValue == 0f) Tabler.Outline.VolumeOff else Tabler.Outline.Volume,
                 label = "${(volumeValue * 100).toInt()}%",
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -239,7 +235,7 @@ private fun SeekCircleOverlay(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        imageVector = if (isLeft) Icons.Default.FastRewind else Icons.Default.FastForward,
+                        imageVector = if (isLeft) Tabler.Outline.PlayerTrackPrev else Tabler.Outline.PlayerTrackNext,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),

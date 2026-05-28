@@ -18,12 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,6 +54,8 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +97,7 @@ fun OfflineSeriesScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -131,7 +127,7 @@ fun OfflineSeriesScreen(
                                 )
                             }
                             Icon(
-                                Icons.Default.Star,
+                                Tabler.Outline.Star,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.tertiary,
@@ -241,7 +237,7 @@ fun OfflineSeriesScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(
-                                    Icons.Default.Delete,
+                                    Tabler.Outline.Trash,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                 )
@@ -258,7 +254,7 @@ fun OfflineSeriesScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
-                                Icons.Default.Delete,
+                                Tabler.Outline.Trash,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                             )
@@ -337,7 +333,7 @@ private fun OfflineEpisodeRow(
                         )
                     }
                     Icon(
-                        Icons.Default.Star,
+                        Tabler.Outline.Star,
                         contentDescription = null,
                         modifier = Modifier.size(10.dp),
                         tint = MaterialTheme.colorScheme.tertiary,
@@ -368,7 +364,7 @@ private fun OfflineEpisodeRow(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
                     Icon(
-                        Icons.Default.Check,
+                        Tabler.Outline.Check,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary,
@@ -398,7 +394,7 @@ private fun OfflineEpisodeRow(
         if (episode.downloadStatus == DownloadStatus.COMPLETED) {
             IconButton(onClick = onPlay) {
                 Icon(
-                    Icons.Default.PlayArrow,
+                    Tabler.Outline.PlayerPlay,
                     contentDescription = "Play",
                     tint = MaterialTheme.colorScheme.primary,
                 )
@@ -412,7 +408,7 @@ private fun OfflineEpisodeRow(
 
         IconButton(onClick = onDelete) {
             Icon(
-                Icons.Default.Delete,
+                Tabler.Outline.Trash,
                 contentDescription = "Delete",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(20.dp),

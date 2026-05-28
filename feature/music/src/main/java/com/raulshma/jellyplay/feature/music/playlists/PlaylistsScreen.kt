@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun PlaylistsScreen(
@@ -76,7 +74,7 @@ fun PlaylistsScreen(
                 title = { Text("Playlists") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -138,7 +136,7 @@ private fun PlaylistItemRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Default.MusicNote,
+            imageVector = Tabler.Outline.Music,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
@@ -169,7 +167,7 @@ private fun PlaylistItemRow(
         }
         IconButton(onClick = onClick) {
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Open",
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )

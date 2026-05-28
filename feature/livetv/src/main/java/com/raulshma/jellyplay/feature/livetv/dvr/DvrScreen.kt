@@ -15,11 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +54,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +86,7 @@ fun DvrScreen(
                 title = { Text("Recordings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -123,7 +120,7 @@ fun DvrScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            Icons.Default.FiberManualRecord,
+                            Tabler.Outline.Circle,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
@@ -225,8 +222,8 @@ private fun TimerCard(
         ) {
             Icon(
                 imageVector = when (timer.status) {
-                    DvrTimerStatus.RECORDING -> Icons.Default.FiberManualRecord
-                    else -> Icons.Default.Schedule
+                    DvrTimerStatus.RECORDING -> Tabler.Outline.Circle
+                    else -> Tabler.Outline.Clock
                 },
                 contentDescription = null,
                 tint = when (timer.status) {
@@ -285,7 +282,7 @@ private fun TimerCard(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Delete,
+                Tabler.Outline.Trash,
                 contentDescription = "Cancel recording",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(18.dp),
@@ -316,7 +313,7 @@ private fun SeriesTimerCard(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.FiberManualRecord,
+                Tabler.Outline.Circle,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
@@ -359,7 +356,7 @@ private fun SeriesTimerCard(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Delete,
+                Tabler.Outline.Trash,
                 contentDescription = "Cancel series recording",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(18.dp),

@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -33,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import kotlinx.coroutines.delay
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 private val PRESET_DURATIONS = listOf(
     15 * 60 * 1000L,
@@ -151,7 +150,7 @@ private fun ActiveTimerSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Default.Timer,
+                    Tabler.Outline.Stopwatch,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
@@ -204,7 +203,7 @@ private fun SleepTimerChip(
     ) {
         if (isSelected) {
             Icon(
-                Icons.Default.Check,
+                Tabler.Outline.Check,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp),

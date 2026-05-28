@@ -43,11 +43,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -96,6 +91,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -245,7 +242,7 @@ fun SearchScreen(
                             Box {
                                 ExpressiveToolbarIconButton(
                                     onClick = { viewModel.toggleShowFilters() },
-                                    icon = Icons.Default.FilterList,
+                                    icon = Tabler.Outline.Filter,
                                     contentDescription = "Filters",
                                     highlighted = hasActiveFilters,
                                 )
@@ -295,7 +292,7 @@ fun SearchScreen(
                                 },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.Search,
+                                        Tabler.Outline.Search,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                         modifier = Modifier.size(20.dp),
@@ -312,7 +309,7 @@ fun SearchScreen(
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Close,
+                                                imageVector = Tabler.Outline.X,
                                                 contentDescription = "Clear search",
                                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                                 modifier = Modifier.size(16.dp),
@@ -338,7 +335,7 @@ fun SearchScreen(
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Mic,
+                                                imageVector = Tabler.Outline.Microphone,
                                                 contentDescription = "Voice search",
                                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                                 modifier = Modifier.size(16.dp),
@@ -490,7 +487,7 @@ fun SearchScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.Search,
+                                        Tabler.Outline.Search,
                                         contentDescription = null,
                                         modifier = Modifier.size(48.dp),
                                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
@@ -521,7 +518,7 @@ fun SearchScreen(
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.Search,
+                                        Tabler.Outline.Search,
                                         contentDescription = null,
                                         modifier = Modifier.size(64.dp),
                                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
@@ -754,7 +751,7 @@ private fun GlassDismissTag(
             fontWeight = FontWeight.Medium,
         )
         Icon(
-            Icons.Default.Close,
+            Tabler.Outline.X,
             contentDescription = "Remove",
             modifier = Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),

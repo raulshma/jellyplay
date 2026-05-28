@@ -53,20 +53,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -154,6 +140,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -835,7 +823,7 @@ private fun DetailContent(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                Tabler.Outline.ArrowLeft,
                                 contentDescription = "Back",
                                 tint = backIconColor,
                                 modifier = Modifier.padding(8.dp),
@@ -853,7 +841,7 @@ private fun DetailContent(
                                 )
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                Tabler.Outline.ArrowLeft,
                                 contentDescription = "Back",
                                 tint = backIconColor,
                             )
@@ -873,7 +861,7 @@ private fun DetailContent(
                                 )
                         ) {
                             Icon(
-                                Icons.Filled.MoreVert,
+                                Tabler.Outline.DotsVertical,
                                 contentDescription = "Edit",
                                 tint = editIconColor,
                             )
@@ -1027,7 +1015,7 @@ private fun MediaInfoSection(
             }
 
             QuickInfoPill(
-                icon = Icons.Default.HighQuality,
+                icon = Tabler.Outline.BadgeHd,
                 text = qualityLabel,
                 modifier = Modifier.weight(1f),
             )
@@ -1054,7 +1042,7 @@ private fun MediaInfoSection(
             }
 
             QuickInfoPill(
-                icon = Icons.Default.GraphicEq,
+                icon = Tabler.Outline.WaveSine,
                 text = audioLabel,
                 showTrailingIndicator = true,
                 onClick = { if (audioStreams.isNotEmpty()) picker = StreamPickerType.AUDIO },
@@ -1070,7 +1058,7 @@ private fun MediaInfoSection(
                 ?: "OFF"
 
             QuickInfoPill(
-                icon = Icons.Default.ClosedCaption,
+                icon = Tabler.Outline.Subtitles,
                 text = subtitleLabel,
                 showTrailingIndicator = subtitleStreams.isNotEmpty(),
                 onClick = { picker = StreamPickerType.SUBTITLE },
@@ -1176,7 +1164,7 @@ private fun MediaInfoSection(
                                 }
                                 if (isSelected) {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        imageVector = Tabler.Outline.Check,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.size(18.dp),
@@ -1245,7 +1233,7 @@ private fun QuickInfoPill(
         )
         if (showTrailingIndicator) {
             Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
+                imageVector = Tabler.Outline.ChevronDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
@@ -1472,7 +1460,7 @@ private fun DetailActionButtons(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(Modifier.size(6.dp))
                 Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
             }
@@ -1517,7 +1505,7 @@ private fun DetailActionButtons(
                         }
                 ) {
                     Icon(
-                        if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                         contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
                         tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
@@ -1539,7 +1527,7 @@ private fun DetailActionButtons(
                         .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
-                        if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                         contentDescription = "Favorite",
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
@@ -1572,9 +1560,9 @@ private fun DetailActionButtons(
                                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                             }
                         } else if (isDownloadCompleted) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
@@ -1601,7 +1589,7 @@ private fun DetailActionButtons(
                         if (isDownloadingSeries) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -1658,7 +1646,7 @@ private fun DetailActionButtons(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     Spacer(Modifier.size(8.dp))
                     Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
                 }
@@ -1681,7 +1669,7 @@ private fun DetailActionButtons(
                     }
             ) {
                 Icon(
-                    if (item.isPlayed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                     contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
                     tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
@@ -1699,7 +1687,7 @@ private fun DetailActionButtons(
                     .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
             ) {
                 Icon(
-                    if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                     contentDescription = "Favorite",
                     tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
@@ -1739,9 +1727,9 @@ private fun DetailActionButtons(
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         }
                     } else if (dlCompleted) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     } else {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
@@ -1765,7 +1753,7 @@ private fun DetailActionButtons(
                     if (isDownloadingSeries) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
@@ -1961,7 +1949,7 @@ private fun DetailContentBody(
                     item.communityRating?.let { rating ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.Favorite,
+                                Tabler.Outline.Heart,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
@@ -2498,7 +2486,7 @@ private fun EpisodeCard(
             Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
@@ -2722,7 +2710,7 @@ private fun AlbumTrackItem(
 
         IconButton(onClick = onPlayClick) {
             Icon(
-                Icons.Default.PlayArrow,
+                Tabler.Outline.PlayerPlay,
                 contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )

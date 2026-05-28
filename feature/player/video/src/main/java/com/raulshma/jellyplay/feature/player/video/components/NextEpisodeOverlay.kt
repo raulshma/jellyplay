@@ -29,9 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -56,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -147,7 +146,7 @@ fun NextEpisodeOverlay(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                imageVector = Tabler.Outline.PlayerPlay,
                                 contentDescription = "Play Next",
                                 tint = Color.White,
                                 modifier = Modifier.size(30.dp),
@@ -171,7 +170,7 @@ fun NextEpisodeOverlay(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = Tabler.Outline.X,
                                 contentDescription = "Cancel",
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp),
