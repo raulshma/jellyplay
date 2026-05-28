@@ -20,10 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -54,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -93,7 +91,7 @@ fun QuickConnectScreen(
                             viewModel.cancelQuickConnect()
                             onBack()
                         },
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tooltipText = "Back",
                     )
@@ -196,7 +194,7 @@ private fun WaitingForApprovalContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            Icons.Default.Link,
+            Tabler.Outline.Link,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.primary,
@@ -308,7 +306,7 @@ private fun ErrorContent(
             onClick = onRetry,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Try Again")
         }

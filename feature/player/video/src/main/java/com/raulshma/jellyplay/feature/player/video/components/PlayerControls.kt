@@ -31,24 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -103,6 +85,8 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.formatDuration
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 internal fun PlayerControls(
@@ -230,7 +214,7 @@ internal fun PlayerControls(
                         modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            Tabler.Outline.ArrowLeft,
                             "Back",
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp),
@@ -290,7 +274,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Icons.Default.FastRewind, "Rewind",
+                        Tabler.Outline.PlayerTrackPrev, "Rewind",
                         modifier = Modifier.size(IconButtonDefaults.largeIconSize),
                     )
                 }
@@ -308,7 +292,7 @@ internal fun PlayerControls(
                 ) {
                     Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
                         Icon(
-                            if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (playing) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             if (playing) "Pause" else "Play",
                             modifier = Modifier.size(40.dp),
                         )
@@ -325,7 +309,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Icons.Default.FastForward, "Forward",
+                        Tabler.Outline.PlayerTrackNext, "Forward",
                         modifier = Modifier.size(IconButtonDefaults.largeIconSize),
                     )
                 }
@@ -385,45 +369,45 @@ internal fun PlayerControls(
                         )
                         PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
                         PlayerIconButton(
-                            icon = Icons.Default.Audiotrack,
+                            icon = Tabler.Outline.Music,
                             contentDescription = "Audio",
                             onClick = onAudioClick,
                         )
                         PlayerIconButton(
-                            icon = Icons.Default.ClosedCaption,
+                            icon = Tabler.Outline.Subtitles,
                             contentDescription = "Subtitles",
                             onClick = onSubtitleClick,
                         )
                         if (chapters.isNotEmpty()) {
                             PlayerIconButton(
-                                icon = Icons.AutoMirrored.Filled.List,
+                                icon = Tabler.Outline.List,
                                 contentDescription = "Chapters",
                                 onClick = onChapterClick,
                             )
                         }
                         if (hasEpisodes && episodeBrowserEnabled) {
                             PlayerIconButton(
-                                icon = Icons.Default.VideoLibrary,
+                                icon = Tabler.Outline.Video,
                                 contentDescription = "Episodes",
                                 onClick = onEpisodesClick,
                             )
                         }
                         if (isInSyncPlaySession) {
                             PlayerIconButton(
-                                icon = Icons.Default.Group,
+                                icon = Tabler.Outline.Users,
                                 contentDescription = "SyncPlay",
                                 onClick = onSyncPlayClick,
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                         PlayerIconButton(
-                            icon = Icons.Default.AspectRatio,
+                            icon = Tabler.Outline.AspectRatio,
                             contentDescription = "Aspect Ratio",
                             onClick = onAspectRatioClick,
                             tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
                         )
                         PlayerIconButton(
-                            icon = Icons.Default.Info,
+                            icon = Tabler.Outline.InfoCircle,
                             contentDescription = "Info",
                             onClick = onInfoClick,
                         )
@@ -435,7 +419,7 @@ internal fun PlayerControls(
                         var showOverflow by remember { mutableStateOf(false) }
                         Box {
                             PlayerIconButton(
-                                icon = Icons.Default.MoreVert,
+                                icon = Tabler.Outline.DotsVertical,
                                 contentDescription = "More options",
                                 onClick = { showOverflow = true },
                             )
@@ -912,7 +896,7 @@ private fun PlayerOverflowMenu(
     ) {
         if (supportsSubtitleStyle) {
             OverflowMenuItem(
-                icon = Icons.Default.ClosedCaption,
+                icon = Tabler.Outline.Subtitles,
                 label = "Subtitle Style",
                 onClick = onSubtitleStyleClick,
             )
@@ -921,7 +905,7 @@ private fun PlayerOverflowMenu(
         if (supportsDialogueBoost) {
             if (showDialogueBoostSubmenu) {
                 OverflowMenuItem(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = Tabler.Outline.ArrowLeft,
                     label = "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = false },
                 )
@@ -942,7 +926,7 @@ private fun PlayerOverflowMenu(
                         leadingIcon = {
                             if (dialogueBoostEnabled && dialogueBoostStrength == strength) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    Tabler.Outline.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -953,7 +937,7 @@ private fun PlayerOverflowMenu(
                 }
             } else {
                 OverflowMenuItem(
-                    icon = Icons.Default.Audiotrack,
+                    icon = Tabler.Outline.Music,
                     label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
                     onClick = { showDialogueBoostSubmenu = true },
                     tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -963,7 +947,7 @@ private fun PlayerOverflowMenu(
         if (supportsNightMode) {
             if (showNightModeSubmenu) {
                 OverflowMenuItem(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = Tabler.Outline.ArrowLeft,
                     label = "Night Mode",
                     onClick = { showNightModeSubmenu = false },
                 )
@@ -984,7 +968,7 @@ private fun PlayerOverflowMenu(
                         leadingIcon = {
                             if (nightModeEnabled && nightModeStrength == strength) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    Tabler.Outline.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -995,7 +979,7 @@ private fun PlayerOverflowMenu(
                 }
             } else {
                 OverflowMenuItem(
-                    icon = Icons.Default.MoreVert,
+                    icon = Tabler.Outline.DotsVertical,
                     label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
                     onClick = { showNightModeSubmenu = true },
                     tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -1005,7 +989,7 @@ private fun PlayerOverflowMenu(
         if (supportsAudioNormalization) {
             if (showAudioNormalizationSubmenu) {
                 OverflowMenuItem(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = Tabler.Outline.ArrowLeft,
                     label = "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = false },
                 )
@@ -1025,7 +1009,7 @@ private fun PlayerOverflowMenu(
                         leadingIcon = {
                             if (audioNormalizationEnabled && audioNormalizationMode == mode) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    Tabler.Outline.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -1036,7 +1020,7 @@ private fun PlayerOverflowMenu(
                 }
             } else {
                 OverflowMenuItem(
-                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    icon = Tabler.Outline.Volume,
                     label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
                     onClick = { showAudioNormalizationSubmenu = true },
                     tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -1046,7 +1030,7 @@ private fun PlayerOverflowMenu(
         if (supportsChannelMixing) {
             if (showChannelMixSubmenu) {
                 OverflowMenuItem(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = Tabler.Outline.ArrowLeft,
                     label = "Channel Mixing",
                     onClick = { showChannelMixSubmenu = false },
                 )
@@ -1066,7 +1050,7 @@ private fun PlayerOverflowMenu(
                         leadingIcon = {
                             if (channelMixEnabled && channelMixMode == mode) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    Tabler.Outline.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -1077,7 +1061,7 @@ private fun PlayerOverflowMenu(
                 }
             } else {
                 OverflowMenuItem(
-                    icon = Icons.Default.Audiotrack,
+                    icon = Tabler.Outline.Music,
                     label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
                     onClick = { showChannelMixSubmenu = true },
                     tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -1086,45 +1070,45 @@ private fun PlayerOverflowMenu(
         }
         if (supportsAudioDelay) {
             OverflowMenuItem(
-                icon = Icons.Default.MoreVert,
+                icon = Tabler.Outline.DotsVertical,
                 label = "Audio Delay",
                 onClick = onAudioDelayClick,
             )
         }
         OverflowMenuItem(
-            icon = Icons.Default.Info,
+            icon = Tabler.Outline.InfoCircle,
             label = "Decoder",
             onClick = onDecoderClick,
         )
         if (supportsAudioPassthrough) {
             OverflowMenuItem(
-                icon = Icons.AutoMirrored.Filled.VolumeUp,
+                icon = Tabler.Outline.Volume,
                 label = "Passthrough",
                 onClick = onPassthroughClick,
                 tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
         }
         OverflowMenuItem(
-            icon = Icons.Default.MoreVert,
+            icon = Tabler.Outline.DotsVertical,
             label = "Download Subs",
             onClick = onSubtitleDownloadClick,
         )
         if (supportsOcr) {
             OverflowMenuItem(
-                icon = Icons.Default.Info,
+                icon = Tabler.Outline.InfoCircle,
                 label = "OCR Subtitle",
                 onClick = onOcrClick,
                 enabled = !isOcrRunning,
             )
         }
         OverflowMenuItem(
-            icon = Icons.Default.Info,
+            icon = Tabler.Outline.InfoCircle,
             label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
             onClick = onVideoStatsClick,
             tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
         OverflowMenuItem(
-            icon = Icons.Default.Timer,
+            icon = Tabler.Outline.Stopwatch,
             label = if (sleepTimerActive) "Sleep Timer \u00B7 $sleepTimerDisplayText" else "Sleep Timer",
             onClick = onSleepTimerClick,
             tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,

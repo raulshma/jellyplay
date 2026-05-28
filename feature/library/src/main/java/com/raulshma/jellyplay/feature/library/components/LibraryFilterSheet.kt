@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +48,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.PlayedStatus
 import com.raulshma.jellyplay.feature.library.SortOption
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -348,7 +348,7 @@ private fun GlassFilterChip(
         ) {
             if (selected) {
                 Icon(
-                    Icons.Default.Check,
+                    Tabler.Outline.Check,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     tint = checkTint,

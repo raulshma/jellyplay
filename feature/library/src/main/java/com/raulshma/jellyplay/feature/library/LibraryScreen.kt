@@ -31,13 +31,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Mood
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,6 +79,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -225,24 +220,24 @@ fun LibraryScreen(
                             ) {
                                 ExpressiveToolbarIconButton(
                                     onClick = onSmartPlaylistsClick,
-                                    icon = Icons.Default.AutoAwesome,
+                                    icon = Tabler.Outline.Wand,
                                     contentDescription = "Smart Playlists",
                                 )
                                 ExpressiveToolbarIconButton(
                                     onClick = onMoodPlaylistsClick,
-                                    icon = Icons.Default.Mood,
+                                    icon = Tabler.Outline.MoodSmile,
                                     contentDescription = "Mood Playlists",
                                 )
                                 ExpressiveToolbarIconButton(
                                     onClick = onPlaylistsClick,
-                                    icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                                    icon = Tabler.Outline.Playlist,
                                     contentDescription = "Playlists",
                                 )
                                 // Filter button with active-dot badge
                                 Box {
                                     ExpressiveToolbarIconButton(
                                         onClick = { viewModel.toggleShowFilters() },
-                                        icon = Icons.Default.FilterList,
+                                        icon = Tabler.Outline.Filter,
                                         contentDescription = "Filters",
                                         highlighted = hasActiveFilters,
                                     )
@@ -420,7 +415,7 @@ fun LibraryScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         Icon(
-                                            Icons.Default.Search,
+                                            Tabler.Outline.Search,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
                                             tint = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.3f),
@@ -692,7 +687,7 @@ private fun GlassDismissTag(
             fontWeight = FontWeight.Medium,
         )
         Icon(
-            Icons.Default.Close,
+            Tabler.Outline.X,
             contentDescription = "Remove",
             modifier = Modifier.size(14.dp),
             tint = iconTint,

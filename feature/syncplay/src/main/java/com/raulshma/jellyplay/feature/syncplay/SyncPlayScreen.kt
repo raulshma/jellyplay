@@ -36,17 +36,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,6 +81,8 @@ import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -172,7 +163,7 @@ fun SyncPlayScreen(
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = onBack,
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Tabler.Outline.ArrowLeft,
                         contentDescription = "Back",
                         tooltipText = "Back",
                     )
@@ -181,7 +172,7 @@ fun SyncPlayScreen(
                     if (isInGroup) {
                         TooltipIconButton(
                             onClick = { viewModel.leaveGroup() },
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            imageVector = Tabler.Outline.Logout,
                             contentDescription = "Leave group",
                             tooltipText = "Leave group",
                         )
@@ -198,7 +189,7 @@ fun SyncPlayScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
-                    icon = { Icon(Icons.Default.Add, contentDescription = "Create group") },
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
                     text = { Text("Create group") },
                 )
             }
@@ -252,7 +243,7 @@ fun SyncPlayScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Icon(
-                                Icons.Default.Group,
+                                Tabler.Outline.Users,
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -338,7 +329,7 @@ private fun SyncPlayGroupCard(
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.People,
+                        Tabler.Outline.Users,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -407,7 +398,7 @@ private fun ActiveGroupView(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.People,
+                        Tabler.Outline.Users,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary,
@@ -445,17 +436,17 @@ private fun ActiveGroupView(
                 ) {
                     FilledTonalButton(onClick = onTogglePlayback) {
                         Icon(
-                            if (groupInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (groupInfo.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
                             contentDescription = if (groupInfo.isPlaying) "Pause" else "Play",
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(if (groupInfo.isPlaying) "Pause" else "Play")
                     }
                     FilledTonalButton(onClick = onStop) {
-                        Icon(Icons.Default.Stop, contentDescription = "Stop")
+                        Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop")
                     }
                     OutlinedButton(onClick = onLeave) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Leave")
+                        Icon(Tabler.Outline.Logout, contentDescription = "Leave")
                         Spacer(Modifier.width(4.dp))
                         Text("Leave")
                     }
@@ -478,7 +469,7 @@ private fun ActiveGroupView(
             var repeatExpanded by remember { mutableStateOf(false) }
             Box {
                 FilledTonalButton(onClick = { repeatExpanded = true }) {
-                    Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(groupInfo.repeatMode.name, style = MaterialTheme.typography.labelSmall)
                 }
@@ -501,7 +492,7 @@ private fun ActiveGroupView(
             var shuffleExpanded by remember { mutableStateOf(false) }
             Box {
                 FilledTonalButton(onClick = { shuffleExpanded = true }) {
-                    Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(groupInfo.shuffleMode.name, style = MaterialTheme.typography.labelSmall)
                 }

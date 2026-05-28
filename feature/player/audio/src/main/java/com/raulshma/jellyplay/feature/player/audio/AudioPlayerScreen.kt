@@ -44,39 +44,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.NightsStay
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SpatialAudio
-import androidx.compose.material.icons.filled.SurroundSound
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Waves
-import androidx.compose.material.icons.filled.Piano
-import androidx.compose.material.icons.filled.Balance
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -131,6 +98,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
@@ -895,7 +864,7 @@ private fun LyricsSearchSheet(
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, "Clear", modifier = Modifier.size(18.dp))
+                            Icon(Tabler.Outline.X, "Clear", modifier = Modifier.size(18.dp))
                         }
                     }
                 },
@@ -1035,7 +1004,7 @@ private fun LyricsOverlay(
                 modifier = Modifier.padding(16.dp),
             ) {
                 Icon(
-                    Icons.Outlined.MusicNote,
+                    Tabler.Outline.Music,
                     null,
                     modifier = Modifier.size(36.dp),
                     tint = Color.White.copy(alpha = 0.5f),
@@ -1053,7 +1022,7 @@ private fun LyricsOverlay(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 ) {
                     Icon(
-                        Icons.Default.Search,
+                        Tabler.Outline.Search,
                         null,
                         modifier = Modifier.size(14.dp),
                     )
@@ -1185,7 +1154,7 @@ private fun LyricsOverlay(
                             ),
                     ) {
                         Icon(
-                            Icons.Default.Search,
+                            Tabler.Outline.Search,
                             "Search lyrics",
                             modifier = Modifier.size(14.dp),
                             tint = Color.White.copy(alpha = 0.8f),
@@ -1243,7 +1212,7 @@ private fun AudioEffectsSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Tune, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Tabler.Outline.Adjustments, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
                         Text("Equalizer", style = MaterialTheme.typography.bodyLarge)
                     }
@@ -1266,7 +1235,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.GraphicEq,
+                            Tabler.Outline.WaveSine,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.bassBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1309,7 +1278,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.SurroundSound,
+                            Tabler.Outline.Speakerphone,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.virtualizerEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1347,7 +1316,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Waves,
+                            Tabler.Outline.WaveSine,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.reverbPreset != com.raulshma.jellyplay.core.model.ReverbPreset.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1380,7 +1349,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.RecordVoiceOver,
+                            Tabler.Outline.Microphone2,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1423,7 +1392,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Nightlight,
+                            Tabler.Outline.Moon,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1466,7 +1435,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Balance,
+                            Tabler.Outline.Scale,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.lrBalance != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1502,7 +1471,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Piano,
+                            Tabler.Outline.Piano,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.pitchSemitones != 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1536,7 +1505,7 @@ private fun AudioEffectsSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.AutoAwesome,
+                            Tabler.Outline.Wand,
                             null,
                             modifier = Modifier.size(20.dp),
                             tint = if (viewModel.autoEqByGenre) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1599,7 +1568,7 @@ private fun PixelPlayerTopBar(
     ) {
         IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
             Icon(
-                Icons.Default.KeyboardArrowDown, "Minimize",
+                Tabler.Outline.ChevronDown, "Minimize",
                 tint = Color.White,
                 modifier = Modifier.size(28.dp),
             )
@@ -1614,7 +1583,7 @@ private fun PixelPlayerTopBar(
             if (hasLyrics) {
                 IconButton(onClick = onLyricsClick, modifier = Modifier.tvFocusable()) {
                     Icon(
-                        if (lyricsVisible) Icons.Filled.Lyrics else Icons.Default.Mic,
+                        if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
                         tint = if (lyricsVisible) Color(0xFFE8B4C8) else Color.White,
                         modifier = Modifier.size(22.dp),
@@ -1622,11 +1591,11 @@ private fun PixelPlayerTopBar(
                 }
             }
             IconButton(onClick = onQueueClick, modifier = Modifier.tvFocusable()) {
-                Icon(Icons.Default.QueueMusic, "Queue", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.Playlist, "Queue", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             Box {
                 IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
-                    Icon(Icons.Default.MoreVert, "More", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Tabler.Outline.DotsVertical, "More", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
                     textColor = MaterialTheme.colorScheme.onSurface,
@@ -1636,43 +1605,43 @@ private fun PixelPlayerTopBar(
                     DropdownMenuItem(
                         text = { Text("Speed (${if (speed == 1.0f) "1x" else "${speed}x"})") },
                         onClick = onSpeedClick,
-                        leadingIcon = { Icon(Icons.Default.Speed, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Gauge, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Equalizer") },
                         onClick = onEqualizerClick,
-                        leadingIcon = { Icon(Icons.Default.Tune, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Adjustments, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Audio Effects") },
                         onClick = onEffectsClick,
-                        leadingIcon = { Icon(Icons.Default.SpatialAudio, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Ear, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (dialogueBoostEnabled) "Dialogue Boost · ${dialogueBoostStrength.displayName}" else "Dialogue Boost") },
                         onClick = { onDialogueBoostClick(); onMenuToggle(false) },
-                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (nightModeEnabled) "Night Mode · ${nightModeStrength.displayName}" else "Night Mode") },
                         onClick = { onNightModeClick(); onMenuToggle(false) },
-                        leadingIcon = { Icon(Icons.Default.Nightlight, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Moon, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text("Ambient Mode") },
                         onClick = onAmbientClick,
-                        leadingIcon = { Icon(Icons.Default.NightsStay, null) },
+                        leadingIcon = { Icon(Tabler.Outline.MoonStars, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(
                         text = { Text(if (sleepTimerActive) "Sleep Timer · $sleepTimerDisplayText" else "Sleep Timer") },
                         onClick = onSleepTimerClick,
-                        leadingIcon = { Icon(Icons.Default.Timer, null) },
+                        leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
                         colors = itemColors,
                     )
                 }
@@ -1746,7 +1715,7 @@ private fun AlbumArtwork(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Default.MusicNote,
+                    Tabler.Outline.Music,
                     contentDescription = null,
                     modifier = Modifier.size(72.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
@@ -1870,7 +1839,7 @@ private fun PixelTransportControls(
             onClick = onSkipPrevious,
             icon = {
                 Icon(
-                    Icons.Default.SkipPrevious, "Previous",
+                    Tabler.Outline.PlayerSkipBack, "Previous",
                     modifier = Modifier.size(28.dp),
                     tint = Color.White,
                 )
@@ -1887,7 +1856,7 @@ private fun PixelTransportControls(
             onClick = onSkipNext,
             icon = {
                 Icon(
-                    Icons.Default.SkipNext, "Next",
+                    Tabler.Outline.PlayerSkipForward, "Next",
                     modifier = Modifier.size(28.dp),
                     tint = Color.White,
                 )
@@ -1923,7 +1892,7 @@ private fun PixelSecondaryControls(
             onClick = onToggleShuffle,
             tint = if (shuffleMode) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
-                Icon(Icons.Default.Shuffle, "Shuffle", modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.ArrowsShuffle, "Shuffle", modifier = Modifier.size(22.dp))
             },
         )
         IconButtonWithPressAnimation(
@@ -1931,7 +1900,7 @@ private fun PixelSecondaryControls(
             tint = if (repeatMode > 0) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
                 Icon(
-                    if (repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                    if (repeatMode == 2) Tabler.Outline.RepeatOnce else Tabler.Outline.Repeat,
                     when (repeatMode) {
                         0 -> "Repeat off"; 1 -> "Repeat all"; else -> "Repeat one"
                     },
@@ -1944,7 +1913,7 @@ private fun PixelSecondaryControls(
             tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.6f),
             icon = {
                 Icon(
-                    if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    if (isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                     "Favorite",
                     modifier = Modifier.size(22.dp),
                 )
@@ -2007,7 +1976,7 @@ private fun PixelPlayPauseButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
             if (isPlaying) "Pause" else "Play",
             modifier = Modifier.size(36.dp),
             tint = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -2179,7 +2148,7 @@ private fun SwipeTrackCard(
         ) {
             if (isNext) {
                 Icon(
-                    Icons.Default.SkipNext,
+                    Tabler.Outline.PlayerSkipForward,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.8f),
                     modifier = Modifier.size(24.dp)
@@ -2187,7 +2156,7 @@ private fun SwipeTrackCard(
                 Spacer(Modifier.width(8.dp))
             } else {
                 Icon(
-                    Icons.Default.SkipPrevious,
+                    Tabler.Outline.PlayerSkipBack,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.8f),
                     modifier = Modifier.size(24.dp)
@@ -2210,7 +2179,7 @@ private fun SwipeTrackCard(
                     )
                 } else {
                     Icon(
-                        Icons.Default.MusicNote,
+                        Tabler.Outline.Music,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.5f),
                     )

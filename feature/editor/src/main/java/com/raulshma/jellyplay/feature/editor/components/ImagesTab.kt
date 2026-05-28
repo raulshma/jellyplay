@@ -22,12 +22,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -67,6 +61,8 @@ import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 private val IMAGE_TYPES = listOf("Primary", "Art", "Backdrop", "Banner", "Box", "BoxRear", "Disc", "Logo", "Menu", "Thumb")
 
@@ -98,7 +94,7 @@ fun ImagesTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilledTonalButton(onClick = { showUploadSheet = true }) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Upload")
             }
@@ -106,7 +102,7 @@ fun ImagesTab(
                 viewModel.loadRemoteImages(null, null, null)
                 showBrowseSheet = true
             }) {
-                Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Tabler.Outline.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Browse Online")
             }
@@ -253,7 +249,7 @@ private fun ImageCard(
                     .padding(4.dp),
             ) {
                 Icon(
-                    Icons.Filled.Delete,
+                    Tabler.Outline.Trash,
                     contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -548,7 +544,7 @@ private fun RemoteImageCard(
                     .padding(2.dp),
             ) {
                 Icon(
-                    Icons.Filled.Download,
+                    Tabler.Outline.Download,
                     contentDescription = "Download",
                     tint = MaterialTheme.colorScheme.primary,
                 )
@@ -601,7 +597,7 @@ private fun FullImageDialog(
                     .padding(8.dp),
             ) {
                 Icon(
-                    Icons.Filled.Close,
+                    Tabler.Outline.X,
                     contentDescription = "Close",
                     tint = MaterialTheme.colorScheme.onSurface,
                 )

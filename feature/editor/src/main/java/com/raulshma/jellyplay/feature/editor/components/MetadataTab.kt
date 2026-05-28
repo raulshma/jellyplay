@@ -18,14 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -53,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -495,7 +489,7 @@ private fun SectionHeader(
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                imageVector = if (expanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
                 contentDescription = if (expanded) "Collapse" else "Expand",
             )
         }
@@ -531,7 +525,7 @@ private fun EditableChipGroup(
                     label = { Text(item) },
                     trailingIcon = {
                         Icon(
-                            Icons.Filled.Close,
+                            Tabler.Outline.X,
                             contentDescription = "Remove",
                             modifier = Modifier.size(18.dp),
                         )
@@ -558,7 +552,7 @@ private fun EditableChipGroup(
                     }
                 },
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add")
+                Icon(Tabler.Outline.Plus, contentDescription = "Add")
             }
         }
     }
@@ -581,7 +575,7 @@ private fun PeopleEditor(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Filled.Person,
+                    Tabler.Outline.User,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
                 )
@@ -598,10 +592,10 @@ private fun PeopleEditor(
                     isNewPerson = false
                     showPersonDialog = person
                 }) {
-                    Icon(Icons.Filled.ExpandMore, contentDescription = "Edit")
+                    Icon(Tabler.Outline.ChevronDown, contentDescription = "Edit")
                 }
                 IconButton(onClick = { onRemove(person) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                    Icon(Tabler.Outline.Trash, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -610,7 +604,7 @@ private fun PeopleEditor(
             isNewPerson = true
             showPersonDialog = com.raulshma.jellyplay.core.model.EditorPerson()
         }) {
-            Icon(Icons.Filled.Add, contentDescription = null)
+            Icon(Tabler.Outline.Plus, contentDescription = null)
             Spacer(modifier = Modifier.width(4.dp))
             Text("Add Person")
         }

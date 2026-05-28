@@ -19,9 +19,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -89,6 +86,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import java.text.NumberFormat
 import java.util.*
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -602,7 +601,7 @@ private fun SeerrDetailContent(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
+                            Tabler.Outline.ArrowLeft,
                             contentDescription = "Back",
                             tint = Color.White,
                             modifier = Modifier.padding(8.dp),
@@ -611,7 +610,7 @@ private fun SeerrDetailContent(
                 } else {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
+                            Tabler.Outline.ArrowLeft,
                             contentDescription = "Back",
                             tint = backIconColor
                         )
@@ -663,7 +662,7 @@ private fun SeerrActionButtons(
                 ),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
+                Icon(Tabler.Outline.Plus, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Request", fontWeight = FontWeight.Bold)
             }
@@ -685,7 +684,7 @@ private fun SeerrActionButtons(
                 contentPadding = PaddingValues(vertical = 12.dp),
                 enabled = false
             ) {
-                Icon(Icons.Default.Check, contentDescription = null)
+                Icon(Tabler.Outline.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Available", fontWeight = FontWeight.Bold)
             }
@@ -1136,7 +1135,7 @@ private fun VideosSection(
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         
@@ -1166,7 +1165,7 @@ private fun VideosSection(
                         )
                         
                         Icon(
-                            Icons.Default.PlayCircleOutline,
+                            Tabler.Outline.PlayerPlay,
                             contentDescription = null,
                             modifier = Modifier.align(Alignment.Center).size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -1366,27 +1365,27 @@ private fun MediaInformationSection(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Icons.Default.Info)
+            MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Tabler.Outline.InfoCircle)
 
             val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
             if (movie != null) {
                 ReleaseDateRow(releaseDate, movie.releases, discoverRegion)
             } else {
-                MediaInfoRow("Release Date", releaseDate ?: "Unknown", Icons.Default.Event)
+                MediaInfoRow("Release Date", releaseDate ?: "Unknown", Tabler.Outline.CalendarEvent)
             }
 
             if (movie != null) {
                 movie.revenue?.takeIf { it > 0 }?.let {
-                    MediaInfoRow("Revenue", currencyFormatter.format(it), Icons.Default.Payments)
+                    MediaInfoRow("Revenue", currencyFormatter.format(it), Tabler.Outline.Cash)
                 }
                 movie.budget?.takeIf { it > 0 }?.let {
-                    MediaInfoRow("Budget", currencyFormatter.format(it), Icons.Default.AccountBalanceWallet)
+                    MediaInfoRow("Budget", currencyFormatter.format(it), Tabler.Outline.Wallet)
                 }
             }
 
             val language = movie?.originalLanguage ?: tv?.originalLanguage
             if (language != null) {
-                MediaInfoRow("Language", Locale(language).displayLanguage, Icons.Default.Language)
+                MediaInfoRow("Language", Locale(language).displayLanguage, Tabler.Outline.Language)
             }
 
             val productionCountries = movie?.productionCountries ?: emptyList()
@@ -1395,12 +1394,12 @@ private fun MediaInformationSection(
                     val flag = getFlagEmoji(country.iso31661)
                     if (flag != null) "$flag ${country.name}" else country.name
                 }
-                MediaInfoRow("Country", countryText, Icons.Default.Public)
+                MediaInfoRow("Country", countryText, Tabler.Outline.World)
             }
 
             val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
             if (studios.isNotEmpty()) {
-                MediaInfoRow("Studios", studios.joinToString(", "), Icons.Default.Business)
+                MediaInfoRow("Studios", studios.joinToString(", "), Tabler.Outline.Building)
             }
 
             val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
@@ -1431,7 +1430,7 @@ private fun ReleaseDateRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.Event,
+            imageVector = Tabler.Outline.CalendarEvent,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
@@ -1468,19 +1467,19 @@ private fun ReleaseDateRow(
 private fun ReleaseTypeIcon(type: Int) {
     when (type) {
         3 -> Icon(
-            imageVector = Icons.Default.LocalActivity,
+            imageVector = Tabler.Outline.Ticket,
             contentDescription = "Theatrical Release",
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         4 -> Icon(
-            imageVector = Icons.Default.CloudDownload,
+            imageVector = Tabler.Outline.CloudDownload,
             contentDescription = "Digital Release",
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         5 -> Icon(
-            imageVector = Icons.Default.FiberManualRecord,
+            imageVector = Tabler.Outline.Circle,
             contentDescription = "Physical Release",
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -1500,7 +1499,7 @@ private fun StreamingProvidersRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.PlayCircle,
+            imageVector = Tabler.Outline.PlayerPlay,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)

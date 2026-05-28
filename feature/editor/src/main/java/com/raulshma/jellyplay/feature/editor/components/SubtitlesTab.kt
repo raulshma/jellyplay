@@ -17,13 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -57,6 +50,8 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -86,12 +81,12 @@ fun SubtitlesTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilledTonalButton(onClick = { showUploadSheet = true }) {
-                Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Upload")
             }
             FilledTonalButton(onClick = { showSearchSheet = true }) {
-                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Search Remote")
             }
@@ -131,7 +126,7 @@ fun SubtitlesTab(
                             if (subtitle.isExternal) {
                                 IconButton(onClick = { showDeleteConfirm = subtitle }) {
                                     Icon(
-                                        Icons.Filled.Delete,
+                                        Tabler.Outline.Trash,
                                         contentDescription = "Delete",
                                         tint = MaterialTheme.colorScheme.error,
                                     )
@@ -342,7 +337,7 @@ private fun RemoteSubtitleSearchSheet(
                         hasSearched = true
                     },
                 ) {
-                    Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Search")
                 }
@@ -430,7 +425,7 @@ private fun RemoteSubtitleCard(
         trailingContent = {
             IconButton(onClick = onDownload) {
                 Icon(
-                    Icons.Filled.Download,
+                    Tabler.Outline.Download,
                     contentDescription = "Download",
                     tint = MaterialTheme.colorScheme.primary,
                 )

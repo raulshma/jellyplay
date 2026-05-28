@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -60,6 +58,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import java.time.LocalDate
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun SeerrMediaCard(
@@ -382,7 +382,7 @@ fun SeerrMediaCard(
                                 .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
                         ) {
                             Icon(
-                                Icons.Default.Add,
+                                Tabler.Outline.Plus,
                                 contentDescription = "Request",
                                 tint = Color.White,
                                 modifier = Modifier.padding(2.dp),
