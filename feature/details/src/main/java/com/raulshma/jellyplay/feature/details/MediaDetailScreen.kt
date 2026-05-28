@@ -675,6 +675,74 @@ private fun DetailContent(
                                 }
                             }
                         }
+
+                        if (detail != null && item != null) {
+                            AnimatedVisibility(
+                                visible = contentVisible,
+                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                        slideInVertically(
+                                            initialOffsetY = { it / 12 },
+                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                                        ),
+                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
+                                    targetOffsetY = { -it / 24 },
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                DetailContentBody(
+                                    item = item,
+                                    detail = detail,
+                                    seasons = seasons,
+                                    episodes = episodes,
+                                    fetchedSeasonIds = fetchedSeasonIds,
+                                    smartPlayTarget = smartPlayTarget,
+                                    selectedSubtitleIndex = selectedSubtitleIndex,
+                                    selectedAudioIndex = selectedAudioIndex,
+                                    getImageUrl = getImageUrl,
+                                    isAudio = isAudio,
+                                    isAlbum = isAlbum,
+                                    albumTracks = albumTracks,
+                                    isDownloading = isDownloading,
+                                    isDownloadingSeries = isDownloadingSeries,
+                                    activeDownload = activeDownload,
+                                    onPlayClick = onPlayClick,
+                                    onAudioClick = onAudioClick,
+                                    onDownloadClick = { showDownloadDialog = true },
+                                    onDownloadSeriesClick = onDownloadSeriesClick,
+                                    onToggleFavorite = onToggleFavorite,
+                                    onMarkPlayed = onMarkPlayed,
+                                    onMarkUnplayed = onMarkUnplayed,
+                                    onSubtitleSelect = onSubtitleSelect,
+                                    onAudioSelect = onAudioSelect,
+                                    onItemClick = onItemClick,
+                                    onPersonClick = onPersonClick,
+                                    onNavigateToSeries = onNavigateToSeries,
+                                    onSeasonSelected = onSeasonSelected,
+                                    onLoadSeerrData = onLoadSeerrData,
+                                    contentFocusRequester = contentFocusRequester,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
+                                    onPlayAlbumTrack = onPlayAlbumTrack,
+                                    showActionButtons = false
+                                )
+                            }
+                        } else if (isLoading) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                SkeletonDetailBody()
+                            }
+                        } else if (error != null) {
+                            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = onRetry) { Text("Retry") }
+                            }
+                        }
                     }
                 } else {
                     Column(
