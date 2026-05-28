@@ -58,11 +58,15 @@ class OfflineLibraryViewModel @Inject constructor(
             offlineRepository.getSeasonsForSeries(seriesId).collect { seasonList ->
                 _seasons.value = seasonList
 
+                // Launch a separate coroutine for each season's episodes to avoid
+                // the terminal inner collect blocking the outer loop
                 val episodesMap = mutableMapOf<String, List<OfflineMediaItem>>()
                 for (season in seasonList) {
-                    offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
-                        episodesMap[season.id] = episodeList
-                        _episodes.value = episodesMap.toMap()
+                    launch {
+                        offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
+                            episodesMap[season.id] = episodeList
+                            _episodes.value = episodesMap.toMap()
+                        }
                     }
                 }
             }

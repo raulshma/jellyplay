@@ -113,6 +113,12 @@ class DetailViewModel @Inject constructor(
         private set
     var isDownloading by mutableStateOf(false)
         private set
+    var downloadError by mutableStateOf<String?>(null)
+        private set
+
+    fun clearDownloadError() {
+        downloadError = null
+    }
     var isDownloadingSeries by mutableStateOf(false)
         private set
 
@@ -180,6 +186,11 @@ class DetailViewModel @Inject constructor(
             seerrDataLoaded = false
             _seerrRecommendations.value = emptyList()
             _seerrSimilar.value = emptyList()
+            // Reset download state to prevent stale flags from blocking new downloads
+            isDownloading = false
+            isDownloadingSeries = false
+            downloadError = null
+            seriesDownloadResult = null
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     _detail.value = detail
@@ -468,15 +479,23 @@ class DetailViewModel @Inject constructor(
     }
 
     fun startDownload() {
-        val detail = _detail.value ?: return
+        val detail = _detail.value ?: run {
+            downloadError = "Media details not loaded"
+            return
+        }
         val item = detail.item
-        val source = detail.mediaSources.firstOrNull() ?: return
+        val source = detail.mediaSources.firstOrNull() ?: run {
+            downloadError = "No media source available for download"
+            return
+        }
 
         viewModelScope.launch {
             isDownloading = true
+            downloadError = null
             try {
                 val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
                 if (streamUrl.isBlank()) {
+                    downloadError = "Could not get stream URL"
                     isDownloading = false
                     return@launch
                 }
@@ -495,15 +514,21 @@ class DetailViewModel @Inject constructor(
                     imageUrl = imageUrl,
                     imageBlurHash = item.blurHashes.primary,
                 ).onSuccess { downloadItem ->
-                    enqueueDownloadWorker(downloadItem.id)
-                    try {
-                        val backdropUrl = playbackRepository.getBackdropUrl(item.id, maxWidth = 1280)
-                        downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
-                    } catch (_: Exception) {
+                    // Only enqueue the worker for new (PENDING) downloads,
+                    // not for already-completed or in-progress ones.
+                    if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                        enqueueDownloadWorker(downloadItem.id)
+                        try {
+                            val backdropUrl = playbackRepository.getBackdropUrl(item.id, maxWidth = 1280)
+                            downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
+                        } catch (_: Exception) {
+                        }
                     }
-                }.onFailure {
+                }.onFailure { error ->
+                    downloadError = error.message ?: "Download failed"
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                downloadError = e.message ?: "Download failed"
             }
             isDownloading = false
         }
@@ -513,9 +538,15 @@ class DetailViewModel @Inject constructor(
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 
     fun downloadSeries(seasonIds: List<String>? = null) {
-        val detail = _detail.value ?: return
+        val detail = _detail.value ?: run {
+            seriesDownloadResult = SeriesDownloadResult(error = "Media details not loaded")
+            return
+        }
         val item = detail.item
-        if (item.mediaType != MediaType.SERIES) return
+        if (item.mediaType != MediaType.SERIES) {
+            seriesDownloadResult = SeriesDownloadResult(error = "This is not a series")
+            return
+        }
 
         viewModelScope.launch {
             isDownloadingSeries = true
