@@ -175,7 +175,6 @@ private fun MainContent(
     val currentRoute = navigator.currentRoute()
 
     val isPlayerScreen = currentRoute is Route.VideoPlayer ||
-            currentRoute is Route.OfflinePlayer ||
             currentRoute is Route.LiveTvChannelPlayer
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
@@ -599,7 +598,6 @@ private fun MainNavDisplay(
                 val contentKey = entry.contentKey.toString()
                 val isPlayer = contentKey.contains("AudioPlayer") ||
                         contentKey.contains("VideoPlayer") ||
-                        contentKey.contains("OfflinePlayer") ||
                         contentKey.contains("LiveTvChannelPlayer") ||
                         contentKey.contains("Ambient")
 

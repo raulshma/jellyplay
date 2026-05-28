@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,12 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,7 +56,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 @Composable
 fun OfflineLibraryScreen(
     onItemClick: (String) -> Unit,
-    onPlayOffline: (filePath: String, title: String) -> Unit,
+    onPlayOffline: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: OfflineLibraryViewModel = hiltViewModel(),
 ) {
@@ -119,8 +123,8 @@ fun OfflineLibraryScreen(
                             onClick = {
                                 if (item.mediaType == MediaType.SERIES) {
                                     onItemClick(item.id)
-                                } else if (item.downloadPath != null) {
-                                    onPlayOffline(item.downloadPath!!, item.name)
+                                } else {
+                                    onPlayOffline(item.id)
                                 }
                             },
                         )
@@ -177,11 +181,62 @@ private fun OfflineMediaCard(
             modifier = Modifier.padding(top = 6.dp),
         )
 
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 2.dp),
+        ) {
+            if (item.year != null) {
+                Text(
+                    text = item.year.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+            if (item.communityRating != null && item.communityRating!! > 0) {
+                if (item.year != null) {
+                    Text(
+                        text = " · ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    )
+                }
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp),
+                    tint = MaterialTheme.colorScheme.tertiary,
+                )
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = String.format("%.1f", item.communityRating),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+            if (item.officialRating != null) {
+                Text(
+                    text = " · ${item.officialRating}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                )
+            }
+        }
+
         if (item.mediaType == MediaType.SERIES && item.childCount > 0) {
             Text(
                 text = "${item.childCount} episodes",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+
+        if (item.genres.isNotEmpty()) {
+            Text(
+                text = item.genres.take(3).joinToString(", "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

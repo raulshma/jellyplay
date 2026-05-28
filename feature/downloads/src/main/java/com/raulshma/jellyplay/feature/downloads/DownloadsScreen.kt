@@ -74,7 +74,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
-    onPlayOffline: (filePath: String, title: String) -> Unit,
+    onPlayOffline: (itemId: String) -> Unit,
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -159,7 +159,7 @@ fun DownloadsScreen(
                             formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
                             onClick = {
                                 if (download.status == DownloadStatus.COMPLETED) {
-                                    onPlayOffline(download.downloadPath, download.name)
+                                    onPlayOffline(download.mediaItemId)
                                 }
                             },
                             onCancel = { viewModel.cancelDownload(download) },
