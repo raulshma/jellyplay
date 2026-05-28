@@ -19,6 +19,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -426,13 +428,15 @@ fun HomeScreen(
         }
 
         var isFabExpanded by remember { mutableStateOf(false) }
+        var isSearchExpanded by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
-        val isSearchFocused by remember { derivedStateOf { viewModel.searchQuery.isNotBlank() } }
+        val isSearchFocused by remember { derivedStateOf { viewModel.searchQuery.isNotBlank() || isSearchExpanded } }
 
         BackHandler(enabled = isFabExpanded || isSearchFocused) {
             if (isFabExpanded) {
                 isFabExpanded = false
-            } else if (viewModel.searchQuery.isNotBlank()) {
+            } else if (isSearchFocused) {
+                isSearchExpanded = false
                 viewModel.clearSearch()
                 focusManager.clearFocus()
             }
@@ -750,11 +754,10 @@ fun HomeScreen(
                 }
             }
 
-            val borderAlpha = 0.08f + (0.04f * scrollFraction)
             val appBarIconColor = lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollFraction)
             val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
             val dockScale = 1f - (0.04f * scrollFraction)
-            val dockCornerRadius = 16f + (12f * scrollFraction)
+            val dockCornerRadius = 24f + (4f * scrollFraction) // More rounded for expressive feel
 
             Box(
                 modifier = Modifier
@@ -763,146 +766,172 @@ fun HomeScreen(
                     .padding(
                         horizontal = (4f + 12f * scrollFraction).dp,
                         vertical = (4f + 4f * scrollFraction).dp
-                    )
-                    .graphicsLayer {
-                        scaleX = dockScale
-                        scaleY = dockScale
-                    }
-                    .clip(
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = dockCornerRadius.dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
-                    .background(
-                        lerp(
-                            Color.Black.copy(alpha = 0.3f),
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
-                            scrollFraction
-                        )
-                    )
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = borderAlpha * 2f),
-                                    Color.White.copy(alpha = borderAlpha * 0.5f),
-                                )
-                            )
-                        ),
-                        AbsoluteSmoothCornerShape(
-                            cornerRadius = dockCornerRadius.dp,
-                            smoothnessAsPercent = 60
-                        )
-                    )
+                    ),
+                contentAlignment = Alignment.TopEnd
             ) {
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ModeSwitch(
-                        currentMode = viewModel.homeMode,
-                        onModeChange = onModeChange,
-                    )
-                    if (viewModel.offlineMode != OfflineMode.ONLINE) {
-                        IconButton(
-                            onClick = { viewModel.toggleOfflineMode() },
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Icon(
-                                Tabler.Outline.Download,
-                                contentDescription = "Go online",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
+                        .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
+                        .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                        .graphicsLayer {
+                            scaleX = dockScale
+                            scaleY = dockScale
+                            shadowElevation = if (scrollFraction > 0f) 8f * scrollFraction else 2f
+                            shape = RoundedCornerShape(dockCornerRadius.dp)
+                            clip = true
                         }
-                    }
-                    HeaderStatusIndicator(
-                        status = headerStatus,
-                        modifier = Modifier.padding(start = 8.dp),
-                        tint = appBarIconColorFaded,
-                    )
-
-                    @OptIn(ExperimentalMaterial3Api::class)
-                    val searchTextFieldColors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = appBarIconColor,
-                    )
-                    TextField(
-                        value = viewModel.searchQuery,
-                        onValueChange = { viewModel.updateSearchQuery(it) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 12.dp)
-                            .height(48.dp),
-                        placeholder = {
-                            Text(
-                                "Search movies, shows, music...",
-                                color = appBarIconColor.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.bodyMedium,
+                        .background(
+                            lerp(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f),
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                scrollFraction
                             )
-                        },
-                        colors = searchTextFieldColors,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = appBarIconColor,
-                        ),
-                        singleLine = true,
-                    )
-
-                    if (viewModel.searchQuery.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                viewModel.clearSearch()
-                                focusManager.clearFocus()
-                            },
-                            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Icon(
-                                Tabler.Outline.X,
-                                contentDescription = "Clear search",
-                                tint = appBarIconColorFaded,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-
-                if (viewModel.searchQuery.isNotBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 64.dp)
-                            .heightIn(max = 400.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
-                                ShapeCache.smooth28,
-                            )
-                            .clip(ShapeCache.smooth28),
-                    ) {
-                        HomeSearchResultsOverlay(
-                            jellyfinResults = viewModel.searchJellyfinResults,
-                            seerrResults = viewModel.searchSeerrResults,
-                            isSearching = viewModel.isSearching,
-                            getImageUrl = { viewModel.getImageUrl(it) },
-                            onJellyfinClick = { item ->
-                                viewModel.clearSearch()
-                                focusManager.clearFocus()
-                                onItemClick(item.id)
-                            },
-                            onSeerrClick = { item ->
-                                viewModel.clearSearch()
-                                focusManager.clearFocus()
-                                onSearchSeerrClick(item.id, item.mediaType)
-                            },
                         )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
+                            .height(64.dp)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        if (isSearchFocused) {
+                            IconButton(
+                                onClick = {
+                                    isSearchExpanded = false
+                                    viewModel.clearSearch()
+                                    focusManager.clearFocus()
+                                },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Tabler.Outline.ArrowLeft,
+                                    contentDescription = "Back",
+                                    tint = appBarIconColorFaded,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+
+                            @OptIn(ExperimentalMaterial3Api::class)
+                            val searchTextFieldColors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                cursorColor = appBarIconColor,
+                            )
+                            val focusRequester = remember { FocusRequester() }
+                            TextField(
+                                value = viewModel.searchQuery,
+                                onValueChange = { viewModel.updateSearchQuery(it) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 4.dp)
+                                    .height(48.dp)
+                                    .focusRequester(focusRequester),
+                                placeholder = {
+                                    Text(
+                                        "Search movies, shows, music...",
+                                        color = appBarIconColor.copy(alpha = 0.5f),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                },
+                                colors = searchTextFieldColors,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    color = appBarIconColor,
+                                ),
+                                singleLine = true,
+                            )
+
+                            LaunchedEffect(isSearchFocused) {
+                                if (isSearchFocused && viewModel.searchQuery.isEmpty()) {
+                                    focusRequester.requestFocus()
+                                }
+                            }
+
+                            if (viewModel.searchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.clearSearch()
+                                        focusManager.clearFocus()
+                                    },
+                                    shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.X,
+                                        contentDescription = "Clear search",
+                                        tint = appBarIconColorFaded,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        } else {
+                            if (viewModel.offlineMode != OfflineMode.ONLINE) {
+                                IconButton(
+                                    onClick = { viewModel.toggleOfflineMode() },
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Download,
+                                        contentDescription = "Go online",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                            ModeSwitch(
+                                currentMode = viewModel.homeMode,
+                                onModeChange = onModeChange,
+                            )
+                            HeaderStatusIndicator(
+                                status = headerStatus,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                tint = appBarIconColorFaded,
+                            )
+                            IconButton(
+                                onClick = { isSearchExpanded = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Tabler.Outline.Search,
+                                    contentDescription = "Search",
+                                    tint = appBarIconColorFaded,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    if (viewModel.searchQuery.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
+                                ),
+                        ) {
+                            HomeSearchResultsOverlay(
+                                jellyfinResults = viewModel.searchJellyfinResults,
+                                seerrResults = viewModel.searchSeerrResults,
+                                isSearching = viewModel.isSearching,
+                                getImageUrl = { viewModel.getImageUrl(it) },
+                                onJellyfinClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.clearSearch()
+                                    focusManager.clearFocus()
+                                    onItemClick(item.id)
+                                },
+                                onSeerrClick = { item ->
+                                    isSearchExpanded = false
+                                    viewModel.clearSearch()
+                                    focusManager.clearFocus()
+                                    onSearchSeerrClick(item.id, item.mediaType)
+                                },
+                            )
+                        }
                     }
                 }
             }
