@@ -16,19 +16,36 @@
 	<img alt="Media3" src="https://img.shields.io/badge/Media3-FF6F00?style=for-the-badge&logo=android&logoColor=white" />
 </p>
 
-</br>
-
 <div align="center">
 
 JellyPlay is a modern Android Jellyfin client with multi-server support, adaptive layouts, multi-engine playback, offline downloads, SyncPlay watch parties, and a fully Compose-based UI — optimized for phones, tablets, and Android TV.
 
 </div>
 
+<table align="center" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
+	<tr>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/home.png" width="180" alt="Home screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/library.png" width="180" alt="Library screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/search.png" width="180" alt="Search screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/settings.png" width="180" alt="Settings screen" style="display: block;" /></td>
+	</tr>
+	<tr>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_home.png" width="180" alt="Audio home screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_player.png" width="180" alt="Audio player screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail.png" width="180" alt="Media detail screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail_2.png" width="180" alt="Secondary media detail screen" style="display: block;" /></td>
+	</tr>
+	<tr>
+		<td colspan="4" align="center" style="padding: 1px;"><img src="media-resources/screenshots/video_player.png" width="760" alt="Landscape video player screen" style="display: block;" /></td>
+	</tr>
+</table>
+
 ---
 
 ## Features
 
 ### Platform & UI
+
 - Multi-server Jellyfin support with auto-discovery
 - Token-based and Quick Connect authentication
 - Multi-user support with per-server user switching
@@ -42,11 +59,13 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Quick settings tile launcher
 
 ### Search
+
 - Global Jellyfin search across movies, shows, music, albums, and more
 - Filters for genre, year, and media type
 - Voice search support
 
 ### Video Player
+
 - **Three built-in engines**: ExoPlayer (Media3), libmpv, and LibVLC
 - External player launching (MX Player, VLC, etc.)
 - Direct play, direct stream, and transcoding support
@@ -66,6 +85,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Media session integration for lock screen and notifications
 
 ### Subtitle System
+
 - External subtitle loading and download
 - ASS/SSA subtitle format parsing
 - Subtitle styling (font size, color, background, edge type, position) with persistence
@@ -74,6 +94,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Subtitle OCR via ML Kit for extracting text from video frames
 
 ### Audio Player
+
 - Music browsing for artists, albums, tracks, genres, and playlists
 - Queue management with drag-to-reorder
 - Shuffle and repeat modes
@@ -87,11 +108,13 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Ambient Mode with animated color blobs derived from album art
 
 ### Music Discovery
+
 - Smart playlists with criteria-based filtering (genre, artist, year, rating, play count, tags)
 - Mood playlists with 10 presets (Happy Vibes, Chill Out, Energetic, Deep Focus, Workout, Melancholy, Romantic, Party Time, Sleep, Late Night Drive)
 - Recently played, frequent artists, and recommended albums
 
 ### Library & Browsing
+
 - Home sections: Continue Watching, Next Up, Latest, Favorites, and Surprise Me shuffle
 - Library browsing with pagination and folder filtering
 - Media detail pages with cast, crew, metadata, and related items
@@ -99,12 +122,14 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Collection/box set browsing
 
 ### Seerr Integration
+
 - Jellyseerr and Overseerr connection support
 - Discover trending, popular, and upcoming content
 - Request content via Radarr/Sonarr directly from the app
 - Seerr detail pages for unavailable media
 
 ### SyncPlay (Watch Parties)
+
 - Create and join synchronized watch groups
 - Real-time playback sync with speed-to-sync and skip-to-sync correction
 - Server time synchronization for precise coordination
@@ -112,17 +137,20 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Group settings for repeat and shuffle modes
 
 ### Live TV & DVR
+
 - Live TV channel browsing with current program info
 - Electronic Program Guide (EPG) with program timeline
 - DVR recording management
 
 ### Downloads & Offline
+
 - Video downloads via WorkManager with progress tracking
 - Pause, resume, and retry support with HTTP Range resumption
 - Offline playback for completed downloads
 - Foreground notification with speed and ETA
 
 ### Settings
+
 - Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer
 - Audio: default speed, night mode, dialogue boost, equalizer, audio normalization, channel mix
 - Subtitles: language, style, trickplay, intro/outro skip (manual and auto)
@@ -135,24 +163,24 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 
 ## Tech Stack
 
-| Category | Technologies |
-|---|---|
-| Language | Kotlin |
-| UI | Jetpack Compose, Material 3, Material 3 Adaptive |
-| TV | Android TV Material, Leanback |
-| Navigation | Navigation 3 |
-| DI | Hilt |
-| Storage | Room, DataStore |
-| Background | WorkManager, Coroutines, StateFlow |
-| Video Players | Media3/ExoPlayer, libmpv, LibVLC |
-| Audio Effects | Android Equalizer, LoudnessEnhancer |
-| Media Session | Media3 Session, Media3 Cast |
-| Casting | Google Play Services Cast Framework |
-| Networking | OkHttp, Jellyfin SDK |
-| Serialization | kotlinx.serialization |
-| Images | Coil (with BlurHash support) |
-| Text Recognition | ML Kit |
-| Testing | JUnit 4, Espresso, Compose UI Test, OkHttp MockWebServer |
+| Category         | Technologies                                             |
+| ---------------- | -------------------------------------------------------- |
+| Language         | Kotlin                                                   |
+| UI               | Jetpack Compose, Material 3, Material 3 Adaptive         |
+| TV               | Android TV Material, Leanback                            |
+| Navigation       | Navigation 3                                             |
+| DI               | Hilt                                                     |
+| Storage          | Room, DataStore                                          |
+| Background       | WorkManager, Coroutines, StateFlow                       |
+| Video Players    | Media3/ExoPlayer, libmpv, LibVLC                         |
+| Audio Effects    | Android Equalizer, LoudnessEnhancer                      |
+| Media Session    | Media3 Session, Media3 Cast                              |
+| Casting          | Google Play Services Cast Framework                      |
+| Networking       | OkHttp, Jellyfin SDK                                     |
+| Serialization    | kotlinx.serialization                                    |
+| Images           | Coil (with BlurHash support)                             |
+| Text Recognition | ML Kit                                                   |
+| Testing          | JUnit 4, Espresso, Compose UI Test, OkHttp MockWebServer |
 
 ---
 
@@ -193,6 +221,7 @@ The project uses product flavors — `phone` (standard mobile) and `tv` (Android
 ## CI/CD
 
 A GitHub Actions workflow (`.github/workflows/release.yml`) automates release builds:
+
 - Triggered on push to `v[0-9]+*` or `release/**` branches
 - Auto-calculates version from branch name with git tag-based patch incrementing
 - Builds signed release APKs for both phone and TV flavors
@@ -202,16 +231,16 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) automates release bu
 
 ## Permissions
 
-| Permission | Purpose |
-|---|---|
-| `INTERNET` | Jellyfin API access and media playback |
-| `ACCESS_NETWORK_STATE` | Network connectivity monitoring |
-| `ACCESS_WIFI_STATE` | WiFi state for server discovery and streaming |
-| `CHANGE_WIFI_MULTICAST_STATE` | Jellyfin server auto-discovery |
-| `FOREGROUND_SERVICE` | Foreground service for playback and downloads |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback foreground service type |
-| `FOREGROUND_SERVICE_DATA_SYNC` | Download worker foreground service type |
-| `POST_NOTIFICATIONS` | Playback, download, and widget notifications |
+| Permission                          | Purpose                                       |
+| ----------------------------------- | --------------------------------------------- |
+| `INTERNET`                          | Jellyfin API access and media playback        |
+| `ACCESS_NETWORK_STATE`              | Network connectivity monitoring               |
+| `ACCESS_WIFI_STATE`                 | WiFi state for server discovery and streaming |
+| `CHANGE_WIFI_MULTICAST_STATE`       | Jellyfin server auto-discovery                |
+| `FOREGROUND_SERVICE`                | Foreground service for playback and downloads |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback foreground service type        |
+| `FOREGROUND_SERVICE_DATA_SYNC`      | Download worker foreground service type       |
+| `POST_NOTIFICATIONS`                | Playback, download, and widget notifications  |
 
 ---
 
