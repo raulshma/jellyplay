@@ -6,10 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,16 +20,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,12 +40,16 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UserManagementScreen(
     onBack: () -> Unit,
@@ -61,9 +59,9 @@ fun UserManagementScreen(
     val currentUser = viewModel.currentUser
     val serverUsers = viewModel.currentServerUsers
     val isLoading = viewModel.isLoadingUsers
-    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current
+    val networkStatus by LocalNetworkStatus.current
         .collectAsStateWithLifecycle()
-    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+    val headerStatus = resolveHeaderStatus(
         isLoading = isLoading,
         hasError = false,
         networkStatus = networkStatus,
@@ -74,106 +72,80 @@ fun UserManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Switch User")
-                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
-                },
-                navigationIcon = {
-                    TooltipIconButton(
-                        onClick = onBack,
-                        imageVector = Tabler.Outline.ArrowLeft,
-                        contentDescription = "Back",
-                        tooltipText = "Back",
-                    )
-                },
-                scrollBehavior = scrollBehavior,
+    JellyPlayScreenScaffold(
+        title = "Switch User",
+        onBack = onBack,
+        actions = {
+            HeaderStatusIndicator(
+                status = headerStatus,
+                modifier = Modifier.padding(start = 12.dp),
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAddUser,
-                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                text = { Text("Add User") },
-            )
-        },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
-        when {
-            serverUsers.isEmpty() && !isLoading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        Tabler.Outline.User,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No users on this server",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Add a user to get started",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                serverUsers.isEmpty() && !isLoading -> {
+                    ScreenEmptyState(
+                        icon = Tabler.Outline.User,
+                        title = "No users on this server",
+                        description = "Add a user to get started",
+                        actionLabel = "Add User",
+                        onAction = onAddUser,
                     )
                 }
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.padding(padding),
-                    contentPadding = PaddingValues(contentPad),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
-                ) {
-                    itemsIndexed(serverUsers, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
-                        val isCurrentUser = currentUser?.id == user.id
-                        val visible = remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) { visible.value = true }
-                        AnimatedVisibility(
-                            visible = visible.value,
-                            enter = fadeIn(
-                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 10 },
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            ),
-                        ) {
-                            UserManagementCard(
-                                user = user,
-                                isCurrentUser = isCurrentUser,
-                                onClick = {
-                                    if (!isCurrentUser) {
-                                        viewModel.switchUser(user.id) {
-                                            onBack()
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(contentPad),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                    ) {
+                        itemsIndexed(serverUsers, key = { _, it -> it.id }, contentType = { _, _ -> "user" }) { index, user ->
+                            val isCurrentUser = currentUser?.id == user.id
+                            val visible = remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) { visible.value = true }
+                            AnimatedVisibility(
+                                visible = visible.value,
+                                enter = fadeIn(
+                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
+                                ) + slideInVertically(
+                                    initialOffsetY = { it / 10 },
+                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                ),
+                            ) {
+                                UserManagementCard(
+                                    user = user,
+                                    isCurrentUser = isCurrentUser,
+                                    onClick = {
+                                        if (!isCurrentUser) {
+                                            viewModel.switchUser(user.id) {
+                                                onBack()
+                                            }
                                         }
-                                    }
-                                },
-                                onRemove = {
-                                    viewModel.removeUser(user.id)
-                                },
-                            )
+                                    },
+                                    onRemove = {
+                                        viewModel.removeUser(user.id)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            AnimatedVisibility(
+                visible = serverUsers.isNotEmpty(),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                        slideInVertically(initialOffsetY = { it }),
+                exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                        androidx.compose.animation.slideOutVertically(targetOffsetY = { it }),
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = onAddUser,
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
+                    text = { Text("Add User") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                )
             }
         }
     }

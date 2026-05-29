@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,27 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,15 +37,15 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DvrScreen(
     onBack: () -> Unit,
@@ -77,115 +65,82 @@ fun DvrScreen(
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val backgroundColor = rememberScreenBackgroundColor()
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Recordings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                        status = headerStatus,
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                },
-                scrollBehavior = scrollBehavior,
+    JellyPlayScreenScaffold(
+        title = "Recordings",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                status = headerStatus,
+                modifier = Modifier.padding(start = 12.dp),
             )
         },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            if (viewModel.error != null && viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty()) {
-                ErrorScreen(
-                    message = viewModel.error!!,
-                    onRetry = { viewModel.load() },
-                )
-            } else if (viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            Tabler.Outline.Circle,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                        )
+    ) {
+        if (viewModel.error != null && viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty()) {
+            ErrorScreen(
+                message = viewModel.error!!,
+                onRetry = { viewModel.load() },
+            )
+        } else if (viewModel.timers.isEmpty() && viewModel.seriesTimers.isEmpty()) {
+            ScreenEmptyState(
+                icon = Tabler.Outline.Circle,
+                title = "No scheduled recordings",
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = contentPad,
+                    end = contentPad,
+                    top = 8.dp,
+                    bottom = bottomPad,
+                ),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+            ) {
+                if (viewModel.seriesTimers.isNotEmpty()) {
+                    item {
                         Text(
-                            text = "No scheduled recordings",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            text = "Series Recordings",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        )
+                    }
+                    items(viewModel.seriesTimers.size, key = { viewModel.seriesTimers[it].id }, contentType = { "seriesTimer" }) { index ->
+                        val timer = viewModel.seriesTimers[index]
+                        SeriesTimerCard(
+                            timer = timer,
+                            onCancel = { viewModel.cancelSeriesTimer(it) },
+                        )
+                    }
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                         )
                     }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = contentPad,
-                        end = contentPad,
-                        top = 8.dp,
-                        bottom = bottomPad,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
-                ) {
-                    if (viewModel.seriesTimers.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "Series Recordings",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                            )
-                        }
-                        items(viewModel.seriesTimers.size, key = { viewModel.seriesTimers[it].id }, contentType = { "seriesTimer" }) { index ->
-                            val timer = viewModel.seriesTimers[index]
-                            SeriesTimerCard(
-                                timer = timer,
-                                onCancel = { viewModel.cancelSeriesTimer(it) },
-                            )
-                        }
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
-                                    .height(1.dp)
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                            )
-                        }
-                    }
 
-                    if (viewModel.timers.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "Scheduled Recordings",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                            )
-                        }
-                        items(viewModel.timers.size, key = { viewModel.timers[it].id }, contentType = { "timer" }) { index ->
-                            val timer = viewModel.timers[index]
-                            TimerCard(
-                                timer = timer,
-                                onCancel = { viewModel.cancelTimer(it) },
-                            )
-                        }
+                if (viewModel.timers.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Scheduled Recordings",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        )
+                    }
+                    items(viewModel.timers.size, key = { viewModel.timers[it].id }, contentType = { "timer" }) { index ->
+                        val timer = viewModel.timers[index]
+                        TimerCard(
+                            timer = timer,
+                            onCancel = { viewModel.cancelTimer(it) },
+                        )
                     }
                 }
             }

@@ -1,24 +1,17 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,17 +31,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,8 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +52,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
@@ -84,39 +73,25 @@ fun SeerrSettingsScreen(
     val isTesting = viewModel.isTesting
     val isConnected = connectionStatus is ConnectionStatus.Connected
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val contentPad = adaptiveInfo.contentPadding(isTv)
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Seerr") },
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
-                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
+    JellyPlayScreenScaffold(
+        title = "Seerr",
+        onBack = onBack,
+    ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .imePadding(),
             contentPadding = PaddingValues(
-                start = if (LocalTvMode.current) 80.dp else 16.dp,
-                end = if (LocalTvMode.current) 80.dp else 16.dp,
-                bottom = 80.dp,
+                start = contentPad,
+                end = contentPad,
+                bottom = adaptiveInfo.bottomPadding(isTv),
             ),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // ── Connection Section ──
             item {
                 SectionHeader(title = "Connection")
             }
@@ -196,7 +171,6 @@ fun SeerrSettingsScreen(
                 }
             }
 
-            // ── Connection Status ──
             item {
                 AnimatedVisibility(
                     visible = connectionStatus is ConnectionStatus.Connected || connectionStatus is ConnectionStatus.Error,
@@ -221,7 +195,6 @@ fun SeerrSettingsScreen(
                 }
             }
 
-            // ── Feature Toggles (only when connected) ──
             if (isConnected) {
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -276,7 +249,7 @@ fun SeerrSettingsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                            .padding(start = 32.dp),
+                                .padding(start = 32.dp),
                         ) {
                             FeatureToggle(
                                 icon = Tabler.Outline.Puzzle,
@@ -322,7 +295,6 @@ fun SeerrSettingsScreen(
                     }
                 }
 
-                // ── Region Settings ──
                 item {
                     Spacer(Modifier.height(16.dp))
                     SectionHeader(title = "Regions")

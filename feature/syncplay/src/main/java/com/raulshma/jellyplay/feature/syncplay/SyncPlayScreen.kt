@@ -3,10 +3,7 @@ package com.raulshma.jellyplay.feature.syncplay
 import androidx.compose.animation.AnimatedContent
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -17,7 +14,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,23 +37,18 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,15 +66,20 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
+import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SyncPlayScreen(
     onBack: () -> Unit,
@@ -98,14 +93,14 @@ fun SyncPlayScreen(
     val isInGroup = viewModel.isInGroup
     val showCreateDialog = viewModel.showCreateDialog
     val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
-    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+    val headerStatus = resolveHeaderStatus(
         isLoading = isLoading,
         hasError = error != null,
         networkStatus = networkStatus,
@@ -140,66 +135,25 @@ fun SyncPlayScreen(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState) { data ->
-                Snackbar(data)
-            }
-        },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("SyncPlay")
-                        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                            status = headerStatus,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
-                },
-                navigationIcon = {
-                    TooltipIconButton(
-                        onClick = onBack,
-                        imageVector = Tabler.Outline.ArrowLeft,
-                        contentDescription = "Back",
-                        tooltipText = "Back",
-                    )
-                },
-                actions = {
-                    if (isInGroup) {
-                        TooltipIconButton(
-                            onClick = { viewModel.leaveGroup() },
-                            imageVector = Tabler.Outline.Logout,
-                            contentDescription = "Leave group",
-                            tooltipText = "Leave group",
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
+    JellyPlayScreenScaffold(
+        title = "SyncPlay",
+        onBack = onBack,
+        actions = {
+            HeaderStatusIndicator(
+                status = headerStatus,
+                modifier = Modifier.padding(start = 12.dp),
             )
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = !isInGroup,
-                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = { viewModel.updateShowCreateDialog(true) },
-                    icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
-                    text = { Text("Create group") },
+            if (isInGroup) {
+                TooltipIconButton(
+                    onClick = { viewModel.leaveGroup() },
+                    imageVector = Tabler.Outline.Logout,
+                    contentDescription = "Leave group",
+                    tooltipText = "Leave group",
                 )
             }
         },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             when {
                 error != null && groups.isEmpty() -> {
                     Column(
@@ -238,29 +192,11 @@ fun SyncPlayScreen(
 
                 else -> {
                     if (groups.isEmpty()) {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Icon(
-                                Tabler.Outline.Users,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Text(
-                                "No active SyncPlay groups",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Create a group to watch together",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Users,
+                            title = "No active SyncPlay groups",
+                            description = "Create a group to watch together",
+                        )
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -288,6 +224,30 @@ fun SyncPlayScreen(
                         }
                     }
                 }
+            }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp),
+            ) { data ->
+                Snackbar(data)
+            }
+
+            AnimatedVisibility(
+                visible = !isInGroup,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = { viewModel.updateShowCreateDialog(true) },
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
+                    text = { Text("Create group") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                )
             }
         }
     }
@@ -359,7 +319,6 @@ private fun SyncPlayGroupCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActiveGroupView(
     groupInfo: com.raulshma.jellyplay.core.model.SyncPlayGroupInfo,

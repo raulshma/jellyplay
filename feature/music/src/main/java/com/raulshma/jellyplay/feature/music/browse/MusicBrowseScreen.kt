@@ -1,14 +1,10 @@
 package com.raulshma.jellyplay.feature.music.browse
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -16,37 +12,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.ContainedLoadingIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +41,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.feature.music.components.ArtistCard
@@ -68,7 +53,6 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MusicBrowseScreen(
     onArtistClick: (String) -> Unit,
@@ -88,20 +72,12 @@ fun MusicBrowseScreen(
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(title = { Text("Browse Music") }, scrollBehavior = scrollBehavior)
-        },
-    ) { padding ->
+    JellyPlayScreenScaffold(
+        title = "Browse Music",
+    ) { _ ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            // Expressive tab row with spring animations
             PrimaryTabRow(
                 selectedTabIndex = pagerState.currentPage,
                 containerColor = MaterialTheme.colorScheme.background,
@@ -110,17 +86,16 @@ fun MusicBrowseScreen(
                     Tab(
                         selected = pagerState.currentPage == index,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        text = { 
+                        text = {
                             Text(
                                 text = title,
                                 style = MaterialTheme.typography.labelLarge
-                            ) 
+                            )
                         },
                     )
                 }
             }
 
-            // Animated pager content
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
@@ -128,7 +103,6 @@ fun MusicBrowseScreen(
                 AnimatedContent(
                     targetState = page,
                     transitionSpec = {
-                        // Expressive slide transition
                         slideInVertically(
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -218,16 +192,16 @@ private fun TracksPage(
     val tracks = viewModel.tracks.collectAsLazyPagingItems()
     Box(modifier = Modifier.fillMaxSize()) {
         when (val refreshState = tracks.loadState.refresh) {
-            is LoadState.Loading -> ExpressiveLoadingState()
+            is LoadState.Loading -> ScreenLoadingState()
             is LoadState.Error -> ErrorScreen(
                 message = refreshState.error.localizedMessage ?: "Failed to load tracks",
                 onRetry = { tracks.refresh() },
             )
             is LoadState.NotLoading -> {
                 if (tracks.itemCount == 0) {
-                    ExpressiveEmptyState(
-                        message = "No tracks found",
-                        icon = Tabler.Outline.Music
+                    ScreenEmptyState(
+                        icon = Tabler.Outline.Music,
+                        title = "No tracks found",
                     )
                 } else {
                     LazyColumn(
@@ -270,9 +244,9 @@ private fun GenresPage(
 ) {
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     if (genres.isEmpty()) {
-        ExpressiveEmptyState(
-            message = "No genres found",
-            icon = Tabler.Outline.Music
+        ScreenEmptyState(
+            icon = Tabler.Outline.Music,
+            title = "No genres found",
         )
     } else {
         LazyVerticalGrid(
@@ -302,9 +276,9 @@ private fun PlaylistsPage(
 ) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     if (playlists.isEmpty()) {
-        ExpressiveEmptyState(
-            message = "No playlists found",
-            icon = Tabler.Outline.Playlist
+        ScreenEmptyState(
+            icon = Tabler.Outline.Playlist,
+            title = "No playlists found",
         )
     } else {
         LazyVerticalGrid(
@@ -327,60 +301,6 @@ private fun PlaylistsPage(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ExpressiveLoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ContainedLoadingIndicator(
-                modifier = Modifier.size(48.dp),
-            )
-            
-            Text(
-                text = "Loading your music...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExpressiveEmptyState(
-    message: String,
-    icon: ImageVector = Tabler.Outline.Music
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
 @Composable
 private fun <T : Any> PagedGrid(
     items: androidx.paging.compose.LazyPagingItems<T>,
@@ -393,16 +313,16 @@ private fun <T : Any> PagedGrid(
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when (val refreshState = items.loadState.refresh) {
-            is LoadState.Loading -> ExpressiveLoadingState()
+            is LoadState.Loading -> ScreenLoadingState()
             is LoadState.Error -> ErrorScreen(
                 message = refreshState.error.localizedMessage ?: "Failed to load",
                 onRetry = { items.refresh() },
             )
             is LoadState.NotLoading -> {
                 if (items.itemCount == 0) {
-                    ExpressiveEmptyState(
-                        message = "Nothing found",
-                        icon = Tabler.Outline.Search
+                    ScreenEmptyState(
+                        icon = Tabler.Outline.Search,
+                        title = "Nothing found",
                     )
                 } else {
                     LazyVerticalGrid(

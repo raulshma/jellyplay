@@ -23,11 +23,9 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,15 +34,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -68,22 +68,14 @@ fun UserSelectionScreen(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val backgroundColor = rememberScreenBackgroundColor()
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = backgroundColor,
         topBar = {
             TopAppBar(
                 title = { Text(serverName) },
-                navigationIcon = {
-                    TooltipIconButton(
-                        onClick = onBack,
-                        imageVector = Tabler.Outline.ArrowLeft,
-                        contentDescription = "Back",
-                        tooltipText = "Back",
-                    )
-                },
-                scrollBehavior = scrollBehavior,
+                navigationIcon = { CircleBgBackButton(onClick = onBack) },
             )
         },
         floatingActionButton = {
@@ -101,51 +93,20 @@ fun UserSelectionScreen(
 
         when {
             isLoading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    androidx.compose.material3.ContainedLoadingIndicator()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Loading users...")
-                }
+                ScreenLoadingState(
+                    message = "Loading users...",
+                    modifier = Modifier.padding(padding),
+                )
             }
             users.isEmpty() -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        Tabler.Outline.User,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No users on this server",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Add a user to get started",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    androidx.compose.material3.OutlinedButton(onClick = onAddUser) {
-                        Icon(Tabler.Outline.Plus, contentDescription = null)
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text("Add User")
-                    }
-                }
+                ScreenEmptyState(
+                    icon = Tabler.Outline.User,
+                    title = "No users on this server",
+                    description = "Add a user to get started",
+                    actionLabel = "Add User",
+                    onAction = onAddUser,
+                    modifier = Modifier.padding(padding),
+                )
             }
             else -> {
                 LazyColumn(

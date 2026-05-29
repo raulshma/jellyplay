@@ -21,20 +21,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
-import androidx.compose.material3.ContainedLoadingIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -48,14 +41,16 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AlbumDetailScreen(
     albumId: String,
@@ -70,9 +65,7 @@ fun AlbumDetailScreen(
 
     when {
         viewModel.isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                ContainedLoadingIndicator()
-            }
+            ScreenLoadingState()
         }
         viewModel.error != null -> {
             ErrorScreen(
@@ -103,7 +96,6 @@ fun AlbumDetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlbumDetailContent(
     detail: MediaDetail,
@@ -121,10 +113,13 @@ private fun AlbumDetailContent(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
+    val backgroundColor = rememberScreenBackgroundColor()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
-
-    Box(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor)
+    ) {
         MediaImage(
             url = getBackdropUrl(item.id),
             contentDescription = null,
@@ -151,20 +146,10 @@ private fun AlbumDetailContent(
                 )
         )
 
-        MediumTopAppBar(
-            title = {},
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Tabler.Outline.ArrowLeft,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            scrollBehavior = scrollBehavior,
+        CircleBgBackButton(
+            onClick = onBack,
             modifier = Modifier.statusBarsPadding(),
+            iconColor = Color.White,
         )
 
         LazyColumn(
@@ -189,7 +174,6 @@ private fun AlbumDetailContent(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.tvFocusable().clickable {
-                                    // Navigate to artist if we have artist ID
                                 },
                             )
                         }
@@ -313,7 +297,7 @@ private fun TrackItem(
         }
 
         if (onAddToQueue != null) {
-            IconButton(onClick = { onAddToQueue() }) {
+            androidx.compose.material3.IconButton(onClick = { onAddToQueue() }) {
                 Icon(
                     Tabler.Outline.Playlist,
                     contentDescription = "Add to Queue",
