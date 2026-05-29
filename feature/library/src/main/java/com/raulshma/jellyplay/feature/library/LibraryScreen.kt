@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +12,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,26 +34,35 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,29 +73,28 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.feature.library.components.ExpressiveGridItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalLayoutApi::class,
+)
 @Composable
 fun LibraryScreen(
     onItemClick: (String) -> Unit,
@@ -122,7 +134,6 @@ fun LibraryScreen(
         (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
     }
 
-    // ── Cinematic background color (same approach as MediaDetailScreen) ──
     val artworkColors = LocalArtworkColors.current
     val baseColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
@@ -138,8 +149,15 @@ fun LibraryScreen(
         label = "backgroundColor",
     )
 
-    // Entrance animation for header
     var headerVisible by remember { mutableStateOf(true) }
+
+    val isScrolled by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
+    }
+    var toolbarExpanded by remember { mutableStateOf(true) }
+    LaunchedEffect(isScrolled) {
+        toolbarExpanded = !isScrolled
+    }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -169,7 +187,7 @@ fun LibraryScreen(
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ═══════════════════════════════════════════════════════════════
-                // ── Header Section (cinematic dark, white-on-dark text)
+                // ── Header Section
                 // ═══════════════════════════════════════════════════════════════
                 Column(
                     modifier = Modifier
@@ -185,11 +203,16 @@ fun LibraryScreen(
                         .statusBarsPadding()
                         .padding(top = 16.dp),
                 ) {
-                    // ── Title + action row ──
+                    // ── Title row ──
                     AnimatedVisibility(
                         visible = headerVisible,
-                        enter = fadeIn(tween(500, easing = AlphaEasing)) + slideInVertically(
-                            tween(500, easing = FancyTransitionEasing),
+                        enter = fadeIn(
+                            spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + slideInVertically(
+                            spring(
+                                stiffness = Spring.StiffnessMediumLow,
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                            ),
                             initialOffsetY = { -40 },
                         ),
                     ) {
@@ -197,72 +220,35 @@ fun LibraryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 24.dp, end = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Library",
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                    ),
-                                    color = if (isLightTheme) MaterialTheme.colorScheme.onBackground else Color.White,
-                                )
-                                com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                                    status = headerStatus,
-                                    modifier = Modifier.padding(start = 12.dp),
-                                )
-                            }
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                ExpressiveToolbarIconButton(
-                                    onClick = onSmartPlaylistsClick,
-                                    icon = Tabler.Outline.Wand,
-                                    contentDescription = "Smart Playlists",
-                                )
-                                ExpressiveToolbarIconButton(
-                                    onClick = onMoodPlaylistsClick,
-                                    icon = Tabler.Outline.MoodSmile,
-                                    contentDescription = "Mood Playlists",
-                                )
-                                ExpressiveToolbarIconButton(
-                                    onClick = onPlaylistsClick,
-                                    icon = Tabler.Outline.Playlist,
-                                    contentDescription = "Playlists",
-                                )
-                                // Filter button with active-dot badge
-                                Box {
-                                    ExpressiveToolbarIconButton(
-                                        onClick = { viewModel.toggleShowFilters() },
-                                        icon = Tabler.Outline.Filter,
-                                        contentDescription = "Filters",
-                                        highlighted = hasActiveFilters,
-                                    )
-                                    if (hasActiveFilters) {
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .padding(4.dp)
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primary),
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = "Library",
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = if (isLightTheme) MaterialTheme.colorScheme.onBackground else Color.White,
+                            )
+                            ErrorAwareStatusIndicator(
+                                status = headerStatus,
+                                errorMessage = error,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
                         }
                     }
 
                     Spacer(Modifier.height(16.dp))
 
-                    // ── Folder chips (glass pill style, like season badges) ──
+                    // ── Folder chips (glass pill with spring shape morphing) ──
                     AnimatedVisibility(
                         visible = headerVisible && folders.size > 1,
-                        enter = fadeIn(tween(500, delayMillis = 100, easing = AlphaEasing)) + slideInVertically(
-                            tween(500, delayMillis = 100, easing = FancyTransitionEasing),
+                        enter = fadeIn(
+                            spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + slideInVertically(
+                            spring(
+                                stiffness = Spring.StiffnessMediumLow,
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                            ),
                             initialOffsetY = { 40 },
                         ),
                     ) {
@@ -288,11 +274,15 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Active filters bar (dismissible glass tags) ──
+                    // ── Active filters bar ──
                     AnimatedVisibility(
                         visible = hasActiveFilters,
-                        enter = fadeIn(tween(200, easing = AlphaEasing)) + expandVertically(),
-                        exit = fadeOut(tween(200, easing = AlphaEasing)) + shrinkVertically(),
+                        enter = fadeIn(
+                            spring(stiffness = Spring.StiffnessHigh)
+                        ) + expandVertically(),
+                        exit = fadeOut(
+                            spring(stiffness = Spring.StiffnessHigh)
+                        ) + shrinkVertically(),
                     ) {
                         FlowRow(
                             modifier = Modifier
@@ -332,15 +322,28 @@ fun LibraryScreen(
                                     },
                                 )
                             }
-                            // Clear all link
                             val clearAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
                             val clearAllInteractionSource = remember { MutableInteractionSource() }
                             val isClearAllPressed by clearAllInteractionSource.collectIsPressedAsState()
                             val clearAllScale by animateFloatAsState(
                                 targetValue = if (isClearAllPressed) 0.95f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
                                 label = "clearAllPressedScale"
                             )
-                            val clearAllShape = ShapeCache.smooth8
+                            val clearAllShapeMorph by animateFloatAsState(
+                                targetValue = if (isClearAllPressed) 1f else 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                                label = "clearAllShapeMorph"
+                            )
+                            val clearAllShape = remember(clearAllShapeMorph) {
+                                if (clearAllShapeMorph > 0.5f) ShapeCache.smooth12 else ShapeCache.smooth8
+                            }
                             Box(
                                 modifier = Modifier
                                     .graphicsLayer {
@@ -405,7 +408,6 @@ fun LibraryScreen(
 
                         is LoadState.NotLoading -> {
                             if (pagedItems.itemCount == 0) {
-                                // ── Empty state ──
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center,
@@ -435,7 +437,6 @@ fun LibraryScreen(
                                     }
                                 }
                             } else {
-                                // ── Media Grid ──
                                 LazyVerticalGrid(
                                     state = gridState,
                                     columns = GridCells.Adaptive(gridCellSize),
@@ -451,18 +452,20 @@ fun LibraryScreen(
                                     ) { index ->
                                         val item = pagedItems[index]
                                         if (item != null) {
-                                            PosterCard(
-                                                item = item,
-                                                imageUrl = viewModel.getImageUrl(item.id),
-                                                onClick = { onItemClick(item.id) },
-                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                    (item.playbackPositionTicks?.toFloat()
-                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                } else 0f,
-                                                blurHash = item.blurHashes.primary,
-                                                sharedElementKey = "poster_${item.id}",
-                                            )
+                                            ExpressiveGridItem(index = index) {
+                                                PosterCard(
+                                                    item = item,
+                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    onClick = { onItemClick(item.id) },
+                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                        (item.playbackPositionTicks?.toFloat()
+                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                    } else 0f,
+                                                    blurHash = item.blurHashes.primary,
+                                                    sharedElementKey = "poster_${item.id}",
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -470,7 +473,79 @@ fun LibraryScreen(
                         }
                     }
 
-                    // ── Append loading (gradient fade + progress bar) ──
+                    // ── Scroll-aware Floating Toolbar ──
+                    if (!isTv && pagedItems.itemCount > 0) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = toolbarExpanded,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 16.dp),
+                            enter = fadeIn(
+                                spring(stiffness = Spring.StiffnessMedium)
+                            ) + slideInVertically(
+                                spring(
+                                    stiffness = Spring.StiffnessMedium,
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                ),
+                                initialOffsetY = { it },
+                            ),
+                            exit = fadeOut(
+                                spring(stiffness = Spring.StiffnessHigh)
+                            ) + androidx.compose.animation.slideOutVertically(
+                                spring(stiffness = Spring.StiffnessHigh),
+                                targetOffsetY = { it },
+                            ),
+                        ) {
+                            HorizontalFloatingToolbar(
+                                expanded = true,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                                floatingActionButton = {
+                                    FloatingToolbarDefaults.VibrantFloatingActionButton(
+                                        onClick = { viewModel.toggleShowFilters() },
+                                    ) {
+                                        Icon(
+                                            Tabler.Outline.Filter,
+                                            contentDescription = "Filters",
+                                        )
+                                    }
+                                },
+                            ) {
+                                IconButton(
+                                    onClick = onSmartPlaylistsClick,
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Wand,
+                                        contentDescription = "Smart Playlists",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onMoodPlaylistsClick,
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.MoodSmile,
+                                        contentDescription = "Mood Playlists",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onPlaylistsClick,
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Playlist,
+                                        contentDescription = "Playlists",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Append loading ──
                     if (pagedItems.loadState.append is LoadState.Loading) {
                         Box(
                             modifier = Modifier
@@ -487,8 +562,7 @@ fun LibraryScreen(
                                 .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                            androidx.compose.material3.LinearWavyProgressIndicator(
+                            LinearWavyProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth(0.4f)
                                     .clip(ShapeCache.smooth4),
@@ -532,8 +606,57 @@ fun LibraryScreen(
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── Subcomponents (matching MediaDetailScreen design language)
+// ── Subcomponents
 // ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ErrorAwareStatusIndicator(
+    status: com.raulshma.jellyplay.core.ui.components.HeaderStatus,
+    errorMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    val isError = status is com.raulshma.jellyplay.core.ui.components.HeaderStatus.Error
+    val tooltipState = rememberTooltipState(isPersistent = false)
+    val scope = rememberCoroutineScope()
+
+    if (isError && errorMessage != null) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            tooltip = {
+                PlainTooltip(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = ShapeCache.smooth12,
+                ) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            },
+            state = tooltipState,
+            enableUserInput = true,
+            modifier = modifier,
+        ) {
+            com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                status = status,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { scope.launch { tooltipState.show() } },
+                ),
+            )
+        }
+    } else {
+        com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+            status = status,
+            modifier = modifier,
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -543,7 +666,6 @@ private fun ExpressiveToolbarIconButton(
     contentDescription: String,
     highlighted: Boolean = false,
 ) {
-    val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.15f)
     val tint = if (highlighted) MaterialTheme.colorScheme.primary
                else MaterialTheme.colorScheme.onSurfaceVariant
@@ -573,25 +695,36 @@ private fun ExpressiveToolbarIconButton(
     }
 }
 
-/**
- * Glass pill selector matching the detail screen's season badge style.
- * Theme-aware: adapts glass tint and content color to light/dark themes.
- */
 @Composable
 private fun GlassPill(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "pillPressedScale"
     )
     val scale = baseScale * focusState.scale
+
+    val shapeMorphProgress by animateFloatAsState(
+        targetValue = if (isPressed || selected) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "pillShapeMorph"
+    )
+    val shape = remember(shapeMorphProgress) {
+        if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
+    }
 
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
@@ -604,7 +737,6 @@ private fun GlassPill(
         selected -> if (isLight) Color.White else Color.Black
         else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
     }
-    val shape = ShapeCache.smooth16
 
     Surface(
         modifier = Modifier
@@ -621,6 +753,7 @@ private fun GlassPill(
                 onClick = onClick
             )
             .animateContentSizeNoClip(MaterialTheme.motionScheme.slowSpatialSpec()),
+        shape = shape,
         color = surfaceColor,
         contentColor = contentColor,
     ) {
@@ -635,24 +768,35 @@ private fun GlassPill(
     }
 }
 
-/**
- * Small dismissible filter tag with a glass background and close icon.
- * Theme-aware: adapts glass tint and text color to light/dark themes.
- */
 @Composable
 private fun GlassDismissTag(
     label: String,
     onDismiss: () -> Unit,
 ) {
-    val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "tagPressedScale"
     )
     val scale = baseScale * focusState.scale
+
+    val shapeMorphProgress by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "tagShapeMorph"
+    )
+    val shape = remember(shapeMorphProgress) {
+        if (shapeMorphProgress > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
+    }
 
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
@@ -660,7 +804,6 @@ private fun GlassDismissTag(
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
     val textColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
     val iconTint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)
-    val shape = ShapeCache.smooth12
 
     Row(
         modifier = Modifier
