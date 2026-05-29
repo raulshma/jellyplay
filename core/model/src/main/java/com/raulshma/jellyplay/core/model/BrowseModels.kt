@@ -25,6 +25,7 @@ data class HomeSection(
 enum class HomeSectionType {
     CONTINUE_WATCHING,
     NEXT_UP,
+    RECENTLY_ADDED,
     LATEST_MEDIA,
     FAVORITES,
     LIVE_TV,
