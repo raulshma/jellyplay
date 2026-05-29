@@ -40,6 +40,13 @@ data class SubtitleSource(
     val id: String,
 )
 
+data class VideoEffectsConfig(
+    val brightness: Float = 0f,
+    val contrast: Float = 1f,
+    val saturation: Float = 1f,
+    val sharpness: Float = 0f,
+)
+
 data class EngineConfig(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
@@ -47,6 +54,7 @@ data class EngineConfig(
     val subtitleDelayMs: Long = 0,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val audioEffects: AudioEffectsConfig = AudioEffectsConfig(),
+    val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
 )
 
 data class AudioEffectsConfig(
@@ -81,6 +89,7 @@ data class EngineCapabilities(
     val supportsNightMode: Boolean = false,
     val supportsAudioNormalization: Boolean = false,
     val supportsChannelMixing: Boolean = false,
+    val supportsVideoFilters: Boolean = false,
 )
 
 enum class EnginePlaybackState {

@@ -27,7 +27,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,6 +54,7 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -278,9 +281,9 @@ private fun ScanningRow(onStop: () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        CircularProgressIndicator(
+        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+        LoadingIndicator(
             modifier = Modifier.size(16.dp),
-            strokeWidth = 2.dp,
             color = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -323,9 +326,9 @@ private fun ServerCountRow(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             if (isScanning) {
-                CircularProgressIndicator(
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                LoadingIndicator(
                     modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -520,10 +523,11 @@ private fun ManualEntrySection(
             modifier = Modifier.fillMaxWidth(),
         ) {
             if (uiState.isConnecting) {
-                CircularProgressIndicator(
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                ContainedLoadingIndicator(
                     modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    indicatorColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = Color.Transparent,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }

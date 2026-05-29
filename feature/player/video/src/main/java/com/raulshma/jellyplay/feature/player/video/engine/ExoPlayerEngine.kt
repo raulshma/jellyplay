@@ -25,6 +25,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -103,6 +104,7 @@ class ExoPlayerEngine(
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var currentMediaItem: MediaItem? = null
+    private val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
     private val currentSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
@@ -215,6 +217,7 @@ class ExoPlayerEngine(
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setBandwidthMeter(bandwidthMeter)
             .build()
 
         exo.addListener(listener)
@@ -520,6 +523,8 @@ class ExoPlayerEngine(
         val audioFormat = p.audioFormat
         val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
 
+        val bandwidthEstimate = bandwidthMeter.bitrateEstimate
+
         val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
             videoDecoder = videoFormat?.codecs,
@@ -551,6 +556,7 @@ class ExoPlayerEngine(
             audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
             bufferedPositionMs = bufferedPos,
+            estimatedBandwidthBps = bandwidthEstimate,
         )
 
         val currentStats = lastVideoStats

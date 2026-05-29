@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.flow.Flow
 
 interface DownloadRepository {
@@ -48,4 +49,10 @@ interface DownloadRepository {
         seriesId: String,
         seasonIds: List<String>? = null,
     ): Result<List<String>>
+
+    suspend fun downloadTrickplayData(
+        itemId: String,
+        trickplayInfo: TrickplayInfo,
+        downloadPath: String,
+    )
 }

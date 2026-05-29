@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.feature.library.components
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
@@ -23,13 +25,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,7 +56,11 @@ import com.raulshma.jellyplay.feature.library.SortOption
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalLayoutApi::class,
+)
 @Composable
 fun LibraryFilterSheet(
     currentFilters: LibraryFilters,
@@ -67,7 +76,6 @@ fun LibraryFilterSheet(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Dark cinematic sheet matching the detail screen's palette
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
@@ -82,10 +90,7 @@ fun LibraryFilterSheet(
     ) {
         val contentColor = if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
         val contentColorMedium = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
-        val contentColorFaint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
         val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
-        val glassBgSolid = if (isLight) MaterialTheme.colorScheme.surfaceContainerHighest else Color.White
-        val glassBgSolidContent = if (isLight) MaterialTheme.colorScheme.onSurface else Color.Black
 
         Column(
             modifier = Modifier
@@ -94,7 +99,6 @@ fun LibraryFilterSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            // ── Header ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -111,6 +115,10 @@ fun LibraryFilterSheet(
                 val isResetPressed by resetInteractionSource.collectIsPressedAsState()
                 val resetScale by animateFloatAsState(
                     targetValue = if (isResetPressed) 0.95f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium,
+                    ),
                     label = "resetPressedScale"
                 )
                 val resetShape = ShapeCache.smooth12
@@ -147,24 +155,37 @@ fun LibraryFilterSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Sort By ──
+            // ── Sort By (ButtonGroup) ──
             SectionLabel("Sort By")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 SortOption.entries.forEach { option ->
-                    GlassFilterChip(
-                        label = option.displayName,
-                        selected = option == selectedSort,
-                        onClick = { selectedSort = option },
-                    )
+                    ToggleButton(
+                        checked = option == selectedSort,
+                        onCheckedChange = {
+                            if (it) selectedSort = option
+                        },
+                        shapes = ToggleButtonDefaults.shapes(),
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = glassBg,
+                            contentColor = contentColor,
+                            checkedContainerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.White,
+                            checkedContentColor = if (isLight) Color.White else Color.Black,
+                        ),
+                    ) {
+                        Text(
+                            text = option.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (option == selectedSort) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Media Type ──
+            // ── Media Type (FlowRow with expressive chips) ──
             SectionLabel("Media Type")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -187,18 +208,31 @@ fun LibraryFilterSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Status ──
+            // ── Status (ButtonGroup) ──
             SectionLabel("Status")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 PlayedStatus.entries.forEach { status ->
-                    GlassFilterChip(
-                        label = status.displayName,
-                        selected = status == selectedPlayedStatus,
-                        onClick = { selectedPlayedStatus = status },
-                    )
+                    ToggleButton(
+                        checked = status == selectedPlayedStatus,
+                        onCheckedChange = {
+                            if (it) selectedPlayedStatus = status
+                        },
+                        shapes = ToggleButtonDefaults.shapes(),
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = glassBg,
+                            contentColor = contentColor,
+                            checkedContainerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.White,
+                            checkedContentColor = if (isLight) Color.White else Color.Black,
+                        ),
+                    ) {
+                        Text(
+                            text = status.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (status == selectedPlayedStatus) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
                 }
             }
 
@@ -234,6 +268,10 @@ fun LibraryFilterSheet(
             val isApplyPressed by applyInteractionSource.collectIsPressedAsState()
             val applyScale by animateFloatAsState(
                 targetValue = if (isApplyPressed) 0.95f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
                 label = "applyPressedScale"
             )
             val applyShape = ShapeCache.smooth16
@@ -291,25 +329,37 @@ private fun SectionLabel(text: String) {
     )
 }
 
-/**
- * Glass filter chip matching the MediaDetailScreen genre pill style.
- * Theme-aware: adapts colors for both light and dark themes.
- */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun GlassFilterChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "chipPressedScale"
     )
     val scale = baseScale * focusState.scale
+
+    val shapeMorphProgress by animateFloatAsState(
+        targetValue = if (isPressed || selected) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "chipShapeMorph"
+    )
+    val chipShape = remember(shapeMorphProgress) {
+        if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
+    }
 
     val isLight = MaterialTheme.colorScheme.background.let { bg ->
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
@@ -323,7 +373,6 @@ private fun GlassFilterChip(
         else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
     }
     val checkTint = if (isLight) Color.White else Color.Black
-    val chipShape = ShapeCache.smooth16
 
     Box(
         modifier = Modifier

@@ -20,6 +20,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onServerManagement = { navigator.navigate(Route.ServerManagement) },
             onUserManagement = { navigator.navigate(Route.UserManagement) },
             onSeerrSettings = { navigator.navigate(Route.SeerrSettings) },
+            onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
         )
     }
 
