@@ -357,6 +357,8 @@ class JellyfinApiClientImpl @Inject constructor(
                 }
                 .onFailure { if (firstError == null) firstError = it }
 
+            val allLatestItems = mutableListOf<MediaItem>()
+
             foldersResult
                 .onSuccess { folders ->
                     val latestDeferred = folders
@@ -367,6 +369,7 @@ class JellyfinApiClientImpl @Inject constructor(
                     latestDeferred.forEach { deferred ->
                         val (folder, result) = deferred.await()
                         result.onSuccess { latest ->
+                            allLatestItems.addAll(latest)
                             if (latest.isNotEmpty()) {
                                 val sectionId = "latest_${folder.id}"
                                 sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
@@ -375,6 +378,20 @@ class JellyfinApiClientImpl @Inject constructor(
                     }
                 }
                 .onFailure { if (firstError == null) firstError = it }
+
+            val recentlyAddedItems = allLatestItems
+                .distinctBy { it.id }
+                .filter { it.id !in continueWatchingIds }
+            if (recentlyAddedItems.isNotEmpty()) {
+                val recentlyAddedSection = HomeSection(
+                    "recently_added",
+                    "Recently Added",
+                    HomeSectionType.RECENTLY_ADDED,
+                    recentlyAddedItems,
+                )
+                val insertIndex = sections.indexOfFirst { it.type == HomeSectionType.LATEST_MEDIA }.coerceAtLeast(0)
+                sections.add(insertIndex, recentlyAddedSection)
+            }
 
             if (sections.isEmpty() && firstError != null) {
                 throw firstError!!
