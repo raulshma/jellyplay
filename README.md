@@ -19,7 +19,13 @@
 
 <div align="center">
 
-JellyPlay is a modern Android Jellyfin client with multi-server support, adaptive layouts, multi-engine playback, offline downloads, SyncPlay watch parties, and a fully Compose-based UI — optimized for phones, tablets, and Android TV.
+### Modern, Open-Source Jellyfin Client for Android & Android TV
+
+**JellyPlay** is a high-performance, feature-rich, and open-source **Jellyfin client app for Android** devices. Built entirely from the ground up using **Kotlin** and **Jetpack Compose** (Material 3/Expressive), JellyPlay delivers a premium, smooth, and native media streaming experience. Designed with an adaptive responsive interface, it adapts flawlessly to **Android mobile phones, tablets, foldables, and Android TV**.
+
+Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr**, or download media for **offline playback**, JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**) and real-time **SyncPlay watch parties**.
+
+[Key Features](#features) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building & Flavors](#building) • [Permissions](#permissions) • [Project Structure](#project-structure)
 
 </div>
 
