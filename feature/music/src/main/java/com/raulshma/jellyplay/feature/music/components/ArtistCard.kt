@@ -1,12 +1,19 @@
 package com.raulshma.jellyplay.feature.music.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -38,7 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 
@@ -54,20 +60,38 @@ fun ArtistCard(
     val tvFocusState = rememberTvFocusState(focusedScale = 1.1f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Expressive spring-based scale animation
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "artistCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = lessSpringySpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "artistCardCombinedScale",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
         animationSpec = tween(150, easing = AlphaEasing),
         label = "artistCardBrightness",
+    )
+    
+    // Shape morphing animation for the ring
+    val ringMorphScale by animateFloatAsState(
+        targetValue = if (isPressed) 1.05f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "ringMorph"
     )
 
     val ringTransition = rememberInfiniteTransition(label = "artist_ring")
@@ -98,8 +122,10 @@ fun ArtistCard(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                // Subtle rotation on press for expressive feel
+                rotationZ = if (isPressed) -2f else 0f
             }
-            .tvFocusIndicator(tvFocusState, androidx.compose.foundation.shape.CircleShape)
+            .tvFocusIndicator(tvFocusState, CircleShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -117,6 +143,11 @@ fun ArtistCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .padding(6.dp)
+                .graphicsLayer {
+                    // Shape morphing for the ring
+                    scaleX = ringMorphScale
+                    scaleY = ringMorphScale
+                }
                 .drawBehind {
                     rotate(ringRotation) {
                         drawCircle(
@@ -156,14 +187,17 @@ fun ArtistCard(
                 )
             }
 
-            if (brightnessOverlay > 0.01f) {
+            // Expressive brightness overlay with animated visibility
+            if (isPressed) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 )
             }
         }
+        
+        // Artist name with expressive typography
         Text(
             text = name,
             style = MaterialTheme.typography.bodyMedium,
