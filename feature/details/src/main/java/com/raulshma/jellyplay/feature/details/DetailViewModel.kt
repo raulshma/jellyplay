@@ -523,6 +523,11 @@ class DetailViewModel @Inject constructor(
                             downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
                         } catch (_: Exception) {
                         }
+                        source.trickplayInfo?.let { info ->
+                            launch {
+                                downloadRepository.downloadTrickplayData(item.id, info, downloadItem.downloadPath)
+                            }
+                        }
                     }
                 }.onFailure { error ->
                     downloadError = error.message ?: "Download failed"

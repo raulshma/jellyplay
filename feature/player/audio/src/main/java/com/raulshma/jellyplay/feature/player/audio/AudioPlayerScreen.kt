@@ -45,8 +45,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -881,7 +881,8 @@ private fun LyricsSearchSheet(
                     enabled = searchQuery.isNotBlank() && !isSearching,
                 ) {
                     if (isSearching) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                        ContainedLoadingIndicator(modifier = Modifier.size(16.dp))
                     } else {
                         Text("Search")
                     }

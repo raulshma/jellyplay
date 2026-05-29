@@ -1,7 +1,14 @@
 package com.raulshma.jellyplay.feature.music.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -50,20 +57,38 @@ fun AlbumCard(
     val tvFocusState = rememberTvFocusState()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Expressive spring-based scale animation
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
-        animationSpec = lessSpringySpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "albumCardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = lessSpringySpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "albumCardCombinedScale",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
         animationSpec = tween(150, easing = AlphaEasing),
         label = "albumCardBrightness",
+    )
+    
+    // Shape morphing animation
+    val morphScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "shapeMorph"
     )
 
     Column(
@@ -73,6 +98,8 @@ fun AlbumCard(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                // Subtle rotation on press for expressive feel
+                rotationZ = if (isPressed) -1f else 0f
             }
             .tvFocusIndicator(tvFocusState, ShapeCache.smooth8)
             .clickable(
@@ -101,9 +128,15 @@ fun AlbumCard(
                 )
             }
 
+            // Album art with shape morphing
             Box(
                 modifier = Modifier
                     .size(114.dp)
+                    .graphicsLayer {
+                        // Shape morphing effect
+                        scaleX = morphScale
+                        scaleY = morphScale
+                    }
                     .clip(ShapeCache.smooth12)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
@@ -126,15 +159,18 @@ fun AlbumCard(
                     )
                 }
 
-                if (brightnessOverlay > 0.01f) {
+                // Expressive brightness overlay with animated visibility
+                if (isPressed) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                     )
                 }
             }
         }
+        
+        // Track name with expressive typography
         Text(
             text = name,
             style = MaterialTheme.typography.bodyMedium,
@@ -142,6 +178,8 @@ fun AlbumCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 8.dp),
         )
+        
+        // Artist and year with expressive styling
         if (artist != null || year != null) {
             Text(
                 text = listOfNotNull(artist, year?.toString()).joinToString(" · "),

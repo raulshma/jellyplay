@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -123,6 +124,7 @@ internal fun PlayerControls(
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit,
+    tvTrickplayBitmap: Bitmap? = null,
     onBack: () -> Unit,
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
@@ -165,7 +167,10 @@ internal fun PlayerControls(
     onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
     sleepTimerActive: Boolean = false,
     sleepTimerDisplayText: String = "",
+    supportsVideoFilters: Boolean = false,
+    videoFiltersActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
+    onVideoFilterClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -344,12 +349,14 @@ internal fun PlayerControls(
                     chapters = chapters,
                     segments = segments,
                     bufferedPosition = bufferedPosition,
+                    trickplayBitmap = tvTrickplayBitmap,
                     onSeek = { fraction ->
                         onSeek(fraction)
                         onSeekPositionChange((fraction * duration).toLong())
                     },
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
+                    onSeekPositionChange = onSeekPositionChange,
                 )
 
 
@@ -506,6 +513,12 @@ internal fun PlayerControls(
                                     showOverflow = false
                                     onSleepTimerClick()
                                 },
+                                supportsVideoFilters = supportsVideoFilters,
+                                videoFiltersActive = videoFiltersActive,
+                                onVideoFilterClick = {
+                                    showOverflow = false
+                                    onVideoFilterClick()
+                                },
                             )
                         }
 
@@ -581,9 +594,11 @@ private fun TvControllableSeekBar(
     chapters: List<ChapterInfo>,
     segments: List<MediaSegment> = emptyList(),
     bufferedPosition: Long = 0L,
+    trickplayBitmap: Bitmap? = null,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
+    onSeekPositionChange: (Long) -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -659,6 +674,7 @@ private fun TvControllableSeekBar(
                                         }
                                         tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
                                         onSeek(tvSeekPosition)
+                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
                                         true
                                     }
                                     Key.DirectionLeft -> {
@@ -668,6 +684,7 @@ private fun TvControllableSeekBar(
                                         }
                                         tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
                                         onSeek(tvSeekPosition)
+                                        onSeekPositionChange((tvSeekPosition * duration).toLong())
                                         true
                                     }
                                     Key.Enter, Key.NumPadEnter -> {
@@ -804,6 +821,22 @@ private fun TvControllableSeekBar(
 
         if (isDragging || (isTv && isSeekBarFocused)) {
             val displayMs = if (isDragging) (dragFraction * duration).toLong() else (tvSeekPosition * duration).toLong()
+
+            if (isTv && isSeekBarFocused && trickplayBitmap != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    TrickplayOverlay(
+                        bitmap = trickplayBitmap,
+                        positionMs = displayMs,
+                        durationMs = duration,
+                    )
+                }
+            }
+
             Text(
                 formatDuration(displayMs),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -882,6 +915,9 @@ private fun PlayerOverflowMenu(
     onChannelMixClick: () -> Unit = {},
     onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
     onSleepTimerClick: () -> Unit = {},
+    supportsVideoFilters: Boolean = false,
+    videoFiltersActive: Boolean = false,
+    onVideoFilterClick: () -> Unit = {},
 ) {
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
@@ -1113,6 +1149,14 @@ private fun PlayerOverflowMenu(
             onClick = onSleepTimerClick,
             tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
+        if (supportsVideoFilters) {
+            OverflowMenuItem(
+                icon = Tabler.Outline.ColorSwatch,
+                label = if (videoFiltersActive) "Video Filters \u00B7 On" else "Video Filters",
+                onClick = onVideoFilterClick,
+                tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 

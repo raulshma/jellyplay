@@ -30,6 +30,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -60,7 +62,8 @@ fun MetadataTab(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.CircularProgressIndicator()
+            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+            LoadingIndicator()
         }
         return
     }

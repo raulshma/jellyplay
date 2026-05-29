@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -365,8 +366,32 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             source?.trickplayInfo?.let { info ->
-                trickplayManager.initialize(itemId, info)
+                val download = downloadRepository.getDownloadByMediaItemId(itemId)
+                val downloadPath = download?.downloadPath
+                if (downloadPath != null) {
+                    val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
+                    trickplayManager.initializeWithCache(itemId, info, cacheDir)
+                } else {
+                    trickplayManager.initialize(itemId, info)
+                }
                 _uiState.update { it.copy(trickplayInfo = info) }
+            }
+
+            if (source?.trickplayInfo == null) {
+                val download = downloadRepository.getDownloadByMediaItemId(itemId)
+                val downloadPath = download?.downloadPath
+                if (downloadPath != null) {
+                    val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
+                        .loadLocalTrickplayInfo(downloadPath)
+                    if (localInfo != null) {
+                        val cacheDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
+                            .getLocalTrickplayDir(downloadPath)
+                        if (cacheDir != null) {
+                            trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
+                            _uiState.update { it.copy(trickplayInfo = localInfo) }
+                        }
+                    }
+                }
             }
 
             playbackRepository.reportPlaybackStart(
@@ -724,6 +749,11 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.setReverbPreset(preset)
         }
     }
+
+    fun setVideoEffects(effects: VideoEffectsConfig) {
+        _uiState.update { it.copy(videoEffects = effects) }
+        updateConfigWithUiState()
+    }
     
     private fun updateConfigWithUiState() {
         val state = _uiState.value
@@ -733,6 +763,7 @@ class VideoPlayerViewModel @Inject constructor(
             audioDelayMs = state.audioDelayMs,
             subtitleDelayMs = state.subtitleStyle.offsetMs,
             subtitleStyle = state.subtitleStyle,
+            videoEffects = state.videoEffects,
             audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
                 dialogueBoostEnabled = state.dialogueBoostEnabled,
                 dialogueBoostStrength = state.dialogueBoostStrength,

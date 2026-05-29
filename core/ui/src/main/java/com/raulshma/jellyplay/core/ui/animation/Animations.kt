@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.core.ui.animation
 
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -9,7 +10,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.Dp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -43,26 +43,50 @@ fun fancySlideTransition(
     screenWidthPx: Int,
 ): ContentTransform = if (isForward) {
     slideInHorizontally(
-        animationSpec = androidx.compose.animation.core.tween(600, easing = FancyTransitionEasing),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
         initialOffsetX = { screenWidthPx }
     ) + fadeIn(
-        androidx.compose.animation.core.tween(300, 100, AlphaEasing)
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
     ) togetherWith slideOutHorizontally(
-        animationSpec = androidx.compose.animation.core.tween(600, easing = FancyTransitionEasing),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
         targetOffsetX = { -screenWidthPx }
     ) + fadeOut(
-        androidx.compose.animation.core.tween(300, 100, AlphaEasing)
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
     )
 } else {
     slideInHorizontally(
-        animationSpec = androidx.compose.animation.core.tween(600, easing = FancyTransitionEasing),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
         initialOffsetX = { -screenWidthPx }
     ) + fadeIn(
-        androidx.compose.animation.core.tween(300, 100, AlphaEasing)
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
     ) togetherWith slideOutHorizontally(
-        animationSpec = androidx.compose.animation.core.tween(600, easing = FancyTransitionEasing),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
         targetOffsetX = { screenWidthPx }
     ) + fadeOut(
-        androidx.compose.animation.core.tween(300, 100, AlphaEasing)
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
     )
 }

@@ -7,7 +7,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -84,9 +85,9 @@ fun HeaderStatusIndicator(
                 Box(modifier = Modifier.size(20.dp))
             }
             is HeaderStatus.Loading -> {
-                CircularProgressIndicator(
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                LoadingIndicator(
                     modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
                     color = tint,
                 )
             }

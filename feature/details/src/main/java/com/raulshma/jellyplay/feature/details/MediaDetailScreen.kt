@@ -55,9 +55,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -673,6 +675,74 @@ private fun DetailContent(
                                         contentFocusRequester = contentFocusRequester,
                                     )
                                 }
+                            }
+                        }
+
+                        if (detail != null && item != null) {
+                            AnimatedVisibility(
+                                visible = contentVisible,
+                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                        slideInVertically(
+                                            initialOffsetY = { it / 12 },
+                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                                        ),
+                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
+                                    targetOffsetY = { -it / 24 },
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                DetailContentBody(
+                                    item = item,
+                                    detail = detail,
+                                    seasons = seasons,
+                                    episodes = episodes,
+                                    fetchedSeasonIds = fetchedSeasonIds,
+                                    smartPlayTarget = smartPlayTarget,
+                                    selectedSubtitleIndex = selectedSubtitleIndex,
+                                    selectedAudioIndex = selectedAudioIndex,
+                                    getImageUrl = getImageUrl,
+                                    isAudio = isAudio,
+                                    isAlbum = isAlbum,
+                                    albumTracks = albumTracks,
+                                    isDownloading = isDownloading,
+                                    isDownloadingSeries = isDownloadingSeries,
+                                    activeDownload = activeDownload,
+                                    onPlayClick = onPlayClick,
+                                    onAudioClick = onAudioClick,
+                                    onDownloadClick = { showDownloadDialog = true },
+                                    onDownloadSeriesClick = onDownloadSeriesClick,
+                                    onToggleFavorite = onToggleFavorite,
+                                    onMarkPlayed = onMarkPlayed,
+                                    onMarkUnplayed = onMarkUnplayed,
+                                    onSubtitleSelect = onSubtitleSelect,
+                                    onAudioSelect = onAudioSelect,
+                                    onItemClick = onItemClick,
+                                    onPersonClick = onPersonClick,
+                                    onNavigateToSeries = onNavigateToSeries,
+                                    onSeasonSelected = onSeasonSelected,
+                                    onLoadSeerrData = onLoadSeerrData,
+                                    contentFocusRequester = contentFocusRequester,
+                                    seerrRecommendations = seerrRecommendations,
+                                    seerrSimilar = seerrSimilar,
+                                    isSeerrConnected = isSeerrConnected,
+                                    isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+                                    getSeerrPosterUrl = getSeerrPosterUrl,
+                                    onSeerrRequest = onSeerrRequest,
+                                    onNavigate = onNavigate,
+                                    onPlayAlbumTrack = onPlayAlbumTrack,
+                                    showActionButtons = false
+                                )
+                            }
+                        } else if (isLoading) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                SkeletonDetailBody()
+                            }
+                        } else if (error != null) {
+                            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = onRetry) { Text("Retry") }
                             }
                         }
                     }
@@ -1562,9 +1632,10 @@ private fun DetailActionButtons(
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                CircularProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                                LinearWavyProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp))
                             } else {
-                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                                LoadingIndicator(modifier = Modifier.size(22.dp))
                             }
                         } else if (isDownloadCompleted) {
                             Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1594,7 +1665,8 @@ private fun DetailActionButtons(
                             ) { onDownloadSeriesClick() }
                     ) {
                         if (isDownloadingSeries) {
-                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                            LoadingIndicator(modifier = Modifier.size(22.dp))
                         } else {
                             Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
@@ -1729,9 +1801,10 @@ private fun DetailActionButtons(
                 ) {
                     if (isDownloading || dlActive) {
                         if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
-                            CircularProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            LinearWavyProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp))
                         } else {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                            LoadingIndicator(modifier = Modifier.size(24.dp))
                         }
                     } else if (dlCompleted) {
                         Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1758,7 +1831,8 @@ private fun DetailActionButtons(
                         ) { onDownloadSeriesClick() }
                 ) {
                     if (isDownloadingSeries) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                        LoadingIndicator(modifier = Modifier.size(24.dp))
                     } else {
                         Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                     }

@@ -117,6 +117,7 @@ dependencies {
     implementation(project(":feature:livetv"))
     implementation(project(":feature:syncplay"))
     implementation(project(":feature:editor"))
+    implementation(project(":feature:admin"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
