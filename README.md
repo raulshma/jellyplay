@@ -55,6 +55,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Token-based and Quick Connect authentication
 - Multi-user support with per-server user switching
 - Material 3 UI with dynamic theming from artwork
+- Expressive animations and transitions across music and media components using spring-based motion specifications
 - Predictive back gesture support
 - Edge-to-edge immersive layouts
 - Adaptive layouts for phone, tablet, foldable, and TV
@@ -72,6 +73,8 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 ### Video Player
 
 - **Three built-in engines**: ExoPlayer (Media3), libmpv, and LibVLC
+- Video filter controls: Adjust brightness, contrast, saturation, and sharpness in-player (libmpv & LibVLC)
+- Enhanced Video Stats Overlay presenting real-time stream bitrate, frame rate, and dropped frames
 - External player launching (MX Player, VLC, etc.)
 - Direct play, direct stream, and transcoding support
 - Resume playback and progress reporting
@@ -82,7 +85,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - HDR badge indicator
 - Picture-in-Picture support
 - Mini player overlay
-- Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets)
+- Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets) with offline caching support to view seeking preview sprites during offline playback
 - Frame rate matching for display refresh rate sync
 - Adaptive bitrate streaming
 - Intro skip and next episode auto-play
@@ -92,11 +95,12 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 ### Subtitle System
 
 - External subtitle loading and download
-- ASS/SSA subtitle format parsing
+- ASS/SSA and VTT subtitle format parsing with enhanced cue handling
 - Subtitle styling (font size, color, background, edge type, position) with persistence
 - Subtitle delay offset control
 - Preferred subtitle language selection
 - Subtitle OCR via ML Kit for extracting text from video frames
+- Community rating indicator for search results and subtitle download sheet
 
 ### Audio Player
 
@@ -120,7 +124,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 
 ### Library & Browsing
 
-- Home sections: Continue Watching, Next Up, Latest, Favorites, and Surprise Me shuffle
+- Home sections: Continue Watching, Next Up, Recently Added, Latest, Favorites, and Surprise Me shuffle
 - Library browsing with pagination and folder filtering
 - Media detail pages with cast, crew, metadata, and related items
 - Person detail pages with filmography browsing
@@ -132,6 +136,23 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Discover trending, popular, and upcoming content
 - Request content via Radarr/Sonarr directly from the app
 - Seerr detail pages for unavailable media
+
+### Metadata & Media Editor
+
+- Directly accessible from the media detail screen for authorized/admin users
+- Comprehensive metadata editing (title, original title, tagline, overview, premiere/release dates, sorting titles, and custom ratings)
+- Rich artwork manager: Upload, update, or remove Primary, Backdrop, Banner, Logo, Art, Disc, and Thumb images
+- Subtitle editor: View embedded subtitle tracks, upload external subtitle files, and delete unwanted external tracks
+
+### Admin Dashboard
+
+- Accessible directly via settings menu for server administrators
+- Real-time system health monitor showing server status, CPU/Memory load, OS details, and server controls (restart/shutdown)
+- Active User Sessions: View all active devices connected to the server, view session details, and end sessions remotely
+- Library stats row: Direct overview of item counts across movies, series, episodes, albums, songs, and books
+- Scheduled Tasks manager: Monitor, trigger, and cancel scheduled tasks on the Jellyfin server in real-time
+- Server Logs viewer: Browse, view, and download active server logs with severity indicators and recent activity timelines
+- Running tasks card tracking background operations with live progress updates
 
 ### SyncPlay (Watch Parties)
 
@@ -160,6 +181,7 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 - Audio: default speed, night mode, dialogue boost, equalizer, audio normalization, channel mix
 - Subtitles: language, style, trickplay, intro/outro skip (manual and auto)
 - SyncPlay: progress reporting, auto-join, sync correction parameters
+- Downloads: connections preference, max cache size (with unlimited/0 option support)
 - Visual: dynamic theming, streaming quality
 - Security: PIN lock
 - Kids: mode toggle, max content rating
@@ -272,6 +294,8 @@ feature/settings/        Settings, server/user management, Seerr configuration
 feature/music/           Music browsing, smart/mood playlists, artist/album details
 feature/livetv/          Live TV channels, EPG guide, and DVR
 feature/syncplay/        SyncPlay group management and watch party UI
+feature/editor/          Metadata, artwork, and subtitle editor for media items
+feature/admin/           Admin dashboard for server status, active devices, logs, and tasks
 ```
 
 ---
