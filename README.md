@@ -14,6 +14,7 @@
 	<img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white&style=for-the-badge" />
 	<img alt="Material 3" src="https://custom-icon-badges.demolab.com/badge/material%20you-lightblue?style=for-the-badge&logoColor=333&logo=material-you" />
 	<img alt="Media3" src="https://img.shields.io/badge/Media3-FF6F00?style=for-the-badge&logo=android&logoColor=white" />
+	<img alt="Status - Beta" src="https://img.shields.io/badge/Status-Beta-orange?style=for-the-badge" />
 </p>
 
 <div align="center">
@@ -41,6 +42,10 @@ JellyPlay is a modern Android Jellyfin client with multi-server support, adaptiv
 </table>
 
 ---
+
+> [!NOTE]
+> **JellyPlay is currently in Active Beta.** 🧪
+> The application is under active development. While the core features (such as playback, multi-server support, and offline downloads) are functional and stable, you may encounter occasional visual bugs or edge-case issues. We highly appreciate any bug reports, feedback, and contributions!
 
 ## Features
 
