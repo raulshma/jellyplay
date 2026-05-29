@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -66,6 +65,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
@@ -151,15 +152,11 @@ fun SeerrDetailScreen(
                     ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 error != null && movieDetail == null && tvDetail == null -> {
-                    Column(
+                    ErrorScreen(
+                        message = error ?: "Unknown error",
+                        onRetry = { viewModel.loadDetails(tmdbId, mediaType) },
                         modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(text = "Error: $error", color = MaterialTheme.colorScheme.error)
-                        Button(onClick = { viewModel.loadDetails(tmdbId, mediaType) }) {
-                            Text("Retry")
-                        }
-                    }
+                    )
                 }
                 else -> {
                     SeerrDetailContent(
@@ -586,36 +583,10 @@ private fun SeerrDetailContent(
                 }
             },
             navigationIcon = {
-                val backOverHero = appBarColor < 0.5f
-                val backIconColor = if (backOverHero) Color.White else MaterialTheme.colorScheme.onSurface
-                if (isTv) {
-                    val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
-                    Box(
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
-                            .then(backFocusState.focusModifier)
-                            .tvFocusIndicator(backFocusState, CircleShape)
-                            .clickable(onClick = onBack),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.padding(8.dp),
-                        )
-                    }
-                } else {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            tint = backIconColor
-                        )
-                    }
-                }
+                CircleBgBackButton(
+                    onClick = onBack,
+                    scrollCollapsed = appBarColor,
+                )
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = animatedContainerColor,

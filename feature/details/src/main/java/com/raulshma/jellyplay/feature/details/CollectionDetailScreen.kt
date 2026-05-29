@@ -19,8 +19,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,13 +42,12 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,9 +83,7 @@ fun CollectionDetailScreen(
             MediumTopAppBar(
                 title = { Text(collectionDetail?.item?.name ?: "Collection") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
-                    }
+                    CircleBgBackButton(onClick = onBack)
                 },
                 scrollBehavior = scrollBehavior,
             )

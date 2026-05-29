@@ -63,7 +63,6 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -113,6 +112,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
@@ -739,11 +740,11 @@ private fun DetailContent(
                                 SkeletonDetailBody()
                             }
                         } else if (error != null) {
-                            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = onRetry) { Text("Retry") }
-                            }
+                            ErrorScreen(
+                                message = error,
+                                onRetry = onRetry,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 } else {
@@ -856,11 +857,10 @@ private fun DetailContent(
                         } else if (isLoading) {
                             SkeletonDetailBody()
                         } else if (error != null) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = onRetry) { Text("Retry") }
-                            }
+                            ErrorScreen(
+                                message = error,
+                                onRetry = onRetry,
+                            )
                         }
                     }
                 }
@@ -884,46 +884,10 @@ private fun DetailContent(
                     )
                 },
                 navigationIcon = {
-                    if (isTv) {
-                        val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
-                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        Box(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
-                                )
-                                .then(backFocusState.focusModifier)
-                                .tvFocusIndicator(backFocusState, CircleShape)
-                                .clickable(onClick = onBack),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Tabler.Outline.ArrowLeft,
-                                contentDescription = "Back",
-                                tint = backIconColor,
-                                modifier = Modifier.padding(8.dp),
-                            )
-                        }
-                    } else {
-                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
-                                )
-                        ) {
-                            Icon(
-                                Tabler.Outline.ArrowLeft,
-                                contentDescription = "Back",
-                                tint = backIconColor,
-                            )
-                        }
-                    }
+                    CircleBgBackButton(
+                        onClick = onBack,
+                        scrollCollapsed = scrollCollapsed,
+                    )
                 },
                 actions = {
                     if (!isTv) {

@@ -15,15 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,15 +33,14 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.components.TooltipIconButton
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
     serverAddress: String,
@@ -63,20 +59,9 @@ fun LoginScreen(
         contentVisible = true
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Sign In") },
-                navigationIcon = {
-                    TooltipIconButton(
-                        onClick = onBack,
-                        imageVector = Tabler.Outline.ArrowLeft,
-                        contentDescription = "Back",
-                        tooltipText = "Back",
-                    )
-                },
-            )
-        },
+    JellyPlayScreenScaffold(
+        title = "Sign In",
+        onBack = onBack,
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current

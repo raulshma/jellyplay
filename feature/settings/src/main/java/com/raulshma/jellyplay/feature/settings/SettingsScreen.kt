@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,13 +32,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -83,6 +77,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -108,7 +103,6 @@ fun SettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    val backFocusState = rememberTvFocusState()
     val listFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(isTv) {
@@ -150,45 +144,17 @@ fun SettingsScreen(
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .then(backFocusState.focusModifier)
-                            .tvFocusIndicator(backFocusState, CircleShape)
-                            .clickable(onClick = onBack),
-                    ) {
-                        Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .size(20.dp),
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
+    com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
+        title = "Settings",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+    ) {
         val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .imePadding()
                 .verticalScroll(scrollState)
                 .then(if (isTv) Modifier
@@ -202,9 +168,9 @@ fun SettingsScreen(
                     }
                 else Modifier)
                 .padding(
-                    start = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
-                    end = adaptiveInfo.contentPadding(LocalTvMode.current) - 16.dp,
-                    bottom = 80.dp,
+                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                    bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
                 ),
         ) {
             AnimatedSettingsEntrance(0) {
