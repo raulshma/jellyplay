@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -294,12 +296,18 @@ fun PosterCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     val baseScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = defaultSpatialSpec<Float>(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "cardScale",
     )
     val scale by animateFloatAsState(
         targetValue = baseScale * tvFocusState.scale,
-        animationSpec = defaultSpatialSpec<Float>(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "cardCombinedScale",
     )
     val elevation by animateDpAsState(
@@ -309,14 +317,32 @@ fun PosterCard(
             isTv -> 12.dp
             else -> 4.dp
         },
-        animationSpec = fastEffectsSpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh,
+        ),
         label = "cardElevation",
     )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = fastEffectsSpec(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh,
+        ),
         label = "cardBrightness",
     )
+
+    val cardShape by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "cardShapeMorph",
+    )
+    val shape = remember(cardShape) {
+        if (cardShape > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
+    }
 
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
@@ -349,13 +375,13 @@ fun PosterCard(
                     scaleY = scale
                     shadowElevation = elevation.toPx()
                 }
-                .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
+                .tvFocusIndicator(tvFocusState, shape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClick,
                 ),
-            shape = ShapeCache.smooth12,
+            shape = shape,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
