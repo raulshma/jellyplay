@@ -644,7 +644,8 @@ fun HomeScreen(
                                         ) {
                                             items(
                                                 count = rowItems.size,
-                                                key = { index -> rowItems[index].id }
+                                                key = { index -> rowItems[index].id },
+                                                contentType = { "seerrCard" },
                                             ) { index ->
                                                 val item = rowItems[index]
                                                 SeerrMediaCard(
@@ -702,6 +703,7 @@ fun HomeScreen(
                                         items(
                                             count = viewModel.offlineLibrary.size,
                                             key = { index -> "offline_${viewModel.offlineLibrary[index].id}" },
+                                            contentType = { "offlineItem" },
                                         ) { index ->
                                             val offlineItem = viewModel.offlineLibrary[index]
                                             Column(
