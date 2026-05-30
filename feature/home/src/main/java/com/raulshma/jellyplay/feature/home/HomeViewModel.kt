@@ -108,6 +108,8 @@ class HomeViewModel @Inject constructor(
                 hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
                 _uiState.update { it.copy(
                     kidsModeEnabled = prefs.kidsModeEnabled,
+                    pinHash = prefs.pinHash,
+                    biometricLockEnabled = prefs.biometricLockEnabled,
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
@@ -510,5 +512,13 @@ class HomeViewModel @Inject constructor(
         val maxIndex = kidRatings.indexOf(maxRating)
         val itemIndex = kidRatings.indexOf(item.officialRating)
         return if (itemIndex >= 0 && maxIndex >= 0) itemIndex <= maxIndex else true
+    }
+
+    fun exitKidsMode() {
+        viewModelScope.launch { preferencesStore.setKidsModeEnabled(false) }
+    }
+
+    fun verifyPin(pin: String): Boolean {
+        return preferencesStore.verifyPin(pin, _uiState.value.pinHash)
     }
 }

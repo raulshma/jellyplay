@@ -16,8 +16,10 @@ import androidx.compose.animation.togetherWith
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FastInvokeEasing
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -88,6 +91,7 @@ fun KidsHomeScreen(
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
     onRefresh: () -> Unit,
+    onExitKidsModeRequest: () -> Unit = {},
 ) {
     KidsHomeScreenInternal(
         sections = state.sections,
@@ -99,6 +103,7 @@ fun KidsHomeScreen(
         fallbackImageUrlBuilder = fallbackImageUrlBuilder,
         onItemClick = onItemClick,
         onRefresh = onRefresh,
+        onExitKidsModeRequest = onExitKidsModeRequest,
     )
 }
 
@@ -114,6 +119,7 @@ fun KidsHomeScreen(
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
     onRefresh: () -> Unit,
+    onExitKidsModeRequest: () -> Unit = {},
 ) {
     KidsHomeScreenInternal(
         sections = sections,
@@ -125,10 +131,11 @@ fun KidsHomeScreen(
         fallbackImageUrlBuilder = fallbackImageUrlBuilder,
         onItemClick = onItemClick,
         onRefresh = onRefresh,
+        onExitKidsModeRequest = onExitKidsModeRequest,
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun KidsHomeScreenInternal(
     sections: List<HomeSection>,
@@ -140,9 +147,11 @@ private fun KidsHomeScreenInternal(
     fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
     onItemClick: (String) -> Unit,
     onRefresh: () -> Unit,
+    onExitKidsModeRequest: () -> Unit = {},
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
+    val hapticFeedback = LocalHapticFeedback.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
@@ -183,7 +192,20 @@ private fun KidsHomeScreenInternal(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.combinedClickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onLongClick = {
+                                hapticFeedback.performHapticFeedback(
+                                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                )
+                                onExitKidsModeRequest()
+                            },
+                            onClick = {},
+                        ),
+                    ) {
                         Icon(
                             Tabler.Outline.BabyCarriage,
                             contentDescription = null,

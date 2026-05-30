@@ -87,6 +87,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
+import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
+import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -144,6 +147,9 @@ fun SettingsScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+    var showKidsModeAuth by remember { mutableStateOf(false) }
+    var kidsModeAuthError by remember { mutableStateOf<String?>(null) }
+    var pendingKidsModeDisable by remember { mutableStateOf(false) }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -1142,13 +1148,23 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+                val biometricAvailability = rememberBiometricAvailability()
+                val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
+
                 SettingsGroup(
                     icon = Tabler.Outline.Lock,
                     title = "Security",
-                    summary = { if (preferences.pinLockEnabled) "PIN lock: On" else "PIN lock: Off" },
+                    summary = {
+                        when {
+                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> "PIN + Biometric lock: On"
+                            preferences.biometricLockEnabled -> "Biometric lock: On"
+                            preferences.pinLockEnabled -> "PIN lock: On"
+                            else -> "Lock: Off"
+                        }
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    val secTotal = 2
+                    val secTotal = if (canShowBiometric) 4 else 3
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = "PIN Lock",
@@ -1164,19 +1180,74 @@ fun SettingsScreen(
                             else showPinDialog = true
                         },
                     )
+                    if (canShowBiometric) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Fingerprint,
+                            title = "Biometric Unlock",
+                            subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
+                            checked = preferences.biometricLockEnabled,
+                            index = 1, count = secTotal,
+                            onCheckedChange = { viewModel.setBiometricLockEnabled(it) },
+                            onClick = { viewModel.setBiometricLockEnabled(!preferences.biometricLockEnabled) },
+                        )
+                    }
                     SettingToggleItem(
                         icon = Tabler.Outline.BabyCarriage,
                         title = "Kids Mode",
                         subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
                         checked = preferences.kidsModeEnabled,
-                        index = 1, count = secTotal,
-                        onCheckedChange = { viewModel.setKidsModeEnabled(it) },
+                        index = if (canShowBiometric) 2 else 1, count = secTotal,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                if (preferences.pinHash != null || preferences.biometricLockEnabled) {
+                                    viewModel.setKidsModeEnabled(true)
+                                } else {
+                                    showPinDialog = true
+                                }
+                            } else {
+                                if (preferences.pinHash != null || preferences.biometricLockEnabled) {
+                                    pendingKidsModeDisable = true
+                                    showKidsModeAuth = true
+                                } else {
+                                    viewModel.setKidsModeEnabled(false)
+                                }
+                            }
+                        },
                         onClick = {
-                            val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
-                            val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
-                            viewModel.setKidsModeMaxRating(nextRating)
+                            if (preferences.kidsModeEnabled) {
+                                val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
+                                val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
+                                viewModel.setKidsModeMaxRating(nextRating)
+                            }
                         },
                     )
+                    if (preferences.pinLockEnabled) {
+                        val autoLockPresets = listOf(
+                            15_000L to "15 sec",
+                            30_000L to "30 sec",
+                            60_000L to "1 min",
+                            120_000L to "2 min",
+                            300_000L to "5 min",
+                            600_000L to "10 min",
+                            1_800_000L to "30 min",
+                            3_600_000L to "1 hour",
+                            7_200_000L to "2 hours",
+                            0L to "Never",
+                        )
+                        val currentLabel = autoLockPresets.find { it.first == preferences.autoLockTimerMs }?.second ?: "30 sec"
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Auto-Lock Timer",
+                            subtitle = "Lock app after going to background",
+                            trailingText = currentLabel,
+                            index = if (canShowBiometric) 3 else 2, count = secTotal,
+                            onClick = {
+                                val currentIndex = autoLockPresets.indexOfFirst { it.first == preferences.autoLockTimerMs }
+                                val nextIndex = (currentIndex + 1) % autoLockPresets.size
+                                viewModel.setAutoLockTimerMs(autoLockPresets[nextIndex].first)
+                            },
+                        )
+                    }
                 }
             }
 
@@ -1274,6 +1345,41 @@ fun SettingsScreen(
                     pinError = null
                 }) { Text("Cancel") }
             },
+        )
+    }
+
+    if (showKidsModeAuth) {
+        AuthChallengeScreen(
+            title = "Exit Kids Mode",
+            subtitle = "Authenticate to change Kids Mode",
+            pinHash = preferences.pinHash,
+            biometricEnabled = preferences.biometricLockEnabled,
+            onPinEntered = { pin ->
+                if (pin.isEmpty()) {
+                    if (pendingKidsModeDisable) viewModel.setKidsModeEnabled(false)
+                    showKidsModeAuth = false
+                    kidsModeAuthError = null
+                    pendingKidsModeDisable = false
+                } else if (preferences.pinHash != null) {
+                    val valid = viewModel.verifyPin(pin)
+                    if (valid) {
+                        if (pendingKidsModeDisable) viewModel.setKidsModeEnabled(false)
+                        showKidsModeAuth = false
+                        kidsModeAuthError = null
+                        pendingKidsModeDisable = false
+                    } else {
+                        kidsModeAuthError = "Incorrect PIN"
+                    }
+                }
+            },
+            onErrorClear = { kidsModeAuthError = null },
+            errorMessage = kidsModeAuthError,
+            onDismiss = {
+                showKidsModeAuth = false
+                kidsModeAuthError = null
+                pendingKidsModeDisable = false
+            },
+            showAsDialog = true,
         )
     }
 

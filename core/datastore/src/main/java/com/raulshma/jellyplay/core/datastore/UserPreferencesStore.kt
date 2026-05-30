@@ -58,9 +58,11 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_DELETE_CACHE = stringPreferencesKey("auto_delete_cache")
         val PIN_LOCK_ENABLED = stringPreferencesKey("pin_lock_enabled")
         val PIN_HASH = stringPreferencesKey("pin_hash")
+        val BIOMETRIC_LOCK_ENABLED = stringPreferencesKey("biometric_lock_enabled")
         val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
         val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
         val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
+        val AUTO_LOCK_TIMER_MS = stringPreferencesKey("auto_lock_timer_ms")
         val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
@@ -217,8 +219,10 @@ class UserPreferencesStore @Inject constructor(
             autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
             pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
             pinHash = prefs[Keys.PIN_HASH],
+            biometricLockEnabled = prefs[Keys.BIOMETRIC_LOCK_ENABLED]?.toBoolean() ?: false,
             kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
             kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
+            autoLockTimerMs = prefs[Keys.AUTO_LOCK_TIMER_MS]?.toLongOrNull() ?: 30_000L,
             dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
             dialogueBoostStrength = try {
                 EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
@@ -403,6 +407,10 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    suspend fun setBiometricLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled.toString() }
+    }
+
     suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
     }
@@ -428,6 +436,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setKidsModeMaxRating(rating: String) {
         context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
+    }
+
+    suspend fun setAutoLockTimerMs(ms: Long) {
+        context.dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms.toString() }
     }
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {

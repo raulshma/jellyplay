@@ -36,6 +36,7 @@ okhttp = "5.3.2"
 smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
+biometric = "1.1.0"
 
 [libraries]
 # AndroidX Core
@@ -142,6 +143,9 @@ smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-an
 
 # Android TV
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
+
+# Biometric
+biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
