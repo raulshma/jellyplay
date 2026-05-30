@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -88,6 +89,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
+import androidx.fragment.app.FragmentActivity
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 
@@ -1181,14 +1183,42 @@ fun SettingsScreen(
                         },
                     )
                     if (canShowBiometric) {
+                        val bioContext = LocalContext.current
+                        val bioActivity = remember(bioContext) { bioContext as? FragmentActivity }
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
                             title = "Biometric Unlock",
                             subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
                             checked = preferences.biometricLockEnabled,
                             index = 1, count = secTotal,
-                            onCheckedChange = { viewModel.setBiometricLockEnabled(it) },
-                            onClick = { viewModel.setBiometricLockEnabled(!preferences.biometricLockEnabled) },
+                            onCheckedChange = { enabled ->
+                                if (enabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Enable Biometric Unlock",
+                                        subtitle = "Verify your identity to enable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                } else if (!enabled) {
+                                    viewModel.setBiometricLockEnabled(false)
+                                }
+                            },
+                            onClick = {
+                                if (preferences.biometricLockEnabled) {
+                                    viewModel.setBiometricLockEnabled(false)
+                                } else if (bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Enable Biometric Unlock",
+                                        subtitle = "Verify your identity to enable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                }
+                            },
                         )
                     }
                     SettingToggleItem(
@@ -1221,7 +1251,7 @@ fun SettingsScreen(
                             }
                         },
                     )
-                    if (preferences.pinLockEnabled) {
+                    if (preferences.pinLockEnabled || preferences.biometricLockEnabled) {
                         val autoLockPresets = listOf(
                             15_000L to "15 sec",
                             30_000L to "30 sec",

@@ -45,7 +45,12 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.foundation.style.ExperimentalFoundationStyleApi
+import androidx.compose.foundation.style.rememberUpdatedStyleState
+import androidx.compose.foundation.style.styleable
+import com.raulshma.jellyplay.core.designsystem.theme.ComponentStyles
 
+@OptIn(ExperimentalFoundationStyleApi::class)
 @Composable
 fun PinLockScreen(
     title: String = "Enter PIN",
@@ -71,13 +76,13 @@ fun PinLockScreen(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(32.dp))
@@ -88,22 +93,15 @@ fun PinLockScreen(
         ) {
             repeat(maxDigits) { index ->
                 val filled = index < pin.length
-                val dotSize by animateDpAsState(
-                    targetValue = if (filled) 20.dp else 16.dp,
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    label = "dotSize$index",
-                )
-                val dotColor by animateColorAsState(
-                    targetValue = if (filled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outlineVariant,
-                    animationSpec = fastEffectsSpec(),
-                    label = "dotColor$index",
-                )
+                val interactionSource = remember { MutableInteractionSource() }
+                val styleState = rememberUpdatedStyleState(interactionSource)
+                
                 Box(
                     modifier = Modifier
-                        .size(dotSize)
-                        .clip(CircleShape)
-                        .background(dotColor),
+                        .styleable(
+                            styleState,
+                            if (filled) ComponentStyles.pinDotFilledStyle else ComponentStyles.pinDotStyle
+                        )
                 )
             }
         }
@@ -136,21 +134,11 @@ fun PinLockScreen(
                         "" -> Spacer(modifier = Modifier.size(72.dp))
                         "backspace" -> {
                             val interactionSource = remember { MutableInteractionSource() }
-                            val isPressed by interactionSource.collectIsPressedAsState()
-                            val scale by animateFloatAsState(
-                                targetValue = if (isPressed) AnimationTokens.ButtonPressScale else 1f,
-                                animationSpec = defaultSpatialSpec<Float>(),
-                                label = "backspaceScale",
-                            )
+                            val styleState = rememberUpdatedStyleState(interactionSource)
 
                             Box(
                                 modifier = Modifier
-                                    .size(72.dp)
-                                    .graphicsLayer {
-                                        scaleX = scale
-                                        scaleY = scale
-                                    }
-                                    .clip(CircleShape)
+                                    .styleable(styleState, ComponentStyles.pinKeyStyle)
                                     .tvFocusable().clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
@@ -194,6 +182,7 @@ fun PinLockScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationStyleApi::class)
 @Composable
 private fun PinKeyButton(
     key: String,
@@ -201,28 +190,11 @@ private fun PinKeyButton(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) AnimationTokens.ButtonPressScale else 1f,
-        animationSpec = defaultSpatialSpec<Float>(),
-        label = "pinKeyScale_$key",
-    )
-    val surfaceColor by animateColorAsState(
-        targetValue = if (pressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-        else MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "pinKeyColor_$key",
-    )
+    val styleState = rememberUpdatedStyleState(interactionSource)
 
     Box(
         modifier = Modifier
-            .size(72.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(surfaceColor)
+            .styleable(styleState, ComponentStyles.pinKeyStyle)
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -232,7 +204,7 @@ private fun PinKeyButton(
     ) {
         Text(
             text = key,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
