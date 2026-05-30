@@ -1,14 +1,18 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import android.content.Context
+import android.util.Log
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+
+private const val TAG = "BiometricAuthHelper"
 
 object BiometricAuthHelper {
 
@@ -18,11 +22,36 @@ object BiometricAuthHelper {
 
     fun checkAvailability(context: Context): Availability {
         val manager = BiometricManager.from(context)
-        return when (manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)) {
+        val result = manager.canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
+        Log.d(TAG, "canAuthenticate result: $result")
+        return when (result) {
             BiometricManager.BIOMETRIC_SUCCESS -> Availability.AVAILABLE
-            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> Availability.NO_HARDWARE
-            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> Availability.NO_ENROLLED
-            else -> Availability.UNSUPPORTED
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
+                Log.w(TAG, "No biometric hardware detected")
+                Availability.NO_HARDWARE
+            }
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                Log.w(TAG, "Biometric hardware exists but no biometrics enrolled")
+                Availability.NO_ENROLLED
+            }
+            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> {
+                Log.w(TAG, "Security update required")
+                Availability.UNSUPPORTED
+            }
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> {
+                Log.w(TAG, "Biometric not supported on this device")
+                Availability.UNSUPPORTED
+            }
+            BiometricManager.BIOMETRIC_STATUS_UNKNOWN -> {
+                Log.w(TAG, "Biometric status unknown")
+                Availability.UNSUPPORTED
+            }
+            else -> {
+                Log.w(TAG, "Unknown biometric status: $result")
+                Availability.UNSUPPORTED
+            }
         }
     }
 
@@ -70,5 +99,9 @@ object BiometricAuthHelper {
 @Composable
 fun rememberBiometricAvailability(): BiometricAuthHelper.Availability {
     val context = LocalContext.current
-    return remember { BiometricAuthHelper.checkAvailability(context) }
+    val availability = remember { mutableStateOf(BiometricAuthHelper.checkAvailability(context)) }
+    LaunchedEffect(Unit) {
+        availability.value = BiometricAuthHelper.checkAvailability(context)
+    }
+    return availability.value
 }
