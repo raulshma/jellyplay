@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Lock
+import com.composables.icons.tabler.outline.LockOpen
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -47,10 +52,29 @@ internal fun SlideToUnlockOverlay(
     onUnlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val unlockThresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
-    val tapSlopPx = with(LocalDensity.current) { 10.dp.toPx() }
+    val density = LocalDensity.current
+    val unlockThresholdPx = with(density) { 120.dp.toPx() }
+    val tapSlopPx = with(density) { 10.dp.toPx() }
+
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
     var uiVisible by remember { mutableStateOf(false) }
+
+    val animatedOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(isDragging, dragOffsetY) {
+        if (isDragging) {
+            animatedOffset.snapTo(dragOffsetY)
+        } else {
+            animatedOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+            )
+        }
+    }
 
     LaunchedEffect(visible) {
         if (visible) {
@@ -73,20 +97,17 @@ internal fun SlideToUnlockOverlay(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         down.consume()
                         var revealed = false
-                        var totalDy = 0f
                         do {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
                             val dy = change.position.y - down.position.y
-                            totalDy = dy
 
                             if (!revealed && abs(dy) < tapSlopPx) {
-                                if (!uiVisible) {
-                                    uiVisible = true
-                                }
+                                if (!uiVisible) uiVisible = true
                             } else {
                                 revealed = true
+                                isDragging = true
                                 val upward = (-dy).coerceAtLeast(0f)
                                 dragOffsetY = upward
                                 if (upward >= unlockThresholdPx) {
@@ -100,13 +121,14 @@ internal fun SlideToUnlockOverlay(
                         if (!revealed) {
                             uiVisible = true
                         }
-                        dragOffsetY = 0f
+                        isDragging = false
                     }
                 },
             contentAlignment = Alignment.Center,
         ) {
-            val progress = (dragOffsetY / unlockThresholdPx).coerceIn(0f, 1f)
-            val iconAlpha = 0.5f + progress * 0.5f
+            val offsetY = animatedOffset.value
+            val progress = (offsetY / unlockThresholdPx).coerceIn(0f, 1f)
+            val isUnlocked = progress > 0.7f
 
             AnimatedVisibility(
                 visible = uiVisible || progress > 0f,
@@ -116,30 +138,40 @@ internal fun SlideToUnlockOverlay(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.offset(y = with(LocalDensity.current) { (-dragOffsetY).toDp() }),
+                    modifier = Modifier.graphicsLayer {
+                        translationY = -offsetY
+                    },
                 ) {
                     Box(
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.15f + progress * 0.2f))
-                            .alpha(iconAlpha),
+                            .background(Color.White.copy(alpha = 0.15f + progress * 0.15f))
+                            .alpha(1f - progress * 0.7f),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Tabler.Outline.Lock,
-                            contentDescription = "Drag up to unlock",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp),
-                        )
+                        Crossfade(
+                            targetState = isUnlocked,
+                            animationSpec = tween(200),
+                            label = "lockIcon",
+                        ) { unlocked ->
+                            Icon(
+                                imageVector = if (unlocked) Tabler.Outline.LockOpen else Tabler.Outline.Lock,
+                                contentDescription = if (unlocked) "Unlocked" else "Drag up to unlock",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
                     }
 
                     Text(
                         text = "Slide up to unlock",
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = Color.White.copy(alpha = 0.6f * (1f - progress)),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .graphicsLayer { alpha = 1f - progress },
                     )
                 }
             }
