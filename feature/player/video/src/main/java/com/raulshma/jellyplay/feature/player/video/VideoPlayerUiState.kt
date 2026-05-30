@@ -126,7 +126,17 @@ data class VideoPlayerUiState(
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         segmentBehaviors[type] ?: SegmentBehavior.IGNORE
 
+    private var cachedSegmentPosition: Long = Long.MIN_VALUE
+    private var cachedSegmentResult: MediaSegment? = null
+
     fun computeActiveSegment(): MediaSegment? {
+        if (cachedSegmentPosition == currentPosition && cachedSegmentResult != null) return cachedSegmentResult
+        cachedSegmentPosition = currentPosition
+        cachedSegmentResult = computeActiveSegmentInternal()
+        return cachedSegmentResult
+    }
+
+    private fun computeActiveSegmentInternal(): MediaSegment? {
         val posTicks = currentPosition * 10_000
         val apiMatches = segments.filter { seg ->
             seg.hasSegment && posTicks >= seg.startTicks && posTicks < seg.endTicks

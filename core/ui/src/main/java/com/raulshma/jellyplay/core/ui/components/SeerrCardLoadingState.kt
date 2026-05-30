@@ -71,7 +71,7 @@ fun rememberSeerrCardLoadingState(): SeerrCardLoadingState {
 
 private class SeerrCardLoadingStateImpl : SeerrCardLoadingState {
 
-    private var loadingIds by mutableStateOf(setOf<Int>())
+    private var loadingIds by mutableStateOf(emptySet<Int>())
 
     override fun isLoading(itemId: Int): Boolean = itemId in loadingIds
 

@@ -384,9 +384,14 @@ class JellyfinApiClientImpl @Inject constructor(
                         val filteredFolders = folders
                             .filter { it.collectionType != "music" }
                             .filter { it.id !in hiddenLibraryIds }
+                        val semaphore = kotlinx.coroutines.sync.Semaphore(4)
                         val latestDeferred = filteredFolders
                             .map { folder ->
-                                async { folder to getLatestMedia(folder.id, limit = 16) }
+                                async {
+                                    semaphore.acquire()
+                                    try { folder to getLatestMedia(folder.id, limit = 16) }
+                                    finally { semaphore.release() }
+                                }
                             }
                         latestDeferred.forEach { deferred ->
                             val (folder, result) = deferred.await()
