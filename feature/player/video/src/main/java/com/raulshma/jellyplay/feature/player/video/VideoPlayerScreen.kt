@@ -95,6 +95,7 @@ import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomS
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
+import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
@@ -170,6 +171,8 @@ fun VideoPlayerScreen(
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
 
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+
+    val isScreenLocked = uiState.isScreenLocked
 
 
 
@@ -505,7 +508,8 @@ fun VideoPlayerScreen(
                     }
                 } else Modifier
             )
-            .pointerInput(uiState.gesturesEnabled, uiState.seekDurationMs) {
+            .pointerInput(uiState.gesturesEnabled, uiState.seekDurationMs, isScreenLocked) {
+                if (isScreenLocked) return@pointerInput
                 if (!uiState.gesturesEnabled) return@pointerInput
                 detectTapGestures(
                     onTap = { showControls = !showControls },
@@ -572,7 +576,7 @@ fun VideoPlayerScreen(
             seekOffsetMs = seekOffsetMs,
             brightnessValue = brightnessOverlay,
             volumeValue = volumeOverlay,
-            gesturesEnabled = uiState.gesturesEnabled,
+            gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
             swipeSeekMaxMs = uiState.swipeSeekMaxMs,
             onSeekGesture = remember(engine) {
                 { totalDeltaMs ->
@@ -699,6 +703,18 @@ fun VideoPlayerScreen(
                 .padding(top = 60.dp, end = 16.dp),
         )
 
+        if (isScreenLocked && !isInPipMode) {
+            SlideToUnlockOverlay(
+                visible = true,
+                onDismiss = { },
+                onUnlock = {
+                    viewModel.setScreenLocked(false)
+                    showControls = true
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         if (uiState.showVideoStats) {
             VideoStatsOverlay(
                 stats = uiState.videoStats,
@@ -763,7 +779,7 @@ fun VideoPlayerScreen(
 
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,
-            isVisible = showControls && !isInPipMode,
+            isVisible = showControls && !isInPipMode && !isScreenLocked,
             supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
             supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
             supportsNightMode = uiState.engineCapabilities.supportsNightMode,
@@ -838,6 +854,10 @@ fun VideoPlayerScreen(
             supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
             videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig(),
             onVideoFilterClick = { currentSheet = PlayerSheet.VideoFilter },
+            onLockClick = {
+                viewModel.setScreenLocked(true)
+                showControls = false
+            },
             onControlsFocusChange = { controlsHasFocus = it },
             modifier = Modifier.fillMaxSize(),
         )
