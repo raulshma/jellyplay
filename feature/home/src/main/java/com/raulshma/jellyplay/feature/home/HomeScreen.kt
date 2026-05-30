@@ -355,59 +355,73 @@ private fun MainHomeContent(
                 }
             }
 
-            HomeTopDock(
-                scrollFraction = scrollFraction,
-                isSearchFocused = isSearchFocused,
-                searchQuery = state.searchState.query,
-                offlineMode = state.offlineMode,
-                homeMode = state.homeMode,
-                headerStatus = headerStatus,
-                activeDownloadCount = activeDownloadCount,
-                onModeChange = onModeChange,
-                onSearchExpanded = { isSearchExpanded = it },
-                onSearchQueryChange = { viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(it)) },
-                onClearSearch = {
-                    isSearchExpanded = false
-                    viewModel.onEvent(HomeUiEvent.ClearSearch)
-                },
-                onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                searchResultsContent = {
-                    HomeSearchResultsOverlay(
-                        jellyfinResults = state.searchState.jellyfinResults,
-                        seerrResults = state.searchState.seerrResults,
-                        isSearching = state.searchState.isSearching,
-                        getImageUrl = { viewModel.getImageUrl(it) },
-                        onJellyfinClick = { item ->
-                            isSearchExpanded = false
-                            viewModel.onEvent(HomeUiEvent.ClearSearch)
-                            focusManager.clearFocus()
-                            onItemClick(item.id)
-                        },
-                        onSeerrClick = { item ->
-                            isSearchExpanded = false
-                            viewModel.onEvent(HomeUiEvent.ClearSearch)
-                            focusManager.clearFocus()
-                            onSearchSeerrClick(item.id, item.mediaType)
-                        },
-                    )
-                },
-            )
+            ArtworkThemeWrapper(
+                imageUrl = backdropUrl,
+                dynamicTheming = state.dynamicTheming,
+                darkTheme = !isLightTheme,
+                oledMode = state.oledMode,
+            ) {
+                HomeTopDock(
+                    scrollFraction = scrollFraction,
+                    isSearchFocused = isSearchFocused,
+                    searchQuery = state.searchState.query,
+                    offlineMode = state.offlineMode,
+                    homeMode = state.homeMode,
+                    headerStatus = headerStatus,
+                    activeDownloadCount = activeDownloadCount,
+                    onModeChange = onModeChange,
+                    onSearchExpanded = { isSearchExpanded = it },
+                    onSearchQueryChange = { viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(it)) },
+                    onClearSearch = {
+                        isSearchExpanded = false
+                        viewModel.onEvent(HomeUiEvent.ClearSearch)
+                    },
+                    onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                    searchResultsContent = {
+                        HomeSearchResultsOverlay(
+                            jellyfinResults = state.searchState.jellyfinResults,
+                            seerrResults = state.searchState.seerrResults,
+                            isSearching = state.searchState.isSearching,
+                            getImageUrl = { viewModel.getImageUrl(it) },
+                            onJellyfinClick = { item ->
+                                isSearchExpanded = false
+                                viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                focusManager.clearFocus()
+                                onItemClick(item.id)
+                            },
+                            onSeerrClick = { item ->
+                                isSearchExpanded = false
+                                viewModel.onEvent(HomeUiEvent.ClearSearch)
+                                focusManager.clearFocus()
+                                onSearchSeerrClick(item.id, item.mediaType)
+                            },
+                        )
+                    },
+                )
+            }
 
-            HomeFabMenu(
-                isExpanded = isFabExpanded,
-                onToggle = { isFabExpanded = it },
-                activeDownloadCount = activeDownloadCount,
-                offlineMode = state.offlineMode,
-                onSurpriseClick = {
-                    showSurprise = !showSurprise
-                    if (!showSurprise) autoRotateEnabled = true
-                },
-                onSyncPlayClick = onSyncPlayClick,
-                onDownloadsClick = onDownloadsClick,
-                onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                onSettingsClick = onSettingsClick,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
+            ArtworkThemeWrapper(
+                imageUrl = backdropUrl,
+                dynamicTheming = state.dynamicTheming,
+                darkTheme = !isLightTheme,
+                oledMode = state.oledMode,
+            ) {
+                HomeFabMenu(
+                    isExpanded = isFabExpanded,
+                    onToggle = { isFabExpanded = it },
+                    activeDownloadCount = activeDownloadCount,
+                    offlineMode = state.offlineMode,
+                    onSurpriseClick = {
+                        showSurprise = !showSurprise
+                        if (!showSurprise) autoRotateEnabled = true
+                    },
+                    onSyncPlayClick = onSyncPlayClick,
+                    onDownloadsClick = onDownloadsClick,
+                    onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                    onSettingsClick = onSettingsClick,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
+            }
         }
     }
 
