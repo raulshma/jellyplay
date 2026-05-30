@@ -152,6 +152,7 @@ fun SettingsScreen(
     var showKidsModeAuth by remember { mutableStateOf(false) }
     var kidsModeAuthError by remember { mutableStateOf<String?>(null) }
     var pendingKidsModeDisable by remember { mutableStateOf(false) }
+    var showKidsRatingPicker by remember { mutableStateOf(false) }
     var showPinDisableAuth by remember { mutableStateOf(false) }
     var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
     var showBiometricDisableAuth by remember { mutableStateOf(false) }
@@ -1262,9 +1263,7 @@ fun SettingsScreen(
                         },
                         onClick = {
                             if (preferences.kidsModeEnabled) {
-                                val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
-                                val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
-                                viewModel.setKidsModeMaxRating(nextRating)
+                                showKidsRatingPicker = true
                             }
                         },
                     )
@@ -1427,6 +1426,27 @@ fun SettingsScreen(
                 pendingKidsModeDisable = false
             },
             showAsDialog = true,
+        )
+    }
+
+    if (showKidsRatingPicker) {
+        val ratings = com.raulshma.jellyplay.core.model.KidsContentFilter.SELECTABLE_MAX_RATINGS
+        SettingsListPickerSheet(
+            title = "Max Content Rating",
+            items = ratings,
+            label = { it },
+            subtitle = {
+                when (it) {
+                    "G", "TV-Y", "TV-G" -> "Suitable for all ages"
+                    "TV-Y7" -> "Directed to older children"
+                    "PG", "TV-PG" -> "Parental guidance suggested"
+                    "PG-13", "TV-14" -> "Parents strongly cautioned"
+                    else -> ""
+                }
+            },
+            isSelected = { it == preferences.kidsModeMaxRating },
+            onDismiss = { showKidsRatingPicker = false },
+            onSelect = { viewModel.setKidsModeMaxRating(it); showKidsRatingPicker = false },
         )
     }
 
