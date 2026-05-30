@@ -152,6 +152,9 @@ fun SettingsScreen(
     var showKidsModeAuth by remember { mutableStateOf(false) }
     var kidsModeAuthError by remember { mutableStateOf<String?>(null) }
     var pendingKidsModeDisable by remember { mutableStateOf(false) }
+    var showPinDisableAuth by remember { mutableStateOf(false) }
+    var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+    var showBiometricDisableAuth by remember { mutableStateOf(false) }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -1175,10 +1178,10 @@ fun SettingsScreen(
                         index = 0, count = secTotal,
                         onCheckedChange = { enabled ->
                             if (enabled) showPinDialog = true
-                            else viewModel.clearPin()
+                            else showPinDisableAuth = true
                         },
                         onClick = {
-                            if (preferences.pinLockEnabled) viewModel.clearPin()
+                            if (preferences.pinLockEnabled) showPinDisableAuth = true
                             else showPinDialog = true
                         },
                     )
@@ -1201,14 +1204,28 @@ fun SettingsScreen(
                                         onError = {},
                                         onFailed = {},
                                     )
-                                } else if (!enabled) {
-                                    viewModel.setBiometricLockEnabled(false)
+                                } else if (!enabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Disable Biometric Unlock",
+                                        subtitle = "Verify your identity to disable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(false) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
                                 }
                             },
                             onClick = {
-                                if (preferences.biometricLockEnabled) {
-                                    viewModel.setBiometricLockEnabled(false)
-                                } else if (bioActivity != null) {
+                                if (preferences.biometricLockEnabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Disable Biometric Unlock",
+                                        subtitle = "Verify your identity to disable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(false) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                } else if (!preferences.biometricLockEnabled && bioActivity != null) {
                                     BiometricAuthHelper.authenticate(
                                         activity = bioActivity,
                                         title = "Enable Biometric Unlock",
@@ -1410,6 +1427,75 @@ fun SettingsScreen(
                 pendingKidsModeDisable = false
             },
             showAsDialog = true,
+        )
+    }
+
+    if (showPinDisableAuth) {
+        AlertDialog(
+            onDismissRequest = {
+                showPinDisableAuth = false
+                pinDisableAuthError = null
+            },
+            title = { Text("Disable PIN Lock") },
+            text = {
+                Column {
+                    Text(
+                        "Enter your current PIN to disable PIN lock.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinInput = it
+                                pinDisableAuthError = null
+                            }
+                        },
+                        label = { Text("Current PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinDisableAuthError != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AnimatedVisibility(
+                        visible = pinDisableAuthError != null,
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    ) {
+                        pinDisableAuthError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val valid = viewModel.verifyPin(pinInput)
+                    if (valid) {
+                        viewModel.clearPin()
+                        showPinDisableAuth = false
+                        pinInput = ""
+                        pinDisableAuthError = null
+                    } else {
+                        pinDisableAuthError = "Incorrect PIN"
+                    }
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPinDisableAuth = false
+                    pinInput = ""
+                    pinDisableAuthError = null
+                }) { Text("Cancel") }
+            },
         )
     }
 

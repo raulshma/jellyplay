@@ -58,6 +58,7 @@ fun PinLockScreen(
     onPinEntered: (String) -> Unit,
     onErrorClear: () -> Unit = {},
     errorMessage: String? = null,
+    compactMode: Boolean = false,
 ) {
     var pin by remember { mutableStateOf("") }
     val maxDigits = 4
@@ -68,11 +69,11 @@ fun PinLockScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .then(if (compactMode) Modifier else Modifier.fillMaxSize())
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = contentPad),
+            .padding(horizontal = if (compactMode) 0.dp else contentPad),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = if (compactMode) Arrangement.Center else Arrangement.Center,
     ) {
         Text(
             text = title,

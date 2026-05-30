@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.foundation.layout.heightIn
 import androidx.fragment.app.FragmentActivity
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Fingerprint
@@ -77,7 +78,7 @@ fun AuthChallengeScreen(
 
     val content = @Composable {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = if (showAsDialog) Modifier else Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -151,6 +152,7 @@ fun AuthChallengeScreen(
                     onPinEntered = onPinEntered,
                     onErrorClear = onErrorClear,
                     errorMessage = errorMessage,
+                    compactMode = showAsDialog,
                 )
                 if (canUseBiometric) {
                     Spacer(Modifier.height(16.dp))
@@ -188,6 +190,7 @@ fun AuthChallengeScreen(
                 tonalElevation = 6.dp,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 580.dp)
                     .padding(vertical = 32.dp),
             ) {
                 Box(modifier = Modifier.padding(24.dp)) {
