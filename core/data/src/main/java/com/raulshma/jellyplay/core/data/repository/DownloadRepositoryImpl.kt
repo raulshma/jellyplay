@@ -80,6 +80,14 @@ class DownloadRepositoryImpl @Inject constructor(
             if (existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name && !isCompleted) {
                 return@runCatching existing.toDownloadItem()
             }
+            if (existing.downloadPath.isNotBlank()) {
+                val oldFile = File(existing.downloadPath)
+                if (oldFile.exists()) oldFile.delete()
+                oldFile.parentFile?.let { parent ->
+                    val oldTrickplayDir = File(parent, "trickplay")
+                    if (oldTrickplayDir.exists()) oldTrickplayDir.deleteRecursively()
+                }
+            }
             downloadDao.deleteDownloadById(existing.id)
         }
 
@@ -126,7 +134,16 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.CANCELLED.name)
+        val file = File(entity.downloadPath)
+        if (file.exists()) file.delete()
+        file.parentFile?.let { parent ->
+            val trickplayDir = File(parent, "trickplay")
+            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+        }
+        downloadDao.deleteDownloadById(id)
+        offlineMediaDao.deleteById(entity.mediaItemId)
+        offlineMediaDao.deleteOrphanedSeasons()
+        offlineMediaDao.deleteOrphanedSeries()
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
@@ -147,10 +164,14 @@ class DownloadRepositoryImpl @Inject constructor(
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         val file = File(entity.downloadPath)
         if (file.exists()) file.delete()
-        val trickplayDir = File(file.parentFile, "trickplay")
-        if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+        file.parentFile?.let { parent ->
+            val trickplayDir = File(parent, "trickplay")
+            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+        }
         downloadDao.deleteDownloadById(id)
         offlineMediaDao.deleteById(entity.mediaItemId)
+        offlineMediaDao.deleteOrphanedSeasons()
+        offlineMediaDao.deleteOrphanedSeries()
     }
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
