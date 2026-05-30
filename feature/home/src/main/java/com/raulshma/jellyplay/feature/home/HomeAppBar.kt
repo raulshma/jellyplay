@@ -276,7 +276,6 @@ private fun CollapsedDockContent(
     )
     HeaderStatusIndicator(
         status = headerStatus,
-        modifier = Modifier.padding(horizontal = 4.dp),
         tint = appBarIconColorFaded,
     )
     IconButton(
