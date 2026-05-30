@@ -105,11 +105,17 @@ fun MusicHomeScreen(
                             AudioPlayerScreensSection(
                                 onNowPlayingClick = onNowPlayingClick,
                                 onAmbientClick = onAmbientClick,
+                                onTracksClick = onTracksClick,
+                                onAlbumsClick = onAlbumsClick,
+                                onArtistsClick = onArtistsClick,
+                                onGenresClick = onGenresClick,
+                                onPlaylistsClick = onPlaylistsClick,
                             )
                         }
 
                         if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
                             item {
+                                Spacer(modifier = Modifier.height(24.dp))
                                 RecentlyPlayedSection(
                                     tracks = recentlyPlayedSection.items,
                                     onTrackClick = onItemClick,
