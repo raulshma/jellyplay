@@ -36,6 +36,9 @@ import androidx.fragment.app.FragmentActivity
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Fingerprint
 import com.composables.icons.tabler.outline.Lock
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 
 @Composable
 fun AuthChallengeScreen(
@@ -176,12 +179,25 @@ fun AuthChallengeScreen(
     }
 
     if (showAsDialog) {
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val dialogPadding = when (adaptiveInfo.windowSizeClass) {
+            WindowSizeClass.Expanded -> 32.dp
+            WindowSizeClass.Medium -> 24.dp
+            WindowSizeClass.Compact -> 16.dp
+        }
+        val innerPadding = when (adaptiveInfo.windowSizeClass) {
+            WindowSizeClass.Expanded -> 24.dp
+            WindowSizeClass.Medium -> 20.dp
+            WindowSizeClass.Compact -> 16.dp
+        }
+
         Dialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(
                 securePolicy = SecureFlagPolicy.SecureOn,
                 dismissOnBackPress = true,
                 dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false,
             ),
         ) {
             Surface(
@@ -190,10 +206,9 @@ fun AuthChallengeScreen(
                 tonalElevation = 6.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 580.dp)
-                    .padding(vertical = 32.dp),
+                    .padding(dialogPadding),
             ) {
-                Box(modifier = Modifier.padding(24.dp)) {
+                Box(modifier = Modifier.padding(innerPadding)) {
                     content()
                 }
             }

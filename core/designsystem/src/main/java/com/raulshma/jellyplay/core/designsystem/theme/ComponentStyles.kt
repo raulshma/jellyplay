@@ -7,6 +7,7 @@ import androidx.compose.foundation.style.pressed
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalFoundationStyleApi::class)
@@ -21,11 +22,11 @@ object ComponentStyles {
     private val StyleScope.shapes: Shapes
         get() = LocalJellyPlayShapes.currentValue
 
-    val pinKeyStyle = Style {
+    fun pinKeyStyle(keySize: Dp = 72.dp) = Style {
         background(colors.surfaceVariant)
         shape(shapes.extraLarge)
-        minWidth(72.dp)
-        minHeight(72.dp)
+        minWidth(keySize)
+        minHeight(keySize)
         textStyle(typography.headlineMedium)
         
         pressed {
@@ -34,22 +35,17 @@ object ComponentStyles {
         }
     }
 
-    val pinDotStyle = Style {
+    fun pinDotStyle(dotSize: Dp = 16.dp) = Style {
         shape(shapes.extraLarge)
         background(colors.outlineVariant)
-        minWidth(16.dp)
-        minHeight(16.dp)
-
-        // Custom state logic for "filled" will be handled dynamically in the component since 
-        // Style doesn't have a built-in `filled` state yet, or we can use custom state 
-        // interaction, but using multiple styles is simpler. 
-        // Alternatively, we define two styles.
+        minWidth(dotSize)
+        minHeight(dotSize)
     }
     
-    val pinDotFilledStyle = Style {
+    fun pinDotFilledStyle(dotSize: Dp = 20.dp) = Style {
         shape(shapes.extraLarge)
         background(colors.primary)
-        minWidth(20.dp)
-        minHeight(20.dp)
+        minWidth(dotSize)
+        minHeight(dotSize)
     }
 }

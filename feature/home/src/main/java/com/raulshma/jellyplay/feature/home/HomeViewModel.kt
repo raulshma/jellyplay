@@ -507,11 +507,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun isAllowedForKids(item: com.raulshma.jellyplay.core.model.MediaItem, maxRating: String): Boolean {
-        if (item.officialRating == null) return true
-        val kidRatings = listOf("G", "TV-Y", "TV-Y7", "TV-G", "PG", "TV-PG")
-        val maxIndex = kidRatings.indexOf(maxRating)
-        val itemIndex = kidRatings.indexOf(item.officialRating)
-        return if (itemIndex >= 0 && maxIndex >= 0) itemIndex <= maxIndex else true
+        return com.raulshma.jellyplay.core.model.KidsContentFilter.isAllowed(item, maxRating)
     }
 
     fun exitKidsMode() {

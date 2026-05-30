@@ -36,12 +36,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -67,6 +69,28 @@ fun PinLockScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
+    val keySize = when {
+        compactMode && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact -> 56.dp
+        adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> 80.dp
+        else -> 72.dp
+    }
+    val dotSize = when {
+        compactMode && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact -> 12.dp
+        else -> 16.dp
+    }
+    val dotFilledSize = when {
+        compactMode && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact -> 16.dp
+        else -> 20.dp
+    }
+    val keySpacing = when {
+        compactMode && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact -> 8.dp
+        else -> 16.dp
+    }
+    val sectionSpacing = when {
+        compactMode && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact -> 8.dp
+        else -> 16.dp
+    }
+
     Column(
         modifier = Modifier
             .then(if (compactMode) Modifier else Modifier.fillMaxSize())
@@ -89,7 +113,7 @@ fun PinLockScreen(
         Spacer(Modifier.height(32.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(keySpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             repeat(maxDigits) { index ->
@@ -101,7 +125,7 @@ fun PinLockScreen(
                     modifier = Modifier
                         .styleable(
                             styleState,
-                            if (filled) ComponentStyles.pinDotFilledStyle else ComponentStyles.pinDotStyle
+                            if (filled) ComponentStyles.pinDotFilledStyle(dotFilledSize) else ComponentStyles.pinDotStyle(dotSize)
                         )
                 )
             }
@@ -116,7 +140,7 @@ fun PinLockScreen(
             )
         }
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(if (compactMode) 32.dp else 48.dp))
 
         val keys = listOf(
             listOf("1", "2", "3"),
@@ -128,18 +152,18 @@ fun PinLockScreen(
         keys.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, androidx.compose.ui.Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(keySpacing, androidx.compose.ui.Alignment.CenterHorizontally),
             ) {
                 row.forEach { key ->
                     when (key) {
-                        "" -> Spacer(modifier = Modifier.size(72.dp))
+                        "" -> Spacer(modifier = Modifier.size(keySize))
                         "backspace" -> {
                             val interactionSource = remember { MutableInteractionSource() }
                             val styleState = rememberUpdatedStyleState(interactionSource)
 
                             Box(
                                 modifier = Modifier
-                                    .styleable(styleState, ComponentStyles.pinKeyStyle)
+                                    .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
                                     .tvFocusable().clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
@@ -163,6 +187,7 @@ fun PinLockScreen(
                             PinKeyButton(
                                 key = key,
                                 isPressed = false,
+                                keySize = keySize,
                                 onClick = {
                                     if (pin.length < maxDigits) {
                                         pin += key
@@ -178,7 +203,7 @@ fun PinLockScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(sectionSpacing))
         }
     }
 }
@@ -188,6 +213,7 @@ fun PinLockScreen(
 private fun PinKeyButton(
     key: String,
     isPressed: Boolean,
+    keySize: Dp = 72.dp,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -195,7 +221,7 @@ private fun PinKeyButton(
 
     Box(
         modifier = Modifier
-            .styleable(styleState, ComponentStyles.pinKeyStyle)
+            .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
             .tvFocusable().clickable(
                 interactionSource = interactionSource,
                 indication = null,
