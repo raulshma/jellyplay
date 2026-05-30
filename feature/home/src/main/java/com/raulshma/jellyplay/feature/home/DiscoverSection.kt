@@ -2,9 +2,6 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 
-/**
- * Returns the card size fraction based on the item's vote average rating.
- */
 fun ratingToSizeFraction(voteAverage: Float?): Float {
     if (voteAverage == null) return 1.0f
     return when {
