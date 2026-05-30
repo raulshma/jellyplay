@@ -776,24 +776,21 @@ class DetailViewModel @Inject constructor(
         _seerrRequestResult.value = null
     }
 
-    /**
-     * Pre-fetches Seerr detail data for a related item so the destination
-     * Seerr detail screen loads instantly.
-     */
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getMovieDetails(tmdbId)
-                } else {
-                    seerrRepository.getTvDetails(tmdbId)
+                coroutineScope {
+                    if (mediaType == "movie") {
+                        seerrRepository.getMovieDetails(tmdbId)
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId)
+                    }
+                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                    launch { seerrRepository.getRecommendations(tmdbId, type) }
+                    launch { seerrRepository.getSimilar(tmdbId, type) }
                 }
-                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                launch { seerrRepository.getRecommendations(tmdbId, type) }
-                launch { seerrRepository.getSimilar(tmdbId, type) }
             } catch (_: Exception) {
-                // Detail screen will retry
             }
             onDone()
         }

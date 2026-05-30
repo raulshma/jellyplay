@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -220,17 +221,18 @@ class SearchViewModel @Inject constructor(
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getMovieDetails(tmdbId)
-                } else {
-                    seerrRepository.getTvDetails(tmdbId)
+                coroutineScope {
+                    if (mediaType == "movie") {
+                        seerrRepository.getMovieDetails(tmdbId)
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId)
+                    }
+                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                    launch { seerrRepository.getRecommendations(tmdbId, type) }
+                    launch { seerrRepository.getSimilar(tmdbId, type) }
                 }
-                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                launch { seerrRepository.getRecommendations(tmdbId, type) }
-                launch { seerrRepository.getSimilar(tmdbId, type) }
             } catch (_: Exception) {
-                // Detail screen will retry on failure
             }
             onDone()
         }
