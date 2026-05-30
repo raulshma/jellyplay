@@ -83,6 +83,54 @@ import com.composables.icons.tabler.outline.*
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun KidsHomeScreen(
+    state: HomeUiState,
+    imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
+    onItemClick: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    KidsHomeScreenInternal(
+        sections = state.sections,
+        favorites = state.favorites,
+        isLoading = state.isLoading,
+        isRefreshing = state.isRefreshing,
+        error = state.error,
+        imageUrlBuilder = imageUrlBuilder,
+        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+        onItemClick = onItemClick,
+        onRefresh = onRefresh,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun KidsHomeScreen(
+    sections: List<HomeSection>,
+    favorites: List<MediaItem>,
+    isLoading: Boolean,
+    isRefreshing: Boolean = false,
+    error: String?,
+    imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
+    onItemClick: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    KidsHomeScreenInternal(
+        sections = sections,
+        favorites = favorites,
+        isLoading = isLoading,
+        isRefreshing = isRefreshing,
+        error = error,
+        imageUrlBuilder = imageUrlBuilder,
+        fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+        onItemClick = onItemClick,
+        onRefresh = onRefresh,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun KidsHomeScreenInternal(
     sections: List<HomeSection>,
     favorites: List<MediaItem>,
     isLoading: Boolean,
