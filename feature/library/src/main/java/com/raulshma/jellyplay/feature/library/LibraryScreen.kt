@@ -141,7 +141,7 @@ fun LibraryScreen(
     val targetBackgroundColor = if (isLightTheme) {
         MaterialTheme.colorScheme.background
     } else {
-        lerp(baseColor, Color.Black, 0.70f)
+        lerp(baseColor, Color.Black, 0.65f)
     }
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,

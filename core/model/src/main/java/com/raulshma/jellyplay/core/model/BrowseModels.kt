@@ -30,6 +30,38 @@ enum class HomeSectionType {
     FAVORITES,
     LIVE_TV,
     DOWNLOADED,
+    ;
+
+    val displayName: String
+        get() = when (this) {
+            CONTINUE_WATCHING -> "Continue Watching"
+            NEXT_UP -> "Next Up"
+            RECENTLY_ADDED -> "Recently Added"
+            LATEST_MEDIA -> "Latest Media"
+            FAVORITES -> "Favorites"
+            LIVE_TV -> "Live TV"
+            DOWNLOADED -> "Downloaded"
+        }
+
+    val description: String
+        get() = when (this) {
+            CONTINUE_WATCHING -> "Resume watching in-progress media"
+            NEXT_UP -> "Next unwatched episodes of your shows"
+            RECENTLY_ADDED -> "Recently added items across all libraries"
+            LATEST_MEDIA -> "Latest items from each library"
+            FAVORITES -> "Your favorited items"
+            LIVE_TV -> "Live television channels"
+            DOWNLOADED -> "Offline downloaded items"
+        }
+
+    companion object {
+        val CONFIGURABLE = setOf(
+            CONTINUE_WATCHING,
+            NEXT_UP,
+            RECENTLY_ADDED,
+            LATEST_MEDIA,
+        )
+    }
 }
 
 @Immutable

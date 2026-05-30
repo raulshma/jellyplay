@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -120,6 +121,8 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_EQ_BY_GENRE = stringPreferencesKey("auto_eq_by_genre")
         val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
         val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
+        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
+        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -305,6 +308,18 @@ class UserPreferencesStore @Inject constructor(
             autoEqByGenre = prefs[Keys.AUTO_EQ_BY_GENRE]?.toBoolean() ?: false,
             pitchSemitones = prefs[Keys.PITCH_SEMITONES]?.toFloatOrNull() ?: 0f,
             downloadConnections = prefs[Keys.DOWNLOAD_CONNECTIONS]?.toIntOrNull() ?: 4,
+            enabledHomeSectionTypes = try {
+                prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
+                    json.decodeFromString<Set<String>>(it)
+                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                        .toSet()
+                } ?: HomeSectionType.CONFIGURABLE
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE },
+            hiddenLibrarySectionIds = try {
+                prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]?.let {
+                    json.decodeFromString<Set<String>>(it)
+                } ?: emptySet()
+            } catch (_: Exception) { emptySet() },
         )
     }.distinctUntilChanged()
 
@@ -643,6 +658,18 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setDownloadConnections(count: Int) {
         context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count.toString() }
+    }
+
+    suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
+        context.dataStore.edit {
+            it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(types.map { t -> t.name }.toSet())
+        }
+    }
+
+    suspend fun setHiddenLibrarySectionIds(ids: Set<String>) {
+        context.dataStore.edit {
+            it[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(ids)
+        }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

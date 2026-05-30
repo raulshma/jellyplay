@@ -334,9 +334,9 @@ fun HomeScreen(
         val isLightTheme = remember(bgColor) {
             (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
         }
-        val artworkColors = if (viewModel.dynamicTheming && !backdropUrl.isNullOrBlank()) {
-            com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(backdropUrl)
-        } else null
+        val artworkColors = com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(
+            if (viewModel.dynamicTheming && !backdropUrl.isNullOrBlank()) backdropUrl else null
+        )
         val baseOverlayColor = artworkColors?.darkMuted
             ?: artworkColors?.dominant
             ?: if (isLightTheme) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.background
@@ -644,7 +644,8 @@ fun HomeScreen(
                                         ) {
                                             items(
                                                 count = rowItems.size,
-                                                key = { index -> rowItems[index].id }
+                                                key = { index -> rowItems[index].id },
+                                                contentType = { "seerrCard" },
                                             ) { index ->
                                                 val item = rowItems[index]
                                                 SeerrMediaCard(
@@ -702,6 +703,7 @@ fun HomeScreen(
                                         items(
                                             count = viewModel.offlineLibrary.size,
                                             key = { index -> "offline_${viewModel.offlineLibrary[index].id}" },
+                                            contentType = { "offlineItem" },
                                         ) { index ->
                                             val offlineItem = viewModel.offlineLibrary[index]
                                             Column(
@@ -1195,8 +1197,8 @@ private fun HeroHeader(
         }
     }
 
-    val breathTransition = rememberInfiniteTransition(label = "hero_breath")
-    val breathScale by breathTransition.animateFloat(
+    val heroTransition = rememberInfiniteTransition(label = "hero_animations")
+    val breathScale by heroTransition.animateFloat(
         initialValue = 1.0f,
         targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
@@ -1206,7 +1208,7 @@ private fun HeroHeader(
         label = "breath"
     )
 
-    val playPulseScale by rememberInfiniteTransition(label = "play_pulse").animateFloat(
+    val playPulseScale by heroTransition.animateFloat(
         initialValue = 1.0f,
         targetValue = 1.35f,
         animationSpec = infiniteRepeatable(
@@ -1215,7 +1217,7 @@ private fun HeroHeader(
         ),
         label = "playPulseScale"
     )
-    val playPulseAlpha by rememberInfiniteTransition(label = "play_pulse_alpha").animateFloat(
+    val playPulseAlpha by heroTransition.animateFloat(
         initialValue = 0.45f,
         targetValue = 0.0f,
         animationSpec = infiniteRepeatable(
@@ -1225,7 +1227,7 @@ private fun HeroHeader(
         label = "playPulseAlpha"
     )
 
-    val ratingPulse by rememberInfiniteTransition(label = "rating_pulse").animateFloat(
+    val ratingPulse by heroTransition.animateFloat(
         initialValue = 0.9f,
         targetValue = 1.1f,
         animationSpec = infiniteRepeatable(

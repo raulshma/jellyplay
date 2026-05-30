@@ -288,6 +288,19 @@ private fun MainContent(
                         enterPip = enterPip,
                         enterVideoMiniMode = enterVideoMiniMode,
                         onBack = { navigator.goBack() },
+                        onNowPlayingClick = {
+                            val itemId = audioItemId ?: return@TvMainLayout
+                            navigator.navigate(Route.AudioPlayer(itemId))
+                        },
+                        onAmbientClick = {
+                            navigator.navigate(
+                                Route.Ambient(
+                                    imageUrl = audioArtworkUrl,
+                                    title = audioTitle,
+                                    artist = audioArtist,
+                                )
+                            )
+                        },
                     )
                 }
                 }
@@ -325,6 +338,19 @@ private fun MainContent(
                                     enterPip = enterPip,
                                     enterVideoMiniMode = enterVideoMiniMode,
                                     innerPadding = noPadding,
+                                    onNowPlayingClick = {
+                                        val itemId = audioItemId ?: return@MainNavDisplay
+                                        navigator.navigate(Route.AudioPlayer(itemId))
+                                    },
+                                    onAmbientClick = {
+                                        navigator.navigate(
+                                            Route.Ambient(
+                                                imageUrl = audioArtworkUrl,
+                                                title = audioTitle,
+                                                artist = audioArtist,
+                                            )
+                                        )
+                                    },
                                 )
                             }
                             if (showMiniPlayer && isExpanded) {
@@ -425,6 +451,19 @@ private fun MainContent(
                             enterPip = enterPip,
                             enterVideoMiniMode = enterVideoMiniMode,
                             innerPadding = noPadding,
+                            onNowPlayingClick = {
+                                val itemId = audioItemId ?: return@MainNavDisplay
+                                navigator.navigate(Route.AudioPlayer(itemId))
+                            },
+                            onAmbientClick = {
+                                navigator.navigate(
+                                    Route.Ambient(
+                                        imageUrl = audioArtworkUrl,
+                                        title = audioTitle,
+                                        artist = audioArtist,
+                                    )
+                                )
+                            },
                         )
                         if (isVideoMiniMode) {
                             VideoMiniPlayer(
@@ -472,6 +511,8 @@ private fun TvMainLayout(
     enterPip: () -> Unit,
     enterVideoMiniMode: () -> Unit,
     onBack: () -> Unit,
+    onNowPlayingClick: () -> Unit = {},
+    onAmbientClick: () -> Unit = {},
 ) {
     val contentFocusRequester = remember { FocusRequester() }
     val railFocusRequesters = remember(activeTopLevelRoutes.size) {
@@ -547,6 +588,8 @@ private fun TvMainLayout(
                         .weight(1f)
                         .focusRequester(contentFocusRequester)
                         .tvFocusRestorer(),
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
                 )
             },
         )
@@ -583,6 +626,8 @@ private fun MainNavDisplay(
     enterVideoMiniMode: () -> Unit = {},
     innerPadding: PaddingValues = PaddingValues(0.dp),
     modifier: Modifier = Modifier,
+    onNowPlayingClick: () -> Unit = {},
+    onAmbientClick: () -> Unit = {},
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
@@ -766,6 +811,8 @@ private fun MainNavDisplay(
                         onTracksClick = { navigator.navigate(Route.Tracks) },
                         onGenresClick = { navigator.navigate(Route.Genres) },
                         onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                        onNowPlayingClick = onNowPlayingClick,
+                        onAmbientClick = onAmbientClick,
                     )
                 },
             )

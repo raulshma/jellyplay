@@ -66,7 +66,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +78,8 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
@@ -150,16 +151,7 @@ fun SearchScreen(
         }
     }
 
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
-    val backgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
-    } else {
-        lerp(
-            MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.surface,
-            0.70f,
-        )
-    }
+    val backgroundColor = rememberScreenBackgroundColor()
 
     var headerVisible by remember { mutableStateOf(true) }
 
@@ -477,64 +469,18 @@ fun SearchScreen(
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
                         pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr -> {
-                            // ── Empty state ──
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Icon(
-                                        Tabler.Outline.Search,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    )
-                                    Text(
-                                        text = "No results found",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                    )
-                                    if (hasActiveFilters) {
-                                        Text(
-                                            text = "Try adjusting your filters",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                        )
-                                    }
-                                }
-                            }
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.Search,
+                                title = "No results found",
+                                description = if (hasActiveFilters) "Try adjusting your filters" else null,
+                            )
                         }
                         pagedResults.itemCount == 0 && query.isBlank() && !showSeerr -> {
-                            // ── Initial state ──
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Icon(
-                                        Tabler.Outline.Search,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(64.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                    )
-                                    Text(
-                                        text = "Search your library",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    )
-                                    Text(
-                                        text = "Movies, shows, music, and more",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                                    )
-                                }
-                            }
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.Search,
+                                title = "Search your library",
+                                description = "Movies, shows, music, and more",
+                            )
                         }
                         else -> {
                             // ── Library grid ──

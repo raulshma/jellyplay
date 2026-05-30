@@ -1,18 +1,11 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,35 +19,29 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Refresh
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ActiveSessionsSection
 import com.raulshma.jellyplay.feature.admin.dashboard.components.LibraryStatsRow
 import com.raulshma.jellyplay.feature.admin.dashboard.components.QuickActionsSection
@@ -73,7 +60,8 @@ fun AdminDashboardScreen(
 ) {
     val state = viewModel.state
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val isTv = LocalTvMode.current
+    val backgroundColor = rememberScreenBackgroundColor()
 
     var showRestartDialog by remember { mutableStateOf(false) }
     var showShutdownDialog by remember { mutableStateOf(false) }
@@ -112,55 +100,34 @@ fun AdminDashboardScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Dashboard") },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable(onClick = onBack),
-                    ) {
-                        Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            modifier = Modifier.padding(12.dp).size(20.dp),
-                        )
-                    }
-                },
-                actions = {
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = { viewModel.loadDashboard() }),
-                    ) {
-                        Icon(
-                            Tabler.Outline.Refresh,
-                            contentDescription = "Refresh",
-                            modifier = Modifier.padding(12.dp).size(20.dp),
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                scrollBehavior = scrollBehavior,
-            )
+    JellyPlayScreenScaffold(
+        title = "Dashboard",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            Box(
+                modifier = Modifier
+                    .padding(4.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = { viewModel.loadDashboard() }),
+            ) {
+                Icon(
+                    Tabler.Outline.Refresh,
+                    contentDescription = "Refresh",
+                    modifier = Modifier.padding(12.dp).size(20.dp),
+                )
+            }
         },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
+    ) {
         when {
             state.isLoading -> {
-                LoadingScreen(modifier = Modifier.fillMaxSize().padding(padding))
+                ScreenLoadingState(modifier = Modifier.fillMaxSize())
             }
             state.error != null -> {
                 ErrorScreen(
                     message = state.error ?: "Unknown error",
                     onRetry = { viewModel.loadDashboard() },
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
             else -> {
@@ -169,14 +136,13 @@ fun AdminDashboardScreen(
                     state = state,
                     useGrid = useGrid,
                     contentPadding = adaptiveInfo.contentPadding(false) - 8.dp,
+                    bottomPadding = adaptiveInfo.bottomPadding(isTv),
                     onRestart = { showRestartDialog = true },
                     onShutdown = { showShutdownDialog = true },
                     onScheduledTasks = onScheduledTasks,
                     onDevices = onDevices,
                     onLogs = onLogs,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -188,6 +154,7 @@ private fun DashboardContent(
     state: AdminDashboardState,
     useGrid: Boolean,
     contentPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     onRestart: () -> Unit,
     onShutdown: () -> Unit,
     onScheduledTasks: () -> Unit,
@@ -204,7 +171,7 @@ private fun DashboardContent(
                 start = contentPadding,
                 end = contentPadding,
                 top = 8.dp,
-                bottom = 100.dp,
+                bottom = bottomPadding,
             ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

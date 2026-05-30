@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -173,28 +174,30 @@ class AudioPlayerViewModel @Inject constructor(
             audioPlaybackManager.albumArtUrl.collect { albumArtUrl = it }
         }
         viewModelScope.launch {
-            audioPlaybackManager.isPlaying.collect { isPlaying = it }
+            combine(
+                audioPlaybackManager.isPlaying,
+                audioPlaybackManager.currentPosition,
+                audioPlaybackManager.duration,
+                audioPlaybackManager.speed,
+            ) { playing, pos, dur, spd ->
+                isPlaying = playing
+                currentPosition = pos
+                duration = dur
+                speed = spd
+            }.collect {}
         }
         viewModelScope.launch {
-            audioPlaybackManager.currentPosition.collect { currentPosition = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.duration.collect { duration = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.speed.collect { speed = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.shuffleMode.collect { shuffleMode = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.repeatMode.collect { repeatMode = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.queue.collect { queue = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.currentIndex.collect { currentIndex = it }
+            combine(
+                audioPlaybackManager.shuffleMode,
+                audioPlaybackManager.repeatMode,
+                audioPlaybackManager.queue,
+                audioPlaybackManager.currentIndex,
+            ) { shuf, rep, q, idx ->
+                shuffleMode = shuf
+                repeatMode = rep
+                queue = q
+                currentIndex = idx
+            }.collect {}
         }
         viewModelScope.launch {
             audioPlaybackManager.currentPlayingItemId.collect { itemId ->
@@ -207,64 +210,69 @@ class AudioPlayerViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            audioPlaybackManager.lyrics.collect { lyrics = it }
+            combine(
+                audioPlaybackManager.lyrics,
+                audioPlaybackManager.currentLyricIndex,
+                audioPlaybackManager.lyricsSource,
+                audioPlaybackManager.isFetchingLyrics,
+            ) { ly, idx, src, fetching ->
+                lyrics = ly
+                currentLyricIndex = idx
+                lyricsSource = src
+                isFetchingLyrics = fetching
+            }.collect {}
         }
         viewModelScope.launch {
-            audioPlaybackManager.currentLyricIndex.collect { currentLyricIndex = it }
+            combine(
+                audioPlaybackManager.nightModeEnabled,
+                audioPlaybackManager.dialogueBoostEnabled,
+                audioPlaybackManager.equalizerEnabled,
+                audioPlaybackManager.equalizerSettings,
+                audioPlaybackManager.equalizerPreset,
+            ) { night, dialogue, eqEn, eqSet, eqPre ->
+                nightModeEnabled = night
+                dialogueBoostEnabled = dialogue
+                equalizerEnabled = eqEn
+                equalizerSettings = eqSet
+                equalizerPreset = eqPre
+            }.collect {}
         }
         viewModelScope.launch {
-            audioPlaybackManager.lyricsSource.collect { lyricsSource = it }
+            combine(
+                audioPlaybackManager.bassBoostEnabled,
+                audioPlaybackManager.virtualizerEnabled,
+                audioPlaybackManager.virtualizerStrength,
+                audioPlaybackManager.reverbPresetState,
+            ) { bass, virtEn, virtStr, rev ->
+                bassBoostEnabled = bass
+                virtualizerEnabled = virtEn
+                virtualizerStrength = virtStr
+                reverbPreset = rev
+            }.collect {}
         }
         viewModelScope.launch {
-            audioPlaybackManager.isFetchingLyrics.collect { isFetchingLyrics = it }
+            combine(
+                audioPlaybackManager.lrBalance,
+                audioPlaybackManager.pitchSemitones,
+                audioPlaybackManager.autoEqByGenre,
+                audioPlaybackManager.fftData,
+            ) { lr, pitch, autoEq, fft ->
+                lrBalance = lr
+                pitchSemitones = pitch
+                autoEqByGenre = autoEq
+                fftData = fft
+            }.collect {}
         }
         viewModelScope.launch {
-            audioPlaybackManager.nightModeEnabled.collect { nightModeEnabled = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.dialogueBoostEnabled.collect { dialogueBoostEnabled = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.equalizerEnabled.collect { equalizerEnabled = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.equalizerSettings.collect { equalizerSettings = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.equalizerPreset.collect { equalizerPreset = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.bassBoostEnabled.collect { bassBoostEnabled = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.virtualizerEnabled.collect { virtualizerEnabled = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.virtualizerStrength.collect { virtualizerStrength = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.reverbPresetState.collect { reverbPreset = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.lrBalance.collect { lrBalance = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.pitchSemitones.collect { pitchSemitones = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.autoEqByGenre.collect { autoEqByGenre = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.fftData.collect { fftData = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.crossfadeDurationMs.collect { crossfadeDurationMs = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.replayGainMode.collect { normalizationMode = it }
-        }
-        viewModelScope.launch {
-            audioPlaybackManager.replayGainPreAmpDb.collect { preAmpDb = it }
+            combine(
+                audioPlaybackManager.crossfadeDurationMs,
+                audioPlaybackManager.replayGainMode,
+                audioPlaybackManager.replayGainPreAmpDb,
+            ) { cross, rg, pre ->
+                crossfadeDurationMs = cross
+                normalizationMode = rg
+                preAmpDb = pre
+            }.collect {}
         }
         viewModelScope.launch {
             sleepTimerManager.remainingMs.collect { remaining ->
@@ -272,14 +280,13 @@ class AudioPlayerViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            sleepTimerManager.isActive.collect { active ->
+            combine(
+                sleepTimerManager.isActive,
+                sleepTimerManager.isEndOfEpisodeMode,
+            ) { active, endOfEpisode ->
                 sleepTimerActive = active
-            }
-        }
-        viewModelScope.launch {
-            sleepTimerManager.isEndOfEpisodeMode.collect { endOfEpisode ->
                 sleepTimerEndOfEpisode = endOfEpisode
-            }
+            }.collect {}
         }
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->

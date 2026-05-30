@@ -330,18 +330,8 @@ class ExoPlayerEngine(
         }
 
         if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
-            val p = player
-            if (p != null) {
-                val currentPosition = p.currentPosition
-                val currentMediaItem = p.currentMediaItem
-                if (currentMediaItem != null) {
-                    val wasPlaying = p.playWhenReady
-                    p.setMediaItem(currentMediaItem)
-                    p.seekTo(currentPosition)
-                    p.prepare()
-                    p.playWhenReady = wasPlaying
-                }
-            }
+            // The OffsettingSubtitleParserFactory reads currentConfig.subtitleDelayMs
+            // dynamically via its lambda, so no media reload is needed.
         }
         
         if (oldConfig.audioEffects != config.audioEffects) {
@@ -468,8 +458,16 @@ class ExoPlayerEngine(
         val pv = playerView ?: return null
         if (pv.width <= 0 || pv.height <= 0) return null
         return try {
-            Bitmap.createBitmap(pv.width, pv.height, Bitmap.Config.RGB_565).also {
-                pv.draw(Canvas(it))
+            val maxDim = 1080
+            val scale = if (pv.width > maxDim || pv.height > maxDim) {
+                minOf(maxDim.toFloat() / pv.width, maxDim.toFloat() / pv.height)
+            } else 1f
+            val w = (pv.width * scale).toInt().coerceAtLeast(1)
+            val h = (pv.height * scale).toInt().coerceAtLeast(1)
+            Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565).also {
+                val canvas = Canvas(it)
+                if (scale < 1f) canvas.scale(scale, scale)
+                pv.draw(canvas)
             }
         } catch (_: Exception) { null }
     }

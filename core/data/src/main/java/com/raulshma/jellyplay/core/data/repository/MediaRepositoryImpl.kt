@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -42,8 +43,11 @@ class MediaRepositoryImpl @Inject constructor(
     private val lyricsCacheDao: LyricsCacheDao,
 ) : MediaRepository {
 
-    override suspend fun getHomeSections(): Result<List<HomeSection>> =
-        apiClient.getHomeSections()
+    override suspend fun getHomeSections(
+        enabledSections: Set<HomeSectionType>,
+        hiddenLibraryIds: Set<String>,
+    ): Result<List<HomeSection>> =
+        apiClient.getHomeSections(enabledSections, hiddenLibraryIds)
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
         apiClient.getLibraryFolders()
