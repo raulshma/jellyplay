@@ -444,6 +444,10 @@ class VideoPlayerViewModel @Inject constructor(
         initialize(episodeId, null, startPositionTicks)
     }
 
+    fun setScreenLocked(locked: Boolean) {
+        _uiState.update { it.copy(isScreenLocked = locked) }
+    }
+
     fun setPlaybackSpeed(speed: Float) {
         _uiState.update { it.copy(playbackSpeed = speed) }
         playerSessionManager.engine?.setPlaybackSpeed(speed)
