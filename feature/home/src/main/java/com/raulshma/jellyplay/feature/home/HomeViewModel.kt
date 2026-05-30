@@ -92,6 +92,10 @@ class HomeViewModel @Inject constructor(
         private set
     var offlineLibrary by mutableStateOf<List<OfflineMediaItem>>(emptyList())
         private set
+    var enabledHomeSectionTypes by mutableStateOf(HomeSectionType.CONFIGURABLE)
+        private set
+    var hiddenLibrarySectionIds by mutableStateOf(emptySet<String>())
+        private set
 
     // Seerr Discover state
     var discoverSections by mutableStateOf<Map<DiscoverSectionType, List<SeerrSearchItem>>>(emptyMap())
@@ -144,6 +148,8 @@ class HomeViewModel @Inject constructor(
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
                 oledMode = prefs.oledMode
+                enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
+                hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
             }
         }
 
@@ -229,7 +235,9 @@ class HomeViewModel @Inject constructor(
 
             lastRefreshTime = System.currentTimeMillis()
             val prefs = preferencesStore.preferences.first()
-            mediaRepository.getHomeSections()
+            val enabledSections = enabledHomeSectionTypes
+            val hiddenLibIds = hiddenLibrarySectionIds
+            mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
                     val filteredSections = if (prefs.kidsModeEnabled) {
                         withContext(kotlinx.coroutines.Dispatchers.Default) {
