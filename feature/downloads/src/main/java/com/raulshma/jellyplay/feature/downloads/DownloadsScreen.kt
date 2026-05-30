@@ -1,12 +1,8 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.animation.AnimatedVisibility
-import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.animation.core.animateFloatAsState
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
@@ -25,18 +21,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -61,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -83,27 +74,19 @@ fun DownloadsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
-    Column(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Downloads")
-                    com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
-                        status = headerStatus,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Tabler.Outline.ArrowLeft, "Back")
-                }
-            },
-            scrollBehavior = scrollBehavior,
-        )
-
+    com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
+        title = "Downloads",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
+                status = headerStatus,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        },
+    ) {
         if (viewModel.totalStorageBytes > 0) {
             Text(
                 "Storage used: ${viewModel.formatBytes(viewModel.totalStorageBytes)}",
@@ -114,15 +97,11 @@ fun DownloadsScreen(
         }
 
         if (downloads.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "No downloads yet",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+                icon = Tabler.Outline.Download,
+                title = "No downloads yet",
+                description = "Downloaded content will appear here",
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

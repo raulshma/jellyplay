@@ -63,7 +63,6 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -85,6 +84,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -103,6 +103,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -113,6 +115,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
@@ -239,6 +243,10 @@ fun MediaDetailScreen(
             com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides seerrPrefetchCallback,
             com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
         ) {
+        val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+        val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+        val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
+
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -248,52 +256,61 @@ fun MediaDetailScreen(
             smartPlayTarget = viewModel.smartPlayTarget,
             selectedSubtitleIndex = viewModel.selectedSubtitleIndex,
             selectedAudioIndex = viewModel.selectedAudioIndex,
-            getImageUrl = { viewModel.getImageUrl(it) },
-            getBackdropUrl = { viewModel.getBackdropUrl(it) },
+            getImageUrl = rememberedGetImageUrl,
+            getBackdropUrl = rememberedGetBackdropUrl,
             isDownloading = viewModel.isDownloading,
             isDownloadingSeries = viewModel.isDownloadingSeries,
             activeDownload = activeDownload,
             isLoading = isLoading,
             error = error,
-            onRetry = { viewModel.loadItem(itemId) },
-            onPlayClick = { playItemId, sourceId, start ->
-                onPlayClick(
-                    playItemId,
-                    sourceId,
-                    start,
-                    viewModel.selectedSubtitleIndex,
-                    viewModel.selectedAudioIndex,
-                )
+            onRetry = remember(viewModel, itemId) { { viewModel.loadItem(itemId) } },
+            onPlayClick = remember(viewModel, onPlayClick) {
+                { playItemId: String, sourceId: String?, start: Long ->
+                    onPlayClick(
+                        playItemId,
+                        sourceId,
+                        start,
+                        viewModel.selectedSubtitleIndex,
+                        viewModel.selectedAudioIndex,
+                    )
+                }
             },
-            onAudioClick = { onAudioClick(itemId) },
-            onDownloadClick = { viewModel.startDownload() },
-            onDownloadSeriesClick = { showSeriesDownloadSheet = true },
-            onToggleFavorite = { viewModel.toggleFavorite() },
-            onMarkPlayed = { viewModel.markPlayed() },
-            onMarkUnplayed = { viewModel.markUnplayed() },
-            onSubtitleSelect = { viewModel.selectSubtitle(it) },
-            onAudioSelect = { viewModel.selectAudio(it) },
+            onAudioClick = remember(onAudioClick, itemId) { { onAudioClick(itemId) } },
+            onDownloadClick = remember(viewModel) { { viewModel.startDownload() } },
+            onDownloadSeriesClick = remember(viewModel) {
+                {
+                    showSeriesDownloadSheet = true
+                    viewModel.loadDownloadedEpisodeIds()
+                }
+            },
+            onToggleFavorite = remember(viewModel) { { viewModel.toggleFavorite() } },
+            onMarkPlayed = remember(viewModel) { { viewModel.markPlayed() } },
+            onMarkUnplayed = remember(viewModel) { { viewModel.markUnplayed() } },
+            onSubtitleSelect = remember(viewModel) { { idx: Int? -> viewModel.selectSubtitle(idx) } },
+            onAudioSelect = remember(viewModel) { { idx: Int? -> viewModel.selectAudio(idx) } },
             onItemClick = onItemClick,
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
-            onSeasonSelected = { seasonId ->
-                val seriesId = detail?.item?.seriesId ?: itemId
-                viewModel.loadEpisodesForSeason(seriesId, seasonId)
+            onSeasonSelected = remember(viewModel, detail, itemId) {
+                { seasonId: String ->
+                    val seriesId = detail?.item?.seriesId ?: itemId
+                    viewModel.loadEpisodesForSeason(seriesId, seasonId)
+                }
             },
-            onLoadSeerrData = {
-                detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
+            onLoadSeerrData = remember(viewModel) {
+                { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } }
             },
             onBack = onBack,
             seerrRecommendations = seerrRecommendations,
             seerrSimilar = seerrSimilar,
             isSeerrConnected = isSeerrConnected,
             isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
-            getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
-            onSeerrRequest = { seerrRequestItem = it },
+            getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
+            onSeerrRequest = remember { { item: SeerrSearchItem -> seerrRequestItem = item } },
             onNavigate = onNavigate,
-            onEditClick = { onEditClick(itemId) },
+            onEditClick = remember(onEditClick, itemId) { { onEditClick(itemId) } },
             albumTracks = viewModel.albumTracks,
-            onPlayAlbumTrack = { index -> viewModel.playAlbum(index) },
+            onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
         )
 
         // Seerr request dialog
@@ -332,17 +349,30 @@ fun MediaDetailScreen(
     val detailItem = detail?.item
     if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
         com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = { showSeriesDownloadSheet = false },
+            onDismissRequest = {
+                showSeriesDownloadSheet = false
+                viewModel.resetDownloadSheetState()
+            },
         ) {
             SeriesDownloadSheet(
                 seasons = viewModel.seasons,
-                episodeCounts = viewModel.episodes.mapValues { it.value.size },
-                isDownloading = viewModel.isDownloadingSeries,
-                onDownload = { selectedSeasonIds ->
-                    showSeriesDownloadSheet = false
-                    viewModel.downloadSeries(selectedSeasonIds)
+                episodes = viewModel.downloadSheetEpisodes,
+                loadingSeasons = viewModel.downloadSheetLoadingSeasons,
+                downloadedEpisodeIds = viewModel.downloadedEpisodeIds,
+                onLoadEpisodes = { seasonId ->
+                    viewModel.loadDownloadSheetEpisodes(seasonId)
                 },
-                onDismiss = { showSeriesDownloadSheet = false },
+                isDownloading = viewModel.isDownloadingSeries,
+                onDownload = { selectedEpisodes ->
+                    showSeriesDownloadSheet = false
+                    val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
+                    viewModel.downloadSeries(nonEmpty)
+                    viewModel.resetDownloadSheetState()
+                },
+                onDismiss = {
+                    showSeriesDownloadSheet = false
+                    viewModel.resetDownloadSheetState()
+                },
             )
         }
     }
@@ -454,7 +484,9 @@ private fun DetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    SideEffect { navBarColor.value = backgroundColor }
+    SideEffect {
+        if (navBarColor.value != backgroundColor) navBarColor.value = backgroundColor
+    }
 
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(
@@ -739,11 +771,11 @@ private fun DetailContent(
                                 SkeletonDetailBody()
                             }
                         } else if (error != null) {
-                            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = onRetry) { Text("Retry") }
-                            }
+                            ErrorScreen(
+                                message = error,
+                                onRetry = onRetry,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 } else {
@@ -856,11 +888,10 @@ private fun DetailContent(
                         } else if (isLoading) {
                             SkeletonDetailBody()
                         } else if (error != null) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = onRetry) { Text("Retry") }
-                            }
+                            ErrorScreen(
+                                message = error,
+                                onRetry = onRetry,
+                            )
                         }
                     }
                 }
@@ -884,46 +915,10 @@ private fun DetailContent(
                     )
                 },
                 navigationIcon = {
-                    if (isTv) {
-                        val backFocusState = rememberTvFocusState(focusedScale = 1.15f)
-                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        Box(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
-                                )
-                                .then(backFocusState.focusModifier)
-                                .tvFocusIndicator(backFocusState, CircleShape)
-                                .clickable(onClick = onBack),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Tabler.Outline.ArrowLeft,
-                                contentDescription = "Back",
-                                tint = backIconColor,
-                                modifier = Modifier.padding(8.dp),
-                            )
-                        }
-                    } else {
-                        val backIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
-                                )
-                        ) {
-                            Icon(
-                                Tabler.Outline.ArrowLeft,
-                                contentDescription = "Back",
-                                tint = backIconColor,
-                            )
-                        }
-                    }
+                    CircleBgBackButton(
+                        onClick = onBack,
+                        scrollCollapsed = scrollCollapsed,
+                    )
                 },
                 actions = {
                     if (!isTv) {
@@ -956,11 +951,13 @@ private fun DetailContent(
         val source = detail?.mediaSources?.firstOrNull()
         val fileSize = source?.size
         val context = LocalContext.current
-        val availableBytes = remember {
-            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-                ?: context.filesDir
-            val stat = StatFs(downloadDir.absolutePath)
-            stat.availableBlocksLong * stat.blockSizeLong
+        val availableBytes by produceState(initialValue = 0L) {
+            value = withContext(Dispatchers.IO) {
+                val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                    ?: context.filesDir
+                val stat = StatFs(downloadDir.absolutePath)
+                stat.availableBlocksLong * stat.blockSizeLong
+            }
         }
         val fileSizeText = fileSize?.let { size ->
             when {

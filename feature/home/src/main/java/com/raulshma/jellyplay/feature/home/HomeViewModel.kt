@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +93,10 @@ class HomeViewModel @Inject constructor(
         private set
     var offlineLibrary by mutableStateOf<List<OfflineMediaItem>>(emptyList())
         private set
+    var enabledHomeSectionTypes by mutableStateOf(HomeSectionType.CONFIGURABLE)
+        private set
+    var hiddenLibrarySectionIds by mutableStateOf(emptySet<String>())
+        private set
 
     // Seerr Discover state
     var discoverSections by mutableStateOf<Map<DiscoverSectionType, List<SeerrSearchItem>>>(emptyMap())
@@ -144,6 +149,8 @@ class HomeViewModel @Inject constructor(
                 homeMode = prefs.homeMode
                 dynamicTheming = prefs.dynamicTheming
                 oledMode = prefs.oledMode
+                enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
+                hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
             }
         }
 
@@ -229,7 +236,9 @@ class HomeViewModel @Inject constructor(
 
             lastRefreshTime = System.currentTimeMillis()
             val prefs = preferencesStore.preferences.first()
-            mediaRepository.getHomeSections()
+            val enabledSections = enabledHomeSectionTypes
+            val hiddenLibIds = hiddenLibrarySectionIds
+            mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
                     val filteredSections = if (prefs.kidsModeEnabled) {
                         withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -568,17 +577,18 @@ class HomeViewModel @Inject constructor(
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getMovieDetails(tmdbId)
-                } else {
-                    seerrRepository.getTvDetails(tmdbId)
+                coroutineScope {
+                    if (mediaType == "movie") {
+                        seerrRepository.getMovieDetails(tmdbId)
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId)
+                    }
+                    val type = if (mediaType == "movie") com.raulshma.jellyplay.core.model.MediaType.MOVIE else com.raulshma.jellyplay.core.model.MediaType.SERIES
+                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                    launch { seerrRepository.getRecommendations(tmdbId, type) }
+                    launch { seerrRepository.getSimilar(tmdbId, type) }
                 }
-                val type = if (mediaType == "movie") com.raulshma.jellyplay.core.model.MediaType.MOVIE else com.raulshma.jellyplay.core.model.MediaType.SERIES
-                launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                launch { seerrRepository.getRecommendations(tmdbId, type) }
-                launch { seerrRepository.getSimilar(tmdbId, type) }
             } catch (_: Exception) {
-                // Detail screen will retry on failure
             }
             onDone()
         }

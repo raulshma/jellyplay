@@ -8,9 +8,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,38 +19,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.Edit
@@ -58,6 +49,13 @@ import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DeviceInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +64,9 @@ fun DevicesScreen(
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val backgroundColor = rememberScreenBackgroundColor()
 
     if (state.showDeleteDialog) {
         AlertDialog(
@@ -111,50 +111,23 @@ fun DevicesScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Devices") },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable(onClick = onBack),
-                    ) {
-                        Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            modifier = Modifier.padding(12.dp).size(20.dp),
-                        )
-                    }
-                },
-                actions = {
-                    androidx.compose.material3.IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                scrollBehavior = scrollBehavior,
-            )
+    JellyPlayScreenScaffold(
+        title = "Devices",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            IconButton(onClick = { viewModel.refresh() }) {
+                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+            }
         },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
+    ) {
         when {
             state.isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-                    androidx.compose.material3.LoadingIndicator()
-                }
+                ScreenLoadingState(modifier = Modifier.fillMaxSize())
             }
             state.error != null -> {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -168,21 +141,20 @@ fun DevicesScreen(
                 PullToRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { viewModel.refresh() },
-                    modifier = Modifier.padding(padding),
                 ) {
                     if (state.devices.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("No devices found", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.DeviceDesktop,
+                            title = "No devices found",
+                        )
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                                horizontal = 16.dp,
-                                vertical = 8.dp,
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 8.dp,
+                                bottom = adaptiveInfo.bottomPadding(isTv),
                             ),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
@@ -272,7 +244,7 @@ private fun DeviceItem(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            androidx.compose.material3.IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Tabler.Outline.Edit,
                     contentDescription = "Edit",
@@ -280,7 +252,7 @@ private fun DeviceItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            androidx.compose.material3.IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Tabler.Outline.Trash,
                     contentDescription = "Delete",

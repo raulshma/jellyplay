@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,9 +8,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,34 +24,26 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +60,12 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,59 +74,38 @@ fun LogsScreen(
     viewModel: LogsViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val backgroundColor = rememberScreenBackgroundColor()
     val tabs = listOf("Log Files", "Activity Log")
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Logs") },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable(onClick = onBack),
-                    ) {
+    JellyPlayScreenScaffold(
+        title = "Logs",
+        onBack = onBack,
+        backgroundColor = backgroundColor,
+        actions = {
+            if (state.selectedTabIndex == 1) {
+                if (state.isLiveStreamActive) {
+                    IconButton(onClick = { viewModel.stopLiveStream() }) {
                         Icon(
-                            Tabler.Outline.ArrowLeft,
-                            contentDescription = "Back",
-                            modifier = Modifier.padding(12.dp).size(20.dp),
+                            Tabler.Outline.PlayerPause,
+                            contentDescription = "Stop Live",
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
-                },
-                actions = {
-                    if (state.selectedTabIndex == 1) {
-                        if (state.isLiveStreamActive) {
-                            IconButton(onClick = { viewModel.stopLiveStream() }) {
-                                Icon(
-                                    Tabler.Outline.PlayerPause,
-                                    contentDescription = "Stop Live",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        } else {
-                            IconButton(onClick = { viewModel.startLiveStream() }) {
-                                Icon(Tabler.Outline.Activity, contentDescription = "Start Live")
-                            }
-                        }
+                } else {
+                    IconButton(onClick = { viewModel.startLiveStream() }) {
+                        Icon(Tabler.Outline.Activity, contentDescription = "Start Live")
                     }
-                    IconButton(onClick = { viewModel.loadInitialData() }) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                scrollBehavior = scrollBehavior,
-            )
+                }
+            }
+            IconButton(onClick = { viewModel.loadInitialData() }) {
+                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+            }
         },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-    ) { padding ->
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
         ) {
             PrimaryTabRow(
                 selectedTabIndex = state.selectedTabIndex,
@@ -151,12 +127,14 @@ fun LogsScreen(
                     isLoadingContent = state.isLoadingLogContent,
                     onFileClick = { viewModel.loadLogFile(it) },
                     onBackToList = { viewModel.clearSelectedLogFile() },
+                    bottomPadding = adaptiveInfo.bottomPadding(isTv),
                 )
                 1 -> ActivityLogTab(
                     entries = state.activityEntries,
                     isLiveActive = state.isLiveStreamActive,
                     isLoadingMore = false,
                     onLoadMore = { viewModel.loadMoreActivity() },
+                    bottomPadding = adaptiveInfo.bottomPadding(isTv),
                 )
             }
         }
@@ -171,6 +149,7 @@ private fun LogFilesTab(
     isLoadingContent: Boolean,
     onFileClick: (String) -> Unit,
     onBackToList: () -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
     if (selectedLogFileContent != null || isLoadingContent) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -230,18 +209,18 @@ private fun LogFilesTab(
         }
     } else {
         if (logFiles.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("No log files found", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            ScreenEmptyState(
+                icon = Tabler.Outline.FileText,
+                title = "No log files found",
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 16.dp,
-                    vertical = 8.dp,
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 8.dp,
+                    bottom = bottomPadding,
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -318,6 +297,7 @@ private fun ActivityLogTab(
     isLiveActive: Boolean,
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
     val listState = rememberLazyListState()
     val shouldLoadMore by remember {
@@ -357,19 +337,19 @@ private fun ActivityLogTab(
     }
 
     if (entries.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("No activity log entries", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        ScreenEmptyState(
+            icon = Tabler.Outline.Activity,
+            title = "No activity log entries",
+        )
     } else {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = 16.dp,
-                vertical = 8.dp,
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 8.dp,
+                bottom = bottomPadding,
             ),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {

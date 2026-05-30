@@ -17,31 +17,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -49,16 +42,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfflineSeriesScreen(
     seriesId: String,
@@ -69,7 +65,6 @@ fun OfflineSeriesScreen(
     val seriesItem by viewModel.seriesItem.collectAsStateWithLifecycle(initialValue = null)
     val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv = false)
 
@@ -81,29 +76,11 @@ fun OfflineSeriesScreen(
     val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
     val seasonEpisodes = selectedSeason?.let { episodes[it.id] } ?: emptyList()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+    JellyPlayScreenScaffold(
+        title = seriesItem?.name ?: "Loading...",
+        onBack = onBack,
     ) {
-        Column(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = seriesItem?.name ?: "Loading...",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Tabler.Outline.ArrowLeft, contentDescription = "Back")
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-            )
-
+        Column(modifier = Modifier.fillMaxSize()) {
             seriesItem?.let { series ->
                 Column(
                     modifier = Modifier.padding(horizontal = contentPad, vertical = 4.dp),
@@ -198,23 +175,17 @@ fun OfflineSeriesScreen(
             }
 
             if (seasonEpisodes.isEmpty() && selectedSeason != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "No episodes downloaded for this season",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    )
-                }
+                ScreenEmptyState(
+                    icon = Tabler.Outline.Download,
+                    title = "No episodes downloaded for this season",
+                )
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(
                         start = contentPad,
                         end = contentPad,
                         top = 8.dp,
-                        bottom = 100.dp,
+                        bottom = adaptiveInfo.bottomPadding(isTv = false),
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -286,7 +257,7 @@ private fun OfflineEpisodeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(ShapeCache.smooth8)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -388,7 +359,7 @@ private fun OfflineEpisodeRow(
                         .fillMaxWidth()
                         .padding(top = 4.dp)
                         .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
+                        .clip(ShapeCache.smooth4),
                 )
             }
         }

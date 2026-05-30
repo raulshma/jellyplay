@@ -324,14 +324,29 @@ class JellyfinApiClientImpl @Inject constructor(
         userInfo
     }
 
-    override suspend fun getHomeSections(): Result<List<HomeSection>> = apiResult {
+    override suspend fun getHomeSections(
+        enabledSections: Set<HomeSectionType>,
+        hiddenLibraryIds: Set<String>,
+    ): Result<List<HomeSection>> = apiResult {
         coroutineScope {
             val sections = mutableListOf<HomeSection>()
             var firstError: Throwable? = null
 
-            val continueWatchingDeferred = async { getContinueWatching() }
-            val nextUpDeferred = async { getNextUp() }
-            val foldersDeferred = async { getLibraryFolders() }
+            val continueWatchingDeferred = async {
+                if (HomeSectionType.CONTINUE_WATCHING in enabledSections) getContinueWatching()
+                else Result.success(emptyList())
+            }
+            val nextUpDeferred = async {
+                if (HomeSectionType.NEXT_UP in enabledSections) getNextUp()
+                else Result.success(emptyList())
+            }
+            val foldersDeferred = async {
+                if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
+                    getLibraryFolders()
+                } else {
+                    Result.success(emptyList())
+                }
+            }
 
             val continueWatchingResult = continueWatchingDeferred.await()
             val nextUpResult = nextUpDeferred.await()
@@ -339,58 +354,73 @@ class JellyfinApiClientImpl @Inject constructor(
 
             var continueWatchingIds = emptySet<String>()
 
-            continueWatchingResult
-                .onSuccess { list ->
-                    if (list.isNotEmpty()) {
-                        continueWatchingIds = list.map { it.id }.toSet()
-                        sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
+                continueWatchingResult
+                    .onSuccess { list ->
+                        if (list.isNotEmpty()) {
+                            continueWatchingIds = list.map { it.id }.toSet()
+                            sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, list))
+                        }
                     }
-                }
-                .onFailure { if (firstError == null) firstError = it }
+                    .onFailure { if (firstError == null) firstError = it }
+            }
 
-            nextUpResult
-                .onSuccess { list ->
-                    val filtered = list.filter { it.id !in continueWatchingIds }
-                    if (filtered.isNotEmpty()) {
-                        sections.add(HomeSection("next_up", "Next Up", HomeSectionType.NEXT_UP, filtered))
+            if (HomeSectionType.NEXT_UP in enabledSections) {
+                nextUpResult
+                    .onSuccess { list ->
+                        val filtered = list.filter { it.id !in continueWatchingIds }
+                        if (filtered.isNotEmpty()) {
+                            sections.add(HomeSection("next_up", "Next Up", HomeSectionType.NEXT_UP, filtered))
+                        }
                     }
-                }
-                .onFailure { if (firstError == null) firstError = it }
+                    .onFailure { if (firstError == null) firstError = it }
+            }
 
             val allLatestItems = mutableListOf<MediaItem>()
 
-            foldersResult
-                .onSuccess { folders ->
-                    val latestDeferred = folders
-                        .filter { it.collectionType != "music" }
-                        .map { folder ->
-                            async { folder to getLatestMedia(folder.id, limit = 16) }
-                        }
-                    latestDeferred.forEach { deferred ->
-                        val (folder, result) = deferred.await()
-                        result.onSuccess { latest ->
-                            allLatestItems.addAll(latest)
-                            if (latest.isNotEmpty()) {
-                                val sectionId = "latest_${folder.id}"
-                                sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
+            if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
+                foldersResult
+                    .onSuccess { folders ->
+                        val filteredFolders = folders
+                            .filter { it.collectionType != "music" }
+                            .filter { it.id !in hiddenLibraryIds }
+                        val semaphore = kotlinx.coroutines.sync.Semaphore(4)
+                        val latestDeferred = filteredFolders
+                            .map { folder ->
+                                async {
+                                    semaphore.acquire()
+                                    try { folder to getLatestMedia(folder.id, limit = 16) }
+                                    finally { semaphore.release() }
+                                }
+                            }
+                        latestDeferred.forEach { deferred ->
+                            val (folder, result) = deferred.await()
+                            result.onSuccess { latest ->
+                                allLatestItems.addAll(latest)
+                                if (latest.isNotEmpty() && HomeSectionType.LATEST_MEDIA in enabledSections) {
+                                    val sectionId = "latest_${folder.id}"
+                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
+                                }
                             }
                         }
                     }
-                }
-                .onFailure { if (firstError == null) firstError = it }
+                    .onFailure { if (firstError == null) firstError = it }
+            }
 
-            val recentlyAddedItems = allLatestItems
-                .distinctBy { it.id }
-                .filter { it.id !in continueWatchingIds }
-            if (recentlyAddedItems.isNotEmpty()) {
-                val recentlyAddedSection = HomeSection(
-                    "recently_added",
-                    "Recently Added",
-                    HomeSectionType.RECENTLY_ADDED,
-                    recentlyAddedItems,
-                )
-                val insertIndex = sections.indexOfFirst { it.type == HomeSectionType.LATEST_MEDIA }.coerceAtLeast(0)
-                sections.add(insertIndex, recentlyAddedSection)
+            if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
+                val recentlyAddedItems = allLatestItems
+                    .distinctBy { it.id }
+                    .filter { it.id !in continueWatchingIds }
+                if (recentlyAddedItems.isNotEmpty()) {
+                    val recentlyAddedSection = HomeSection(
+                        "recently_added",
+                        "Recently Added",
+                        HomeSectionType.RECENTLY_ADDED,
+                        recentlyAddedItems,
+                    )
+                    val insertIndex = sections.indexOfFirst { it.type == HomeSectionType.LATEST_MEDIA }.coerceAtLeast(0)
+                    sections.add(insertIndex, recentlyAddedSection)
+                }
             }
 
             if (sections.isEmpty() && firstError != null) {

@@ -125,6 +125,15 @@ class DetailViewModel @Inject constructor(
     var seriesDownloadResult by mutableStateOf<SeriesDownloadResult?>(null)
         private set
 
+    var downloadSheetEpisodes by mutableStateOf<Map<String, List<MediaItem>>>(emptyMap())
+        private set
+    private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
+    var downloadSheetLoadingSeasons by mutableStateOf<Set<String>>(emptySet())
+        private set
+    private var downloadSheetFetchedSeasonIds by mutableStateOf<Set<String>>(emptySet())
+    var downloadedEpisodeIds by mutableStateOf<Set<String>>(emptySet())
+        private set
+
     fun clearSeriesDownloadResult() {
         seriesDownloadResult = null
     }
@@ -542,7 +551,7 @@ class DetailViewModel @Inject constructor(
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
 
-    fun downloadSeries(seasonIds: List<String>? = null) {
+    fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
         val detail = _detail.value ?: run {
             seriesDownloadResult = SeriesDownloadResult(error = "Media details not loaded")
             return
@@ -556,7 +565,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             isDownloadingSeries = true
             seriesDownloadResult = null
-            downloadRepository.downloadSeries(item.id, seasonIds)
+            downloadRepository.downloadSeries(item.id, episodeIds)
                 .onSuccess { downloadIds ->
                     seriesDownloadResult = SeriesDownloadResult(
                         queuedCount = downloadIds.size,
@@ -569,6 +578,40 @@ class DetailViewModel @Inject constructor(
                 }
             isDownloadingSeries = false
         }
+    }
+
+    fun loadDownloadSheetEpisodes(seasonId: String) {
+        if (seasonId in downloadSheetFetchedSeasonIds) return
+        val seriesId = currentSeriesId ?: return
+        downloadSheetLoadingSeasons = downloadSheetLoadingSeasons + seasonId
+        viewModelScope.launch {
+            mediaRepository.getEpisodes(seriesId, seasonId)
+                .onSuccess { episodeList ->
+                    downloadSheetEpisodesMap[seasonId] = episodeList
+                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()
+                }
+                .onFailure {
+                    downloadSheetEpisodesMap[seasonId] = emptyList()
+                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()
+                }
+            downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
+            downloadSheetLoadingSeasons = downloadSheetLoadingSeasons - seasonId
+        }
+    }
+
+    fun loadDownloadedEpisodeIds() {
+        val seriesId = currentSeriesId ?: return
+        viewModelScope.launch {
+            downloadedEpisodeIds = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
+        }
+    }
+
+    fun resetDownloadSheetState() {
+        downloadSheetEpisodesMap.clear()
+        downloadSheetEpisodes = emptyMap()
+        downloadSheetLoadingSeasons = emptySet()
+        downloadSheetFetchedSeasonIds = emptySet()
+        downloadedEpisodeIds = emptySet()
     }
 
     fun getBackdropUrl(itemId: String): String =
@@ -733,24 +776,21 @@ class DetailViewModel @Inject constructor(
         _seerrRequestResult.value = null
     }
 
-    /**
-     * Pre-fetches Seerr detail data for a related item so the destination
-     * Seerr detail screen loads instantly.
-     */
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getMovieDetails(tmdbId)
-                } else {
-                    seerrRepository.getTvDetails(tmdbId)
+                coroutineScope {
+                    if (mediaType == "movie") {
+                        seerrRepository.getMovieDetails(tmdbId)
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId)
+                    }
+                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                    launch { seerrRepository.getRecommendations(tmdbId, type) }
+                    launch { seerrRepository.getSimilar(tmdbId, type) }
                 }
-                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                launch { seerrRepository.getRecommendations(tmdbId, type) }
-                launch { seerrRepository.getSimilar(tmdbId, type) }
             } catch (_: Exception) {
-                // Detail screen will retry
             }
             onDone()
         }

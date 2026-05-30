@@ -99,18 +99,28 @@ class SeerrDetailViewModel @Inject constructor(
             _seerrRecommendations.value = emptyList()
             _seerrSimilar.value = emptyList()
 
+            var hasRatings = false
+
             try {
                 if (mediaType == "movie") {
                     seerrRepository.getMovieDetails(tmdbId).onSuccess {
                         _movieDetails.value = it
-                        updateRatings(it.ratings, it.voteAverage)
+                        val ratings = it.ratings
+                        if (ratings?.rt != null || ratings?.imdb != null) {
+                            hasRatings = true
+                        }
+                        updateRatings(ratings, it.voteAverage)
                     }.onFailure {
                         _error.value = it.message
                     }
                 } else {
                     seerrRepository.getTvDetails(tmdbId).onSuccess {
                         _tvDetails.value = it
-                        updateRatings(it.ratings, it.voteAverage)
+                        val ratings = it.ratings
+                        if (ratings?.rt != null || ratings?.imdb != null) {
+                            hasRatings = true
+                        }
+                        updateRatings(ratings, it.voteAverage)
                     }.onFailure {
                         _error.value = it.message
                     }
@@ -119,8 +129,12 @@ class SeerrDetailViewModel @Inject constructor(
                 val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
 
                 coroutineScope {
-                    val ratingsDeferred = async {
-                        seerrRepository.getRatings(tmdbId, mediaType).getOrNull()
+                    val ratingsDeferred = if (hasRatings) {
+                        async { null }
+                    } else {
+                        async {
+                            seerrRepository.getRatings(tmdbId, mediaType).getOrNull()
+                        }
                     }
                     val recommendationsDeferred = async {
                         seerrRepository.getRecommendations(tmdbId, type).getOrNull()
@@ -129,10 +143,8 @@ class SeerrDetailViewModel @Inject constructor(
                         seerrRepository.getSimilar(tmdbId, type).getOrNull()
                     }
 
-                    val ratingsResult = ratingsDeferred.await()
-                    if (ratingsResult != null) {
-                        Log.d(TAG, "Seerr ratings result: rt=${ratingsResult.rt}, imdb=${ratingsResult.imdb}")
-                        updateRatings(ratingsResult, null)
+                    ratingsDeferred.await()?.let {
+                        updateRatings(it, null)
                     }
 
                     recommendationsDeferred.await()?.let {
@@ -264,25 +276,21 @@ class SeerrDetailViewModel @Inject constructor(
         return "https://image.tmdb.org/t/p/w1280$path"
     }
 
-    /**
-     * Pre-fetches detail data for a related Seerr item so the destination detail
-     * screen loads instantly.  [onDone] is invoked on the main thread once the
-     * prefetch completes (success or failure).
-     */
     fun prefetchRelatedDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getMovieDetails(tmdbId)
-                } else {
-                    seerrRepository.getTvDetails(tmdbId)
+                coroutineScope {
+                    if (mediaType == "movie") {
+                        seerrRepository.getMovieDetails(tmdbId)
+                    } else {
+                        seerrRepository.getTvDetails(tmdbId)
+                    }
+                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
+                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
+                    launch { seerrRepository.getRecommendations(tmdbId, type) }
+                    launch { seerrRepository.getSimilar(tmdbId, type) }
                 }
-                val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                launch { seerrRepository.getRecommendations(tmdbId, type) }
-                launch { seerrRepository.getSimilar(tmdbId, type) }
             } catch (_: Exception) {
-                // Detail screen will retry
             }
             onDone()
         }

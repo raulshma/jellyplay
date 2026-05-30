@@ -198,9 +198,17 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> {
+        return withContext(Dispatchers.IO) {
+            downloadDao.getDownloadsForSeries(seriesId)
+                .mapNotNull { it.mediaItemId }
+                .toSet()
+        }
+    }
+
     override suspend fun downloadSeries(
         seriesId: String,
-        seasonIds: List<String>?,
+        episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> = runCatching {
         withContext(Dispatchers.IO) {
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
@@ -211,8 +219,8 @@ class DownloadRepositoryImpl @Inject constructor(
             saveOfflineMetadataForItem(seriesItem, imageUrl, backdropUrl)
 
             val seasons = mediaRepository.getSeasons(seriesId).getOrElse { emptyList() }
-            val targetSeasons = if (seasonIds != null) {
-                seasons.filter { it.id in seasonIds }
+            val targetSeasons = if (episodeIds != null) {
+                seasons.filter { it.id in episodeIds.keys }
             } else {
                 seasons
             }
@@ -222,7 +230,13 @@ class DownloadRepositoryImpl @Inject constructor(
             for (season in targetSeasons) {
                 saveOfflineMetadataForItem(season, null, null)
 
-                val episodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse { emptyList() }
+                val allEpisodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse { emptyList() }
+                val selectedEpisodeIds = episodeIds?.get(season.id)?.toSet()
+                val episodes = if (selectedEpisodeIds != null) {
+                    allEpisodes.filter { it.id in selectedEpisodeIds }
+                } else {
+                    allEpisodes
+                }
                 val offlineEntities = mutableListOf<OfflineMediaEntity>()
 
                 for (episode in episodes) {

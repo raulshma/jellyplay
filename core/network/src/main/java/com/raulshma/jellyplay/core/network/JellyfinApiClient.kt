@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.ItemCounts
@@ -69,7 +70,10 @@ interface JellyfinApiClient {
         secret: String,
     ): Result<UserInfo>
 
-    suspend fun getHomeSections(): Result<List<HomeSection>>
+    suspend fun getHomeSections(
+        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+        hiddenLibraryIds: Set<String> = emptySet(),
+    ): Result<List<HomeSection>>
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
 

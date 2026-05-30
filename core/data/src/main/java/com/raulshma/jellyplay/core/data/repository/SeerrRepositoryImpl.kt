@@ -11,8 +11,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private data class CacheEntry<T>(val value: T, val timestampMs: Long)
 
 @Singleton
 class SeerrRepositoryImpl @Inject constructor(
@@ -27,6 +30,23 @@ class SeerrRepositoryImpl @Inject constructor(
 
     private val cachedPrefs = seerrPreferencesStore.preferences
         .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.Eagerly, null)
+
+    private val detailCache = ConcurrentHashMap<String, CacheEntry<Any>>()
+    private val CACHE_TTL_MS = 60_000L
+
+    private fun <T> getCached(key: String): T? {
+        val entry = detailCache[key] ?: return null
+        if (System.currentTimeMillis() - entry.timestampMs > CACHE_TTL_MS) {
+            detailCache.remove(key)
+            return null
+        }
+        @Suppress("UNCHECKED_CAST")
+        return entry.value as T
+    }
+
+    private fun putCached(key: String, value: Any) {
+        detailCache[key] = CacheEntry(value, System.currentTimeMillis())
+    }
 
     private suspend fun getCredentials(): Pair<String, String>? {
         val prefs = cachedPrefs.value ?: return null
@@ -54,45 +74,60 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getMovieDetails(tmdbId: Int): Result<SeerrMovieDetails> {
+        getCached<SeerrMovieDetails>("movie_details_$tmdbId")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getMovieDetails(serverUrl, apiKey, tmdbId)
+        return seerrApiClient.getMovieDetails(serverUrl, apiKey, tmdbId).also { result ->
+            result.getOrNull()?.let { putCached("movie_details_$tmdbId", it) }
+        }
     }
 
     override suspend fun getTvDetails(tmdbId: Int): Result<SeerrTvDetails> {
+        getCached<SeerrTvDetails>("tv_details_$tmdbId")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getTvDetails(serverUrl, apiKey, tmdbId)
+        return seerrApiClient.getTvDetails(serverUrl, apiKey, tmdbId).also { result ->
+            result.getOrNull()?.let { putCached("tv_details_$tmdbId", it) }
+        }
     }
 
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> {
+        getCached<SeerrRatings>("ratings_${tmdbId}_$mediaType")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
 
-        return if (mediaType == "movie") {
+        return (if (mediaType == "movie") {
             seerrApiClient.getMovieRatingsCombined(serverUrl, apiKey, tmdbId)
         } else {
             seerrApiClient.getTvRatings(serverUrl, apiKey, tmdbId)
+        }).also { result ->
+            result.getOrNull()?.let { putCached("ratings_${tmdbId}_$mediaType", it) }
         }
     }
 
     override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> {
+        getCached<SeerrSearchResponse>("recommendations_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return when (mediaType) {
+        return (when (mediaType) {
             MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(serverUrl, apiKey, tmdbId)
             MediaType.SERIES -> seerrApiClient.getTvRecommendations(serverUrl, apiKey, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for recommendations"))
+        }).also { result ->
+            result.getOrNull()?.let { putCached("recommendations_${tmdbId}_${mediaType.name}", it) }
         }
     }
 
     override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> {
+        getCached<SeerrSearchResponse>("similar_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()
             ?: return Result.failure(Exception("Seerr not configured"))
-        return when (mediaType) {
+        return (when (mediaType) {
             MediaType.MOVIE -> seerrApiClient.getMovieSimilar(serverUrl, apiKey, tmdbId)
             MediaType.SERIES -> seerrApiClient.getTvSimilar(serverUrl, apiKey, tmdbId)
             else -> Result.failure(Exception("Unsupported media type for similar items"))
+        }).also { result ->
+            result.getOrNull()?.let { putCached("similar_${tmdbId}_${mediaType.name}", it) }
         }
     }
 
