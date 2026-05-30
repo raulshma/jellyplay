@@ -20,6 +20,8 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val kidsModeEnabled: Boolean = false,
+    val pinHash: String? = null,
+    val biometricLockEnabled: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val dynamicTheming: Boolean = true,
     val oledMode: Boolean = false,

@@ -47,4 +47,5 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.11.0")
     implementation(libs.smooth.corner.rect)
+    implementation(libs.biometric.ktx)
 }
