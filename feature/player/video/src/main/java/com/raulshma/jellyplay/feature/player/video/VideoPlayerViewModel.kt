@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
@@ -57,7 +56,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -109,6 +107,7 @@ class VideoPlayerViewModel @Inject constructor(
     private var equalizerEnabled: Boolean = false
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var autoplayNext: Boolean = false
+    private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
     private val trickplayManager = TrickplayManager(playbackRepository)
     private var videoMediaSession: MediaSession? = null
 
@@ -142,6 +141,7 @@ class VideoPlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
+                cachedPreferences = prefs
                 if (_uiState.value.subtitleStyle != prefs.subtitleStyle) {
                     _uiState.update { it.copy(subtitleStyle = prefs.subtitleStyle) }
                     playerSessionManager.engine?.let {
@@ -179,7 +179,7 @@ class VideoPlayerViewModel @Inject constructor(
             playerSessionManager.engineFlow.collect { engine ->
                 engineCollectionJob?.cancel()
                 if (engine != null) {
-                    val prefs = preferencesStore.preferences.first()
+                    val prefs = cachedPreferences
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
                         usesSubtitleOverlay = engine is MpvPlayerEngine,
@@ -318,8 +318,7 @@ class VideoPlayerViewModel @Inject constructor(
                 } catch (_: Exception) { }
             }
 
-            val prefs = preferencesStore.preferences.first()
-
+            val prefs = cachedPreferences
             val defaultAspectRatio = try {
                 when (prefs.videoDefaultAspectRatio) {
                     "FIT" -> AspectRatio.FIT
@@ -526,9 +525,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
-        // We can just update preferences, and let the session manager or viewmodel push it
-        // Or we can manually push the update:
-        val prefs = runBlocking { preferencesStore.preferences.first() }
+        val prefs = cachedPreferences
         val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
             decoderMode = _uiState.value.decoderMode,
             audioPassthrough = _uiState.value.audioPassthrough,
@@ -770,7 +767,7 @@ class VideoPlayerViewModel @Inject constructor(
                 nightModeEnabled = state.nightModeEnabled,
                 nightModeStrength = state.nightModeStrength,
                 equalizerEnabled = equalizerEnabled,
-                equalizerSettings = runBlocking(Dispatchers.IO) { preferencesStore.preferences.first().equalizerSettings },
+                equalizerSettings = cachedPreferences.equalizerSettings,
                 audioNormalizationMode = state.audioNormalizationMode,
                 audioNormalizationEnabled = state.audioNormalizationEnabled,
                 channelMixMode = state.channelMixMode,
@@ -1337,7 +1334,7 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(
                         itemId = itemId,
@@ -1359,7 +1356,7 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
                 }

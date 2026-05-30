@@ -2,11 +2,7 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,29 +103,40 @@ fun SeerrMediaCard(
         label = "seerrCardBrightness",
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "seerrShimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -500f,
-        targetValue = 1500f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "seerrShimmerOffset",
-    )
+    val shimmerOffset = remember { Animatable(-500f) }
+    val glowAlpha = remember { Animatable(0.3f) }
 
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FancyTransitionEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "seerrGlowAlpha",
-    )
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            launch {
+                while (isActive) {
+                    shimmerOffset.animateTo(
+                        1500f,
+                        animationSpec = tween(durationMillis = 1200, easing = LinearEasing),
+                    )
+                    shimmerOffset.snapTo(-500f)
+                }
+            }
+            launch {
+                while (isActive) {
+                    glowAlpha.animateTo(
+                        0.8f,
+                        animationSpec = tween(800, easing = FancyTransitionEasing),
+                    )
+                    glowAlpha.animateTo(
+                        0.3f,
+                        animationSpec = tween(800, easing = FancyTransitionEasing),
+                    )
+                }
+            }
+        } else {
+            shimmerOffset.snapTo(-500f)
+            glowAlpha.snapTo(0.3f)
+        }
+    }
 
-    val effectiveShimmerOffset = if (isLoading) shimmerOffset else 0f
-    val effectiveGlowAlpha = if (isLoading) glowAlpha else 0f
+    val effectiveShimmerOffset = if (isLoading) shimmerOffset.value else 0f
+    val effectiveGlowAlpha = if (isLoading) glowAlpha.value else 0f
 
     val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
         val dateStr = item.releaseDate ?: item.firstAirDate

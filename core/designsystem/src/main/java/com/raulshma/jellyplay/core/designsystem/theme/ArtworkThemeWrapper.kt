@@ -4,9 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 
-val LocalArtworkColors = staticCompositionLocalOf<ArtworkColors?> { null }
+val LocalArtworkColors = compositionLocalOf<ArtworkColors?> { null }
 
 @Composable
 fun ArtworkThemeWrapper(

@@ -292,7 +292,9 @@ private fun SeerrDetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    SideEffect { navBarColor.value = backgroundColor }
+    SideEffect {
+        if (navBarColor.value != backgroundColor) navBarColor.value = backgroundColor
+    }
 
     val appBarColor by animateFloatAsState(
         targetValue = if (scrollFraction > 0.7f) 1f else 0f,

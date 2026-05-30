@@ -84,6 +84,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,6 +103,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -240,6 +243,10 @@ fun MediaDetailScreen(
             com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides seerrPrefetchCallback,
             com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
         ) {
+        val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+        val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+        val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
+
         DetailContent(
             itemId = itemId,
             detail = detail,
@@ -249,55 +256,61 @@ fun MediaDetailScreen(
             smartPlayTarget = viewModel.smartPlayTarget,
             selectedSubtitleIndex = viewModel.selectedSubtitleIndex,
             selectedAudioIndex = viewModel.selectedAudioIndex,
-            getImageUrl = { viewModel.getImageUrl(it) },
-            getBackdropUrl = { viewModel.getBackdropUrl(it) },
+            getImageUrl = rememberedGetImageUrl,
+            getBackdropUrl = rememberedGetBackdropUrl,
             isDownloading = viewModel.isDownloading,
             isDownloadingSeries = viewModel.isDownloadingSeries,
             activeDownload = activeDownload,
             isLoading = isLoading,
             error = error,
-            onRetry = { viewModel.loadItem(itemId) },
-            onPlayClick = { playItemId, sourceId, start ->
-                onPlayClick(
-                    playItemId,
-                    sourceId,
-                    start,
-                    viewModel.selectedSubtitleIndex,
-                    viewModel.selectedAudioIndex,
-                )
+            onRetry = remember(viewModel, itemId) { { viewModel.loadItem(itemId) } },
+            onPlayClick = remember(viewModel, onPlayClick) {
+                { playItemId: String, sourceId: String?, start: Long ->
+                    onPlayClick(
+                        playItemId,
+                        sourceId,
+                        start,
+                        viewModel.selectedSubtitleIndex,
+                        viewModel.selectedAudioIndex,
+                    )
+                }
             },
-            onAudioClick = { onAudioClick(itemId) },
-            onDownloadClick = { viewModel.startDownload() },
-            onDownloadSeriesClick = {
-                showSeriesDownloadSheet = true
-                viewModel.loadDownloadedEpisodeIds()
+            onAudioClick = remember(onAudioClick, itemId) { { onAudioClick(itemId) } },
+            onDownloadClick = remember(viewModel) { { viewModel.startDownload() } },
+            onDownloadSeriesClick = remember(viewModel) {
+                {
+                    showSeriesDownloadSheet = true
+                    viewModel.loadDownloadedEpisodeIds()
+                }
             },
-            onToggleFavorite = { viewModel.toggleFavorite() },
-            onMarkPlayed = { viewModel.markPlayed() },
-            onMarkUnplayed = { viewModel.markUnplayed() },
-            onSubtitleSelect = { viewModel.selectSubtitle(it) },
-            onAudioSelect = { viewModel.selectAudio(it) },
+            onToggleFavorite = remember(viewModel) { { viewModel.toggleFavorite() } },
+            onMarkPlayed = remember(viewModel) { { viewModel.markPlayed() } },
+            onMarkUnplayed = remember(viewModel) { { viewModel.markUnplayed() } },
+            onSubtitleSelect = remember(viewModel) { { idx: Int? -> viewModel.selectSubtitle(idx) } },
+            onAudioSelect = remember(viewModel) { { idx: Int? -> viewModel.selectAudio(idx) } },
             onItemClick = onItemClick,
             onPersonClick = onPersonClick,
             onNavigateToSeries = onNavigateToSeries,
-            onSeasonSelected = { seasonId ->
-                val seriesId = detail?.item?.seriesId ?: itemId
-                viewModel.loadEpisodesForSeason(seriesId, seasonId)
+            onSeasonSelected = remember(viewModel, detail, itemId) {
+                { seasonId: String ->
+                    val seriesId = detail?.item?.seriesId ?: itemId
+                    viewModel.loadEpisodesForSeason(seriesId, seasonId)
+                }
             },
-            onLoadSeerrData = {
-                detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
+            onLoadSeerrData = remember(viewModel) {
+                { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } }
             },
             onBack = onBack,
             seerrRecommendations = seerrRecommendations,
             seerrSimilar = seerrSimilar,
             isSeerrConnected = isSeerrConnected,
             isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
-            getSeerrPosterUrl = { viewModel.getSeerrPosterUrl(it) },
-            onSeerrRequest = { seerrRequestItem = it },
+            getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
+            onSeerrRequest = remember { { item: SeerrSearchItem -> seerrRequestItem = item } },
             onNavigate = onNavigate,
-            onEditClick = { onEditClick(itemId) },
+            onEditClick = remember(onEditClick, itemId) { { onEditClick(itemId) } },
             albumTracks = viewModel.albumTracks,
-            onPlayAlbumTrack = { index -> viewModel.playAlbum(index) },
+            onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
         )
 
         // Seerr request dialog
@@ -471,7 +484,9 @@ private fun DetailContent(
     )
 
     val navBarColor = LocalNavigationBarColor.current
-    SideEffect { navBarColor.value = backgroundColor }
+    SideEffect {
+        if (navBarColor.value != backgroundColor) navBarColor.value = backgroundColor
+    }
 
     val contentVisible = detail != null && item != null
     val contentAlpha by animateFloatAsState(
@@ -936,11 +951,13 @@ private fun DetailContent(
         val source = detail?.mediaSources?.firstOrNull()
         val fileSize = source?.size
         val context = LocalContext.current
-        val availableBytes = remember {
-            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-                ?: context.filesDir
-            val stat = StatFs(downloadDir.absolutePath)
-            stat.availableBlocksLong * stat.blockSizeLong
+        val availableBytes by produceState(initialValue = 0L) {
+            value = withContext(Dispatchers.IO) {
+                val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                    ?: context.filesDir
+                val stat = StatFs(downloadDir.absolutePath)
+                stat.availableBlocksLong * stat.blockSizeLong
+            }
         }
         val fileSizeText = fileSize?.let { size ->
             when {

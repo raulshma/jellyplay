@@ -192,7 +192,7 @@ class ResilientSeerrApiClient @Inject constructor(
         rootFolder: String?,
         tags: List<Int>?,
     ): Result<SeerrMediaRequest> =
-        withRetry { delegate.requestMedia(baseUrl, apiKey, mediaType, mediaId, tvdbId, seasons, serverId, profileId, rootFolder, tags) }
+        delegate.requestMedia(baseUrl, apiKey, mediaType, mediaId, tvdbId, seasons, serverId, profileId, rootFolder, tags)
 
     override suspend fun getRadarrSettings(
         baseUrl: String,
