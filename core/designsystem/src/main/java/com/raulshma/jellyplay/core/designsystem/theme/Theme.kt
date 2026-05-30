@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 
 private val LightColorScheme = lightColorScheme(
     primary = md_theme_light_primary,
@@ -191,6 +193,10 @@ private val KidsShapes = Shapes(
     extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
 )
 
+val LocalJellyPlayColorScheme = staticCompositionLocalOf<ColorScheme> { error("No ColorScheme provided") }
+val LocalJellyPlayTypography = staticCompositionLocalOf<androidx.compose.material3.Typography> { error("No Typography provided") }
+val LocalJellyPlayShapes = staticCompositionLocalOf<Shapes> { error("No Shapes provided") }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun JellyPlayTheme(
@@ -228,13 +234,19 @@ fun JellyPlayTheme(
         JellyPlayTypography
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        shapes = shapes,
-        motionScheme = ExpressiveMotionScheme,
-        content = content,
-    )
+    CompositionLocalProvider(
+        LocalJellyPlayColorScheme provides colorScheme,
+        LocalJellyPlayTypography provides typography,
+        LocalJellyPlayShapes provides shapes
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            shapes = shapes,
+            motionScheme = ExpressiveMotionScheme,
+            content = content,
+        )
+    }
 }
 
 private fun ColorScheme.withOledSurfaces(): ColorScheme = copy(

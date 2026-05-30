@@ -1,9 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,23 +51,26 @@ fun AuthChallengeScreen(
     val context = LocalContext.current
     val activity = remember(context) { context as? FragmentActivity }
     val biometricAvailability = rememberBiometricAvailability()
+    val hasPin = pinHash != null
     val canUseBiometric = biometricEnabled && biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE && activity != null
 
     var showBiometric by remember { mutableStateOf(canUseBiometric) }
     var biometricError by remember { mutableStateOf<String?>(null) }
+    var biometricPromptTrigger by remember { mutableStateOf(0) }
 
     if (showBiometric && canUseBiometric) {
         BiometricPromptLauncher(
             activity = activity!!,
             title = title,
             subtitle = subtitle,
+            trigger = biometricPromptTrigger,
             onSuccess = { onPinEntered("") },
             onError = { error ->
                 biometricError = error
-                showBiometric = false
+                if (hasPin) showBiometric = false
             },
             onFailed = {
-                showBiometric = false
+                if (hasPin) showBiometric = false
             },
         )
     }
@@ -113,21 +112,39 @@ fun AuthChallengeScreen(
                     )
                 }
                 Spacer(Modifier.height(32.dp))
-                FilledTonalButton(
-                    onClick = {
-                        showBiometric = false
-                        biometricError = null
-                    },
-                ) {
-                    Icon(
-                        Tabler.Outline.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("Use PIN")
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilledTonalButton(
+                        onClick = {
+                            biometricError = null
+                            biometricPromptTrigger++
+                        },
+                    ) {
+                        Icon(
+                            Tabler.Outline.Fingerprint,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("Retry")
+                    }
+                    if (hasPin) {
+                        FilledTonalButton(
+                            onClick = {
+                                showBiometric = false
+                                biometricError = null
+                            },
+                        ) {
+                            Icon(
+                                Tabler.Outline.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.padding(horizontal = 4.dp))
+                            Text("Use PIN")
+                        }
+                    }
                 }
-            } else {
+            } else if (hasPin) {
                 PinLockScreen(
                     title = title,
                     subtitle = subtitle,
@@ -188,11 +205,12 @@ private fun BiometricPromptLauncher(
     activity: FragmentActivity,
     title: String,
     subtitle: String,
+    trigger: Int = 0,
     onSuccess: () -> Unit,
     onError: (String) -> Unit,
     onFailed: () -> Unit,
 ) {
-    DisposableEffect(Unit) {
+    DisposableEffect(trigger) {
         BiometricAuthHelper.authenticate(
             activity = activity,
             title = title,
