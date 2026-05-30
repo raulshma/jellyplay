@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -251,6 +252,67 @@ fun SettingsScreen(
                         index = 0, count = 1,
                         onClick = onSeerrSettings,
                     )
+                }
+            }
+
+            AnimatedSettingsEntrance(3) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Home,
+                    title = "Home Screen",
+                    summary = {
+                        val enabled = preferences.enabledHomeSectionTypes
+                        "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    val sectionItems = buildList {
+                        add(HomeSectionType.CONTINUE_WATCHING)
+                        add(HomeSectionType.NEXT_UP)
+                        if (HomeSectionType.LATEST_MEDIA in preferences.enabledHomeSectionTypes) {
+                            add(HomeSectionType.RECENTLY_ADDED)
+                        }
+                        add(HomeSectionType.LATEST_MEDIA)
+                    }
+                    val totalCount = sectionItems.size + viewModel.libraryFolders.size
+                    var idx = 0
+
+                    sectionItems.forEach { type ->
+                        if (type == HomeSectionType.LATEST_MEDIA) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.LayersLinked,
+                                title = type.displayName,
+                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
+                                checked = type in preferences.enabledHomeSectionTypes,
+                                index = idx++, count = totalCount,
+                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
+                            )
+                            viewModel.libraryFolders.forEach { folder ->
+                                val isLibraryVisible = folder.id !in preferences.hiddenLibrarySectionIds
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Folder,
+                                    title = "Latest ${folder.name}",
+                                    subtitle = if (isLibraryVisible) "Show latest items" else "Hidden",
+                                    checked = isLibraryVisible,
+                                    index = idx++, count = totalCount,
+                                    onCheckedChange = { viewModel.toggleLibrarySection(folder.id, it) },
+                                )
+                            }
+                        } else {
+                            SettingToggleItem(
+                                icon = when (type) {
+                                    HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
+                                    HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
+                                    HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
+                                    else -> Tabler.Outline.LayersLinked
+                                },
+                                title = type.displayName,
+                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
+                                checked = type in preferences.enabledHomeSectionTypes,
+                                index = idx++, count = totalCount,
+                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
+                            )
+                        }
+                    }
                 }
             }
 

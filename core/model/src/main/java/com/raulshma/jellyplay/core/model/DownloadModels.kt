@@ -113,6 +113,8 @@ data class UserPreferences(
     val autoEqByGenre: Boolean = false,
     val pitchSemitones: Float = 0f,
     val downloadConnections: Int = 4,
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    val hiddenLibrarySectionIds: Set<String> = emptySet(),
 )
 
 @Immutable

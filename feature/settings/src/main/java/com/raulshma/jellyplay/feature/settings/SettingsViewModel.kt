@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -16,6 +17,8 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -41,6 +44,7 @@ class SettingsViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val authRepository: AuthRepository,
     private val downloadRepository: DownloadRepository,
+    private val mediaRepository: MediaRepository,
 ) : ViewModel() {
 
     var preferences by mutableStateOf(UserPreferences())
@@ -65,6 +69,12 @@ class SettingsViewModel @Inject constructor(
     var isLoadingUsers by mutableStateOf(false)
         private set
 
+    var libraryFolders by mutableStateOf<List<LibraryFolder>>(emptyList())
+        private set
+
+    var isLoadingLibraries by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -84,6 +94,18 @@ class SettingsViewModel @Inject constructor(
             }
         }
         calculateCacheSize()
+        loadLibraryFolders()
+    }
+
+    private fun loadLibraryFolders() {
+        viewModelScope.launch {
+            isLoadingLibraries = true
+            mediaRepository.getLibraryFolders()
+                .onSuccess { folders ->
+                    libraryFolders = folders.filter { it.collectionType != "music" }
+                }
+            isLoadingLibraries = false
+        }
     }
 
     fun setDynamicTheming(enabled: Boolean) {
@@ -394,5 +416,25 @@ class SettingsViewModel @Inject constructor(
 
     fun setDreamShowTitle(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setDreamShowTitle(enabled) }
+    }
+
+    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
+        viewModelScope.launch { preferencesStore.setEnabledHomeSectionTypes(types) }
+    }
+
+    fun setHiddenLibrarySectionIds(ids: Set<String>) {
+        viewModelScope.launch { preferencesStore.setHiddenLibrarySectionIds(ids) }
+    }
+
+    fun toggleHomeSectionType(type: HomeSectionType, enabled: Boolean) {
+        val current = preferences.enabledHomeSectionTypes.toMutableSet()
+        if (enabled) current.add(type) else current.remove(type)
+        setEnabledHomeSectionTypes(current)
+    }
+
+    fun toggleLibrarySection(libraryId: String, visible: Boolean) {
+        val current = preferences.hiddenLibrarySectionIds.toMutableSet()
+        if (visible) current.remove(libraryId) else current.add(libraryId)
+        setHiddenLibrarySectionIds(current)
     }
 }

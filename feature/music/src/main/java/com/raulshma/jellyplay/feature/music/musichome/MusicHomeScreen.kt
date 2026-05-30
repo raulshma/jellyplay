@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.feature.music.components.MusicNavItem
 import com.raulshma.jellyplay.feature.music.components.MusicHeader
 import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
+import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
 import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -46,6 +47,8 @@ fun MusicHomeScreen(
     onTracksClick: () -> Unit,
     onGenresClick: () -> Unit,
     onPlaylistsClick: () -> Unit,
+    onNowPlayingClick: () -> Unit = {},
+    onAmbientClick: () -> Unit = {},
     viewModel: MusicHomeViewModel = hiltViewModel(),
 ) {
     val sections = viewModel.sections
@@ -94,6 +97,14 @@ fun MusicHomeScreen(
                             MusicHeader(
                                 onSwitchToVideo = { onModeChange(HomeMode.VIDEO) },
                                 onSettingsClick = onSettingsClick,
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AudioPlayerScreensSection(
+                                onNowPlayingClick = onNowPlayingClick,
+                                onAmbientClick = onAmbientClick,
                             )
                         }
 

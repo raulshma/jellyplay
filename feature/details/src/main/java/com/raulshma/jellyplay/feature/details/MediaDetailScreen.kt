@@ -268,7 +268,10 @@ fun MediaDetailScreen(
             },
             onAudioClick = { onAudioClick(itemId) },
             onDownloadClick = { viewModel.startDownload() },
-            onDownloadSeriesClick = { showSeriesDownloadSheet = true },
+            onDownloadSeriesClick = {
+                showSeriesDownloadSheet = true
+                viewModel.loadDownloadedEpisodeIds()
+            },
             onToggleFavorite = { viewModel.toggleFavorite() },
             onMarkPlayed = { viewModel.markPlayed() },
             onMarkUnplayed = { viewModel.markUnplayed() },
@@ -333,17 +336,30 @@ fun MediaDetailScreen(
     val detailItem = detail?.item
     if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
         com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = { showSeriesDownloadSheet = false },
+            onDismissRequest = {
+                showSeriesDownloadSheet = false
+                viewModel.resetDownloadSheetState()
+            },
         ) {
             SeriesDownloadSheet(
                 seasons = viewModel.seasons,
-                episodeCounts = viewModel.episodes.mapValues { it.value.size },
-                isDownloading = viewModel.isDownloadingSeries,
-                onDownload = { selectedSeasonIds ->
-                    showSeriesDownloadSheet = false
-                    viewModel.downloadSeries(selectedSeasonIds)
+                episodes = viewModel.downloadSheetEpisodes,
+                loadingSeasons = viewModel.downloadSheetLoadingSeasons,
+                downloadedEpisodeIds = viewModel.downloadedEpisodeIds,
+                onLoadEpisodes = { seasonId ->
+                    viewModel.loadDownloadSheetEpisodes(seasonId)
                 },
-                onDismiss = { showSeriesDownloadSheet = false },
+                isDownloading = viewModel.isDownloadingSeries,
+                onDownload = { selectedEpisodes ->
+                    showSeriesDownloadSheet = false
+                    val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
+                    viewModel.downloadSeries(nonEmpty)
+                    viewModel.resetDownloadSheetState()
+                },
+                onDismiss = {
+                    showSeriesDownloadSheet = false
+                    viewModel.resetDownloadSheetState()
+                },
             )
         }
     }
