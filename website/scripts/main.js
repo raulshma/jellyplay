@@ -6,6 +6,48 @@
 (function () {
   'use strict';
 
+  // ============ THEME SWITCHER ============
+  function initThemeSwitcher() {
+    const btn = document.getElementById('theme-switcher-btn');
+    const menu = document.getElementById('theme-menu');
+    const wrapper = document.querySelector('.theme-switcher-wrapper');
+    const options = document.querySelectorAll('.theme-option');
+    
+    if (!btn || !menu || !wrapper) return;
+    
+    const savedTheme = localStorage.getItem('jellyplay_theme') || 'dark';
+    applyTheme(savedTheme);
+    
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      wrapper.classList.toggle('active');
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(e.target)) {
+        wrapper.classList.remove('active');
+      }
+    });
+    
+    options.forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const theme = opt.dataset.value;
+        applyTheme(theme);
+        wrapper.classList.remove('active');
+      });
+    });
+    
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('jellyplay_theme', theme);
+      
+      options.forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.value === theme);
+      });
+    }
+  }
+
   // ============ SCROLL ANIMATIONS (IntersectionObserver) ============
   function initScrollAnimations() {
     const elements = document.querySelectorAll('.animate-on-scroll');
@@ -866,6 +908,7 @@
 
   // ============ INITIALIZE ============
   function init() {
+    initThemeSwitcher();
     initScrollAnimations();
     initMobileNav();
     initNavScrollEffect();
