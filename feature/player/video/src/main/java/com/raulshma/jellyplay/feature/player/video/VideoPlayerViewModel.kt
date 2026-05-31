@@ -469,6 +469,10 @@ class VideoPlayerViewModel @Inject constructor(
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
         }
+        persistStreamSelectionFromPlayer(
+            audioTrackOption = option,
+            subtitleTrackOption = null,
+        )
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
@@ -493,9 +497,51 @@ class VideoPlayerViewModel @Inject constructor(
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
         }
+        persistStreamSelectionFromPlayer(
+            audioTrackOption = null,
+            subtitleTrackOption = option,
+        )
     }
 
-    
+    private fun persistStreamSelectionFromPlayer(
+        audioTrackOption: TrackOption?,
+        subtitleTrackOption: TrackOption?,
+    ) {
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        val streams = _uiState.value.mediaStreams
+        val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+        val audioStreamIndex = if (audioTrackOption != null) {
+            if (audioTrackOption.index < 0) null
+            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption.label)
+        } else {
+            currentSelection?.audioStreamIndex
+        }
+        val subtitleStreamIndex = if (subtitleTrackOption != null) {
+            if (subtitleTrackOption.index < 0) null
+            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption.label)
+        } else {
+            currentSelection?.subtitleStreamIndex
+        }
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+        }
+    }
+
+    private fun resolveMediaStreamIndex(
+        streams: List<MediaStream>,
+        type: StreamType,
+        trackLabel: String?,
+    ): Int? {
+        if (trackLabel == null) return null
+        val typedStreams = streams.filter { it.type == type }
+        return typedStreams.firstOrNull {
+            it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
+        }?.index ?: typedStreams.firstOrNull { it.index >= 0 }?.index
+    }
 
     fun getCurrentPrimarySubtitleText(): String? {
         val engine = playerSessionManager.engine ?: return null
@@ -1160,6 +1206,24 @@ class VideoPlayerViewModel @Inject constructor(
                 audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
             } else null
             (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it) }
+        } else {
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            if (itemId != null) {
+                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val audioIdx = stored?.audioStreamIndex
+                val prefLang = preferencesStore.preferences.value.preferredAudioLanguage
+                if (audioIdx != null) {
+                    val targetStream = streams.firstOrNull {
+                        it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == audioIdx
+                    }
+                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                    if (targetLabel != null) {
+                        audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it) }
+                    }
+                } else if (prefLang != null) {
+                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
+                }
+            }
         }
 
         // Apply pending subtitle selection from detail screen
@@ -1173,6 +1237,24 @@ class VideoPlayerViewModel @Inject constructor(
                 val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
                 if (match != null) {
                     selectSubtitleTrack(match)
+                }
+            }
+        } else {
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            if (itemId != null) {
+                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val subIdx = stored?.subtitleStreamIndex
+                val prefLang = preferencesStore.preferences.value.preferredSubtitleLanguage
+                if (subIdx != null) {
+                    val targetStream = streams.firstOrNull {
+                        it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == subIdx
+                    }
+                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                    if (targetLabel != null) {
+                        subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it) }
+                    }
+                } else if (prefLang != null) {
+                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
                 }
             }
         }
