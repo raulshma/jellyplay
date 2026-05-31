@@ -139,6 +139,7 @@ class UserPreferencesStore @Inject constructor(
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
         val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
+        val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -347,6 +348,7 @@ class UserPreferencesStore @Inject constructor(
                 } ?: emptySet()
             } catch (_: Exception) { emptySet() },
             navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
+            onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]?.toBoolean() ?: false,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -706,6 +708,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setNavBarShowLabels(show: Boolean) {
         context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show.toString() }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

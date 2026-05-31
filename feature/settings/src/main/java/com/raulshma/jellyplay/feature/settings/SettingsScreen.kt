@@ -105,6 +105,7 @@ fun SettingsScreen(
     onUserManagement: () -> Unit = {},
     onSeerrSettings: () -> Unit = {},
     onAdminDashboard: () -> Unit = {},
+    onSetupWizard: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -253,6 +254,23 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(2) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Wand,
+                    title = "Setup Wizard",
+                    summary = { "Re-run the initial setup experience" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Wand,
+                        title = "Re-run Setup",
+                        subtitle = "Configure your preferences again",
+                        index = 0, count = 1,
+                        onClick = onSetupWizard,
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(3) {
                 if (viewModel.currentUser?.isAdmin == true) {
                     SettingsGroup(
                         icon = Tabler.Outline.Server,
