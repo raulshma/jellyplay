@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
             var pinError by rememberSaveable { mutableStateOf<String?>(null) }
 
             val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
-            val showLockScreen = hasLockEnabled && !preferences.kidsModeEnabled && !isPinUnlocked.value
+            val showLockScreen = hasLockEnabled && !isPinUnlocked.value
 
             val darkTheme = when (preferences.themeMode) {
                 ThemeMode.DARK -> true
@@ -94,9 +94,8 @@ class MainActivity : AppCompatActivity() {
 
             JellyPlayTheme(
                 darkTheme = darkTheme,
-                dynamicColor = preferences.dynamicTheming && !preferences.kidsModeEnabled,
+                dynamicColor = preferences.dynamicTheming,
                 oledMode = preferences.oledMode,
-                kidsMode = preferences.kidsModeEnabled,
                 isTv = isTv(),
             ) {
                 if (showLockScreen) {
@@ -193,7 +192,7 @@ class MainActivity : AppCompatActivity() {
 
         if (backgroundedAt > 0L) {
             val prefs = viewModel.preferences.value
-            if ((prefs.pinLockEnabled || prefs.biometricLockEnabled) && !prefs.kidsModeEnabled && prefs.autoLockTimerMs > 0L) {
+            if ((prefs.pinLockEnabled || prefs.biometricLockEnabled) && prefs.autoLockTimerMs > 0L) {
                 val elapsed = System.currentTimeMillis() - backgroundedAt
                 if (elapsed >= prefs.autoLockTimerMs) {
                     isPinUnlocked.value = false

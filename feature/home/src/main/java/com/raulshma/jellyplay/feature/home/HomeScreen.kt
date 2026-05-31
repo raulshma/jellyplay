@@ -61,7 +61,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -94,71 +93,25 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    var showKidsModeAuth by remember { mutableStateOf(false) }
-    var kidsModeAuthError by remember { mutableStateOf<String?>(null) }
-
     if (state.homeMode == HomeMode.MUSIC) {
         musicContent()
         return
     }
 
-    if (state.kidsModeEnabled) {
-        KidsHomeScreen(
-            state = state,
-            imageUrlBuilder = { viewModel.getImageUrl(it.id) },
-            fallbackImageUrlBuilder = rememberFallbackUrls(viewModel),
-            onItemClick = onItemClick,
-            onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
-            onExitKidsModeRequest = { showKidsModeAuth = true },
-        )
-
-        if (showKidsModeAuth) {
-            AuthChallengeScreen(
-                title = "Exit Kids Mode",
-                subtitle = "Authenticate to exit Kids Corner",
-                pinHash = state.pinHash,
-                biometricEnabled = state.biometricLockEnabled,
-                onPinEntered = { pin ->
-                    if (pin.isEmpty()) {
-                        viewModel.exitKidsMode()
-                        showKidsModeAuth = false
-                        kidsModeAuthError = null
-                    } else if (state.pinHash != null) {
-                        val valid = viewModel.verifyPin(pin)
-                        if (valid) {
-                            viewModel.exitKidsMode()
-                            showKidsModeAuth = false
-                            kidsModeAuthError = null
-                        } else {
-                            kidsModeAuthError = "Incorrect PIN"
-                        }
-                    }
-                },
-                onErrorClear = { kidsModeAuthError = null },
-                errorMessage = kidsModeAuthError,
-                onDismiss = {
-                    showKidsModeAuth = false
-                    kidsModeAuthError = null
-                },
-                showAsDialog = true,
-            )
-        }
-    } else {
-        MainHomeContent(
-            state = state,
-            viewModel = viewModel,
-            onItemClick = onItemClick,
-            onPlayClick = onPlayClick,
-            onSettingsClick = onSettingsClick,
-            onSyncPlayClick = onSyncPlayClick,
-            onDownloadsClick = onDownloadsClick,
-            onOfflineLibraryClick = onOfflineLibraryClick,
-            onSeerrItemClick = onSeerrItemClick,
-            onModeChange = onModeChange,
-            onSearchItemClick = onSearchItemClick,
-            onSearchSeerrClick = onSearchSeerrClick,
-        )
-    }
+    MainHomeContent(
+        state = state,
+        viewModel = viewModel,
+        onItemClick = onItemClick,
+        onPlayClick = onPlayClick,
+        onSettingsClick = onSettingsClick,
+        onSyncPlayClick = onSyncPlayClick,
+        onDownloadsClick = onDownloadsClick,
+        onOfflineLibraryClick = onOfflineLibraryClick,
+        onSeerrItemClick = onSeerrItemClick,
+        onModeChange = onModeChange,
+        onSearchItemClick = onSearchItemClick,
+        onSearchSeerrClick = onSearchSeerrClick,
+    )
 }
 
 @Composable

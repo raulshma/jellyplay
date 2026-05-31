@@ -56,8 +56,6 @@ data class UserPreferences(
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,
     val biometricLockEnabled: Boolean = false,
-    val kidsModeEnabled: Boolean = false,
-    val kidsModeMaxRating: String = "PG",
     val autoLockTimerMs: Long = 30_000L,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,

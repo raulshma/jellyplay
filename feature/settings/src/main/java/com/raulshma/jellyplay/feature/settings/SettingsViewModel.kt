@@ -210,14 +210,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setBiometricLockEnabled(enabled) }
     }
 
-    fun setKidsModeEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setKidsModeEnabled(enabled) }
-    }
-
-    fun setKidsModeMaxRating(rating: String) {
-        viewModelScope.launch { preferencesStore.setKidsModeMaxRating(rating) }
-    }
-
     fun setAutoLockTimerMs(ms: Long) {
         viewModelScope.launch { preferencesStore.setAutoLockTimerMs(ms) }
     }

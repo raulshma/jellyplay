@@ -37,7 +37,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -107,9 +106,6 @@ class HomeViewModel @Inject constructor(
                 enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
                 hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
                 _uiState.update { it.copy(
-                    kidsModeEnabled = prefs.kidsModeEnabled,
-                    pinHash = prefs.pinHash,
-                    biometricLockEnabled = prefs.biometricLockEnabled,
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
@@ -354,17 +350,9 @@ class HomeViewModel @Inject constructor(
             val hiddenLibIds = hiddenLibrarySectionIds
             mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
-                    val filteredSections = if (prefs.kidsModeEnabled) {
-                        withContext(kotlinx.coroutines.Dispatchers.Default) {
-                            fetchedSections.map { section ->
-                                section.copy(items = section.items.filter { isAllowedForKids(it, prefs.kidsModeMaxRating) })
-                            }.filter { it.items.isNotEmpty() }
-                        }
-                    } else fetchedSections
+                    _uiState.update { it.copy(sections = fetchedSections) }
 
-                    _uiState.update { it.copy(sections = filteredSections) }
-
-                    val continueWatching = filteredSections
+                    val continueWatching = fetchedSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     val currentIds = continueWatching.map { it.id }.toSet()
@@ -374,16 +362,6 @@ class HomeViewModel @Inject constructor(
                         val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
                         intent.setPackage(context.packageName)
                         context.sendBroadcast(intent)
-                    }
-
-                    if (prefs.kidsModeEnabled) {
-                        mediaRepository.getFavorites(limit = 20)
-                            .onSuccess { result ->
-                                val filteredFavorites = result.items.filter { item ->
-                                    isAllowedForKids(item, prefs.kidsModeMaxRating)
-                                }
-                                _uiState.update { it.copy(favorites = filteredFavorites) }
-                            }
                     }
 
                     _uiState.update { it.copy(error = null) }
@@ -506,15 +484,4 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun isAllowedForKids(item: com.raulshma.jellyplay.core.model.MediaItem, maxRating: String): Boolean {
-        return com.raulshma.jellyplay.core.model.KidsContentFilter.isAllowed(item, maxRating)
-    }
-
-    fun exitKidsMode() {
-        viewModelScope.launch { preferencesStore.setKidsModeEnabled(false) }
-    }
-
-    fun verifyPin(pin: String): Boolean {
-        return preferencesStore.verifyPin(pin, _uiState.value.pinHash)
-    }
 }

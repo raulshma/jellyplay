@@ -81,70 +81,6 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest = md_theme_dark_surfaceContainerHighest,
 )
 
-private val KidsLightColorScheme = lightColorScheme(
-    primary = kids_theme_light_primary,
-    onPrimary = kids_theme_light_onPrimary,
-    primaryContainer = kids_theme_light_primaryContainer,
-    onPrimaryContainer = kids_theme_light_onPrimaryContainer,
-    secondary = kids_theme_light_secondary,
-    onSecondary = kids_theme_light_onSecondary,
-    secondaryContainer = kids_theme_light_secondaryContainer,
-    onSecondaryContainer = kids_theme_light_onSecondaryContainer,
-    tertiary = kids_theme_light_tertiary,
-    onTertiary = kids_theme_light_onTertiary,
-    tertiaryContainer = kids_theme_light_tertiaryContainer,
-    onTertiaryContainer = kids_theme_light_onTertiaryContainer,
-    error = kids_theme_light_error,
-    onError = kids_theme_light_onError,
-    errorContainer = kids_theme_light_errorContainer,
-    onErrorContainer = kids_theme_light_onErrorContainer,
-    background = kids_theme_light_background,
-    onBackground = kids_theme_light_onBackground,
-    surface = kids_theme_light_surface,
-    onSurface = kids_theme_light_onSurface,
-    surfaceVariant = kids_theme_light_surfaceVariant,
-    onSurfaceVariant = kids_theme_light_onSurfaceVariant,
-    outline = kids_theme_light_outline,
-    outlineVariant = kids_theme_light_outlineVariant,
-    surfaceContainerLowest = kids_theme_light_surfaceContainerLowest,
-    surfaceContainerLow = kids_theme_light_surfaceContainerLow,
-    surfaceContainer = kids_theme_light_surfaceContainer,
-    surfaceContainerHigh = kids_theme_light_surfaceContainerHigh,
-    surfaceContainerHighest = kids_theme_light_surfaceContainerHighest,
-)
-
-private val KidsDarkColorScheme = darkColorScheme(
-    primary = kids_theme_dark_primary,
-    onPrimary = kids_theme_dark_onPrimary,
-    primaryContainer = kids_theme_dark_primaryContainer,
-    onPrimaryContainer = kids_theme_dark_onPrimaryContainer,
-    secondary = kids_theme_dark_secondary,
-    onSecondary = kids_theme_dark_onSecondary,
-    secondaryContainer = kids_theme_dark_secondaryContainer,
-    onSecondaryContainer = kids_theme_dark_onSecondaryContainer,
-    tertiary = kids_theme_dark_tertiary,
-    onTertiary = kids_theme_dark_onTertiary,
-    tertiaryContainer = kids_theme_dark_tertiaryContainer,
-    onTertiaryContainer = kids_theme_dark_onTertiaryContainer,
-    error = kids_theme_dark_error,
-    onError = kids_theme_dark_onError,
-    errorContainer = kids_theme_dark_errorContainer,
-    onErrorContainer = kids_theme_dark_onErrorContainer,
-    background = kids_theme_dark_background,
-    onBackground = kids_theme_dark_onBackground,
-    surface = kids_theme_dark_surface,
-    onSurface = kids_theme_dark_onSurface,
-    surfaceVariant = kids_theme_dark_surfaceVariant,
-    onSurfaceVariant = kids_theme_dark_onSurfaceVariant,
-    outline = kids_theme_dark_outline,
-    outlineVariant = kids_theme_dark_outlineVariant,
-    surfaceContainerLowest = kids_theme_dark_surfaceContainerLowest,
-    surfaceContainerLow = kids_theme_dark_surfaceContainerLow,
-    surfaceContainer = kids_theme_dark_surfaceContainer,
-    surfaceContainerHigh = kids_theme_dark_surfaceContainerHigh,
-    surfaceContainerHighest = kids_theme_dark_surfaceContainerHighest,
-)
-
 private val OledColorScheme = darkColorScheme(
     primary = oled_theme_primary,
     onPrimary = oled_theme_onPrimary,
@@ -185,14 +121,6 @@ private val DefaultShapes = Shapes(
     extraLarge = ShapeCache.smooth36,
 )
 
-private val KidsShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
-)
-
 val LocalJellyPlayColorScheme = staticCompositionLocalOf<ColorScheme> { error("No ColorScheme provided") }
 val LocalJellyPlayTypography = staticCompositionLocalOf<androidx.compose.material3.Typography> { error("No Typography provided") }
 val LocalJellyPlayShapes = staticCompositionLocalOf<Shapes> { error("No Shapes provided") }
@@ -203,7 +131,6 @@ fun JellyPlayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     oledMode: Boolean = false,
-    kidsMode: Boolean = false,
     isTv: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -211,7 +138,6 @@ fun JellyPlayTheme(
     val effectiveOledMode = oledMode && effectiveDarkTheme
 
     val colorScheme = when {
-        kidsMode -> if (effectiveDarkTheme) KidsDarkColorScheme else KidsLightColorScheme
         dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (effectiveDarkTheme) {
@@ -226,7 +152,7 @@ fun JellyPlayTheme(
         else -> LightColorScheme
     }
 
-    val shapes = if (kidsMode) KidsShapes else DefaultShapes
+    val shapes = DefaultShapes
 
     val typography = if (isTv) {
         TvTypography

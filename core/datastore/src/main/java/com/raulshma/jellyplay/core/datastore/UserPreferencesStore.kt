@@ -60,8 +60,6 @@ class UserPreferencesStore @Inject constructor(
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val BIOMETRIC_LOCK_ENABLED = stringPreferencesKey("biometric_lock_enabled")
         val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
-        val KIDS_MODE_ENABLED = stringPreferencesKey("kids_mode_enabled")
-        val KIDS_MODE_MAX_RATING = stringPreferencesKey("kids_mode_max_rating")
         val AUTO_LOCK_TIMER_MS = stringPreferencesKey("auto_lock_timer_ms")
         val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
@@ -220,8 +218,6 @@ class UserPreferencesStore @Inject constructor(
             pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
             pinHash = prefs[Keys.PIN_HASH],
             biometricLockEnabled = prefs[Keys.BIOMETRIC_LOCK_ENABLED]?.toBoolean() ?: false,
-            kidsModeEnabled = prefs[Keys.KIDS_MODE_ENABLED]?.toBoolean() ?: false,
-            kidsModeMaxRating = prefs[Keys.KIDS_MODE_MAX_RATING] ?: "PG",
             autoLockTimerMs = prefs[Keys.AUTO_LOCK_TIMER_MS]?.toLongOrNull() ?: 30_000L,
             dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
             dialogueBoostStrength = try {
@@ -428,14 +424,6 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
         context.dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
-    }
-
-    suspend fun setKidsModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.KIDS_MODE_ENABLED] = enabled.toString() }
-    }
-
-    suspend fun setKidsModeMaxRating(rating: String) {
-        context.dataStore.edit { it[Keys.KIDS_MODE_MAX_RATING] = rating }
     }
 
     suspend fun setAutoLockTimerMs(ms: Long) {
