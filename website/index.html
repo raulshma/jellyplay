@@ -35,11 +35,15 @@
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts (Non-Blocking Loading) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+  </noscript>
 
   <!-- Stylesheets -->
   <link rel="stylesheet" href="styles/reset.css">
@@ -47,11 +51,11 @@
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/sections.css">
 
-  <!-- Preload LCP Images -->
-  <link rel="preload" as="image" href="assets/screenshots/video_player.webp">
-  <link rel="preload" as="image" href="assets/screenshots/home.webp">
+  <!-- Preload LCP Images (Viewport-Specific for LCP) -->
+  <link rel="preload" as="image" href="assets/screenshots/video_player.webp" media="(min-width: 1024px)">
+  <link rel="preload" as="image" href="assets/screenshots/home.webp" media="(max-width: 1023px)">
 
-  <!-- Material Web 2.0 via CDN -->
+  <!-- Material Web 2.0 via CDN (Optimized Modular Imports) -->
   <script type="module">
     import 'https://esm.run/@material/web/all.js';
   </script>
@@ -532,35 +536,35 @@
 
       <div class="screenshot-carousel" id="screenshot-carousel">
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/home.webp" alt="JellyPlay home screen" loading="lazy" width="260">
+          <img src="assets/screenshots/home.webp" alt="JellyPlay home screen" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Home</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/library.webp" alt="JellyPlay library browser" loading="lazy" width="260">
+          <img src="assets/screenshots/library.webp" alt="JellyPlay library browser" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Library</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/search.webp" alt="JellyPlay search screen" loading="lazy" width="260">
+          <img src="assets/screenshots/search.webp" alt="JellyPlay search screen" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Search</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/media_detail.webp" alt="JellyPlay media detail page" loading="lazy" width="260">
+          <img src="assets/screenshots/media_detail.webp" alt="JellyPlay media detail page" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Media Detail</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/media_detail_2.webp" alt="JellyPlay secondary media detail" loading="lazy" width="260">
+          <img src="assets/screenshots/media_detail_2.webp" alt="JellyPlay secondary media detail" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Episode List</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/audio_home.webp" alt="JellyPlay audio home" loading="lazy" width="260">
+          <img src="assets/screenshots/audio_home.webp" alt="JellyPlay audio home" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Music Home</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/audio_player.webp" alt="JellyPlay audio player with lyrics" loading="lazy" width="260">
+          <img src="assets/screenshots/audio_player.webp" alt="JellyPlay audio player with lyrics" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Audio Player</div>
         </div>
         <div class="screenshot-card animate-on-scroll">
-          <img src="assets/screenshots/settings.webp" alt="JellyPlay settings" loading="lazy" width="260">
+          <img src="assets/screenshots/settings.webp" alt="JellyPlay settings" loading="lazy" width="260" height="520">
           <div class="screenshot-label">Settings</div>
         </div>
       </div>
@@ -568,7 +572,7 @@
       <!-- Video Player (wide screenshot) -->
       <div class="container" style="margin-top: 32px;">
         <div class="screenshot-wide animate-on-scroll">
-          <img src="assets/screenshots/video_player.webp" alt="JellyPlay video player in landscape mode" loading="lazy">
+          <img src="assets/screenshots/video_player.webp" alt="JellyPlay video player in landscape mode" loading="lazy" width="1000" height="500">
           <div class="screenshot-label">Video Player</div>
         </div>
       </div>
