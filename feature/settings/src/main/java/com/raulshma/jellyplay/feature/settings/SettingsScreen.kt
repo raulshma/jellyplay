@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import android.widget.Toast
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -119,6 +121,7 @@ fun SettingsScreen(
         }
     }
 
+    val currentServerAddress by viewModel.currentServerAddress.collectAsStateWithLifecycle()
     var showPinDialog by remember { mutableStateOf(false) }
     var showPlayerPicker by remember { mutableStateOf(false) }
     var showAudioLanguagePicker by remember { mutableStateOf(false) }
@@ -163,6 +166,15 @@ fun SettingsScreen(
         backgroundColor = backgroundColor,
     ) {
         val scrollState = rememberScrollState()
+        val context = LocalContext.current
+
+        LaunchedEffect(viewModel.messageSentEvent) {
+            viewModel.messageSentEvent?.let { msg ->
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                viewModel.clearMessageEvent()
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,6 +200,17 @@ fun SettingsScreen(
                 if (userName.isNotBlank()) {
                     SettingsProfileBanner(
                         userName = userName,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(1) {
+                if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
+                    ActiveDevicesRow(
+                        sessions = viewModel.activeSessions,
+                        serverAddress = currentServerAddress,
+                        onSendMessage = viewModel::sendMessageToSession,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }

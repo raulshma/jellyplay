@@ -29,6 +29,8 @@ class MainViewModel @Inject constructor(
     val preferencesStore: UserPreferencesStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
+    val webSocketClient: com.raulshma.jellyplay.core.data.syncplay.JellyfinWebSocketClient,
+    private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     val audioPlaybackManager: AudioPlaybackManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
     val appShortcutManager: AppShortcutManager,
@@ -50,6 +52,9 @@ class MainViewModel @Inject constructor(
     private val _navigationRequest = MutableSharedFlow<Route>(extraBufferCapacity = 1)
     val navigationRequest = _navigationRequest.asSharedFlow()
 
+    private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val globalMessage = _globalMessage.asSharedFlow()
+
     init {
         viewModelScope.launch {
             authRepository.restoreSession()
@@ -59,6 +64,49 @@ class MainViewModel @Inject constructor(
             preferences.first()
             _isRestoring.value = false
         }
+        
+        viewModelScope.launch {
+            isAuthenticated.collect { isAuth ->
+                if (isAuth) {
+                    val server = authRepository.currentServer.first()
+                    val user = authRepository.currentUser.first()
+                    if (server != null && user != null) {
+                        webSocketClient.connect(
+                            serverAddress = server.address,
+                            accessToken = user.accessToken,
+                            device = "JellyPlay-${user.id.take(8)}",
+                            deviceName = "JellyPlay",
+                            client = "JellyPlay",
+                        )
+                        try {
+                            apiClient.postCapabilities()
+                        } catch (e: Exception) {
+                            // Ignored
+                        }
+                    }
+                } else {
+                    webSocketClient.disconnect()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            webSocketClient.events.collect { event ->
+                if (event.type == "GeneralCommand") {
+                    val name = event.data.optString("Name")
+                    if (name == "DisplayMessage") {
+                        val args = event.data.optJSONObject("Arguments")
+                        val header = args?.optString("Header") ?: ""
+                        val text = args?.optString("Text") ?: ""
+                        val msg = if (header.isNotBlank()) "$header\n$text" else text
+                        if (msg.isNotBlank()) {
+                            _globalMessage.tryEmit(msg)
+                        }
+                    }
+                }
+            }
+        }
+
         appShortcutManager.observePlaybackForDynamicShortcuts()
     }
 

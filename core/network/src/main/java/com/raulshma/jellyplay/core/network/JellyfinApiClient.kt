@@ -442,4 +442,11 @@ interface JellyfinApiClient {
     ): Result<List<ActivityLogEntry>>
 
     suspend fun getSessions(): Result<List<SessionInfo>>
+
+    suspend fun sendMessageToSession(
+        sessionId: String,
+        header: String,
+        text: String,
+        timeoutMs: Long = 5000,
+    ): Result<Unit>
 }
