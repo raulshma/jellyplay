@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
+import android.animation.ObjectAnimator
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.animation.DecelerateInterpolator
 import androidx.activity.result.contract.ActivityResultContracts
 import android.util.Rational
 import androidx.activity.compose.setContent
@@ -53,6 +56,18 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
+        splashScreen.setOnExitAnimationListener { splashScreenView ->
+            ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f).apply {
+                duration = 400L
+                interpolator = DecelerateInterpolator()
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        splashScreenView.remove()
+                    }
+                })
+                start()
+            }
+        }
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
