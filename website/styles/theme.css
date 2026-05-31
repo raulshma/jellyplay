@@ -1,0 +1,614 @@
+:root {
+  /* ── Design System Color Tokens ── */
+  --md-sys-color-primary: #8b5cf6;       /* Premium Violet */
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #1e1b4b;
+  --md-sys-color-on-primary-container: #ddd6fe;
+  
+  --md-sys-color-secondary: #f43f5e;     /* Elegant Rose/Coral Accent */
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #310815;
+  --md-sys-color-on-secondary-container: #ffe4e6;
+  
+  --md-sys-color-tertiary: #f59e0b;      /* Amber details for contrast */
+  --md-sys-color-on-tertiary: #080612;
+  
+  --md-sys-color-error: #f87171;
+  --md-sys-color-on-error: #450a0a;
+  
+  --md-sys-color-surface: #080612;       /* Deep space slate-indigo background */
+  --md-sys-color-on-surface: #f1f5f9;
+  
+  --md-sys-color-surface-variant: #0e0b1f;
+  --md-sys-color-on-surface-variant: #94a3b8;
+  
+  --md-sys-color-surface-dim: #05040b;
+  --md-sys-color-surface-bright: #130f2c;
+  
+  --md-sys-color-surface-container-lowest: #05040b;
+  --md-sys-color-surface-container-low: #0c091d;
+  --md-sys-color-surface-container: #120e2b;
+  --md-sys-color-surface-container-high: #1a153c;
+  --md-sys-color-surface-container-highest: #241d53;
+  
+  --md-sys-color-outline: rgba(255, 255, 255, 0.05);
+  --md-sys-color-outline-variant: rgba(255, 255, 255, 0.12);
+  
+  --md-sys-color-inverse-surface: #f1f5f9;
+  --md-sys-color-inverse-on-surface: #080612;
+  --md-sys-color-inverse-primary: #7c3aed;
+  
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-background: #080612;
+  --md-sys-color-on-background: #f1f5f9;
+
+  /* ── Typography Tokens ── */
+  --md-ref-typeface-brand: 'Outfit', sans-serif;
+  --md-ref-typeface-plain: 'Inter', sans-serif;
+
+  /* ── Typescale ── */
+  --md-sys-typescale-display-large-font: 'Outfit', sans-serif;
+  --md-sys-typescale-display-large-weight: 800;
+  --md-sys-typescale-display-medium-font: 'Outfit', sans-serif;
+  --md-sys-typescale-display-medium-weight: 700;
+  --md-sys-typescale-display-small-font: 'Outfit', sans-serif;
+  --md-sys-typescale-display-small-weight: 600;
+
+  --md-sys-typescale-headline-large-font: 'Outfit', sans-serif;
+  --md-sys-typescale-headline-large-weight: 700;
+  --md-sys-typescale-headline-medium-font: 'Outfit', sans-serif;
+  --md-sys-typescale-headline-medium-weight: 600;
+  --md-sys-typescale-headline-small-font: 'Outfit', sans-serif;
+  --md-sys-typescale-headline-small-weight: 600;
+
+  --md-sys-typescale-title-large-font: 'Outfit', sans-serif;
+  --md-sys-typescale-title-large-weight: 600;
+  --md-sys-typescale-title-medium-font: 'Outfit', sans-serif;
+  --md-sys-typescale-title-medium-weight: 600;
+  --md-sys-typescale-title-small-font: 'Outfit', sans-serif;
+  --md-sys-typescale-title-small-weight: 500;
+
+  --md-sys-typescale-body-large-font: 'Inter', sans-serif;
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-medium-font: 'Inter', sans-serif;
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-small-font: 'Inter', sans-serif;
+  --md-sys-typescale-body-small-weight: 400;
+
+  /* ── Custom Brand Properties ── */
+  --jp-gradient: linear-gradient(135deg, #8b5cf6, #ec4899, #f43f5e);
+  --jp-gradient-text: linear-gradient(135deg, #a78bfa, #ec4899, #f43f5e);
+  --jp-gradient-accent: linear-gradient(135deg, #c084fc, #ec4899);
+  
+  --jp-surface: #080612;
+  --jp-surface-dim: #05040b;
+  --jp-surface-container: #0e0b1f;
+  --jp-surface-container-high: #15112e;
+  
+  --jp-glow-primary: rgba(139, 92, 246, 0.15);
+  --jp-glow-accent: rgba(244, 63, 94, 0.1);
+  --jp-glass-bg: rgba(14, 11, 31, 0.65);
+  --jp-glass-border: rgba(255, 255, 255, 0.05);
+  --jp-glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  
+  /* ── Shape Tokens ── */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 24px;
+  --md-sys-shape-corner-full: 9999px;
+}
+
+/* ── Material Component Overrides ── */
+md-filled-button {
+  --md-filled-button-container-color: #8b5cf6;
+  --md-filled-button-label-text-color: #ffffff;
+  --md-filled-button-container-shape: 9999px;
+  --md-filled-button-label-text-font: 'Inter', sans-serif;
+  --md-filled-button-label-text-weight: 600;
+  --md-filled-button-hover-state-layer-color: rgba(255, 255, 255, 0.08);
+}
+
+md-outlined-button {
+  --md-outlined-button-outline-color: rgba(255, 255, 255, 0.2);
+  --md-sys-color-outline: rgba(255, 255, 255, 0.2);
+  --md-outlined-button-label-text-color: #f1f5f9;
+  --md-outlined-button-container-shape: 9999px;
+  --md-outlined-button-label-text-font: 'Inter', sans-serif;
+}
+
+md-assist-chip {
+  --md-assist-chip-container-color: var(--jp-surface-container);
+  --md-assist-chip-outline-color: rgba(255, 255, 255, 0.06);
+  --md-assist-chip-label-text-color: rgba(241, 245, 249, 0.85);
+  --md-assist-chip-label-text-font: 'Inter', sans-serif;
+  --md-assist-chip-container-shape: 10px;
+  --md-assist-chip-hover-state-layer-color: rgba(255, 255, 255, 0.06);
+}
+
+md-icon {
+  --md-icon-color: #cbd5e1;
+  --md-icon-size: 24px;
+  --md-icon-font: 'Material Symbols Outlined';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+md-icon:not(:defined) {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  display: inline-block;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utility Classes ── */
+.glass-card {
+  background: var(--jp-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--jp-glass-border);
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  box-shadow: var(--jp-glass-shadow);
+}
+
+.gradient-text {
+  background: var(--jp-gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Custom Link Buttons ── */
+.btn-filled,
+.btn-outlined {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  border-radius: 9999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-filled {
+  background: var(--jp-gradient);
+  color: #ffffff !important;
+  padding: 0 28px;
+  border: none;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+}
+
+.btn-filled:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(244, 63, 94, 0.35);
+  opacity: 0.95;
+}
+
+.btn-filled:active {
+  transform: translateY(0);
+}
+
+.btn-filled md-icon {
+  margin-right: 8px;
+  --md-icon-color: #ffffff;
+  --md-icon-size: 20px;
+}
+
+.btn-outlined {
+  background-color: rgba(255, 255, 255, 0.03);
+  color: #f1f5f9 !important;
+  padding: 0 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-outlined:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff !important;
+  transform: translateY(-2px);
+}
+
+.btn-outlined:active {
+  transform: translateY(0);
+}
+
+.btn-outlined md-icon {
+  margin-right: 8px;
+  --md-icon-color: #cbd5e1;
+  --md-icon-size: 20px;
+}
+
+.btn-filled.has-icon { padding-left: 20px; }
+.btn-outlined.has-icon { padding-left: 20px; }
+
+/* ── GitHub Pill Badge for Nav Bar ── */
+.github-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.github-badge:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.github-badge-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 14px;
+  padding-right: 10px;
+}
+
+.github-badge-logo svg {
+  color: #ffffff;
+}
+
+.github-badge-divider {
+  width: 1px;
+  height: 16px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.github-badge-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 10px;
+  padding-right: 14px;
+  color: #f59e0b;
+}
+
+.github-badge-stars svg {
+  color: #f59e0b;
+}
+
+#github-stars-count {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.github-badge:hover #github-stars-count {
+  color: #ffffff;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   CSS HIGH-FIDELITY DEVICE MOCKUPS
+   ═══════════════════════════════════════════════════ */
+
+/* ── Portrait Smartphone Bezel ── */
+.phone-mockup {
+  position: relative;
+  width: 280px;
+  height: 560px;
+  background: #0f0f15;
+  border-radius: 40px;
+  box-shadow: 
+    0 0 0 10px #1e1e24, /* Frame */
+    0 0 0 12px #2d2d34, /* Outer Rim */
+    0 25px 60px -15px rgba(0, 0, 0, 0.8),
+    0 0 30px rgba(139, 92, 246, 0.2);
+  padding: 0;
+  overflow: hidden;
+  box-sizing: content-box;
+}
+
+/* Landscape Phone */
+.phone-mockup.landscape {
+  width: 500px;
+  height: 250px;
+  border-radius: 30px;
+  box-shadow: 
+    0 0 0 8px #1e1e24, 
+    0 0 0 10px #2d2d34, 
+    0 20px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+  position: relative;
+  background: #05040b;
+}
+
+.phone-screen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Glare highlight */
+.phone-mockup::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0) 100%);
+  z-index: 10;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Dynamic Island/Punch hole camera */
+.phone-camera {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 18px;
+  background: #000000;
+  border-radius: 12px;
+  z-index: 15;
+}
+
+.phone-mockup.landscape .phone-camera {
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+/* ── Smart TV Bezel ── */
+.tv-mockup {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.tv-frame {
+  position: relative;
+  aspect-ratio: 16/9;
+  background: #09090b;
+  border: 10px solid #18181b;
+  border-radius: 12px;
+  box-shadow: 
+    0 20px 50px -10px rgba(0,0,0,0.8),
+    0 0 40px rgba(244, 63, 94, 0.15);
+  overflow: hidden;
+}
+
+.tv-screen {
+  width: 100%;
+  height: 100%;
+  background: #05040b;
+}
+
+.tv-screen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tv-stand-neck {
+  width: 60px;
+  height: 32px;
+  background: #18181b;
+  margin: 0 auto;
+  border-bottom: 1px solid #27272a;
+}
+
+.tv-stand-base {
+  width: 220px;
+  height: 8px;
+  background: linear-gradient(180deg, #27272a 0%, #09090b 100%);
+  margin: 0 auto;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   COMPARISON MATRIX SECTION
+   ═══════════════════════════════════════════════════ */
+.comparison-section {
+  position: relative;
+}
+
+.comparison-wrapper {
+  overflow-x: auto;
+  width: 100%;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(14, 11, 31, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 600px;
+}
+
+.comparison-table th, 
+.comparison-table td {
+  padding: 18px 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9375rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.comparison-table th {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  color: #ffffff;
+  background: rgba(14, 11, 31, 0.8);
+  letter-spacing: 0.5px;
+}
+
+.comparison-table th:first-child {
+  width: 35%;
+}
+
+.comparison-table td {
+  color: rgba(241, 245, 249, 0.8);
+  vertical-align: middle;
+}
+
+.comparison-table tr:last-child td {
+  border-bottom: none;
+}
+
+.comparison-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+  color: #ffffff;
+}
+
+.comparison-feature-title {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.comparison-feature-desc {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.check-icon {
+  color: #10b981; /* Green */
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cross-icon {
+  color: #f43f5e; /* Coral/Rose */
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.highlight-col {
+  background: rgba(139, 92, 246, 0.06);
+  color: #ffffff !important;
+  font-weight: 600;
+  border-left: 1px solid rgba(139, 92, 246, 0.1);
+  border-right: 1px solid rgba(139, 92, 246, 0.1);
+}
+
+th.highlight-col {
+  background: rgba(139, 92, 246, 0.15) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   FAQ ACCORDION SECTION
+   ═══════════════════════════════════════════════════ */
+.faq-grid {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.faq-item {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 11, 31, 0.4);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-item:hover {
+  border-color: rgba(139, 92, 246, 0.2);
+  background: rgba(14, 11, 31, 0.6);
+}
+
+.faq-item.active {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(14, 11, 31, 0.7);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.faq-trigger {
+  width: 100%;
+  padding: 24px;
+  background: none;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+  gap: 16px;
+}
+
+.faq-question {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.faq-icon {
+  color: #8b5cf6;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-item.active .faq-icon {
+  transform: rotate(180deg);
+}
+
+.faq-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-answer {
+  padding: 0 24px 24px 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 0;
+}
