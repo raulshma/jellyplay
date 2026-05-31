@@ -22,6 +22,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -241,48 +244,64 @@ class DownloadRepositoryImpl @Inject constructor(
                 }
                 val offlineEntities = mutableListOf<OfflineMediaEntity>()
 
-                for (episode in episodes) {
-                    try {
-                        val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
-                        val source = episodeDetail?.mediaSources?.firstOrNull()
-                        val streamUrl = if (source != null) {
-                            playbackRepository.getStreamUrl(episode.id, source.id)
-                        } else {
-                            playbackRepository.getStreamUrl(episode.id, episode.id)
-                        }
-
-                        if (streamUrl.isNotBlank()) {
-                            val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
-                            offlineEntities.add(episode.toOfflineMediaEntity(epImageUrl, null))
-
-                            val download = startDownload(
-                                mediaItemId = episode.id,
-                                name = episode.name,
-                                mediaType = MediaType.EPISODE.name,
-                                mediaSourceId = source?.id ?: episode.id,
-                                downloadUrl = streamUrl,
-                                imageUrl = epImageUrl,
-                                imageBlurHash = episode.blurHashes.primary,
-                                seriesId = seriesId,
-                                seasonId = season.id,
-                                seriesName = seriesItem.name,
-                                seasonName = season.name,
-                                episodeNumber = episode.episodeNumber,
-                                seasonNumber = episode.seasonNumber,
-                            ).getOrNull()
-
-                            if (download != null) {
-                                preloadImageToCache(epImageUrl)
-                                enqueueDownloadWorker(download.id)
-                                downloadIds.add(download.id)
-                                source?.trickplayInfo?.let { info ->
-                                    try {
-                                        downloadTrickplayData(episode.id, info, download.downloadPath)
-                                    } catch (_: Exception) { }
+                val episodeResults = coroutineScope {
+                    episodes.map { episode ->
+                        async {
+                            try {
+                                val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
+                                val source = episodeDetail?.mediaSources?.firstOrNull()
+                                val streamUrl = if (source != null) {
+                                    playbackRepository.getStreamUrl(episode.id, source.id)
+                                } else {
+                                    playbackRepository.getStreamUrl(episode.id, episode.id)
                                 }
+
+                                if (streamUrl.isNotBlank()) {
+                                    val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
+                                    val offlineEntity = episode.toOfflineMediaEntity(epImageUrl, null)
+
+                                    val download = startDownload(
+                                        mediaItemId = episode.id,
+                                        name = episode.name,
+                                        mediaType = MediaType.EPISODE.name,
+                                        mediaSourceId = source?.id ?: episode.id,
+                                        downloadUrl = streamUrl,
+                                        imageUrl = epImageUrl,
+                                        imageBlurHash = episode.blurHashes.primary,
+                                        seriesId = seriesId,
+                                        seasonId = season.id,
+                                        seriesName = seriesItem.name,
+                                        seasonName = season.name,
+                                        episodeNumber = episode.episodeNumber,
+                                        seasonNumber = episode.seasonNumber,
+                                    ).getOrNull()
+
+                                    if (download != null) {
+                                        preloadImageToCache(epImageUrl)
+                                        enqueueDownloadWorker(download.id)
+                                        source?.trickplayInfo?.let { info ->
+                                            try {
+                                                downloadTrickplayData(episode.id, info, download.downloadPath)
+                                            } catch (_: Exception) { }
+                                        }
+                                        Pair(offlineEntity, download.id)
+                                    } else {
+                                        Pair(offlineEntity, null)
+                                    }
+                                } else {
+                                    null
+                                }
+                            } catch (_: Exception) {
+                                null
                             }
                         }
-                    } catch (_: Exception) {
+                    }.awaitAll()
+                }
+
+                for (result in episodeResults) {
+                    if (result != null) {
+                        offlineEntities.add(result.first)
+                        result.second?.let { downloadIds.add(it) }
                     }
                 }
 

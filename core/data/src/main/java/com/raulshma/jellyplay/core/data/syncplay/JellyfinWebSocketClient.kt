@@ -15,6 +15,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import kotlin.random.Random
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -97,7 +98,7 @@ class JellyfinWebSocketClient @Inject constructor(
             Log.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, giving up")
             return
         }
-        val delayMs = (1000L * attempts).coerceAtMost(30_000L)
+        val delayMs = (1000L * (1L shl (attempts - 1).coerceAtMost(4)) + (0..1000L).random()).coerceAtMost(30_000L)
         scope.launch {
             delay(delayMs)
             if (serverUrl != null && token != null) {

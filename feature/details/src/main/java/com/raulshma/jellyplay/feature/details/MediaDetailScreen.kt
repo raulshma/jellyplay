@@ -596,7 +596,7 @@ private fun DetailContent(
                             ),
                             startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
-                        )
+                            )
                     )
             )
         }

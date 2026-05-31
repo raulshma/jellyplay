@@ -18,6 +18,9 @@ class PlaybackRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
 ) : PlaybackRepository {
 
+    private data class CachedSegments(val segments: List<MediaSegment>, val timestamp: Long)
+    private val segmentsCache = mutableMapOf<String, CachedSegments>()
+
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
         apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
 
@@ -66,9 +69,17 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getCreditTimestamps(itemId)
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
+        val cached = segmentsCache[itemId]
+        if (cached != null && System.currentTimeMillis() - cached.timestamp < 5 * 60 * 1000L) {
+            return Result.success(cached.segments)
+        }
+
         val segmentsResult = apiClient.getMediaSegments(itemId)
         val segments = segmentsResult.getOrDefault(emptyList())
-        if (segments.isNotEmpty()) return Result.success(segments)
+        if (segments.isNotEmpty()) {
+            segmentsCache[itemId] = CachedSegments(segments, System.currentTimeMillis())
+            return Result.success(segments)
+        }
 
         return coroutineScope {
             val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
@@ -103,7 +114,9 @@ class PlaybackRepositoryImpl @Inject constructor(
                     )
                 }
             }
-            Result.success(fallbackSegments)
+            val result = Result.success(fallbackSegments)
+            segmentsCache[itemId] = CachedSegments(fallbackSegments, System.currentTimeMillis())
+            result
         }
     }
 

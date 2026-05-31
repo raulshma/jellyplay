@@ -97,7 +97,7 @@ class JellyfinApiClientImpl @Inject constructor(
     private suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
 
-    private companion object {
+    internal companion object {
         val sharedJson = Json { ignoreUnknownKeys = true }
         private val CACHED_CAPABILITIES by lazy {
             org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
@@ -894,10 +894,10 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun toggleFavorite(itemId: String): Result<Boolean> = apiResult {
+    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = apiResult {
         val uuid = itemId.toUUID()
-        val item = requireApi().userLibraryApi.getItem(itemId = uuid).content
-        if (item.userData?.isFavorite == true) {
+        val isFavorite = currentIsFavorite ?: requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+        if (isFavorite) {
             requireApi().userLibraryApi.unmarkFavoriteItem(
                 userId = _currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
@@ -1742,47 +1742,57 @@ class JellyfinApiClientImpl @Inject constructor(
             )
         } ?: emptyList()
 
-        val cultures = try {
-            val culturesUrl = "${server.address}/Localization/Cultures"
-            val culturesRequest = Request.Builder()
-                .url(culturesUrl)
-                .header("X-Emby-Token", user.accessToken)
-                .build()
-            okHttpClient.newCall(culturesRequest).execute().use { response ->
-                response.body?.string()?.let { body ->
-                    sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
-                        val obj = elem.jsonObject
-                        com.raulshma.jellyplay.core.model.CultureInfo(
-                            name = obj["Name"]?.jsonPrimitive?.content ?: "",
-                            displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
-                            twoLetterISOLanguageName = obj["TwoLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
-                            threeLetterISOLanguageName = obj["ThreeLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
-                        )
+        val result = coroutineScope {
+            val culturesDeferred = async {
+                try {
+                    val culturesUrl = "${server.address}/Localization/Cultures"
+                    val culturesRequest = Request.Builder()
+                        .url(culturesUrl)
+                        .header("X-Emby-Token", user.accessToken)
+                        .build()
+                    okHttpClient.newCall(culturesRequest).execute().use { response ->
+                        response.body?.string()?.let { body ->
+                            sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
+                                val obj = elem.jsonObject
+                                com.raulshma.jellyplay.core.model.CultureInfo(
+                                    name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                                    displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
+                                    twoLetterISOLanguageName = obj["TwoLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
+                                    threeLetterISOLanguageName = obj["ThreeLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
+                                )
+                            }
+                        } ?: emptyList()
                     }
-                } ?: emptyList()
+                } catch (_: Exception) { emptyList() }
             }
-        } catch (_: Exception) { emptyList() }
 
-        val countries = try {
-            val countriesUrl = "${server.address}/Localization/Countries"
-            val countriesRequest = Request.Builder()
-                .url(countriesUrl)
-                .header("X-Emby-Token", user.accessToken)
-                .build()
-            okHttpClient.newCall(countriesRequest).execute().use { response ->
-                response.body?.string()?.let { body ->
-                    sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
-                        val obj = elem.jsonObject
-                        com.raulshma.jellyplay.core.model.CountryInfo(
-                            name = obj["Name"]?.jsonPrimitive?.content ?: "",
-                            displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
-                            twoLetterISORegionName = obj["TwoLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
-                            threeLetterISORegionName = obj["ThreeLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
-                        )
+            val countriesDeferred = async {
+                try {
+                    val countriesUrl = "${server.address}/Localization/Countries"
+                    val countriesRequest = Request.Builder()
+                        .url(countriesUrl)
+                        .header("X-Emby-Token", user.accessToken)
+                        .build()
+                    okHttpClient.newCall(countriesRequest).execute().use { response ->
+                        response.body?.string()?.let { body ->
+                            sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
+                                val obj = elem.jsonObject
+                                com.raulshma.jellyplay.core.model.CountryInfo(
+                                    name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                                    displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
+                                    twoLetterISORegionName = obj["TwoLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
+                                    threeLetterISORegionName = obj["ThreeLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
+                                )
+                            }
+                        } ?: emptyList()
                     }
-                } ?: emptyList()
+                } catch (_: Exception) { emptyList() }
             }
-        } catch (_: Exception) { emptyList() }
+
+            culturesDeferred.await() to countriesDeferred.await()
+        }
+
+        val (cultures, countries) = result
 
         com.raulshma.jellyplay.core.model.MetadataEditorInfo(
             parentalRatingOptions = parentalRatings,

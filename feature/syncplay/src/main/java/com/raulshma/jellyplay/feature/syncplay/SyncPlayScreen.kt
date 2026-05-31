@@ -483,7 +483,7 @@ private fun ActiveGroupView(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(groupInfo.participants, contentType = { "participant" }) { participant ->
+            items(groupInfo.participants, key = { it.userId }, contentType = { "participant" }) { participant ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(

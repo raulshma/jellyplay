@@ -610,4 +610,9 @@ class AudioPlayerViewModel @Inject constructor(
         get() = audioPlaybackManager.currentPlayingItemId.value
 
     private fun keySentinel(id: String) = "§null§$id"
+
+    override fun onCleared() {
+        super.onCleared()
+        stopPlayback()
+    }
 }

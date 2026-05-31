@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,6 +48,13 @@ class JellyPlayNotificationProvider(
     private var cachedBitmap: Bitmap? = null
     private var cachedArtworkUri: String? = null
     private var cachedAccentColor: Int = FALLBACK_COLOR
+
+    fun release() {
+        scope.cancel()
+        cachedBitmap?.recycle()
+        cachedBitmap = null
+        cachedArtworkUri = null
+    }
 
     init {
         ensureNotificationChannel()
@@ -165,7 +173,9 @@ class JellyPlayNotificationProvider(
                 val bitmap = result.image?.toBitmap()
 
                 if (bitmap != null) {
+                    val old = cachedBitmap
                     cachedBitmap = bitmap
+                    old?.recycle()
                     cachedAccentColor = extractAccentColor(bitmap)
                     withContext(Dispatchers.Main) {
                         callback.onNotificationChanged(

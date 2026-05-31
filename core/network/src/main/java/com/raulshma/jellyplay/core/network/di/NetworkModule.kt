@@ -77,9 +77,17 @@ abstract class NetworkModule {
                 .retryOnConnectionFailure(true)
                 .addNetworkInterceptor { chain ->
                     val response = chain.proceed(chain.request())
-                    if (response.isSuccessful && chain.request().url.encodedPath.contains("/Images/")) {
+                    val path = chain.request().url.encodedPath
+                    val cacheMaxAge = when {
+                        path.contains("/Images/") -> 604800
+                        path.contains("/Genres") -> 300
+                        path.contains("/System/Info") -> 600
+                        path.contains("/Library/MediaFolders") -> 300
+                        else -> null
+                    }
+                    if (response.isSuccessful && cacheMaxAge != null) {
                         response.newBuilder()
-                            .header("Cache-Control", "max-age=604800")
+                            .header("Cache-Control", "max-age=$cacheMaxAge")
                             .build()
                     } else {
                         response

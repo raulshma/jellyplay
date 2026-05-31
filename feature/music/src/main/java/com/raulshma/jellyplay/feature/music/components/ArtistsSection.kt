@@ -76,7 +76,7 @@ fun ArtistsSection(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(artists) { artist ->
+            items(artists, key = { it.id }) { artist ->
                 HeartShapeArtistCard(
                     artist = artist,
                     onClick = { onArtistClick(artist.id) },

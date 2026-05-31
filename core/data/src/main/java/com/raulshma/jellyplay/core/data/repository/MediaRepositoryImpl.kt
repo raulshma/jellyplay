@@ -430,6 +430,10 @@ class MediaRepositoryImpl @Inject constructor(
                 fetchedAt = System.currentTimeMillis(),
             )
         )
+        try {
+            lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
+        } catch (_: Exception) {
+        }
     }
 
     companion object {

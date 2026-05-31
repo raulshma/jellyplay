@@ -409,13 +409,13 @@ fun PosterCard(
                         .fillMaxWidth()
                         .height(60.dp)
                         .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
-                                ),
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                                    ),
+                                )
                             )
-                        )
                 )
 
                 if (item.isPlayed) {
