@@ -378,7 +378,7 @@ md-assist-chip {
   --md-assist-chip-container-color: var(--jp-surface-container);
   --md-assist-chip-outline-color: var(--jp-white-alpha-12);
   --md-assist-chip-label-text-color: var(--jp-color-slate-100);
-  --md-assist-chip-label-text-font: 'Inter', sans-serif;
+  --md-assist-chip-label-text-font: 500 0.8125rem/1.25rem 'Inter', sans-serif; /* Valid CSS font shorthand including size, weight, line-height, and family */
   --md-assist-chip-container-shape: 9999px; /* Pill corners */
   --md-assist-chip-hover-state-layer-color: var(--jp-white-alpha-08);
 
@@ -386,11 +386,11 @@ md-assist-chip {
   --md-assist-chip-container-height: 40px;
   --md-assist-chip-leading-space: 18px;
   --md-assist-chip-trailing-space: 18px;
-  --md-assist-chip-icon-label-padding: 12px; /* Increased space between icon and label */
+  --md-assist-chip-icon-label-padding: 12px; /* Spacing handled natively by component tokens */
 }
 
-md-assist-chip md-icon {
-  margin-right: 12px; /* Fallback explicit spacing for robust styling */
+md-assist-chip [slot="icon"] {
+  margin-right: 8px; /* Clean spacing between leading icon and label text */
 }
 
 md-icon {
