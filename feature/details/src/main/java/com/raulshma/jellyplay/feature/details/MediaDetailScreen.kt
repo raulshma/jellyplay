@@ -2594,6 +2594,22 @@ private fun EpisodeCard(
                         .background(MaterialTheme.colorScheme.primary)
                 )
             }
+            if (episode.isPlayed && (episode.playbackPositionTicks == null || episode.playbackPositionTicks!! <= 0)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(ShapeCache.smooth4)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "Watched",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                    )
+                }
+            }
         }
 
         Column(modifier = Modifier.padding(16.dp)) {
