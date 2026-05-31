@@ -35,7 +35,9 @@ dependencies {
     implementation(libs.palette.ktx)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.compose.ui.google.fonts)
     implementation(libs.androidx.core.ktx)
+    implementation(project(":core:model"))
     api(libs.smooth.corner.rect)
 
     // Android TV

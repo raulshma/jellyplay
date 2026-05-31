@@ -47,6 +47,7 @@ data class UserPreferences(
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val dynamicTheming: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val oledMode: Boolean = false,
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -137,6 +138,14 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+}
+
+@Immutable
+@Serializable
+enum class ContrastLevel {
+    DEFAULT,
+    MEDIUM,
+    HIGH,
 }
 
 @Immutable

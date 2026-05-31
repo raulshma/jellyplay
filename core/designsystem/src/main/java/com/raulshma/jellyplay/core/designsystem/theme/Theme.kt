@@ -13,9 +13,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
+import com.raulshma.jellyplay.core.model.ContrastLevel
 
 private val LightColorScheme = lightColorScheme(
     primary = md_theme_light_primary,
@@ -81,6 +81,134 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest = md_theme_dark_surfaceContainerHighest,
 )
 
+private val MediumContrastLightColorScheme = lightColorScheme(
+    primary = md_theme_light_mediumContrast_primary,
+    onPrimary = md_theme_light_mediumContrast_onPrimary,
+    primaryContainer = md_theme_light_mediumContrast_primaryContainer,
+    onPrimaryContainer = md_theme_light_mediumContrast_onPrimaryContainer,
+    secondary = md_theme_light_mediumContrast_secondary,
+    onSecondary = md_theme_light_mediumContrast_onSecondary,
+    secondaryContainer = md_theme_light_mediumContrast_secondaryContainer,
+    onSecondaryContainer = md_theme_light_mediumContrast_onSecondaryContainer,
+    tertiary = md_theme_light_mediumContrast_tertiary,
+    onTertiary = md_theme_light_mediumContrast_onTertiary,
+    tertiaryContainer = md_theme_light_mediumContrast_tertiaryContainer,
+    onTertiaryContainer = md_theme_light_mediumContrast_onTertiaryContainer,
+    error = md_theme_light_mediumContrast_error,
+    onError = md_theme_light_mediumContrast_onError,
+    errorContainer = md_theme_light_mediumContrast_errorContainer,
+    onErrorContainer = md_theme_light_mediumContrast_onErrorContainer,
+    background = md_theme_light_mediumContrast_background,
+    onBackground = md_theme_light_mediumContrast_onBackground,
+    surface = md_theme_light_mediumContrast_surface,
+    onSurface = md_theme_light_mediumContrast_onSurface,
+    surfaceVariant = md_theme_light_mediumContrast_surfaceVariant,
+    onSurfaceVariant = md_theme_light_mediumContrast_onSurfaceVariant,
+    outline = md_theme_light_mediumContrast_outline,
+    outlineVariant = md_theme_light_mediumContrast_outlineVariant,
+    surfaceContainerLowest = md_theme_light_mediumContrast_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_light_mediumContrast_surfaceContainerLow,
+    surfaceContainer = md_theme_light_mediumContrast_surfaceContainer,
+    surfaceContainerHigh = md_theme_light_mediumContrast_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_light_mediumContrast_surfaceContainerHighest,
+)
+
+private val HighContrastLightColorScheme = lightColorScheme(
+    primary = md_theme_light_highContrast_primary,
+    onPrimary = md_theme_light_highContrast_onPrimary,
+    primaryContainer = md_theme_light_highContrast_primaryContainer,
+    onPrimaryContainer = md_theme_light_highContrast_onPrimaryContainer,
+    secondary = md_theme_light_highContrast_secondary,
+    onSecondary = md_theme_light_highContrast_onSecondary,
+    secondaryContainer = md_theme_light_highContrast_secondaryContainer,
+    onSecondaryContainer = md_theme_light_highContrast_onSecondaryContainer,
+    tertiary = md_theme_light_highContrast_tertiary,
+    onTertiary = md_theme_light_highContrast_onTertiary,
+    tertiaryContainer = md_theme_light_highContrast_tertiaryContainer,
+    onTertiaryContainer = md_theme_light_highContrast_onTertiaryContainer,
+    error = md_theme_light_highContrast_error,
+    onError = md_theme_light_highContrast_onError,
+    errorContainer = md_theme_light_highContrast_errorContainer,
+    onErrorContainer = md_theme_light_highContrast_onErrorContainer,
+    background = md_theme_light_highContrast_background,
+    onBackground = md_theme_light_highContrast_onBackground,
+    surface = md_theme_light_highContrast_surface,
+    onSurface = md_theme_light_highContrast_onSurface,
+    surfaceVariant = md_theme_light_highContrast_surfaceVariant,
+    onSurfaceVariant = md_theme_light_highContrast_onSurfaceVariant,
+    outline = md_theme_light_highContrast_outline,
+    outlineVariant = md_theme_light_highContrast_outlineVariant,
+    surfaceContainerLowest = md_theme_light_highContrast_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_light_highContrast_surfaceContainerLow,
+    surfaceContainer = md_theme_light_highContrast_surfaceContainer,
+    surfaceContainerHigh = md_theme_light_highContrast_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_light_highContrast_surfaceContainerHighest,
+)
+
+private val MediumContrastDarkColorScheme = darkColorScheme(
+    primary = md_theme_dark_mediumContrast_primary,
+    onPrimary = md_theme_dark_mediumContrast_onPrimary,
+    primaryContainer = md_theme_dark_mediumContrast_primaryContainer,
+    onPrimaryContainer = md_theme_dark_mediumContrast_onPrimaryContainer,
+    secondary = md_theme_dark_mediumContrast_secondary,
+    onSecondary = md_theme_dark_mediumContrast_onSecondary,
+    secondaryContainer = md_theme_dark_mediumContrast_secondaryContainer,
+    onSecondaryContainer = md_theme_dark_mediumContrast_onSecondaryContainer,
+    tertiary = md_theme_dark_mediumContrast_tertiary,
+    onTertiary = md_theme_dark_mediumContrast_onTertiary,
+    tertiaryContainer = md_theme_dark_mediumContrast_tertiaryContainer,
+    onTertiaryContainer = md_theme_dark_mediumContrast_onTertiaryContainer,
+    error = md_theme_dark_mediumContrast_error,
+    onError = md_theme_dark_mediumContrast_onError,
+    errorContainer = md_theme_dark_mediumContrast_errorContainer,
+    onErrorContainer = md_theme_dark_mediumContrast_onErrorContainer,
+    background = md_theme_dark_mediumContrast_background,
+    onBackground = md_theme_dark_mediumContrast_onBackground,
+    surface = md_theme_dark_mediumContrast_surface,
+    onSurface = md_theme_dark_mediumContrast_onSurface,
+    surfaceVariant = md_theme_dark_mediumContrast_surfaceVariant,
+    onSurfaceVariant = md_theme_dark_mediumContrast_onSurfaceVariant,
+    outline = md_theme_dark_mediumContrast_outline,
+    outlineVariant = md_theme_dark_mediumContrast_outlineVariant,
+    surfaceContainerLowest = md_theme_dark_mediumContrast_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_dark_mediumContrast_surfaceContainerLow,
+    surfaceContainer = md_theme_dark_mediumContrast_surfaceContainer,
+    surfaceContainerHigh = md_theme_dark_mediumContrast_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_dark_mediumContrast_surfaceContainerHighest,
+)
+
+private val HighContrastDarkColorScheme = darkColorScheme(
+    primary = md_theme_dark_highContrast_primary,
+    onPrimary = md_theme_dark_highContrast_onPrimary,
+    primaryContainer = md_theme_dark_highContrast_primaryContainer,
+    onPrimaryContainer = md_theme_dark_highContrast_onPrimaryContainer,
+    secondary = md_theme_dark_highContrast_secondary,
+    onSecondary = md_theme_dark_highContrast_onSecondary,
+    secondaryContainer = md_theme_dark_highContrast_secondaryContainer,
+    onSecondaryContainer = md_theme_dark_highContrast_onSecondaryContainer,
+    tertiary = md_theme_dark_highContrast_tertiary,
+    onTertiary = md_theme_dark_highContrast_onTertiary,
+    tertiaryContainer = md_theme_dark_highContrast_tertiaryContainer,
+    onTertiaryContainer = md_theme_dark_highContrast_onTertiaryContainer,
+    error = md_theme_dark_highContrast_error,
+    onError = md_theme_dark_highContrast_onError,
+    errorContainer = md_theme_dark_highContrast_errorContainer,
+    onErrorContainer = md_theme_dark_highContrast_onErrorContainer,
+    background = md_theme_dark_highContrast_background,
+    onBackground = md_theme_dark_highContrast_onBackground,
+    surface = md_theme_dark_highContrast_surface,
+    onSurface = md_theme_dark_highContrast_onSurface,
+    surfaceVariant = md_theme_dark_highContrast_surfaceVariant,
+    onSurfaceVariant = md_theme_dark_highContrast_onSurfaceVariant,
+    outline = md_theme_dark_highContrast_outline,
+    outlineVariant = md_theme_dark_highContrast_outlineVariant,
+    surfaceContainerLowest = md_theme_dark_highContrast_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_dark_highContrast_surfaceContainerLow,
+    surfaceContainer = md_theme_dark_highContrast_surfaceContainer,
+    surfaceContainerHigh = md_theme_dark_highContrast_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_dark_highContrast_surfaceContainerHighest,
+)
+
 private val OledColorScheme = darkColorScheme(
     primary = oled_theme_primary,
     onPrimary = oled_theme_onPrimary,
@@ -131,6 +259,7 @@ fun JellyPlayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     oledMode: Boolean = false,
+    contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     isTv: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -148,8 +277,16 @@ fun JellyPlayTheme(
             }
         }
         effectiveOledMode -> OledColorScheme
-        effectiveDarkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        effectiveDarkTheme -> when (contrastLevel) {
+            ContrastLevel.MEDIUM -> MediumContrastDarkColorScheme
+            ContrastLevel.HIGH -> HighContrastDarkColorScheme
+            ContrastLevel.DEFAULT -> DarkColorScheme
+        }
+        else -> when (contrastLevel) {
+            ContrastLevel.MEDIUM -> MediumContrastLightColorScheme
+            ContrastLevel.HIGH -> HighContrastLightColorScheme
+            ContrastLevel.DEFAULT -> LightColorScheme
+        }
     }
 
     val shapes = DefaultShapes

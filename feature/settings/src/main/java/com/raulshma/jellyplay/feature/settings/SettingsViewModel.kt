@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -114,6 +115,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { preferencesStore.setThemeMode(mode) }
+    }
+
+    fun setContrastLevel(level: ContrastLevel) {
+        viewModelScope.launch { preferencesStore.setContrastLevel(level) }
     }
 
     fun setOledMode(enabled: Boolean) {
