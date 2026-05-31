@@ -290,13 +290,44 @@
     const phoneList = document.getElementById('phone-download-list');
     const tvList = document.getElementById('tv-download-list');
     
+    // Dropdown selectors
+    const dropdownList = document.getElementById('dropdown-list');
+    const dropdownToggleBtn = document.getElementById('hero-download-btn-right');
+    const dropdownMenu = document.getElementById('download-dropdown-menu');
+    
     const modal = document.getElementById('download-modal');
     const closeBtn = document.getElementById('modal-close-btn');
     const triggerBtns = document.querySelectorAll('.trigger-download-modal');
     
     if (!navBadge || !navVersionEl || !modalVersionEl || !phoneList || !tvList || !modal) return;
 
-    // --- 1. Modal open/close listeners (Attach synchronously at startup) ---
+    // --- 1. Dropdown Toggle and Document Clicks ---
+    if (dropdownToggleBtn && dropdownMenu) {
+      dropdownToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const expanded = dropdownToggleBtn.getAttribute('aria-expanded') === 'true';
+        dropdownToggleBtn.setAttribute('aria-expanded', !expanded);
+        dropdownMenu.classList.toggle('active', !expanded);
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!dropdownMenu.contains(e.target) && e.target !== dropdownToggleBtn) {
+          dropdownToggleBtn.setAttribute('aria-expanded', 'false');
+          dropdownMenu.classList.remove('active');
+        }
+      });
+
+      // Prevent closing when clicking inside the dropdown header or sections
+      dropdownMenu.addEventListener('click', (e) => {
+        if (!e.target.closest('.download-item-btn') && !e.target.closest('.download-item-btn span')) {
+          e.stopPropagation();
+        }
+      });
+    }
+
+    // --- 2. Modal open/close listeners (Attach synchronously at startup) ---
     function openModal() {
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
@@ -332,8 +363,14 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.classList.contains('active')) {
-        closeModal();
+      if (e.key === 'Escape') {
+        if (modal.classList.contains('active')) {
+          closeModal();
+        }
+        if (dropdownToggleBtn && dropdownMenu && dropdownMenu.classList.contains('active')) {
+          dropdownToggleBtn.setAttribute('aria-expanded', 'false');
+          dropdownMenu.classList.remove('active');
+        }
       }
     });
 
@@ -341,7 +378,7 @@
     const fallbackData = getFallbackData();
     populateDownloads(fallbackData);
 
-    // --- 2. Fetch Release Data asynchronously in background ---
+    // --- 3. Fetch Release Data asynchronously in background ---
     const cacheKey = 'jellyplay_latest_release';
     const cacheDuration = 3600000; // 1 hour
     let releaseData = null;
@@ -395,28 +432,39 @@
 
       phoneList.innerHTML = '';
       tvList.innerHTML = '';
+      if (dropdownList) dropdownList.innerHTML = '';
 
       let phoneCount = 0;
       let tvCount = 0;
+      let dropdownCount = 0;
 
       data.assets.forEach(asset => {
         if (asset.name.endsWith('.apk')) {
-          const html = createDownloadItemHTML(asset);
+          const modalHtml = createDownloadItemHTML(asset);
           if (asset.name.includes('-phone-')) {
-            phoneList.insertAdjacentHTML('beforeend', html);
+            phoneList.insertAdjacentHTML('beforeend', modalHtml);
             phoneCount++;
           } else if (asset.name.includes('-tv-')) {
-            tvList.insertAdjacentHTML('beforeend', html);
+            tvList.insertAdjacentHTML('beforeend', modalHtml);
             tvCount++;
+          }
+
+          if (dropdownList) {
+            const dropdownHtml = createCompactDropdownItemHTML(asset);
+            dropdownList.insertAdjacentHTML('beforeend', dropdownHtml);
+            dropdownCount++;
           }
         }
       });
 
       if (phoneCount === 0) {
-        phoneList.innerHTML = `<p style="color: rgba(255,255,255,0.4); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No phone APKs found.</p>`;
+        phoneList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No phone APKs found.</p>`;
       }
       if (tvCount === 0) {
-        tvList.innerHTML = `<p style="color: rgba(255,255,255,0.4); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No TV APKs found.</p>`;
+        tvList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No TV APKs found.</p>`;
+      }
+      if (dropdownCount === 0 && dropdownList) {
+        dropdownList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No downloads found.</p>`;
       }
     }
   }
@@ -460,6 +508,37 @@
           <span class="material-symbols-outlined">download</span>
         </a>
       </div>
+    `;
+  }
+
+  function createCompactDropdownItemHTML(asset) {
+    let deviceIcon = 'phone_android';
+    let deviceTitle = 'Phone & Tablet Build';
+    if (asset.name.includes('-tv-')) {
+      deviceIcon = 'tv';
+      deviceTitle = 'Android TV Build';
+    }
+    
+    let archLabel = 'Universal';
+    if (asset.name.includes('universal')) {
+      archLabel = 'Universal';
+    } else if (asset.name.includes('arm64-v8a')) {
+      archLabel = 'ARM64';
+    } else if (asset.name.includes('x86_64')) {
+      archLabel = 'x86_64';
+    }
+
+    const sizeStr = asset.size ? formatBytes(asset.size) : 'APK';
+    
+    return `
+      <a href="${asset.url}" class="compact-dropdown-item" download>
+        <span class="dropdown-item-left">
+          <md-icon class="device-icon" title="${deviceTitle}">${deviceIcon}</md-icon>
+          <md-icon class="android-icon" title="Android Installer (APK)">android</md-icon>
+          <span class="dropdown-item-title">${archLabel}</span>
+        </span>
+        <span class="dropdown-item-info">${sizeStr}</span>
+      </a>
     `;
   }
 

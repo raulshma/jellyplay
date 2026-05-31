@@ -7,7 +7,7 @@
   <meta name="description" content="JellyPlay is a modern, open-source Jellyfin client for Android. Stream movies, music, and live TV with a beautiful Material 3 interface. Supports Android phones, tablets, foldables, and Android TV.">
   <meta name="keywords" content="JellyPlay, Jellyfin, Android, media player, streaming, open source, Jellyfin client">
   <meta name="author" content="raulshma">
-  <meta name="theme-color" content="#080612">
+  <meta name="theme-color" content="var(--md-sys-color-background)">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
@@ -170,10 +170,22 @@
             JellyPlay is a high-fidelity, open-source media player for Jellyfin. Built using Kotlin and Jetpack Compose, it features dynamic color theming, offline downloads, and multi-engine playback tailored for modern media enthusiasts.
           </p>
           <div class="hero-actions">
-            <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="btn-filled has-icon" id="hero-download-btn">
-              <md-icon>download</md-icon>
-              Download App
-            </a>
+            <div class="split-btn-group" id="hero-download-split-btn">
+              <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="btn-split-left" id="hero-download-btn-left">
+                <md-icon>download</md-icon>
+                <span>Download App</span>
+              </a>
+              <button type="button" class="btn-split-right" id="hero-download-btn-right" aria-label="Show downloads menu" aria-haspopup="true" aria-expanded="false">
+                <md-icon>expand_more</md-icon>
+              </button>
+              
+              <!-- Dropdown Menu -->
+              <div class="download-dropdown-menu" id="download-dropdown-menu" aria-label="Available downloads">
+                <div class="dropdown-list" id="dropdown-list">
+                  <!-- Dynamically populated with compact items -->
+                </div>
+              </div>
+            </div>
             <a href="https://github.com/raulshma/JellyPlay" target="_blank" rel="noopener noreferrer" class="btn-outlined has-icon" id="hero-github-btn">
               <md-icon>code</md-icon>
               View GitHub
