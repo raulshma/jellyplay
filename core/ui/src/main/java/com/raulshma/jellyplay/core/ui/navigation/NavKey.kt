@@ -46,6 +46,8 @@ sealed class Route : NavKey {
 
     @Serializable data object Settings : Route()
 
+    @Serializable data object Onboarding : Route()
+
     @Serializable data object ServerManagement : Route()
     @Serializable data object UserManagement : Route()
     @Serializable data object SeerrSettings : Route()

@@ -117,6 +117,7 @@ data class UserPreferences(
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val hiddenLibrarySectionIds: Set<String> = emptySet(),
     val navBarShowLabels: Boolean = true,
+    val onboardingCompleted: Boolean = false,
 )
 
 @Immutable

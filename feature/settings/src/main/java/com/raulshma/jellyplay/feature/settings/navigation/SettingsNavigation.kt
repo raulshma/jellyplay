@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.feature.settings.UserManagementScreen
 fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
     onLogout: () -> Unit,
+    onSetupWizard: () -> Unit = {},
 ) {
     entry<Route.Settings> {
         SettingsScreen(
@@ -21,6 +22,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onUserManagement = { navigator.navigate(Route.UserManagement) },
             onSeerrSettings = { navigator.navigate(Route.SeerrSettings) },
             onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
+            onSetupWizard = onSetupWizard,
         )
     }
 

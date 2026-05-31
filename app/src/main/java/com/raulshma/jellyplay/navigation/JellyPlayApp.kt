@@ -125,6 +125,7 @@ import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
+import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -134,8 +135,15 @@ fun JellyPlayApp(
     viewModel: MainViewModel,
 ) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     when {
+        isAuthenticated && !preferences.onboardingCompleted -> {
+            OnboardingContent(
+                onComplete = {},
+                viewModel = viewModel,
+            )
+        }
         isAuthenticated -> {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
@@ -178,6 +186,16 @@ private fun AuthContent(
 }
 
 @Composable
+private fun OnboardingContent(
+    onComplete: () -> Unit,
+    viewModel: MainViewModel,
+) {
+    com.raulshma.jellyplay.feature.onboarding.OnboardingScreen(
+        onComplete = onComplete,
+    )
+}
+
+@Composable
 private fun MainContent(
     onLogout: () -> Unit,
     viewModel: MainViewModel,
@@ -198,6 +216,9 @@ private fun MainContent(
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
+    val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
+            currentRoute is Route.Onboarding
+
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
@@ -215,7 +236,7 @@ private fun MainContent(
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
-    val showMiniPlayer = audioItemId != null && !isAudioPlayerScreen && !isPlayerScreen && !isMiniPlayerDismissed
+    val showMiniPlayer = audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed
 
     LaunchedEffect(audioItemId) {
         if (audioItemId != null) {
@@ -297,9 +318,9 @@ private fun MainContent(
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
                 LocalNavigationBarColor provides navBarColorState,
-                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isPlayerScreen) bottomNavOffsetHeightPx.floatValue else 0f)
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
-            if (isTv && !isPlayerScreen) {
+            if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
                         background = MaterialTheme.colorScheme.background,
@@ -348,7 +369,7 @@ private fun MainContent(
             } else {
                 val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val contentPadding = PaddingValues(0.dp)
-                if (!isPlayerScreen) {
+                if (!isFullScreenRoute) {
                     val nestedScrollConnection = remember {
                         object : NestedScrollConnection {
                             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -910,10 +931,11 @@ private fun MainNavDisplay(
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout)
+            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
             adminSection(navigator)
             musicSection(navigator)
             syncPlaySection(navigator)
+            onboardingSection { navigator.goBack() }
         },
         modifier = modifier,
     )

@@ -121,6 +121,7 @@ dependencies {
     implementation(project(":feature:syncplay"))
     implementation(project(":feature:editor"))
     implementation(project(":feature:admin"))
+    implementation(project(":feature:onboarding"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
