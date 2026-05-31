@@ -300,7 +300,8 @@ fun JellyPlayTheme(
     CompositionLocalProvider(
         LocalJellyPlayColorScheme provides colorScheme,
         LocalJellyPlayTypography provides typography,
-        LocalJellyPlayShapes provides shapes
+        LocalJellyPlayShapes provides shapes,
+        LocalIsLightTheme provides isLightColor(colorScheme.background),
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
