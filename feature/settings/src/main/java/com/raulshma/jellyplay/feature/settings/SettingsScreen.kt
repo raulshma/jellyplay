@@ -188,7 +188,7 @@ fun SettingsScreen(
                 if (userName.isNotBlank()) {
                     SettingsProfileBanner(
                         userName = userName,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
             }
@@ -199,7 +199,7 @@ fun SettingsScreen(
                     title = "Account",
                     summary = { "Signed in as $userName" },
                     initiallyExpanded = true,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Server,
@@ -235,7 +235,7 @@ fun SettingsScreen(
                         icon = Tabler.Outline.Server,
                         title = "Administration",
                         summary = { "Server management dashboard" },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     ) {
                         SettingListItem(
                             icon = Tabler.Outline.Server,
@@ -253,7 +253,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Puzzle,
                     title = "Integrations",
                     summary = { "Seerr" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
@@ -273,7 +273,7 @@ fun SettingsScreen(
                         val enabled = preferences.enabledHomeSectionTypes
                         "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val sectionItems = buildList {
                         add(HomeSectionType.CONTINUE_WATCHING)
@@ -331,7 +331,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.PlayerPlay,
                     title = "Video Player",
                     summary = { "Player Engine: ${preferences.preferredPlayer.displayName}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val videoItems = buildList {
                         add("player" to 0)
@@ -475,7 +475,7 @@ fun SettingsScreen(
                         val buttonCount = preferences.segmentBehaviors.count { it.value == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON }
                         "$autoCount auto-skip, $buttonCount show button"
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size
@@ -504,7 +504,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.BadgeHd,
                     title = "Advanced Video",
                     summary = { "Decoder: ${preferences.decoderMode.displayName}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val advancedItems = mutableListOf<Pair<String, Int>>()
                     advancedItems.add("dialogue" to 0)
@@ -600,7 +600,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Users,
                     title = "SyncPlay",
                     summary = { "Watch together with friends" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                 }
             }
@@ -610,7 +610,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Music,
                     title = "Audio Player",
                     summary = { "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val audioItems = mutableListOf<Int>()
                     for (i in 0..20) audioItems.add(i)
@@ -850,7 +850,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Language,
                     title = "Language",
                     summary = { "Audio: ${preferences.preferredAudioLanguage ?: "Default"}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Language,
@@ -876,7 +876,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Subtitles,
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val subTotal = 6
                     SettingListItem(
@@ -934,7 +934,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Database,
                     title = "Storage",
                     summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val storageTotal = 4
                     SettingInfoItem(
@@ -986,7 +986,7 @@ fun SettingsScreen(
                         if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val isAndroid12 = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
                     val isDarkActive = when (preferences.themeMode) {
@@ -1098,7 +1098,7 @@ fun SettingsScreen(
                             val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                             cats.joinToString(", ")
                         },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     ) {
                         val dreamTotal = 5
                         SettingToggleItem(
@@ -1187,7 +1187,7 @@ fun SettingsScreen(
                             else -> "Lock: Off"
                         }
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val secTotal = if (canShowBiometric) 3 else 2
                     SettingToggleItem(
@@ -1289,7 +1289,7 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(if (isTv) 14 else 13) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     SettingInfoItem(
                         icon = Tabler.Outline.Video,
                         title = "Version",
