@@ -220,6 +220,7 @@ fun MediaDetailScreen(
         val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
         val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
         val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
+        val effectiveIsSeerrConnected = isSeerrConnected
         val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
         val seerrRadarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
         val seerrSonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
@@ -303,7 +304,7 @@ fun MediaDetailScreen(
             onBack = onBack,
             seerrRecommendations = seerrRecommendations,
             seerrSimilar = seerrSimilar,
-            isSeerrConnected = isSeerrConnected,
+            isSeerrConnected = effectiveIsSeerrConnected,
             isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
             getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
             onSeerrRequest = remember { { item: SeerrSearchItem -> seerrRequestItem = item } },
@@ -2592,6 +2593,22 @@ private fun EpisodeCard(
                         .height(4.dp)
                         .background(MaterialTheme.colorScheme.primary)
                 )
+            }
+            if (episode.isPlayed && (episode.playbackPositionTicks == null || episode.playbackPositionTicks!! <= 0)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(ShapeCache.smooth4)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "Watched",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                    )
+                }
             }
         }
 

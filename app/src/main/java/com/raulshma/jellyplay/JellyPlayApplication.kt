@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -37,6 +38,22 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
             try {
                 val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
                 for (download in pending) {
+                    val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                        .setInputData(
+                            Data.Builder()
+                                .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
+                                .build()
+                        )
+                        .build()
+                    WorkManager.getInstance(this).enqueueUniqueWork(
+                        "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                        ExistingWorkPolicy.REPLACE,
+                        workRequest,
+                    )
+                }
+                val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
+                for (download in stale) {
+                    runBlocking { downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name) }
                     val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
                         .setInputData(
                             Data.Builder()

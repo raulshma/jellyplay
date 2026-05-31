@@ -105,6 +105,7 @@ data class VideoPlayerUiState(
     val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerLastUsedDurationMs: Long = 0L,
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
+    val isScreenLocked: Boolean = false,
 ) {
 
     companion object {

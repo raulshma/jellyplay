@@ -88,9 +88,11 @@ android {
     }
 }
 
-composeCompiler {
-    metricsDestination = layout.buildDirectory.dir("compose-metrics")
-    reportsDestination = layout.buildDirectory.dir("compose-reports")
+if (project.hasProperty("enableComposeMetrics")) {
+    composeCompiler {
+        metricsDestination = layout.buildDirectory.dir("compose-metrics")
+        reportsDestination = layout.buildDirectory.dir("compose-reports")
+    }
 }
 
 dependencies {
@@ -122,6 +124,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.appcompat)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

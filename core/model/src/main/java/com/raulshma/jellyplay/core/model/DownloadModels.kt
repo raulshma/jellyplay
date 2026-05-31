@@ -47,6 +47,7 @@ data class UserPreferences(
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val dynamicTheming: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val oledMode: Boolean = false,
     val useBottomNav: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -55,8 +56,8 @@ data class UserPreferences(
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,
-    val kidsModeEnabled: Boolean = false,
-    val kidsModeMaxRating: String = "PG",
+    val biometricLockEnabled: Boolean = false,
+    val autoLockTimerMs: Long = 30_000L,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val equalizerEnabled: Boolean = false,
@@ -137,6 +138,14 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+}
+
+@Immutable
+@Serializable
+enum class ContrastLevel {
+    DEFAULT,
+    MEDIUM,
+    HIGH,
 }
 
 @Immutable

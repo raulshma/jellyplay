@@ -213,8 +213,9 @@ class DownloadWorker(
                         val now = System.currentTimeMillis()
                         val currentDownloaded = totalDownloaded.get()
                         val currentEntity = dao.getDownloadById(downloadId)
-                        if (currentEntity?.status == DownloadStatus.PAUSED.name ||
-                            currentEntity?.status == DownloadStatus.CANCELLED.name
+                        if (currentEntity == null ||
+                            currentEntity.status == DownloadStatus.PAUSED.name ||
+                            currentEntity.status == DownloadStatus.CANCELLED.name
                         ) {
                             cancelled.set(true)
                             break
@@ -264,7 +265,13 @@ class DownloadWorker(
 
             if (cancelled.get()) {
                 val finalBytes = totalDownloaded.get()
-                dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.PAUSED.name, 0L)
+                val currentEntity = dao.getDownloadById(downloadId)
+                val cancelStatus = if (currentEntity == null || currentEntity.status == DownloadStatus.CANCELLED.name) {
+                    DownloadStatus.CANCELLED.name
+                } else {
+                    DownloadStatus.PAUSED.name
+                }
+                dao.updateProgressWithSpeed(downloadId, finalBytes, cancelStatus, 0L)
                 return Result.success()
             }
 
@@ -482,8 +489,9 @@ class DownloadWorker(
                         val now = System.currentTimeMillis()
                         if (now - lastProgressUpdate >= progressUpdateIntervalMs) {
                             val currentEntity = dao.getDownloadById(downloadId)
-                            if (currentEntity?.status == DownloadStatus.PAUSED.name ||
-                                currentEntity?.status == DownloadStatus.CANCELLED.name
+                            if (currentEntity == null ||
+                                currentEntity.status == DownloadStatus.PAUSED.name ||
+                                currentEntity.status == DownloadStatus.CANCELLED.name
                             ) {
                                 response.close()
                                 return Result.success()

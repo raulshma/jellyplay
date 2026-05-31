@@ -32,8 +32,9 @@ fun rememberNavigationState(
     }
 }
 
-class Navigator(val state: NavigationState) {
+class Navigator(val state: NavigationState, private val navigateFilter: ((NavKey) -> Boolean)? = null) {
     fun navigate(route: NavKey) {
+        if (navigateFilter != null && !navigateFilter(route)) return
         if (route in state.backStacks.keys) {
             state.topLevelRoute.value = route
         } else {

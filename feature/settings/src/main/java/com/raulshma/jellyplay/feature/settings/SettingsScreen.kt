@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -69,6 +70,7 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -87,6 +89,10 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
+import androidx.fragment.app.FragmentActivity
+import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
+import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -144,6 +150,10 @@ fun SettingsScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+
+    var showPinDisableAuth by remember { mutableStateOf(false) }
+    var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
+    var showBiometricDisableAuth by remember { mutableStateOf(false) }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -973,6 +983,7 @@ fun SettingsScreen(
                         if (preferences.dynamicTheming) parts.add("Dynamic theming")
                         parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
                         if (preferences.oledMode) parts.add("OLED")
+                        if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
                     },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -985,7 +996,7 @@ fun SettingsScreen(
                     }
 
                     if (isAndroid12) {
-                        val baseCount = if (isDarkActive) 4 else 3
+                        val baseCount = if (isDarkActive) 5 else 4
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1023,12 +1034,32 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setOledMode(it) },
                             )
                         }
+                        val contrastIndex = if (isDarkActive) 3 else 2
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Contrast",
+                            subtitle = when (preferences.contrastLevel) {
+                                ContrastLevel.DEFAULT -> "Standard contrast"
+                                ContrastLevel.MEDIUM -> "Medium contrast"
+                                ContrastLevel.HIGH -> "High contrast"
+                            },
+                            trailingText = preferences.contrastLevel.name,
+                            index = contrastIndex, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.contrastLevel) {
+                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
+                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
+                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
+                                }
+                                viewModel.setContrastLevel(next)
+                            },
+                        )
                         SettingListItem(
                             icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
-                            index = if (isDarkActive) 3 else 2, count = baseCount,
+                            index = if (isDarkActive) 4 else 3, count = baseCount,
                             onClick = {
                                 val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
                                 viewModel.setHomeMode(next)
@@ -1142,13 +1173,23 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+                val biometricAvailability = rememberBiometricAvailability()
+                val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
+
                 SettingsGroup(
                     icon = Tabler.Outline.Lock,
                     title = "Security",
-                    summary = { if (preferences.pinLockEnabled) "PIN lock: On" else "PIN lock: Off" },
+                    summary = {
+                        when {
+                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> "PIN + Biometric lock: On"
+                            preferences.biometricLockEnabled -> "Biometric lock: On"
+                            preferences.pinLockEnabled -> "PIN lock: On"
+                            else -> "Lock: Off"
+                        }
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    val secTotal = 2
+                    val secTotal = if (canShowBiometric) 3 else 2
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = "PIN Lock",
@@ -1157,26 +1198,93 @@ fun SettingsScreen(
                         index = 0, count = secTotal,
                         onCheckedChange = { enabled ->
                             if (enabled) showPinDialog = true
-                            else viewModel.clearPin()
+                            else showPinDisableAuth = true
                         },
                         onClick = {
-                            if (preferences.pinLockEnabled) viewModel.clearPin()
+                            if (preferences.pinLockEnabled) showPinDisableAuth = true
                             else showPinDialog = true
                         },
                     )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.BabyCarriage,
-                        title = "Kids Mode",
-                        subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
-                        checked = preferences.kidsModeEnabled,
-                        index = 1, count = secTotal,
-                        onCheckedChange = { viewModel.setKidsModeEnabled(it) },
-                        onClick = {
-                            val ratings = listOf("G", "PG", "PG-13", "TV-Y", "TV-Y7", "TV-G", "TV-PG")
-                            val nextRating = ratings[(ratings.indexOf(preferences.kidsModeMaxRating) + 1) % ratings.size]
-                            viewModel.setKidsModeMaxRating(nextRating)
-                        },
-                    )
+                    if (canShowBiometric) {
+                        val bioContext = LocalContext.current
+                        val bioActivity = remember(bioContext) { bioContext as? FragmentActivity }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Fingerprint,
+                            title = "Biometric Unlock",
+                            subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
+                            checked = preferences.biometricLockEnabled,
+                            index = 1, count = secTotal,
+                            onCheckedChange = { enabled ->
+                                if (enabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Enable Biometric Unlock",
+                                        subtitle = "Verify your identity to enable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                } else if (!enabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Disable Biometric Unlock",
+                                        subtitle = "Verify your identity to disable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(false) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                }
+                            },
+                            onClick = {
+                                if (preferences.biometricLockEnabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Disable Biometric Unlock",
+                                        subtitle = "Verify your identity to disable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(false) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                } else if (!preferences.biometricLockEnabled && bioActivity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = bioActivity,
+                                        title = "Enable Biometric Unlock",
+                                        subtitle = "Verify your identity to enable biometric lock",
+                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onError = {},
+                                        onFailed = {},
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    if (preferences.pinLockEnabled || preferences.biometricLockEnabled) {
+                        val autoLockPresets = listOf(
+                            15_000L to "15 sec",
+                            30_000L to "30 sec",
+                            60_000L to "1 min",
+                            120_000L to "2 min",
+                            300_000L to "5 min",
+                            600_000L to "10 min",
+                            1_800_000L to "30 min",
+                            3_600_000L to "1 hour",
+                            7_200_000L to "2 hours",
+                            0L to "Never",
+                        )
+                        val currentLabel = autoLockPresets.find { it.first == preferences.autoLockTimerMs }?.second ?: "30 sec"
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Auto-Lock Timer",
+                            subtitle = "Lock app after going to background",
+                            trailingText = currentLabel,
+                            index = if (canShowBiometric) 2 else 1, count = secTotal,
+                            onClick = {
+                                val currentIndex = autoLockPresets.indexOfFirst { it.first == preferences.autoLockTimerMs }
+                                val nextIndex = (currentIndex + 1) % autoLockPresets.size
+                                viewModel.setAutoLockTimerMs(autoLockPresets[nextIndex].first)
+                            },
+                        )
+                    }
                 }
             }
 
@@ -1272,6 +1380,75 @@ fun SettingsScreen(
                     pinInput = ""
                     pinConfirm = ""
                     pinError = null
+                }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showPinDisableAuth) {
+        AlertDialog(
+            onDismissRequest = {
+                showPinDisableAuth = false
+                pinDisableAuthError = null
+            },
+            title = { Text("Disable PIN Lock") },
+            text = {
+                Column {
+                    Text(
+                        "Enter your current PIN to disable PIN lock.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                                pinInput = it
+                                pinDisableAuthError = null
+                            }
+                        },
+                        label = { Text("Current PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinDisableAuthError != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AnimatedVisibility(
+                        visible = pinDisableAuthError != null,
+                        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    ) {
+                        pinDisableAuthError?.let { error ->
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val valid = viewModel.verifyPin(pinInput)
+                    if (valid) {
+                        viewModel.clearPin()
+                        showPinDisableAuth = false
+                        pinInput = ""
+                        pinDisableAuthError = null
+                    } else {
+                        pinDisableAuthError = "Incorrect PIN"
+                    }
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPinDisableAuth = false
+                    pinInput = ""
+                    pinDisableAuthError = null
                 }) { Text("Cancel") }
             },
         )

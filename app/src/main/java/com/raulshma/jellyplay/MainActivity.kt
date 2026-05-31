@@ -8,16 +8,18 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import android.util.Rational
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,7 +28,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.ui.components.PinLockScreen
+import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
@@ -34,11 +36,14 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
 
     private val viewModel: MainViewModel by viewModels()
+
+    private var backgroundedAt = 0L
+    private var isPinUnlocked = mutableStateOf(false)
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -76,12 +81,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-            var isPinUnlocked by rememberSaveable { mutableStateOf(false) }
             var pinError by rememberSaveable { mutableStateOf<String?>(null) }
 
-            val showPinLock = preferences.pinLockEnabled &&
-                preferences.pinHash != null &&
-                !isPinUnlocked
+            val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
+            val showLockScreen = hasLockEnabled && !isPinUnlocked.value
 
             val darkTheme = when (preferences.themeMode) {
                 ThemeMode.DARK -> true
@@ -91,23 +94,32 @@ class MainActivity : ComponentActivity() {
 
             JellyPlayTheme(
                 darkTheme = darkTheme,
-                dynamicColor = preferences.dynamicTheming && !preferences.kidsModeEnabled,
+                dynamicColor = preferences.dynamicTheming,
                 oledMode = preferences.oledMode,
-                kidsMode = preferences.kidsModeEnabled,
+                contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
             ) {
-                if (showPinLock) {
-                    PinLockScreen(
+                if (showLockScreen) {
+                    AuthChallengeScreen(
+                        title = if (preferences.biometricLockEnabled && preferences.pinHash == null) "Authenticate" else "Enter PIN",
+                        subtitle = "Unlock JellyPlay",
+                        pinHash = preferences.pinHash,
+                        biometricEnabled = preferences.biometricLockEnabled,
                         onPinEntered = { pin ->
-                            val valid = viewModel.preferencesStore.verifyPin(
-                                pin,
-                                preferences.pinHash,
-                            )
-                            if (valid) {
-                                isPinUnlocked = true
+                            if (pin.isEmpty()) {
+                                isPinUnlocked.value = true
                                 pinError = null
-                            } else {
-                                pinError = "Incorrect PIN"
+                            } else if (preferences.pinHash != null) {
+                                val valid = viewModel.preferencesStore.verifyPin(
+                                    pin,
+                                    preferences.pinHash,
+                                )
+                                if (valid) {
+                                    isPinUnlocked.value = true
+                                    pinError = null
+                                } else {
+                                    pinError = "Incorrect PIN"
+                                }
                             }
                         },
                         onErrorClear = { pinError = null },
@@ -170,6 +182,7 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         if (!isInPictureInPictureMode) {
             playerLifecycleManager.onActivityPause()
+            backgroundedAt = System.currentTimeMillis()
         }
     }
 
@@ -177,6 +190,17 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         justExitedPip = false
         playerLifecycleManager.onActivityResume()
+
+        if (backgroundedAt > 0L) {
+            val prefs = viewModel.preferences.value
+            if ((prefs.pinLockEnabled || prefs.biometricLockEnabled) && prefs.autoLockTimerMs > 0L) {
+                val elapsed = System.currentTimeMillis() - backgroundedAt
+                if (elapsed >= prefs.autoLockTimerMs) {
+                    isPinUnlocked.value = false
+                }
+            }
+            backgroundedAt = 0L
+        }
     }
 
     override fun onStop() {

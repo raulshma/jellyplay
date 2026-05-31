@@ -670,9 +670,11 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
-        runCatching {
+        apiResult {
+            val userId = _currentUser.value?.id?.toUUID()
             val response = requireApi().genresApi.getGenres(
                 parentId = parentId?.let { it.toUUID() },
+                userId = userId,
                 startIndex = startIndex,
                 limit = limit,
             ).content

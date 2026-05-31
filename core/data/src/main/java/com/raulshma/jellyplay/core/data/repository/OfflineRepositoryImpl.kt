@@ -76,6 +76,10 @@ class OfflineRepositoryImpl @Inject constructor(
             if (download.downloadPath.isNotBlank()) {
                 val file = java.io.File(download.downloadPath)
                 if (file.exists()) file.delete()
+                file.parentFile?.let { parent ->
+                    val trickplayDir = java.io.File(parent, "trickplay")
+                    if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+                }
             }
             downloadDao.deleteDownloadById(download.id)
         }
@@ -89,6 +93,10 @@ class OfflineRepositoryImpl @Inject constructor(
             if (download.downloadPath.isNotBlank()) {
                 val file = java.io.File(download.downloadPath)
                 if (file.exists()) file.delete()
+                file.parentFile?.let { parent ->
+                    val trickplayDir = java.io.File(parent, "trickplay")
+                    if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+                }
             }
             downloadDao.deleteDownloadById(download.id)
         }
@@ -102,6 +110,10 @@ class OfflineRepositoryImpl @Inject constructor(
             if (download.downloadPath.isNotBlank()) {
                 val file = java.io.File(download.downloadPath)
                 if (file.exists()) file.delete()
+                file.parentFile?.let { parent ->
+                    val trickplayDir = java.io.File(parent, "trickplay")
+                    if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+                }
             }
             downloadDao.deleteDownloadById(download.id)
         }
