@@ -164,8 +164,9 @@
     display: none;
   }
 
-  .nav-actions .hide-mobile {
-    display: none;
+  .nav-actions .hide-mobile,
+  .github-badge {
+    display: none !important;
   }
 
   .nav-toggle {
@@ -189,6 +190,7 @@
   padding-top: 100px;
   padding-bottom: 48px;
   background: var(--jp-surface);
+  z-index: 1; /* Create local stacking context to prevent transformed children from overlapping nav/menu */
 }
 
 .hero-content {
@@ -378,7 +380,8 @@
 }
 
 .hero-device-stack {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
@@ -459,18 +462,61 @@
     justify-content: center;
   }
   .hero-visual {
-    height: 480px;
+    height: auto;
     width: 100%;
-    max-width: 420px;
+    max-width: 360px;
     margin: 0 auto;
   }
-  .hero-device-stack .device-landscape {
-    width: 320px;
-    height: 160px;
+  .hero-device-stack {
+    position: relative;
+    width: 100%;
+    height: auto;
   }
   .hero-device-stack .device-portrait {
-    width: 200px;
-    height: 400px;
+    display: none;
+  }
+  .hero-device-stack .device-landscape {
+    display: block;
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin: 0 auto;
+    width: 320px;
+    height: 160px;
+    z-index: 2;
+    transition: transform 0.5s ease;
+  }
+  .hero-device-stack:hover .device-landscape {
+    transform: translateY(-4px) scale(1.02);
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px 32px;
+    margin-top: 36px;
+    padding-top: 24px;
+  }
+  .hero-stat {
+    align-items: center;
+    text-align: center;
+    flex: 1 1 120px;
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-visual {
+    height: auto;
+    max-width: 300px;
+  }
+  .hero-device-stack .device-landscape {
+    width: 280px;
+    height: 140px;
   }
 }
 
@@ -1448,6 +1494,16 @@
   .feature-bento-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .bento-card-lg {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  .feature-widget {
+    margin: 0 auto;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1780,6 +1836,16 @@
   .footer-grid {
     grid-template-columns: 1fr;
     gap: 40px;
+    text-align: center;
+  }
+  .footer-brand-col {
+    align-items: center;
+  }
+  .footer-logo {
+    justify-content: center;
+  }
+  .footer-col-links {
+    align-items: center;
   }
   .footer-bottom {
     flex-direction: column;
@@ -2063,5 +2129,21 @@
   }
   .download-modal-container {
     padding: 24px 20px;
+  }
+}
+
+/* Extra mobile responsive overrides */
+@media (max-width: 480px) {
+  .screenshot-card {
+    width: 260px;
+  }
+  .faq-trigger {
+    padding: 16px;
+  }
+  .faq-answer {
+    padding: 0 16px 16px 16px;
+  }
+  .faq-question {
+    font-size: 1rem;
   }
 }
