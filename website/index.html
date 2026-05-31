@@ -47,18 +47,13 @@
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/sections.css">
 
+  <!-- Preload LCP Images -->
+  <link rel="preload" as="image" href="assets/screenshots/video_player.webp">
+  <link rel="preload" as="image" href="assets/screenshots/home.webp">
+
   <!-- Material Web 2.0 via CDN -->
-  <script type="importmap">
-    {
-      "imports": {
-        "@material/web/": "https://esm.run/@material/web/"
-      }
-    }
-  </script>
   <script type="module">
-    import '@material/web/all.js';
-    import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
-    document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+    import 'https://esm.run/@material/web/all.js';
   </script>
 
   <!-- JSON-LD Structured Data -->
@@ -104,10 +99,6 @@
       </nav>
 
       <div class="nav-actions">
-        <a href="#download" class="release-badge hide-mobile" id="nav-release-badge" style="display: none;">
-          <span class="release-pulse-dot"></span>
-          <span class="release-badge-text">Latest: <span id="nav-release-version">Loading...</span></span>
-        </a>
         <a href="https://github.com/raulshma/JellyPlay" target="_blank" rel="noopener noreferrer" class="github-badge">
           <span class="github-badge-logo">
             <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
@@ -188,9 +179,16 @@
           <div class="hero-badge">
             <span>Open Source •</span>
             <span class="beta-tag-container">
-              <span class="beta-tag">Beta</span>
+              <span class="beta-tag" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span class="release-pulse-dot"></span>
+                Beta
+              </span>
               <span class="tooltip-box">Expect bugs!</span>
             </span>
+            <a href="#download" id="nav-release-badge" style="display: none; color: inherit; text-decoration: none; align-items: center; gap: 8px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
+              <span>•</span>
+              <span id="nav-release-version">Loading...</span>
+            </a>
           </div>
           <h1 class="hero-title">
             Your Jellyfin server,<br>re-imagined for <span class="accent">Android</span>
@@ -588,7 +586,7 @@
           <p class="section-subtitle">Leverages native Android Jetpack libraries and high-performance playback engines.</p>
         </div>
 
-        <div class="tech-chips animate-on-scroll">
+        <md-chip-set class="tech-chips animate-on-scroll">
           <md-assist-chip label="Kotlin">
             <md-icon slot="icon">code</md-icon>
           </md-assist-chip>
@@ -625,7 +623,7 @@
           <md-assist-chip label="Coroutines">
             <md-icon slot="icon">bolt</md-icon>
           </md-assist-chip>
-        </div>
+        </md-chip-set>
       </div>
     </section>
 
