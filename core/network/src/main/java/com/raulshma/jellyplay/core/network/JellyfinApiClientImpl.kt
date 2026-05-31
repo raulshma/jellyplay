@@ -2198,6 +2198,36 @@ class JellyfinApiClientImpl @Inject constructor(
         sessions.map { it.toSessionModel() }
     }
 
+    override suspend fun sendMessageToSession(
+        sessionId: String,
+        header: String,
+        text: String,
+        timeoutMs: Long,
+    ): Result<Unit> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = "${server.address}/Sessions/$sessionId/Command"
+        val body = buildJsonObject {
+            put("Name", JsonPrimitive("DisplayMessage"))
+            put("Arguments", buildJsonObject {
+                put("Header", JsonPrimitive(header))
+                put("Text", JsonPrimitive(text))
+                put("TimeoutMs", JsonPrimitive(timeoutMs.toString()))
+            })
+        }
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Failed to send message: ${response.code}")
+            }
+        }
+    }
+
     private fun okHttp3MultipartBody(bytes: ByteArray): okhttp3.RequestBody =
         bytes.toRequestBody("image/*".toMediaType())
 
@@ -2302,7 +2332,9 @@ class JellyfinApiClientImpl @Inject constructor(
         type = type.serialName,
         mediaType = mediaType?.serialName,
         runTimeTicks = runTimeTicks,
-        primaryImageTag = imageTags?.entries?.firstOrNull()?.value,
+        primaryImageTag = imageTags?.entries?.firstOrNull { it.key == org.jellyfin.sdk.model.api.ImageType.PRIMARY }?.value ?: imageTags?.entries?.firstOrNull()?.value,
+        seriesName = seriesName,
+        backdropImageTag = backdropImageTags?.firstOrNull() ?: imageTags?.entries?.firstOrNull { it.key == org.jellyfin.sdk.model.api.ImageType.BACKDROP }?.value,
     )
 
     private fun org.jellyfin.sdk.model.api.PlayerStateInfo.toSessionPlayStateModel() = SessionPlayState(

@@ -97,6 +97,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
             var pinError by rememberSaveable { mutableStateOf<String?>(null) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            androidx.compose.runtime.LaunchedEffect(viewModel) {
+                viewModel.globalMessage.collect { msg ->
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
 
             val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
             val showLockScreen = hasLockEnabled && !isPinUnlocked.value

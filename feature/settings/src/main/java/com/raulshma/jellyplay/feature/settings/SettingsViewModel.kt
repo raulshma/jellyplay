@@ -33,6 +33,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,6 +47,7 @@ class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val downloadRepository: DownloadRepository,
     private val mediaRepository: MediaRepository,
+    private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
 ) : ViewModel() {
 
     var preferences by mutableStateOf(UserPreferences())
@@ -76,6 +78,21 @@ class SettingsViewModel @Inject constructor(
     var isLoadingLibraries by mutableStateOf(false)
         private set
 
+    val currentServerAddress = authRepository.currentServer
+        .map { it?.address ?: "" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    var activeSessions by mutableStateOf<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
+        private set
+
+    var isLoadingSessions by mutableStateOf(false)
+        private set
+
+    var messageSentEvent by mutableStateOf<String?>(null)
+        private set
+
+    private var sessionRefreshJob: kotlinx.coroutines.Job? = null
+
     init {
         viewModelScope.launch {
             preferencesStore.preferences.collect { prefs ->
@@ -86,6 +103,13 @@ class SettingsViewModel @Inject constructor(
             authRepository.currentUser.collect { user ->
                 currentUser = user
                 currentUserName = user?.name ?: ""
+                if (user?.isAdmin == true) {
+                    loadSessions()
+                    startSessionAutoRefresh()
+                } else {
+                    sessionRefreshJob?.cancel()
+                    activeSessions = emptyList()
+                }
             }
         }
         viewModelScope.launch {
@@ -107,6 +131,61 @@ class SettingsViewModel @Inject constructor(
                 }
             isLoadingLibraries = false
         }
+    }
+
+    private fun loadSessions() {
+        viewModelScope.launch {
+            isLoadingSessions = true
+            apiClient.getSessions()
+                .onSuccess { sessions ->
+                    val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
+                    activeSessions = sessions.filter { 
+                        val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (e: Exception) { java.time.Instant.MIN }
+                        it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
+                        (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
+                    }
+                }
+            isLoadingSessions = false
+        }
+    }
+
+    private fun startSessionAutoRefresh() {
+        sessionRefreshJob?.cancel()
+        sessionRefreshJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                apiClient.getSessions()
+                    .onSuccess { sessions ->
+                        val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
+                        activeSessions = sessions.filter { 
+                            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (e: Exception) { java.time.Instant.MIN }
+                            it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
+                            (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
+                        }
+                    }
+            }
+        }
+    }
+
+    fun sendMessageToSession(sessionId: String, header: String, text: String) {
+        viewModelScope.launch {
+            apiClient.sendMessageToSession(sessionId, header, text)
+                .onSuccess {
+                    messageSentEvent = "Message sent successfully"
+                }
+                .onFailure {
+                    messageSentEvent = "Failed to send message"
+                }
+        }
+    }
+
+    fun clearMessageEvent() {
+        messageSentEvent = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sessionRefreshJob?.cancel()
     }
 
     fun setDynamicTheming(enabled: Boolean) {
