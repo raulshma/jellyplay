@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,6 +52,7 @@ class UserPreferencesStore @Inject constructor(
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
         val OLED_MODE = stringPreferencesKey("oled_mode")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
@@ -210,6 +212,9 @@ class UserPreferencesStore @Inject constructor(
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
             } catch (_: Exception) { ThemeMode.SYSTEM },
+            contrastLevel = try {
+                ContrastLevel.valueOf(prefs[Keys.CONTRAST_LEVEL] ?: ContrastLevel.DEFAULT.name)
+            } catch (_: Exception) { ContrastLevel.DEFAULT },
             oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
@@ -370,6 +375,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setContrastLevel(level: ContrastLevel) {
+        context.dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
     }
 
     suspend fun setOledMode(enabled: Boolean) {

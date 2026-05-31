@@ -96,6 +96,7 @@ class MainActivity : AppCompatActivity() {
                 darkTheme = darkTheme,
                 dynamicColor = preferences.dynamicTheming,
                 oledMode = preferences.oledMode,
+                contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
             ) {
                 if (showLockScreen) {

@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -982,6 +983,7 @@ fun SettingsScreen(
                         if (preferences.dynamicTheming) parts.add("Dynamic theming")
                         parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
                         if (preferences.oledMode) parts.add("OLED")
+                        if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
                     },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -994,7 +996,7 @@ fun SettingsScreen(
                     }
 
                     if (isAndroid12) {
-                        val baseCount = if (isDarkActive) 4 else 3
+                        val baseCount = if (isDarkActive) 5 else 4
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1032,12 +1034,32 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setOledMode(it) },
                             )
                         }
+                        val contrastIndex = if (isDarkActive) 3 else 2
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Contrast",
+                            subtitle = when (preferences.contrastLevel) {
+                                ContrastLevel.DEFAULT -> "Standard contrast"
+                                ContrastLevel.MEDIUM -> "Medium contrast"
+                                ContrastLevel.HIGH -> "High contrast"
+                            },
+                            trailingText = preferences.contrastLevel.name,
+                            index = contrastIndex, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.contrastLevel) {
+                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
+                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
+                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
+                                }
+                                viewModel.setContrastLevel(next)
+                            },
+                        )
                         SettingListItem(
                             icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
-                            index = if (isDarkActive) 3 else 2, count = baseCount,
+                            index = if (isDarkActive) 4 else 3, count = baseCount,
                             onClick = {
                                 val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
                                 viewModel.setHomeMode(next)
