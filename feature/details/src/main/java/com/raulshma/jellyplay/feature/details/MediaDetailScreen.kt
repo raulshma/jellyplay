@@ -220,7 +220,7 @@ fun MediaDetailScreen(
         val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
         val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
         val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
-        val effectiveIsSeerrConnected = isSeerrConnected && !preferences.kidsModeEnabled
+        val effectiveIsSeerrConnected = isSeerrConnected
         val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
         val seerrRadarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
         val seerrSonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()

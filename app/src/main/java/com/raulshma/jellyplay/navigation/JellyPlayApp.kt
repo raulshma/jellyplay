@@ -176,27 +176,10 @@ private fun MainContent(
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
-    val kidsMode = preferences.kidsModeEnabled
-
-    val activeTopLevelRoutes: LinkedHashMap<Route, String> = if (kidsMode) {
-        linkedMapOf<Route, String>(Route.Home to "Home")
-    } else when (homeMode) {
+    val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
     }
-
-    val kidsSafeNavigator = if (kidsMode) {
-        remember(navigator) {
-            Navigator(navigator.state) { route ->
-                route is Route.Home ||
-                        route is Route.MediaDetail ||
-                        route is Route.VideoPlayer ||
-                        route is Route.AudioPlayer ||
-                        route is Route.Ambient ||
-                        route is Route.LiveTvChannelPlayer
-            }
-        }
-    } else navigator
 
     val scope = rememberCoroutineScope()
     val onModeChange: (HomeMode) -> Unit = { mode ->
@@ -232,7 +215,7 @@ private fun MainContent(
             if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
                 navigationState.topLevelRoute.value = route
             } else {
-                kidsSafeNavigator.navigate(route)
+                navigator.navigate(route)
             }
         }
     }
@@ -243,9 +226,9 @@ private fun MainContent(
         }
     }
 
-    val enterVideoMiniMode: () -> Unit = remember(kidsSafeNavigator) {
+    val enterVideoMiniMode: () -> Unit = remember(navigator) {
         {
-            kidsSafeNavigator.goBack()
+            navigator.goBack()
         }
     }
 
@@ -297,20 +280,20 @@ private fun MainContent(
                         animatedNavBarColor = animatedNavBarColor,
                         activeTopLevelRoutes = activeTopLevelRoutes,
                         currentTopLevel = currentTopLevel,
-                        navigator = kidsSafeNavigator,
+                        navigator = navigator,
                         navigationState = navigationState,
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
                         enterPip = enterPip,
                         enterVideoMiniMode = enterVideoMiniMode,
-                        onBack = { kidsSafeNavigator.goBack() },
+                        onBack = { navigator.goBack() },
                         onNowPlayingClick = {
                             val itemId = audioItemId ?: return@TvMainLayout
-                            kidsSafeNavigator.navigate(Route.AudioPlayer(itemId))
+                            navigator.navigate(Route.AudioPlayer(itemId))
                         },
                         onAmbientClick = {
-                            kidsSafeNavigator.navigate(
+                            navigator.navigate(
                                 Route.Ambient(
                                     imageUrl = audioArtworkUrl,
                                     title = audioTitle,
@@ -329,7 +312,7 @@ private fun MainContent(
                             activeTopLevelRoutes.forEach { (route, label) ->
                                 NavigationSuiteItem(
                                     selected = route == currentTopLevel,
-                                    onClick = { kidsSafeNavigator.navigate(route) },
+                                    onClick = { navigator.navigate(route) },
                                     icon = { NavIcon(route, label) },
                                     label = { Text(label) },
                                 )
@@ -348,7 +331,7 @@ private fun MainContent(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 MainNavDisplay(
                                     navigationState = navigationState,
-                                    navigator = kidsSafeNavigator,
+                                    navigator = navigator,
                                     onLogout = onLogout,
                                     homeMode = homeMode,
                                     onModeChange = onModeChange,
@@ -357,10 +340,10 @@ private fun MainContent(
                                     innerPadding = noPadding,
                                     onNowPlayingClick = {
                                         val itemId = audioItemId ?: return@MainNavDisplay
-                                        kidsSafeNavigator.navigate(Route.AudioPlayer(itemId))
+                                        navigator.navigate(Route.AudioPlayer(itemId))
                                     },
                                     onAmbientClick = {
-                                        kidsSafeNavigator.navigate(
+                                        navigator.navigate(
                                             Route.Ambient(
                                                 imageUrl = audioArtworkUrl,
                                                 title = audioTitle,
@@ -384,7 +367,7 @@ private fun MainContent(
                                         isPlaying = isAudioPlaying,
                                         onClick = {
                                             val itemId = audioItemId ?: return@MiniPlayer
-                                            kidsSafeNavigator.navigate(Route.AudioPlayer(itemId))
+                                            navigator.navigate(Route.AudioPlayer(itemId))
                                         },
                                         onClose = {
                                             audioPlaybackManager.stopAndRelease()
@@ -413,7 +396,7 @@ private fun MainContent(
                                         isPlaying = isAudioPlaying,
                                         onClick = {
                                             val itemId = audioItemId ?: return@MiniPlayer
-                                            kidsSafeNavigator.navigate(Route.AudioPlayer(itemId))
+                                            navigator.navigate(Route.AudioPlayer(itemId))
                                         },
                                         onClose = {
                                             audioPlaybackManager.stopAndRelease()
@@ -437,7 +420,7 @@ private fun MainContent(
                                     isPlaying = videoMiniIsPlaying,
                                     onClick = {
                                         val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                        kidsSafeNavigator.navigate(Route.VideoPlayer(itemId))
+                                        navigator.navigate(Route.VideoPlayer(itemId))
                                     },
                                     onClose = {
                                         videoMiniPlayerState.release()
@@ -461,7 +444,7 @@ private fun MainContent(
                     ) {
                         MainNavDisplay(
                             navigationState = navigationState,
-                            navigator = kidsSafeNavigator,
+                            navigator = navigator,
                             onLogout = onLogout,
                             homeMode = homeMode,
                             onModeChange = onModeChange,
@@ -470,10 +453,10 @@ private fun MainContent(
                             innerPadding = noPadding,
                             onNowPlayingClick = {
                                 val itemId = audioItemId ?: return@MainNavDisplay
-                                kidsSafeNavigator.navigate(Route.AudioPlayer(itemId))
+                                navigator.navigate(Route.AudioPlayer(itemId))
                             },
                             onAmbientClick = {
-                                kidsSafeNavigator.navigate(
+                                navigator.navigate(
                                     Route.Ambient(
                                         imageUrl = audioArtworkUrl,
                                         title = audioTitle,
@@ -491,7 +474,7 @@ private fun MainContent(
                                 isPlaying = videoMiniIsPlaying,
                                 onClick = {
                                     val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                    kidsSafeNavigator.navigate(Route.VideoPlayer(itemId))
+                                    navigator.navigate(Route.VideoPlayer(itemId))
                                 },
                                 onClose = {
                                     videoMiniPlayerState.release()

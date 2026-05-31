@@ -149,10 +149,7 @@ fun SettingsScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
-    var showKidsModeAuth by remember { mutableStateOf(false) }
-    var kidsModeAuthError by remember { mutableStateOf<String?>(null) }
-    var pendingKidsModeDisable by remember { mutableStateOf(false) }
-    var showKidsRatingPicker by remember { mutableStateOf(false) }
+
     var showPinDisableAuth by remember { mutableStateOf(false) }
     var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
     var showBiometricDisableAuth by remember { mutableStateOf(false) }
@@ -1170,7 +1167,7 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    val secTotal = if (canShowBiometric) 4 else 3
+                    val secTotal = if (canShowBiometric) 3 else 2
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = "PIN Lock",
@@ -1239,34 +1236,6 @@ fun SettingsScreen(
                             },
                         )
                     }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.BabyCarriage,
-                        title = "Kids Mode",
-                        subtitle = if (preferences.kidsModeEnabled) "Max rating: ${preferences.kidsModeMaxRating}" else "Restrict content by rating",
-                        checked = preferences.kidsModeEnabled,
-                        index = if (canShowBiometric) 2 else 1, count = secTotal,
-                        onCheckedChange = { enabled ->
-                            if (enabled) {
-                                if (preferences.pinHash != null || preferences.biometricLockEnabled) {
-                                    viewModel.setKidsModeEnabled(true)
-                                } else {
-                                    showPinDialog = true
-                                }
-                            } else {
-                                if (preferences.pinHash != null || preferences.biometricLockEnabled) {
-                                    pendingKidsModeDisable = true
-                                    showKidsModeAuth = true
-                                } else {
-                                    viewModel.setKidsModeEnabled(false)
-                                }
-                            }
-                        },
-                        onClick = {
-                            if (preferences.kidsModeEnabled) {
-                                showKidsRatingPicker = true
-                            }
-                        },
-                    )
                     if (preferences.pinLockEnabled || preferences.biometricLockEnabled) {
                         val autoLockPresets = listOf(
                             15_000L to "15 sec",
@@ -1286,7 +1255,7 @@ fun SettingsScreen(
                             title = "Auto-Lock Timer",
                             subtitle = "Lock app after going to background",
                             trailingText = currentLabel,
-                            index = if (canShowBiometric) 3 else 2, count = secTotal,
+                            index = if (canShowBiometric) 2 else 1, count = secTotal,
                             onClick = {
                                 val currentIndex = autoLockPresets.indexOfFirst { it.first == preferences.autoLockTimerMs }
                                 val nextIndex = (currentIndex + 1) % autoLockPresets.size
@@ -1391,62 +1360,6 @@ fun SettingsScreen(
                     pinError = null
                 }) { Text("Cancel") }
             },
-        )
-    }
-
-    if (showKidsModeAuth) {
-        AuthChallengeScreen(
-            title = "Exit Kids Mode",
-            subtitle = "Authenticate to change Kids Mode",
-            pinHash = preferences.pinHash,
-            biometricEnabled = preferences.biometricLockEnabled,
-            onPinEntered = { pin ->
-                if (pin.isEmpty()) {
-                    if (pendingKidsModeDisable) viewModel.setKidsModeEnabled(false)
-                    showKidsModeAuth = false
-                    kidsModeAuthError = null
-                    pendingKidsModeDisable = false
-                } else if (preferences.pinHash != null) {
-                    val valid = viewModel.verifyPin(pin)
-                    if (valid) {
-                        if (pendingKidsModeDisable) viewModel.setKidsModeEnabled(false)
-                        showKidsModeAuth = false
-                        kidsModeAuthError = null
-                        pendingKidsModeDisable = false
-                    } else {
-                        kidsModeAuthError = "Incorrect PIN"
-                    }
-                }
-            },
-            onErrorClear = { kidsModeAuthError = null },
-            errorMessage = kidsModeAuthError,
-            onDismiss = {
-                showKidsModeAuth = false
-                kidsModeAuthError = null
-                pendingKidsModeDisable = false
-            },
-            showAsDialog = true,
-        )
-    }
-
-    if (showKidsRatingPicker) {
-        val ratings = com.raulshma.jellyplay.core.model.KidsContentFilter.SELECTABLE_MAX_RATINGS
-        SettingsListPickerSheet(
-            title = "Max Content Rating",
-            items = ratings,
-            label = { it },
-            subtitle = {
-                when (it) {
-                    "G", "TV-Y", "TV-G" -> "Suitable for all ages"
-                    "TV-Y7" -> "Directed to older children"
-                    "PG", "TV-PG" -> "Parental guidance suggested"
-                    "PG-13", "TV-14" -> "Parents strongly cautioned"
-                    else -> ""
-                }
-            },
-            isSelected = { it == preferences.kidsModeMaxRating },
-            onDismiss = { showKidsRatingPicker = false },
-            onSelect = { viewModel.setKidsModeMaxRating(it); showKidsRatingPicker = false },
         )
     }
 

@@ -202,15 +202,7 @@ class DetailViewModel @Inject constructor(
             seriesDownloadResult = null
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    val prefs = preferencesStore.preferences.first()
-                    val filtered = if (prefs.kidsModeEnabled) {
-                        detail.copy(
-                            relatedItems = com.raulshma.jellyplay.core.model.KidsContentFilter.filter(
-                                detail.relatedItems, prefs.kidsModeMaxRating
-                            )
-                        )
-                    } else detail
-                    _detail.value = filtered
+                    _detail.value = detail
                     val streams = detail.mediaSources.firstOrNull()?.mediaStreams.orEmpty()
                     val storedSelections = preferences.value.mediaStreamSelections
                     val storedSelection = storedSelections[itemId]
