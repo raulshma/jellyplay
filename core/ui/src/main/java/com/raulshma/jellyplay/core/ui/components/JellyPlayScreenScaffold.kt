@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -58,9 +59,6 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-private fun isLightColor(color: Color): Boolean =
-    (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
 
 @Composable
 fun rememberScreenBackgroundColor(

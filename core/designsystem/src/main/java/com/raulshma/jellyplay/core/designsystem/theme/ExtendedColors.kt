@@ -44,3 +44,8 @@ data class ExtendedColors(
     val statsOverlayText: Color = Color(0xFF8AB4F8),
     val hdrBadgeBackground: Color = Color(0xFF1A1A1A),
 )
+
+fun isLightColor(color: Color): Boolean =
+    (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
+
+val LocalIsLightTheme = staticCompositionLocalOf { false }

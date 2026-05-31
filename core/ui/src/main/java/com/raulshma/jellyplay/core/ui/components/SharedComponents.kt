@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -92,7 +91,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 // ─── Dominant color cache ────────────────────────────────────────────────────
-private val dominantColorCache = android.util.LruCache<String, Color>(100)
+private val dominantColorCache = android.util.LruCache<String, Color>(500)
 
 @Composable
 fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer): Color {
@@ -302,47 +301,14 @@ fun PosterCard(
         ),
         label = "cardScale",
     )
-    val scale by animateFloatAsState(
-        targetValue = baseScale * tvFocusState.scale,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "cardCombinedScale",
-    )
-    val elevation by animateDpAsState(
-        targetValue = when {
-            isPressed -> 12.dp
-            tvFocusState.isFocused -> 16.dp
-            isTv -> 12.dp
-            else -> 4.dp
-        },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessHigh,
-        ),
-        label = "cardElevation",
-    )
-    val brightnessOverlay by animateFloatAsState(
-        targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessHigh,
-        ),
-        label = "cardBrightness",
-    )
-
-    val cardShape by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "cardShapeMorph",
-    )
-    val shape = remember(cardShape) {
-        if (cardShape > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
+    val scale = baseScale * tvFocusState.scale
+    val elevation = when {
+        isPressed -> 12.dp
+        tvFocusState.isFocused -> 16.dp
+        isTv -> 12.dp
+        else -> 4.dp
     }
+    val shape = ShapeCache.smooth12
 
     val dominantColor = rememberDominantColor(imageUrl)
     val playButtonSize = if (isTv) 44.dp else 36.dp
@@ -394,14 +360,6 @@ fun PosterCard(
                     contentScale = ContentScale.Crop,
                     crossfade = false,
                 )
-
-                if (brightnessOverlay > 0.01f) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
-                    )
-                }
 
                 Box(
                     modifier = Modifier
