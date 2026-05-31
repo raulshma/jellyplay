@@ -34,6 +34,7 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
             onItemClick = { artistId ->
                 navigator.navigate(Route.ArtistDetail(artistId))
             },
+            onBack = { navigator.goBack() },
         )
     }
     entry<Route.Albums> {
@@ -41,6 +42,7 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
             onItemClick = { albumId ->
                 navigator.navigate(Route.AlbumDetail(albumId))
             },
+            onBack = { navigator.goBack() },
         )
     }
     entry<Route.Tracks> {
@@ -48,6 +50,7 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
             onItemClick = { trackId ->
                 navigator.navigate(Route.AudioPlayer(trackId))
             },
+            onBack = { navigator.goBack() },
         )
     }
     entry<Route.Genres> {
@@ -55,6 +58,7 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
             onItemClick = { genreId, genreName ->
                 navigator.navigate(Route.GenreDetail(genreId, genreName))
             },
+            onBack = { navigator.goBack() },
         )
     }
     entry<Route.AlbumDetail> { key ->

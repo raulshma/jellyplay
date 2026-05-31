@@ -25,7 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +47,11 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 fun AudioPlayerScreensSection(
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
+    onTracksClick: () -> Unit = {},
+    onAlbumsClick: () -> Unit = {},
+    onArtistsClick: () -> Unit = {},
+    onGenresClick: () -> Unit = {},
+    onPlaylistsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -87,6 +94,61 @@ fun AudioPlayerScreensSection(
             item {
                 AmbientExpressiveCard(
                     onClick = onAmbientClick,
+                )
+            }
+            item {
+                PlayerScreenCard(
+                    onClick = onTracksClick,
+                    title = "Tracks",
+                    subtitle = "Browse all songs in your library",
+                    icon = Tabler.Outline.Music,
+                    startColor = MaterialTheme.colorScheme.secondary,
+                    endColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                )
+            }
+            item {
+                PlayerScreenCard(
+                    onClick = onAlbumsClick,
+                    title = "Albums",
+                    subtitle = "Explore full albums and collections",
+                    icon = Tabler.Outline.Vinyl,
+                    startColor = MaterialTheme.colorScheme.primaryContainer,
+                    endColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            item {
+                PlayerScreenCard(
+                    onClick = onArtistsClick,
+                    title = "Artists",
+                    subtitle = "Discover your favorite artists",
+                    icon = Tabler.Outline.Users,
+                    startColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    endColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            item {
+                PlayerScreenCard(
+                    onClick = onGenresClick,
+                    title = "Genres",
+                    subtitle = "Browse music by genre and mood",
+                    icon = Tabler.Outline.Category,
+                    startColor = MaterialTheme.colorScheme.inversePrimary,
+                    endColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+            item {
+                PlayerScreenCard(
+                    onClick = onPlaylistsClick,
+                    title = "Playlists",
+                    subtitle = "Your curated playlists and mixes",
+                    icon = Tabler.Outline.Playlist,
+                    startColor = MaterialTheme.colorScheme.secondaryContainer,
+                    endColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
@@ -179,6 +241,96 @@ private fun NowPlayingExpressiveCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Full player with controls, lyrics & queue",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 16.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerScreenCard(
+    onClick: () -> Unit,
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    startColor: Color,
+    endColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "${title.lowercase().replace(" ", "_")}_scale"
+    )
+
+    Column(
+        modifier = modifier
+            .width(200.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(ShapeCache.smooth24)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(ShapeCache.smooth20)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(startColor, endColor),
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(contentColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(44.dp),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,

@@ -237,6 +237,6 @@ class JellyPlayNotificationProvider(
         const val NOTIFICATION_ID = 1001
         private const val CONTENT_REQUEST_CODE = 2001
         private const val ARTWORK_SIZE = 512
-        private const val FALLBACK_COLOR = 0xFF6750A4.toInt() // md_theme_light_primary
+        private const val FALLBACK_COLOR = 0xFF006878.toInt() // md_theme_light_primary
     }
 }

@@ -50,8 +50,8 @@ class DownloadsViewModel @Inject constructor(
 
     fun cancelDownload(item: DownloadItem) {
         viewModelScope.launch {
-            downloadRepository.cancelDownload(item.id)
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+            downloadRepository.cancelDownload(item.id)
         }
     }
 

@@ -5,6 +5,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.palette.graphics.Palette
 
 data class ArtworkColors(
@@ -95,35 +96,37 @@ object ArtworkColorExtractor {
             ?: artworkColors.muted
             ?: return if (darkTheme) darkColorScheme() else lightColorScheme()
 
+        val surface = if (oledMode) oled_theme_surface else if (darkTheme) md_theme_dark_surface else md_theme_light_surface
+        val background = surface
+
         val primary = seedColor
         val onPrimary = bestContrast(seedColor, Color.White, Color.Black)
         val primaryContainer = if (darkTheme) {
-            artworkColors.darkVibrant ?: seedColor.copy(alpha = 0.7f)
+            val target = (artworkColors.darkVibrant ?: seedColor).copy(alpha = 1f)
+            lerp(surface, target, 0.7f)
         } else {
-            artworkColors.lightVibrant ?: seedColor.copy(alpha = 0.3f)
+            val target = (artworkColors.lightVibrant ?: seedColor).copy(alpha = 1f)
+            lerp(surface, target, 0.3f)
         }
         val onPrimaryContainer = bestContrast(primaryContainer, Color.White, Color.Black)
 
         val secondary = artworkColors.muted ?: artworkColors.lightMuted ?: seedColor
         val onSecondary = bestContrast(secondary, Color.White, Color.Black)
         val secondaryContainer = if (darkTheme) {
-            secondary.copy(alpha = 0.6f)
+            lerp(surface, secondary.copy(alpha = 1f), 0.6f)
         } else {
-            secondary.copy(alpha = 0.3f)
+            lerp(surface, secondary.copy(alpha = 1f), 0.3f)
         }
         val onSecondaryContainer = bestContrast(secondaryContainer, Color.White, Color.Black)
 
         val tertiary = artworkColors.lightVibrant ?: artworkColors.lightMuted ?: seedColor
         val onTertiary = bestContrast(tertiary, Color.White, Color.Black)
         val tertiaryContainer = if (darkTheme) {
-            tertiary.copy(alpha = 0.6f)
+            lerp(surface, tertiary.copy(alpha = 1f), 0.6f)
         } else {
-            tertiary.copy(alpha = 0.3f)
+            lerp(surface, tertiary.copy(alpha = 1f), 0.3f)
         }
         val onTertiaryContainer = bestContrast(tertiaryContainer, Color.White, Color.Black)
-
-        val surface = if (oledMode) oled_theme_surface else if (darkTheme) md_theme_dark_surface else md_theme_light_surface
-        val background = surface
         val onSurface = if (darkTheme) md_theme_dark_onSurface else md_theme_light_onSurface
         val onBackground = onSurface
         val surfaceVariant = if (darkTheme) md_theme_dark_surfaceVariant else md_theme_light_surfaceVariant

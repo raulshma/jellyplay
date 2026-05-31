@@ -1,12 +1,16 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
@@ -64,10 +68,25 @@ fun HeaderStatusIndicator(
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val sizeSpring = spring<IntSize>(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMedium,
+    )
+    val sizeSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     AnimatedContent(
         targetState = status,
         transitionSpec = {
+            val isEnteringNone = targetState is HeaderStatus.None
+            val isLeavingNone = initialState is HeaderStatus.None
             (fadeIn(animationSpec = fadeSpec) togetherWith fadeOut(animationSpec = fadeSpec))
+                .using(
+                    SizeTransform(
+                        clip = false,
+                        sizeAnimationSpec = { _, _ ->
+                            if (isEnteringNone || isLeavingNone) sizeSpring else sizeSpec
+                        }
+                    )
+                )
         },
         label = "headerStatus",
         modifier = modifier.semantics {
@@ -82,12 +101,12 @@ fun HeaderStatusIndicator(
     ) { currentStatus ->
         when (currentStatus) {
             is HeaderStatus.None -> {
-                Box(modifier = Modifier.size(20.dp))
+                Box(modifier = Modifier.size(0.dp))
             }
             is HeaderStatus.Loading -> {
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                 LoadingIndicator(
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(28.dp).padding(horizontal = 4.dp),
                     color = tint,
                 )
             }
@@ -95,14 +114,14 @@ fun HeaderStatusIndicator(
                 Icon(
                     imageVector = Tabler.Outline.AlertCircle,
                     contentDescription = "Error",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).padding(horizontal = 4.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
             is HeaderStatus.Local -> {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.WifiOff,
@@ -115,7 +134,7 @@ fun HeaderStatusIndicator(
             is HeaderStatus.Offline -> {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.CloudOff,

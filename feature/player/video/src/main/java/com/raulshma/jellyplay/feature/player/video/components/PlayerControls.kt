@@ -171,6 +171,7 @@ internal fun PlayerControls(
     videoFiltersActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
     onVideoFilterClick: () -> Unit = {},
+    onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -421,6 +422,11 @@ internal fun PlayerControls(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayerIconButton(
+                            icon = Tabler.Outline.Lock,
+                            contentDescription = "Lock screen",
+                            onClick = onLockClick,
+                        )
                         PipButton(onClick = onPipClick)
 
                         var showOverflow by remember { mutableStateOf(false) }

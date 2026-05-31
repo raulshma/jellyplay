@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -116,6 +117,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setThemeMode(mode) }
     }
 
+    fun setContrastLevel(level: ContrastLevel) {
+        viewModelScope.launch { preferencesStore.setContrastLevel(level) }
+    }
+
     fun setOledMode(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setOledMode(enabled) }
     }
@@ -206,12 +211,12 @@ class SettingsViewModel @Inject constructor(
         return preferencesStore.verifyPin(pin, preferences.pinHash)
     }
 
-    fun setKidsModeEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setKidsModeEnabled(enabled) }
+    fun setBiometricLockEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setBiometricLockEnabled(enabled) }
     }
 
-    fun setKidsModeMaxRating(rating: String) {
-        viewModelScope.launch { preferencesStore.setKidsModeMaxRating(rating) }
+    fun setAutoLockTimerMs(ms: Long) {
+        viewModelScope.launch { preferencesStore.setAutoLockTimerMs(ms) }
     }
 
     fun setDialogueBoostEnabled(enabled: Boolean) {

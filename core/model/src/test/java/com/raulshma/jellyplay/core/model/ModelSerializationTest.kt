@@ -30,8 +30,6 @@ class ModelSerializationTest {
             autoDeleteCache = false,
             pinLockEnabled = true,
             pinHash = "abc123",
-            kidsModeEnabled = true,
-            kidsModeMaxRating = "PG-13",
             dialogueBoostEnabled = true,
             dialogueBoostStrength = EffectStrength.HIGH,
             nightModeStrength = EffectStrength.LOW,
@@ -57,8 +55,6 @@ class ModelSerializationTest {
         assertEquals(true, defaults.autoDeleteCache)
         assertEquals(false, defaults.pinLockEnabled)
         assertEquals(null, defaults.pinHash)
-        assertEquals(false, defaults.kidsModeEnabled)
-        assertEquals("PG", defaults.kidsModeMaxRating)
         assertEquals(false, defaults.dialogueBoostEnabled)
         assertEquals(EffectStrength.MODERATE, defaults.dialogueBoostStrength)
         assertEquals(EffectStrength.MODERATE, defaults.nightModeStrength)

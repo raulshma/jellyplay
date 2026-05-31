@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <defs>
+        <linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#140d2b" />
+            <stop offset="100%" stop-color="#090514" />
+        </linearGradient>
+        <linearGradient id="d" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00f2fe" />
+            <stop offset="100%" stop-color="#8a2be2" />
+        </linearGradient>
+        <filter id="c" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="48" />
+        </filter>
+        <filter id="e" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity=".6" />
+        </filter>
+        <pattern id="b" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.5" fill="rgba(255, 255, 255, 0.05)" />
+        </pattern>
+    </defs>
+    <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#a)" />
+    <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#b)" />
+    <circle cx="256" cy="256" r="160" fill="#8a2be2" opacity=".3" filter="url(#c)" />
+    <rect x="90" y="240" width="80" height="120" rx="16" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" stroke-width="2" transform="rotate(-15 130 300)" />
+    <rect x="340" y="100" width="100" height="60" rx="16" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" stroke-width="2" transform="rotate(10 370 130)" />
+    <circle cx="140" cy="380" r="12" fill="#00f2fe" opacity=".2" />
+    <path d="M120 140h16m-8-8v16" stroke="#8a2be2" stroke-width="4" stroke-linecap="round" opacity=".4" />
+    <g stroke-width="28" stroke-linejoin="round">
+        <path fill="#8a2be2" stroke="#8a2be2" opacity=".25" d="M132 142v180l156-90z" transform="translate(24 12)" />
+        <path fill="#4facfe" stroke="#4facfe" opacity=".5" d="M156 154v180l156-90z" transform="translate(24 12)" />
+        <path fill="url(#d)" stroke="url(#d)" filter="url(#e)" d="M180 166v180l156-90z" transform="translate(24 12)" />
+    </g>
+</svg>
