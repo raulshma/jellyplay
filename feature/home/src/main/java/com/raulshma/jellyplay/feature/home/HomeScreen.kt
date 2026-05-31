@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -285,6 +289,8 @@ private fun MainHomeContent(
     var isSearchExpanded by remember { mutableStateOf(false) }
     val isSearchFocused by remember { derivedStateOf { state.searchState.query.isNotBlank() || isSearchExpanded } }
 
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+
     BackHandler(enabled = isFabExpanded || isSearchFocused) {
         if (isFabExpanded) isFabExpanded = false
         else if (isSearchFocused) {
@@ -405,7 +411,14 @@ private fun MainHomeContent(
                     onDownloadsClick = onDownloadsClick,
                     onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
                     onSettingsClick = onSettingsClick,
-                    modifier = Modifier.align(Alignment.BottomEnd),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                        },
                 )
         }
         }

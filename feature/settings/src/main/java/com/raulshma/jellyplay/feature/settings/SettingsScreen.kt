@@ -1109,6 +1109,15 @@ fun SettingsScreen(
                             },
                         )
                     }
+                    SettingToggleItem(
+                        icon = Tabler.Outline.TextSize,
+                        title = "Show Navigation Labels",
+                        subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
+                        checked = preferences.navBarShowLabels,
+                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else 2, 
+                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else 3,
+                        onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                    )
                 }
             }
 

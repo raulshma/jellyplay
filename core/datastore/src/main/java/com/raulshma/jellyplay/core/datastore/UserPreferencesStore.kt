@@ -138,6 +138,7 @@ class UserPreferencesStore @Inject constructor(
         val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
+        val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -345,6 +346,7 @@ class UserPreferencesStore @Inject constructor(
                     json.decodeFromString<Set<String>>(it)
                 } ?: emptySet()
             } catch (_: Exception) { emptySet() },
+            navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -700,6 +702,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit {
             it[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(ids)
         }
+    }
+
+    suspend fun setNavBarShowLabels(show: Boolean) {
+        context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
