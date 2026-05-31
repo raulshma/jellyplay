@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -52,6 +53,10 @@ class MainViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             authRepository.restoreSession()
+            // Wait for isAuthenticated to reflect the restored session state
+            // before hiding the splash screen, preventing the auth screen flash
+            isAuthenticated.first()
+            preferences.first()
             _isRestoring.value = false
         }
         appShortcutManager.observePlaybackForDynamicShortcuts()
