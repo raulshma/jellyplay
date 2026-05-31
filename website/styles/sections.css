@@ -436,7 +436,7 @@
 .hero-stat .stat-label {
   font-family: 'Inter', sans-serif;
   font-size: 0.8125rem;
-  color: var(--jp-color-slate-500);
+  color: var(--jp-color-slate-400);
   font-weight: 500;
 }
 
@@ -1695,6 +1695,8 @@
 }
 
 .carousel-dot {
+  position: relative;
+
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -1703,6 +1705,14 @@
   cursor: pointer;
   border: none;
   padding: 0;
+}
+
+.carousel-dot::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px; height: 24px;
 }
 
 .carousel-dot.active {
@@ -1845,7 +1855,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   line-height: 1.6;
-  color: var(--jp-color-slate-500);
+  color: var(--jp-color-slate-400);
   max-width: 320px;
 }
 
@@ -1885,7 +1895,7 @@
   align-items: center;
   font-family: 'Inter', sans-serif;
   font-size: 0.8125rem;
-  color: var(--jp-color-slate-600);
+  color: var(--jp-color-slate-400);
 }
 
 .footer-bottom p {
