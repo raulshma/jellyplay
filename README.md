@@ -31,19 +31,19 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 
 <table align="center" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
 	<tr>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/home.png" width="180" alt="Home screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/library.png" width="180" alt="Library screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/search.png" width="180" alt="Search screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/settings.png" width="180" alt="Settings screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/home.webp" width="180" alt="Home screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/library.webp" width="180" alt="Library screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/search.webp" width="180" alt="Search screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/settings.webp" width="180" alt="Settings screen" style="display: block;" /></td>
 	</tr>
 	<tr>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_home.png" width="180" alt="Audio home screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_player.png" width="180" alt="Audio player screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail.png" width="180" alt="Media detail screen" style="display: block;" /></td>
-		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail_2.png" width="180" alt="Secondary media detail screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_home.webp" width="180" alt="Audio home screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/audio_player.webp" width="180" alt="Audio player screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail.webp" width="180" alt="Media detail screen" style="display: block;" /></td>
+		<td align="center" style="padding: 1px;"><img src="media-resources/screenshots/media_detail_2.webp" width="180" alt="Secondary media detail screen" style="display: block;" /></td>
 	</tr>
 	<tr>
-		<td colspan="4" align="center" style="padding: 1px;"><img src="media-resources/screenshots/video_player.png" width="760" alt="Landscape video player screen" style="display: block;" /></td>
+		<td colspan="4" align="center" style="padding: 1px;"><img src="media-resources/screenshots/video_player.webp" width="760" alt="Landscape video player screen" style="display: block;" /></td>
 	</tr>
 </table>
 
