@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.util.Rational
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import android.graphics.Color
 import androidx.activity.viewModels
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -68,7 +70,16 @@ class MainActivity : ComponentActivity() {
                 start()
             }
         }
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
+        window.navigationBarColor = android.graphics.Color.parseColor("#66000000") // Translucent black
+        window.statusBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

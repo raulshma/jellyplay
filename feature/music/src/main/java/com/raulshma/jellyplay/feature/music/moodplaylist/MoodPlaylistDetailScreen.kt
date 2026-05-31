@@ -3,7 +3,11 @@ package com.raulshma.jellyplay.feature.music.moodplaylist
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +52,7 @@ fun MoodPlaylistDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     val displayTitle = if (playlist != null) "${playlist.emoji} ${playlist.name}" else "Mood Playlist"
 
@@ -114,7 +119,12 @@ fun MoodPlaylistDetailScreen(
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(16.dp),
+                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                        },
                 )
             }
         }

@@ -521,4 +521,8 @@ class SettingsViewModel @Inject constructor(
         if (visible) current.remove(libraryId) else current.add(libraryId)
         setHiddenLibrarySectionIds(current)
     }
+
+    fun setNavBarShowLabels(show: Boolean) {
+        viewModelScope.launch { preferencesStore.setNavBarShowLabels(show) }
+    }
 }
