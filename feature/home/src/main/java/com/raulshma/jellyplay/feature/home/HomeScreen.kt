@@ -75,6 +75,9 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
+private val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
+private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
+
 @Composable
 fun HomeScreen(
     onItemClick: (String) -> Unit,
@@ -182,7 +185,7 @@ private fun MainHomeContent(
         featuredCandidates.getOrNull(featuredIndex)
     }
 
-    val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
+    val backdropUrl = remember(featuredItem?.id) { featuredItem?.let { viewModel.getBackdropUrl(it.id) } }
 
     val savedScrollPos = viewModel.getHomeScrollPosition()
     val listState = rememberSaveable(saver = LazyListState.Saver) {
@@ -297,6 +300,12 @@ private fun MainHomeContent(
         onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
         modifier = Modifier.fillMaxSize(),
     ) {
+        ArtworkThemeWrapper(
+            imageUrl = backdropUrl,
+            dynamicTheming = state.dynamicTheming,
+            darkTheme = !isLightTheme,
+            oledMode = state.oledMode,
+        ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
                 state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
@@ -345,12 +354,6 @@ private fun MainHomeContent(
                 }
             }
 
-            ArtworkThemeWrapper(
-                imageUrl = backdropUrl,
-                dynamicTheming = state.dynamicTheming,
-                darkTheme = !isLightTheme,
-                oledMode = state.oledMode,
-            ) {
                 HomeTopDock(
                     scrollFraction = scrollFraction,
                     isSearchFocused = isSearchFocused,
@@ -388,14 +391,7 @@ private fun MainHomeContent(
                         )
                     },
                 )
-            }
 
-            ArtworkThemeWrapper(
-                imageUrl = backdropUrl,
-                dynamicTheming = state.dynamicTheming,
-                darkTheme = !isLightTheme,
-                oledMode = state.oledMode,
-            ) {
                 HomeFabMenu(
                     isExpanded = isFabExpanded,
                     onToggle = { isFabExpanded = it },
@@ -411,7 +407,7 @@ private fun MainHomeContent(
                     onSettingsClick = onSettingsClick,
                     modifier = Modifier.align(Alignment.BottomEnd),
                 )
-            }
+        }
         }
     }
 
@@ -500,24 +496,17 @@ private fun HomeContentList(
         ) {
             if (featuredItem != null) {
                 item {
-                    ArtworkThemeWrapper(
-                        imageUrl = viewModel.getBackdropUrl(featuredItem.id),
-                        dynamicTheming = state.dynamicTheming,
-                        darkTheme = !isLightTheme,
-                        oledMode = state.oledMode,
-                    ) {
-                        AnimatedHeroHeader(
-                            featuredItem = featuredItem,
-                            getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                            height = headerHeight,
-                            backgroundColor = backgroundColor,
-                            contentPadding = contentPad,
-                            listState = listState,
-                            onItemClick = onItemClick,
-                            onDetailsClick = onItemClick,
-                            onFocusChange = onFocusChange,
-                        )
-                    }
+                    AnimatedHeroHeader(
+                        featuredItem = featuredItem,
+                        getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                        height = headerHeight,
+                        backgroundColor = backgroundColor,
+                        contentPadding = contentPad,
+                        listState = listState,
+                        onItemClick = onItemClick,
+                        onDetailsClick = onItemClick,
+                        onFocusChange = onFocusChange,
+                    )
                 }
             } else {
                 item { Spacer(Modifier.height(100.dp)) }
@@ -538,17 +527,18 @@ private fun HomeContentList(
                     label = "sectionAnimation",
                 )
 
+                val heroTransitionBrush = remember(backgroundColor, density) {
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, backgroundColor),
+                        startY = 0f,
+                        endY = with(density) { 10.dp.toPx() },
+                    )
+                }
                 val sectionModifier = Modifier
                     .fillMaxWidth()
                     .then(
                         if (isFirstAfterHero) {
-                            Modifier.background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, backgroundColor),
-                                    startY = 0f,
-                                    endY = with(density) { 10.dp.toPx() },
-                                )
-                            )
+                            Modifier.background(heroTransitionBrush)
                         } else Modifier.background(backgroundColor)
                     )
                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
@@ -602,7 +592,7 @@ private fun HomeContentList(
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
                     val rowItems = discoverRows[rowIndex]
-                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)
+                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
                     val targetSize = pattern[rowIndex % pattern.size]
                     val spacing = 8.dp
 

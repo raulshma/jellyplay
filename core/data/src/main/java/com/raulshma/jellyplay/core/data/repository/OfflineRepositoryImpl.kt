@@ -28,11 +28,7 @@ class OfflineRepositoryImpl @Inject constructor(
                 val download = downloadMap[entity.id]
                 entity.toOfflineMediaItem().copy(
                     downloadPath = download?.downloadPath,
-                    downloadStatus = try {
-                        download?.status?.let { DownloadStatus.valueOf(it) }
-                    } catch (_: Exception) {
-                        null
-                    },
+                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                     downloadedBytes = download?.downloadedBytes ?: 0L,
                     totalSizeBytes = download?.totalSizeBytes ?: 0L,
                 )
@@ -54,11 +50,7 @@ class OfflineRepositoryImpl @Inject constructor(
                 val download = downloadMap[entity.id]
                 entity.toOfflineMediaItem().copy(
                     downloadPath = download?.downloadPath,
-                    downloadStatus = try {
-                        download?.status?.let { DownloadStatus.valueOf(it) }
-                    } catch (_: Exception) {
-                        null
-                    },
+                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                     downloadedBytes = download?.downloadedBytes ?: 0L,
                     totalSizeBytes = download?.totalSizeBytes ?: 0L,
                 )
@@ -122,14 +114,19 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun cleanupOrphans() {
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        offlineMediaDao.cleanupOrphans()
     }
+
+    private fun safeMediaTypeOf(name: String): MediaType =
+        MediaType.entries.find { it.name == name } ?: MediaType.UNKNOWN
+
+    private fun safeDownloadStatusOf(name: String): DownloadStatus? =
+        DownloadStatus.entries.find { it.name == name }
 
     private fun OfflineMediaEntity.toOfflineMediaItem() = OfflineMediaItem(
         id = id,
         name = name,
-        mediaType = try { MediaType.valueOf(mediaType) } catch (_: Exception) { MediaType.UNKNOWN },
+        mediaType = safeMediaTypeOf(mediaType),
         overview = overview,
         year = year,
         communityRating = communityRating,

@@ -46,8 +46,7 @@ class SyncPlayManager @Inject constructor(
     private var keepAliveJob: Job? = null
     private var pingReportJob: Job? = null
 
-    @Volatile
-    private var queuedEvent: SyncPlayEvent? = null
+    private val queuedEvent = AtomicReference<SyncPlayEvent?>(null)
 
     private val _events = MutableSharedFlow<SyncPlayEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<SyncPlayEvent> = _events.asSharedFlow()
@@ -67,6 +66,7 @@ class SyncPlayManager @Inject constructor(
                 handleEvent(typedEvent)
             }
         }
+        keepAliveJob?.cancel()
         keepAliveJob = scope.launch {
             while (true) {
                 delay(30_000)
@@ -81,7 +81,7 @@ class SyncPlayManager @Inject constructor(
                 is SyncPlayEvent.PlaybackCommand -> {
                     if (!syncPlayReady.get()) {
                         Log.d(TAG, "SyncPlay not ready, queuing command: ${event.cmd.command}")
-                        queuedEvent = event
+                        queuedEvent.set(event)
                         return
                     }
                     if (event.cmd.emittedAtMs > 0 && syncPlayEnabledAtMs.get() > 0) {
@@ -105,8 +105,9 @@ class SyncPlayManager @Inject constructor(
                 }
                 is SyncPlayEvent.StateUpdate -> {
                     cachedGroup.get()?.let { g ->
-                        cachedGroup.set(g.copy(isPlaying = event.isPlaying))
-                        _currentGroup.value = g.copy(isPlaying = event.isPlaying)
+                        val updated = g.copy(isPlaying = event.isPlaying)
+                        cachedGroup.set(updated)
+                        _currentGroup.value = updated
                     }
                     _events.tryEmit(event)
                 }
@@ -122,7 +123,7 @@ class SyncPlayManager @Inject constructor(
                     isGroupActive.set(false)
                     activeGroupIdRef.set(null)
                     syncPlayReady.set(false)
-                    queuedEvent = null
+                    queuedEvent.set(null)
                     syncPlayEnabledAtMs.set(0L)
                     queueCore.clear()
                     playbackCore.onGroupLeft()
@@ -191,10 +192,9 @@ class SyncPlayManager @Inject constructor(
                 timeSyncManager.pingUpdated.first()
                 syncPlayReady.set(true)
                 Log.d(TAG, "SyncPlay ready (time sync first ping received)")
-                queuedEvent?.let { evt ->
+                queuedEvent.getAndSet(null)?.let { evt ->
                     Log.d(TAG, "Processing queued event")
                     handleEvent(evt)
-                    queuedEvent = null
                 }
             }
 
@@ -234,7 +234,7 @@ class SyncPlayManager @Inject constructor(
         isGroupActive.set(false)
         activeGroupIdRef.set(null)
         syncPlayReady.set(false)
-        queuedEvent = null
+        queuedEvent.set(null)
         syncPlayEnabledAtMs.set(0L)
         eventJob?.cancel()
         keepAliveJob?.cancel()
@@ -311,6 +311,7 @@ class SyncPlayManager @Inject constructor(
         activeGroupIdRef.set(null)
         syncPlayReady.set(false)
         syncPlayEnabledAtMs.set(0L)
+        queuedEvent.set(null)
         eventJob?.cancel()
         keepAliveJob?.cancel()
         pingReportJob?.cancel()

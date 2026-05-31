@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,10 +30,18 @@ class SeerrRepositoryImpl @Inject constructor(
     private val cachedPrefs = seerrPreferencesStore.preferences
         .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.Eagerly, null)
 
-    private val detailCache = ConcurrentHashMap<String, CacheEntry<Any>>()
+    private val detailCache = object : LinkedHashMap<String, CacheEntry<Any>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry<Any>>): Boolean {
+            return size > 50
+        }
+    }
+    @Volatile
+    private var lastCacheEvictionMs = 0L
     private val CACHE_TTL_MS = 60_000L
 
+    @Synchronized
     private fun <T> getCached(key: String): T? {
+        evictExpired()
         val entry = detailCache[key] ?: return null
         if (System.currentTimeMillis() - entry.timestampMs > CACHE_TTL_MS) {
             detailCache.remove(key)
@@ -44,13 +51,27 @@ class SeerrRepositoryImpl @Inject constructor(
         return entry.value as T
     }
 
+    @Synchronized
     private fun putCached(key: String, value: Any) {
+        evictExpired()
         detailCache[key] = CacheEntry(value, System.currentTimeMillis())
+    }
+
+    private fun evictExpired() {
+        val now = System.currentTimeMillis()
+        if (now - lastCacheEvictionMs < 30_000L) return
+        lastCacheEvictionMs = now
+        val iter = detailCache.entries.iterator()
+        while (iter.hasNext()) {
+            if (now - iter.next().value.timestampMs > CACHE_TTL_MS) {
+                iter.remove()
+            }
+        }
     }
 
     private suspend fun getCredentials(): Pair<String, String>? {
         val prefs = cachedPrefs.value ?: return null
-        val prefsHash = listOf(prefs.serverUrl, prefs.apiKey).hashCode()
+        val prefsHash = 31 * prefs.serverUrl.hashCode() + prefs.apiKey.hashCode()
         if (prefsHash == lastPrefsHash) {
             cachedCredentials?.let { return it }
         }

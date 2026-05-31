@@ -19,7 +19,10 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -28,48 +31,48 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var downloadDao: DownloadDao
 
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
-        recoverPendingDownloads()
+        applicationScope.launch { recoverPendingDownloads() }
     }
 
-    private fun recoverPendingDownloads() {
-        Thread {
-            try {
-                val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
-                for (download in pending) {
-                    val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                        .setInputData(
-                            Data.Builder()
-                                .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                                .build()
-                        )
-                        .build()
-                    WorkManager.getInstance(this).enqueueUniqueWork(
-                        "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                        ExistingWorkPolicy.REPLACE,
-                        workRequest,
+    private suspend fun recoverPendingDownloads() {
+        try {
+            val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
+            for (download in pending) {
+                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
+                            .build()
                     )
-                }
-                val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
-                for (download in stale) {
-                    runBlocking { downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name) }
-                    val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                        .setInputData(
-                            Data.Builder()
-                                .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                                .build()
-                        )
-                        .build()
-                    WorkManager.getInstance(this).enqueueUniqueWork(
-                        "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                        ExistingWorkPolicy.REPLACE,
-                        workRequest,
-                    )
-                }
-            } catch (_: Exception) {
+                    .build()
+                WorkManager.getInstance(this).enqueueUniqueWork(
+                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest,
+                )
             }
-        }.start()
+            val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
+            for (download in stale) {
+                downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
+                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
+                            .build()
+                    )
+                    .build()
+                WorkManager.getInstance(this).enqueueUniqueWork(
+                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest,
+                )
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private val imageLoader by lazy {

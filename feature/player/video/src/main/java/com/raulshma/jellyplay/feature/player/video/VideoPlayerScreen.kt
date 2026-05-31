@@ -886,8 +886,11 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(isSeeking, seekPositionMs) {
         if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            val oldBitmap = seekTrickplayBitmap
             seekTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
+            oldBitmap?.recycle()
         } else if (!isSeeking) {
+            seekTrickplayBitmap?.recycle()
             seekTrickplayBitmap = null
         }
     }
@@ -895,7 +898,9 @@ fun VideoPlayerScreen(
     LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
         if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
             gestureTrickplayVisible = true
+            val oldBitmap = gestureTrickplayBitmap
             gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
+            oldBitmap?.recycle()
         }
     }
 
@@ -903,14 +908,18 @@ fun VideoPlayerScreen(
         if (!isGestureSeeking && gestureTrickplayVisible) {
             delay(1000)
             gestureTrickplayVisible = false
+            gestureTrickplayBitmap?.recycle()
             gestureTrickplayBitmap = null
         }
     }
 
     LaunchedEffect(isTv, isSeeking, seekPositionMs) {
         if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+            val oldBitmap = tvTrickplayBitmap
             tvTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
+            oldBitmap?.recycle()
         } else if (!isSeeking) {
+            tvTrickplayBitmap?.recycle()
             tvTrickplayBitmap = null
         }
     }

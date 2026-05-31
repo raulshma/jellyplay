@@ -152,12 +152,18 @@ fun SeerrMediaCard(
         }
     }
 
-    val mediaStatus = item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
-        ?: SeerrMediaStatus.UNKNOWN
-    val isAvailable = mediaStatus == SeerrMediaStatus.AVAILABLE ||
+    val mediaStatus = remember(item.mediaInfo?.status) {
+        item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
+            ?: SeerrMediaStatus.UNKNOWN
+    }
+    val isAvailable = remember(mediaStatus) {
+        mediaStatus == SeerrMediaStatus.AVAILABLE ||
             mediaStatus == SeerrMediaStatus.PARTIALLY_AVAILABLE
-    val isPending = mediaStatus == SeerrMediaStatus.PENDING ||
+    }
+    val isPending = remember(mediaStatus) {
+        mediaStatus == SeerrMediaStatus.PENDING ||
             mediaStatus == SeerrMediaStatus.PROCESSING
+    }
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
     val cardShape = ShapeCache.smooth12

@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.core.ui.navigation
 
+import androidx.compose.runtime.Immutable
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 sealed class Route : NavKey {
 

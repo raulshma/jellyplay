@@ -68,7 +68,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.jellyfin.sdk.Jellyfin
-import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.ApiClient

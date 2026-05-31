@@ -1331,6 +1331,15 @@ class VideoPlayerViewModel @Inject constructor(
     fun release() {
         if (released) return
         released = true
+        performRelease()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        release()
+    }
+
+    private fun performRelease() {
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
         val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
@@ -1345,24 +1354,6 @@ class VideoPlayerViewModel @Inject constructor(
                         sessionId = sessionId,
                         positionTicks = positionTicks,
                     )
-                }
-            }
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        if (released) return
-        released = true
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        val sessionId = playSessionId
-        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
-        releaseInternals()
-        castManager.release()
-        if (itemId != null && positionTicks > 0) {
-            viewModelScope.launch(Dispatchers.IO) {
-                runCatching {
-                    playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
                 }
             }
         }

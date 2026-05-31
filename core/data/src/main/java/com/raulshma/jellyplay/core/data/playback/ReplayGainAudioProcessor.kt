@@ -5,19 +5,24 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.ShortBuffer
+import java.nio.FloatBuffer
 import kotlin.math.pow
 
 @UnstableApi
 class ReplayGainAudioProcessor : AudioProcessor {
 
     private var pendingGainDb: Float = 0f
-    private var multiplier: Float = 1f
+    @Volatile private var multiplier: Float = 1f
     private var inputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
     private var outputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
     private var buffer: ByteBuffer = EMPTY_BUFFER
     private var outputBuffer: ByteBuffer = EMPTY_BUFFER
     private var isInputEnded = false
     private var isActive = false
+
+    private var cachedShortBuffer: ShortBuffer? = null
+    private var cachedFloatBuffer: FloatBuffer? = null
 
     @Synchronized
     fun setGainDb(gainDb: Float) {
@@ -40,6 +45,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
         }
         this.inputAudioFormat = inputAudioFormat
         outputAudioFormat = inputAudioFormat
+        cachedShortBuffer = null
+        cachedFloatBuffer = null
         return inputAudioFormat
     }
 
@@ -53,6 +60,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
 
         if (buffer.capacity() < remaining) {
             buffer = ByteBuffer.allocateDirect(remaining).order(ByteOrder.nativeOrder())
+            cachedShortBuffer = null
+            cachedFloatBuffer = null
         } else {
             buffer.clear()
         }
@@ -60,7 +69,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
         val mult = multiplier
 
         if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
-            val shortBuffer = buffer.asShortBuffer()
+            val shortBuffer = cachedShortBuffer?.apply { clear() }
+                ?: buffer.asShortBuffer().also { cachedShortBuffer = it }
             val inputShorts = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asShortBuffer()
             inputShorts.position(position / 2)
             inputShorts.limit(limit / 2)
@@ -72,7 +82,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
             buffer.position(0)
             buffer.limit(shortBuffer.position() * 2)
         } else {
-            val floatBuffer = buffer.asFloatBuffer()
+            val floatBuffer = cachedFloatBuffer?.apply { clear() }
+                ?: buffer.asFloatBuffer().also { cachedFloatBuffer = it }
             val inputFloats = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asFloatBuffer()
             inputFloats.position(position / 4)
             inputFloats.limit(limit / 4)
@@ -108,7 +119,9 @@ class ReplayGainAudioProcessor : AudioProcessor {
 
     override fun reset() {
         flush()
-        buffer = EMPTY_BUFFER
+        buffer.clear()
+        cachedShortBuffer = null
+        cachedFloatBuffer = null
         inputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
         outputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
     }

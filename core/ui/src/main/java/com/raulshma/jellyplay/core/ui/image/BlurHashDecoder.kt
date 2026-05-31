@@ -10,6 +10,17 @@ internal object BlurHashDecoder {
     private const val BASE83_CHARS =
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#\$%*+,-.:;=?@[]^_{|}~"
 
+    private val SRGB_TO_LINEAR = FloatArray(256) { i ->
+        val v = i / 255f
+        if (v <= 0.04045f) v / 12.92f else ((v + 0.055f) / 1.055f).pow(2.4f)
+    }
+
+    private val LINEAR_TO_SRGB = IntArray(1024) { i ->
+        val v = i / 1023f
+        val srgb = if (v <= 0.0031308f) v * 12.92f else 1.055f * v.pow(1f / 2.4f) - 0.055f
+        (srgb.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+    }
+
     fun decode(blurHash: String, width: Int, height: Int): Bitmap? {
         if (blurHash.length < 6) return null
 
@@ -42,8 +53,14 @@ internal object BlurHashDecoder {
             }
         }
 
+        val cosX = Array(numX) { i ->
+            FloatArray(width) { x -> cos(Math.PI * x * i / width).toFloat() }
+        }
+        val cosY = Array(numY) { j ->
+            FloatArray(height) { y -> cos(Math.PI * y * j / height).toFloat() }
+        }
+
         val pixels = IntArray(width * height)
-        val pi = Math.PI.toFloat()
 
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -52,8 +69,9 @@ internal object BlurHashDecoder {
                 var b = 0f
 
                 for (j in 0 until numY) {
+                    val cy = cosY[j][y]
                     for (i in 0 until numX) {
-                        val basis = (cos(pi * x * i / width) * cos(pi * y * j / height)).toFloat()
+                        val basis = cosX[i][x] * cy
                         val offset = (j * numX + i) * 3
                         r += colors[offset] * basis
                         g += colors[offset + 1] * basis
@@ -81,9 +99,9 @@ internal object BlurHashDecoder {
     private fun decodeDC(str: String, from: Int, to: Int): FloatArray {
         val value = decode83(str, from, to)
         return floatArrayOf(
-            sRGBToLinear((value shr 16) and 0xFF),
-            sRGBToLinear((value shr 8) and 0xFF),
-            sRGBToLinear(value and 0xFF),
+            SRGB_TO_LINEAR[(value shr 16) and 0xFF],
+            SRGB_TO_LINEAR[(value shr 8) and 0xFF],
+            SRGB_TO_LINEAR[value and 0xFF],
         )
     }
 
@@ -99,15 +117,10 @@ internal object BlurHashDecoder {
         )
     }
 
-    private fun sRGBToLinear(value: Int): Float {
-        val v = value / 255f
-        return if (v <= 0.04045f) v / 12.92f else ((v + 0.055f) / 1.055f).pow(2.4f)
-    }
-
     private fun linearToSRGB(value: Float): Int {
         val v = value.coerceIn(0f, 1f)
-        val srgb = if (v <= 0.0031308f) v * 12.92f else 1.055f * v.pow(1f / 2.4f) - 0.055f
-        return (srgb * 255f + 0.5f).toInt()
+        val idx = (v * 1023f + 0.5f).toInt().coerceIn(0, 1023)
+        return LINEAR_TO_SRGB[idx]
     }
 
     private fun signPow(value: Float): Float {

@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -40,11 +41,18 @@ class DownloadsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            downloadRepository.getAllDownloads().collectLatest { items ->
-                downloads = items
-                isLoading = false
-                totalStorageBytes = items.sumOf { it.downloadedBytes }
-            }
+            downloadRepository.getAllDownloads()
+                .distinctUntilChanged { old, new ->
+                    if (old.size != new.size) return@distinctUntilChanged false
+                    old.zip(new).all { (o, n) -> o.downloadedBytes == n.downloadedBytes && o.id == n.id && o.status == n.status }
+                }
+                .collectLatest { items ->
+                    downloads = items
+                    isLoading = false
+                    val total = totalStorageBytes
+                    val newTotal = items.sumOf { it.downloadedBytes }
+                    if (total != newTotal) totalStorageBytes = newTotal
+                }
         }
     }
 

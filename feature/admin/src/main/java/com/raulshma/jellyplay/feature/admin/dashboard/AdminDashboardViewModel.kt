@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -54,25 +56,27 @@ class AdminDashboardViewModel @Inject constructor(
         viewModelScope.launch {
             state = state.copy(isLoading = true, error = null)
             try {
-                val systemInfoResult = apiClient.getSystemInfo()
-                val countsResult = apiClient.getItemCounts()
-                val tasksResult = apiClient.getScheduledTasks()
-                val sessionsResult = apiClient.getSessions()
-                val activityResult = apiClient.getActivityLogEntries(limit = 10)
+                coroutineScope {
+                    val sysInfoDeferred = async { apiClient.getSystemInfo().getOrNull() }
+                    val countsDeferred = async { apiClient.getItemCounts().getOrNull() }
+                    val sessionsDeferred = async { apiClient.getSessions().getOrNull() }
+                    val activityDeferred = async { apiClient.getActivityLogEntries(limit = 10).getOrNull() }
+                    val tasksDeferred = async { apiClient.getScheduledTasks().getOrNull() }
 
-                val sysInfo = systemInfoResult.getOrNull()
-                val counts = countsResult.getOrNull()
-                val allTasks = tasksResult.getOrNull() ?: emptyList()
-                val sessions = sessionsResult.getOrNull() ?: emptyList()
+                    val sysInfo = sysInfoDeferred.await()
+                    val counts = countsDeferred.await()
+                    val sessions = sessionsDeferred.await() ?: emptyList()
+                    val allTasks = tasksDeferred.await() ?: emptyList()
 
-                state = state.copy(
-                    isLoading = false,
-                    systemInfo = sysInfo,
-                    itemCounts = counts,
-                    runningTasks = allTasks.filter { it.state == TaskState.RUNNING },
-                    sessions = sessions,
-                    recentActivity = activityResult.getOrNull() ?: emptyList(),
-                )
+                    state = state.copy(
+                        isLoading = false,
+                        systemInfo = sysInfo,
+                        itemCounts = counts,
+                        runningTasks = allTasks.filter { it.state == TaskState.RUNNING },
+                        sessions = sessions,
+                        recentActivity = activityDeferred.await() ?: emptyList(),
+                    )
+                }
             } catch (e: Exception) {
                 state = state.copy(isLoading = false, error = e.message)
             }
