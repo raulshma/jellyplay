@@ -4,9 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 
 /**
  * Manages the per-card loading state for SeerrMediaCard click animations.
@@ -71,15 +70,15 @@ fun rememberSeerrCardLoadingState(): SeerrCardLoadingState {
 
 private class SeerrCardLoadingStateImpl : SeerrCardLoadingState {
 
-    private var loadingIds by mutableStateOf(emptySet<Int>())
+    private val loadingIds = mutableStateListOf<Int>()
 
     override fun isLoading(itemId: Int): Boolean = itemId in loadingIds
 
     override fun startLoading(itemId: Int) {
-        loadingIds = loadingIds + itemId
+        if (itemId !in loadingIds) loadingIds.add(itemId)
     }
 
     override fun stopLoading(itemId: Int) {
-        loadingIds = loadingIds - itemId
+        loadingIds.remove(itemId)
     }
 }

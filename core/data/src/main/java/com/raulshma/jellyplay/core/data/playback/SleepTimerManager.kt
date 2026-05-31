@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,13 +42,12 @@ class SleepTimerManager @Inject constructor() {
         _isEndOfEpisodeMode.value = false
         _remainingMs.value = durationMs
 
+        val targetElapsedMs = SystemClock.elapsedRealtime() + durationMs
+
         timerJob = scope.launch {
-            var remaining = durationMs
-            val step = 1000L
-            while (isActive && remaining > 0) {
-                delay(step)
-                remaining -= step
-                _remainingMs.value = remaining.coerceAtLeast(0)
+            while (isActive && SystemClock.elapsedRealtime() < targetElapsedMs) {
+                delay(1000L)
+                _remainingMs.value = (targetElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
             }
             if (isActive) {
                 _isActive.value = false

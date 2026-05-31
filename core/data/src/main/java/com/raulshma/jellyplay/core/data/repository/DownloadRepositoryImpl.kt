@@ -81,9 +81,8 @@ class DownloadRepositoryImpl @Inject constructor(
                 return@runCatching existing.toDownloadItem()
             }
             if (existing.downloadPath.isNotBlank()) {
-                val oldFile = File(existing.downloadPath)
-                if (oldFile.exists()) oldFile.delete()
-                oldFile.parentFile?.let { parent ->
+                File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
+                File(existing.downloadPath).parentFile?.let { parent ->
                     val oldTrickplayDir = File(parent, "trickplay")
                     if (oldTrickplayDir.exists()) oldTrickplayDir.deleteRecursively()
                 }
@@ -104,7 +103,7 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
             ?: File(context.filesDir, "downloads")
         if (!dir.exists()) dir.mkdirs()
-        val safeName = name.replace(Regex("[^a-zA-Z0-9.\\-]"), "_")
+        val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
         val extension = if (mediaType == MediaType.AUDIO.name) "mp3" else "mp4"
         val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
 
@@ -134,16 +133,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        val file = File(entity.downloadPath)
-        if (file.exists()) file.delete()
-        file.parentFile?.let { parent ->
-            val trickplayDir = File(parent, "trickplay")
-            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
-        }
-        downloadDao.deleteDownloadById(id)
-        offlineMediaDao.deleteById(entity.mediaItemId)
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        cleanupDownloadFiles(entity)
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
@@ -162,16 +152,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        val file = File(entity.downloadPath)
-        if (file.exists()) file.delete()
-        file.parentFile?.let { parent ->
-            val trickplayDir = File(parent, "trickplay")
-            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
-        }
-        downloadDao.deleteDownloadById(id)
-        offlineMediaDao.deleteById(entity.mediaItemId)
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        cleanupDownloadFiles(entity)
     }
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
@@ -414,6 +395,21 @@ class DownloadRepositoryImpl @Inject constructor(
         genres = genres.joinToString(","),
     )
 
+    private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
+        if (entity.downloadPath.isNotBlank()) {
+            val file = File(entity.downloadPath)
+            if (file.exists()) file.delete()
+            file.parentFile?.let { parent ->
+                val trickplayDir = File(parent, "trickplay")
+                if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+            }
+        }
+        downloadDao.deleteDownloadById(entity.id)
+        offlineMediaDao.deleteById(entity.mediaItemId)
+        offlineMediaDao.deleteOrphanedSeasons()
+        offlineMediaDao.deleteOrphanedSeries()
+    }
+
     private fun DownloadEntity.toDownloadItem() = DownloadItem(
         id = id,
         mediaItemId = mediaItemId,
@@ -435,4 +431,8 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
     )
+
+    companion object {
+        private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
+    }
 }

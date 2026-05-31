@@ -61,21 +61,14 @@
 -dontwarn is.xyz.mpv.**
 
 # LibVLC - JNI library, must keep all classes and methods
--keep class org.videolan.libvlc.** { *; }
--keep class org.videolan.medialibrary.** { *; }
--keepclassmembers class org.videolan.libvlc.** { *; }
--keepclassmembers class org.videolan.medialibrary.** { *; }
 -keep class org.videolan.** { *; }
+-keepclassmembers class org.videolan.** { *; }
 -dontwarn org.videolan.**
 
-# Media3 / ExoPlayer
--keep class androidx.media3.session.** { *; }
--keep class androidx.media3.exoplayer.** { *; }
+# Media3 / ExoPlayer - consumer rules provided by library
 -dontwarn androidx.media3.**
 
-# Coil
--keep class coil3.SingletonImageLoader { *; }
--keep class coil3.ImageLoader { *; }
+# Coil - consumer rules provided by library
 -dontwarn coil3.**
 
 # Paging

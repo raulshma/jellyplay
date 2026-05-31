@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         LyricsCacheEntity::class,
         OfflineMediaEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false,
 )
 abstract class JellyPlayDatabase : RoomDatabase() {

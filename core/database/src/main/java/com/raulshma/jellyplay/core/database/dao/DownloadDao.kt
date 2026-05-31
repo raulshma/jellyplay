@@ -61,11 +61,17 @@ interface DownloadDao {
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
     @Query("SELECT * FROM downloads WHERE status = :status")
-    fun getDownloadsByStatus(status: String): List<DownloadEntity>
+    suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
     suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE seasonId = :seasonId")
     suspend fun getDownloadsForSeason(seasonId: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
+    suspend fun getDownloadsByMediaItemIds(mediaItemIds: List<String>): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
+    fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
 }

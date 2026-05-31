@@ -91,6 +91,9 @@ fun AnimatedHeroHeader(
         }
     }
 
+    val layoutInfo = listState.layoutInfo
+    val heroIsVisible = layoutInfo.visibleItemsInfo.any { it.index == 0 } || layoutInfo.totalItemsCount == 0
+
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     AnimatedContent(
@@ -124,6 +127,7 @@ fun AnimatedHeroHeader(
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
             onFocusChange = onFocusChange,
+            isVisible = heroIsVisible,
         )
     }
 }
@@ -139,6 +143,7 @@ fun HeroHeader(
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
+    isVisible: Boolean = true,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -178,7 +183,7 @@ fun HeroHeader(
     val heroTransition = rememberInfiniteTransition(label = "hero_animations")
     val breathScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.04f,
+        targetValue = if (isVisible) 1.04f else 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(12000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
@@ -188,7 +193,7 @@ fun HeroHeader(
 
     val playPulseScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.35f,
+        targetValue = if (isVisible) 1.35f else 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
@@ -197,7 +202,7 @@ fun HeroHeader(
     )
     val playPulseAlpha by heroTransition.animateFloat(
         initialValue = 0.45f,
-        targetValue = 0.0f,
+        targetValue = if (isVisible) 0.0f else 0.45f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
@@ -207,7 +212,7 @@ fun HeroHeader(
 
     val ratingPulse by heroTransition.animateFloat(
         initialValue = 0.9f,
-        targetValue = 1.1f,
+        targetValue = if (isVisible) 1.1f else 0.9f,
         animationSpec = infiniteRepeatable(
             animation = tween(2000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
@@ -215,19 +220,21 @@ fun HeroHeader(
         label = "ratingPulse"
     )
 
-    val heroShape = if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = 0.dp,
-            cornerRadiusTR = 0.dp,
-            cornerRadiusBL = 36.dp,
-            cornerRadiusBR = 14.dp,
-            smoothnessAsPercentTL = 60,
-            smoothnessAsPercentTR = 60,
-            smoothnessAsPercentBL = 60,
-            smoothnessAsPercentBR = 60,
-        )
-    } else {
-        RoundedCornerShape(0.dp)
+    val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
+        if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+            AbsoluteSmoothCornerShape(
+                cornerRadiusTL = 0.dp,
+                cornerRadiusTR = 0.dp,
+                cornerRadiusBL = 36.dp,
+                cornerRadiusBR = 14.dp,
+                smoothnessAsPercentTL = 60,
+                smoothnessAsPercentTR = 60,
+                smoothnessAsPercentBL = 60,
+                smoothnessAsPercentBR = 60,
+            )
+        } else {
+            RoundedCornerShape(0.dp)
+        }
     }
 
     Box(

@@ -894,7 +894,7 @@ private fun LyricsSearchSheet(
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                 ) {
-                    items(searchResults.size, contentType = { "searchResult" }) { index ->
+                    items(searchResults.size, key = { it }, contentType = { "searchResult" }) { index ->
                         val track = searchResults[index]
                         Card(
                             onClick = { onApplyTrack(track) },
@@ -1043,7 +1043,7 @@ private fun LyricsOverlay(
                     contentPadding = PaddingValues(vertical = 200.dp),
                     userScrollEnabled = false,
                 ) {
-                    items(lyrics.size, contentType = { "lyricsLine" }) { index ->
+                    items(lyrics.size, key = { it }, contentType = { "lyricsLine" }) { index ->
                         val isCurrent = index == currentIndex && hasSyncedLyrics
                         val distance = if (currentIndex >= 0) kotlin.math.abs(index - currentIndex) else 99
                         val targetAlpha = when {

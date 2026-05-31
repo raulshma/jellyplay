@@ -80,6 +80,7 @@ class JellyfinWebSocketClient @Inject constructor(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure", t)
                 _isConnected.value = false
+                webSocket.close(1000, "reconnecting after failure")
                 scheduleReconnect()
             }
 

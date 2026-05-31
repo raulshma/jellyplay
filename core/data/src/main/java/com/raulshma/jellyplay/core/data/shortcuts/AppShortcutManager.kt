@@ -41,7 +41,7 @@ class AppShortcutManager @Inject constructor(
     }
 
     private fun pushContinueListeningShortcut(track: TrackInfo) {
-        val intent = Intent(context, Class.forName(MAIN_ACTIVITY_CLASS)).apply {
+        val intent = Intent(context, mainActivityClass).apply {
             action = ACTION_PLAY_AUDIO
             putExtra(EXTRA_ITEM_ID, track.itemId)
             putExtra(EXTRA_TITLE, track.title)
@@ -76,11 +76,13 @@ class AppShortcutManager @Inject constructor(
         return IconCompat.createWithResource(context, getDefaultShortcutIcon())
     }
 
-    private fun getDefaultShortcutIcon(): Int {
-        return context.resources.getIdentifier(
+    private val defaultShortcutIconRes by lazy {
+        context.resources.getIdentifier(
             "ic_shortcut_play_music", "drawable", context.packageName
         )
     }
+
+    private fun getDefaultShortcutIcon(): Int = defaultShortcutIconRes
 
     companion object {
         const val ACTION_CONTINUE_WATCHING = "com.raulshma.jellyplay.action.CONTINUE_WATCHING"
@@ -96,6 +98,8 @@ class AppShortcutManager @Inject constructor(
         private const val MAX_DYNAMIC_SHORTCUTS = 3
         private const val MAIN_ACTIVITY_CLASS = "com.raulshma.jellyplay.MainActivity"
     }
+
+    private val mainActivityClass by lazy { Class.forName(MAIN_ACTIVITY_CLASS) }
 }
 
 private data class TrackInfo(

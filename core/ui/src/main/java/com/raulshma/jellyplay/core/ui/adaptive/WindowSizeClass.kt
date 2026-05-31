@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.adaptive
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
 
@@ -10,6 +11,7 @@ enum class WindowSizeClass {
     Expanded,
 }
 
+@Immutable
 data class AdaptiveInfo(
     val windowSizeClass: WindowSizeClass,
     val isLandscape: Boolean,
