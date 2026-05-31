@@ -56,7 +56,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.feature.editor.EditorUiState
@@ -209,7 +211,10 @@ private fun ImageCard(
     ) {
         Box {
             AsyncImage(
-                model = imageUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .size(512, 512)
+                    .build(),
                 contentDescription = imageInfo.imageType,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -301,7 +306,10 @@ private fun ImageUploadSheet(
             if (selectedTab == 0) {
                 selectedUri?.let { uri ->
                     AsyncImage(
-                        model = uri,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(uri)
+                            .size(512, 512)
+                            .build(),
                         contentDescription = "Preview",
                         modifier = Modifier
                             .fillMaxWidth()
@@ -335,7 +343,10 @@ private fun ImageUploadSheet(
                 )
                 if (imageUrl.isNotBlank()) {
                     AsyncImage(
-                        model = imageUrl,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(imageUrl)
+                            .size(512, 512)
+                            .build(),
                         contentDescription = "Preview",
                         modifier = Modifier
                             .fillMaxWidth()
@@ -453,7 +464,7 @@ private fun ImageBrowseSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(remoteImages) { remoteImage ->
+                    items(remoteImages, key = { it.url }) { remoteImage ->
                         RemoteImageCard(
                             remoteImage = remoteImage,
                             onDownload = {
@@ -510,7 +521,10 @@ private fun RemoteImageCard(
     ) {
         Box {
             AsyncImage(
-                model = remoteImage.thumbnailUrl.ifBlank { remoteImage.url },
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(remoteImage.thumbnailUrl.ifBlank { remoteImage.url })
+                    .size(512, 512)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()

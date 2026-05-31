@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +22,7 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
         combine(
             offlineMediaDao.getTopLevelItems(),
-            downloadDao.getAllDownloads(),
+            downloadDao.getAllDownloads().conflate(),
         ) { entities, downloads ->
             val downloadMap = downloads.associateBy { it.mediaItemId }
             entities.map { entity ->
@@ -43,7 +44,7 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         combine(
             offlineMediaDao.getEpisodesForSeason(seasonId),
-            downloadDao.getAllDownloads(),
+            downloadDao.getAllDownloads().conflate(),
         ) { episodes, downloads ->
             val downloadMap = downloads.associateBy { it.mediaItemId }
             episodes.map { entity ->

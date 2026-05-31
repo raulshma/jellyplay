@@ -45,7 +45,7 @@ fun MediaImage(
             .build()
     }
 
-    val fallbackKey = fallbackUrls.joinToString("|")
+    val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
     val allUrls = remember(url, fallbackKey) { listOf(url) + fallbackUrls }
     var currentIndex by remember(url, fallbackKey) { mutableIntStateOf(0) }
     var isError by remember(url, fallbackKey) { mutableStateOf(false) }

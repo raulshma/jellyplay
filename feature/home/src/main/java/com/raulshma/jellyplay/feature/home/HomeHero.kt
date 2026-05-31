@@ -91,8 +91,9 @@ fun AnimatedHeroHeader(
         }
     }
 
-    val layoutInfo = listState.layoutInfo
-    val heroIsVisible = layoutInfo.visibleItemsInfo.any { it.index == 0 } || layoutInfo.totalItemsCount == 0
+    val heroIsVisible by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
+    }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()

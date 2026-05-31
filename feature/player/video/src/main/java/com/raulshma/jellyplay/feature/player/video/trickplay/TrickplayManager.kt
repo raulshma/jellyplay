@@ -176,13 +176,8 @@ class TrickplayManager(
         preloadJob?.cancel()
         preloadJob = null
 
-        val thumbnails = thumbnailCache.snapshot().values.toList()
         thumbnailCache.evictAll()
-        thumbnails.forEach { it.recycle() }
-
-        val sheets = spriteSheetCache.snapshot().values.toList()
         spriteSheetCache.evictAll()
-        sheets.forEach { it.recycle() }
 
         info = null
         itemId = null

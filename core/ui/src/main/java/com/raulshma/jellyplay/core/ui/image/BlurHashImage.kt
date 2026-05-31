@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 internal object BlurHashCache {
-    private val cache = android.util.LruCache<String, Bitmap>(200)
+    private val cache = object : android.util.LruCache<String, Bitmap>(2 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+    }
 
     fun get(key: String): Bitmap? {
         val bitmap = cache.get(key) ?: return null

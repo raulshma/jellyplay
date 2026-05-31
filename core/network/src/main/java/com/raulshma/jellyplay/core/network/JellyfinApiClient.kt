@@ -161,7 +161,7 @@ interface JellyfinApiClient {
 
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
-    suspend fun toggleFavorite(itemId: String): Result<Boolean>
+    suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean? = null): Result<Boolean>
 
     suspend fun reportPlaybackStart(
         itemId: String,

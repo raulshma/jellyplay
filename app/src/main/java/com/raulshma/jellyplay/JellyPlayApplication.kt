@@ -91,6 +91,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
                     .maxSizeBytes(256L * 1024 * 1024)
                     .build()
             }
+            .crossfade(true)
             .build()
     }
 

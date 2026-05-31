@@ -104,3 +104,8 @@
 -dontwarn org.jellyfin.sdk.**
 -dontwarn org.slf4j.**
 -dontwarn io.github.oshai.kotlinlogging.**
+
+# ML Kit Text Recognition
+-keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.android.gms.internal.** { *; }
+-dontwarn com.google.mlkit.**
