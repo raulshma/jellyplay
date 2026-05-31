@@ -308,18 +308,33 @@ fun HomeFabMenu(
     FloatingActionButtonMenu(
         expanded = isExpanded,
         button = {
-            ToggleFloatingActionButton(
-                checked = isExpanded,
-                onCheckedChange = onToggle,
-                containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                    initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    finalColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
+            androidx.compose.material3.BadgedBox(
+                badge = {
+                    if (activeDownloadCount > 0 && !isExpanded) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ) {
+                            Text(
+                                activeDownloadCount.toString(),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
+                    }
+                }
             ) {
-                Icon(
-                    if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
-                    contentDescription = if (isExpanded) "Close menu" else "More options",
-                )
+                ToggleFloatingActionButton(
+                    checked = isExpanded,
+                    onCheckedChange = onToggle,
+                    containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                        initialColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        finalColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Icon(
+                        if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
+                        contentDescription = if (isExpanded) "Close menu" else "More options",
+                    )
+                }
             }
         },
         modifier = modifier
