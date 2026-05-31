@@ -21,6 +21,18 @@ body {
   font-family: 'Inter', sans-serif;
   background: var(--jp-color-app-bg);
   color: var(--jp-color-lavender);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: var(--jp-noise-texture);
+  opacity: 0.12; /* Subtle grain */
+  mix-blend-mode: overlay;
 }
 
 img,

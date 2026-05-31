@@ -9,6 +9,16 @@
   <meta name="author" content="raulshma">
   <meta name="theme-color" content="var(--md-sys-color-background)">
 
+  <!-- Prevent FOUC -->
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('jellyplay_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android">
@@ -113,6 +123,25 @@
             <span id="github-stars-count">0</span>
           </span>
         </a>
+        
+        <!-- Theme Switcher -->
+        <div class="theme-switcher-wrapper">
+          <button class="icon-btn theme-switcher-btn" id="theme-switcher-btn" aria-label="Switch theme">
+            <span class="material-symbols-outlined">palette</span>
+          </button>
+          <div class="theme-menu" id="theme-menu">
+            <button class="theme-option" data-value="dark">
+              <span class="material-symbols-outlined" style="font-size: 18px;">dark_mode</span> Dark
+            </button>
+            <button class="theme-option" data-value="oled">
+              <span class="material-symbols-outlined" style="font-size: 18px;">contrast</span> OLED
+            </button>
+            <button class="theme-option" data-value="light">
+              <span class="material-symbols-outlined" style="font-size: 18px;">light_mode</span> Light
+            </button>
+          </div>
+        </div>
+        
         <md-icon-button class="nav-toggle show-mobile" aria-label="Toggle menu" id="nav-toggle">
           <md-icon>menu</md-icon>
         </md-icon-button>

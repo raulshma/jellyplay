@@ -1,96 +1,67 @@
 :root {
-  /* ── Design System Color Tokens ── */
-  --md-sys-color-primary: #8b5cf6;       /* Premium Violet */
-  --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #1e1b4b;
-  --md-sys-color-on-primary-container: #ddd6fe;
+  /* ── Design System Color Tokens (Dark Theme Default) ── */
+  --md-sys-color-primary: #83D2E5;
+  --md-sys-color-on-primary: #00363F;
+  --md-sys-color-primary-container: #004E5B;
+  --md-sys-color-on-primary-container: #A6EEFF;
   
-  --md-sys-color-secondary: #f43f5e;     /* Elegant Rose/Coral Accent */
-  --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #310815;
-  --md-sys-color-on-secondary-container: #ffe4e6;
+  --md-sys-color-secondary: #B2CBD2;
+  --md-sys-color-on-secondary: #1C3439;
+  --md-sys-color-secondary-container: #334A50;
+  --md-sys-color-on-secondary-container: #CDE7EE;
   
-  --md-sys-color-tertiary: #f59e0b;      /* Amber details for contrast */
-  --md-sys-color-on-tertiary: #080612;
+  --md-sys-color-tertiary: #BDC5EB;
+  --md-sys-color-on-tertiary: #272F4D;
   
-  --md-sys-color-error: #f87171;
-  --md-sys-color-on-error: #450a0a;
+  --md-sys-color-error: #FFB4AB;
+  --md-sys-color-on-error: #690005;
   
-  --md-sys-color-surface: #080612;       /* Deep space slate-indigo background */
-  --md-sys-color-on-surface: #f1f5f9;
+  --md-sys-color-surface: #0E1416;
+  --md-sys-color-on-surface: #DEE3E5;
   
-  --md-sys-color-surface-variant: #0e0b1f;
-  --md-sys-color-on-surface-variant: #94a3b8;
+  --md-sys-color-surface-variant: #3F484B;
+  --md-sys-color-on-surface-variant: #BFC8CB;
   
-  --md-sys-color-surface-dim: #05040b;
-  --md-sys-color-surface-bright: #130f2c;
+  --md-sys-color-surface-dim: #090F11;
+  --md-sys-color-surface-bright: #303637;
   
-  --md-sys-color-surface-container-lowest: #05040b;
-  --md-sys-color-surface-container-low: #0c091d;
-  --md-sys-color-surface-container: #120e2b;
-  --md-sys-color-surface-container-high: #1a153c;
-  --md-sys-color-surface-container-highest: #241d53;
-  
-  --md-sys-color-outline: rgba(255, 255, 255, 0.05);
-  --md-sys-color-outline-variant: rgba(255, 255, 255, 0.12);
-  
-  --md-sys-color-inverse-surface: #f1f5f9;
-  --md-sys-color-inverse-on-surface: #080612;
-  --md-sys-color-inverse-primary: #7c3aed;
-  
-  --md-sys-color-scrim: #000000;
-  --md-sys-color-shadow: #000000;
-  --md-sys-color-background: #080612;
-  --md-sys-color-on-background: #f1f5f9;
+  --md-sys-color-surface-container-lowest: #090F11;
+  --md-sys-color-surface-container-low: #171D1E;
+  --md-sys-color-surface-container: #1B2122;
+  --md-sys-color-surface-container-high: #252B2D;
+  --md-sys-color-surface-container-highest: #303637;
 
   /* ── Typography Tokens ── */
   --md-ref-typeface-brand: 'Outfit', sans-serif;
   --md-ref-typeface-plain: 'Inter', sans-serif;
 
-  /* ── Typescale ── */
-  --md-sys-typescale-display-large-font: 'Outfit', sans-serif;
-  --md-sys-typescale-display-large-weight: 800;
-  --md-sys-typescale-display-medium-font: 'Outfit', sans-serif;
-  --md-sys-typescale-display-medium-weight: 700;
-  --md-sys-typescale-display-small-font: 'Outfit', sans-serif;
-  --md-sys-typescale-display-small-weight: 600;
-
-  --md-sys-typescale-headline-large-font: 'Outfit', sans-serif;
-  --md-sys-typescale-headline-large-weight: 700;
-  --md-sys-typescale-headline-medium-font: 'Outfit', sans-serif;
-  --md-sys-typescale-headline-medium-weight: 600;
-  --md-sys-typescale-headline-small-font: 'Outfit', sans-serif;
-  --md-sys-typescale-headline-small-weight: 600;
-
-  --md-sys-typescale-title-large-font: 'Outfit', sans-serif;
-  --md-sys-typescale-title-large-weight: 600;
-  --md-sys-typescale-title-medium-font: 'Outfit', sans-serif;
-  --md-sys-typescale-title-medium-weight: 600;
-  --md-sys-typescale-title-small-font: 'Outfit', sans-serif;
-  --md-sys-typescale-title-small-weight: 500;
-
-  --md-sys-typescale-body-large-font: 'Inter', sans-serif;
-  --md-sys-typescale-body-large-weight: 400;
-  --md-sys-typescale-body-medium-font: 'Inter', sans-serif;
-  --md-sys-typescale-body-medium-weight: 400;
-  --md-sys-typescale-body-small-font: 'Inter', sans-serif;
-  --md-sys-typescale-body-small-weight: 400;
-
   /* ── Custom Brand Properties ── */
-  --jp-gradient: linear-gradient(135deg, #8b5cf6, #ec4899, #f43f5e);
-  --jp-gradient-text: linear-gradient(135deg, #a78bfa, #ec4899, #f43f5e);
-  --jp-gradient-accent: linear-gradient(135deg, #c084fc, #ec4899);
+  --jp-gradient: var(--md-sys-color-primary);
+  --jp-gradient-text: var(--md-sys-color-primary);
+  --jp-gradient-accent: var(--md-sys-color-secondary);
   
-  --jp-surface: #080612;
-  --jp-surface-dim: #05040b;
-  --jp-surface-container: #0e0b1f;
-  --jp-surface-container-high: #15112e;
+  --jp-surface: var(--md-sys-color-surface);
+  --jp-surface-dim: var(--md-sys-color-surface-dim);
+  --jp-surface-container: var(--md-sys-color-surface-container);
+  --jp-surface-container-high: var(--md-sys-color-surface-container-high);
   
-  --jp-glow-primary: rgba(139, 92, 246, 0.15);
-  --jp-glow-accent: rgba(244, 63, 94, 0.1);
-  --jp-glass-bg: rgba(14, 11, 31, 0.65);
-  --jp-glass-border: rgba(255, 255, 255, 0.05);
-  --jp-glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --jp-glow-primary: rgba(131, 210, 229, 0.15);
+  --jp-glow-accent: rgba(178, 203, 210, 0.1);
+  --jp-glass-bg: rgba(14, 20, 22, 0.65);
+  --jp-glass-border: rgba(255, 255, 255, 0.04);
+
+  /* ── Consolidated Design Tokens ── */
+  --jp-glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  
+  /* ── New Layered Shadows & Easing ── */
+  --jp-layered-shadow-sm: 0 1px 2px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+  --jp-layered-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.2), 0 2px 4px -1px rgba(0,0,0,0.1);
+  --jp-layered-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.15);
+  
+  --jp-ease-spring: cubic-bezier(0.25, 1, 0.5, 1);
+  --jp-ease-snappy: cubic-bezier(0.17, 0.84, 0.44, 1);
+  
+  --jp-noise-texture: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZmlsdGVyIGlkPSJub2lzZUZpbHRlciI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuNjUiIG51bU9jdGF2ZXM9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgibm9pc2VGaWx0ZXIpIi8+PC9zdmc+');
   
   /* ── Shape Tokens ── */
   --md-sys-shape-corner-none: 0px;
@@ -103,6 +74,7 @@
 
   /* ── Neutral Absolute Tokens ── */
   --jp-color-white: #ffffff;
+  --jp-color-absolute-white: #ffffff;
   --jp-color-black: #000000;
 
   /* ── White Alpha (Opacity) Tokens ── */
@@ -135,34 +107,34 @@
   --jp-black-alpha-80: rgba(0, 0, 0, 0.8);
 
   /* ── Brand State Variants ── */
-  --jp-color-primary-hover: #9d75ff;
-  --jp-color-primary-active: #7b4ee4;
-  --jp-color-primary-light: #a78bfa;
-  --jp-color-secondary-hover: #ff4b72;
-  --jp-color-secondary-light: #ff6487;
-  --jp-color-violet-dark: #140d2b;
+  --jp-color-primary-hover: #A6EEFF;
+  --jp-color-primary-active: #49B4CD;
+  --jp-color-primary-light: #CDE7EE;
+  --jp-color-secondary-hover: #CDE7EE;
+  --jp-color-secondary-light: #DFFAFF;
+  --jp-color-violet-dark: #00363F;
 
   /* ── Primary Color Alpha Tokens ── */
-  --jp-primary-alpha-06: rgba(139, 92, 246, 0.06);
-  --jp-primary-alpha-10: rgba(139, 92, 246, 0.1);
-  --jp-primary-alpha-12: rgba(139, 92, 246, 0.12);
-  --jp-primary-alpha-15: rgba(139, 92, 246, 0.15);
-  --jp-primary-alpha-20: rgba(139, 92, 246, 0.2);
-  --jp-primary-alpha-25: rgba(139, 92, 246, 0.25);
-  --jp-primary-alpha-30: rgba(139, 92, 246, 0.3);
-  --jp-primary-alpha-35: rgba(139, 92, 246, 0.35);
+  --jp-primary-alpha-06: rgba(131, 210, 229, 0.06);
+  --jp-primary-alpha-10: rgba(131, 210, 229, 0.1);
+  --jp-primary-alpha-12: rgba(131, 210, 229, 0.12);
+  --jp-primary-alpha-15: rgba(131, 210, 229, 0.15);
+  --jp-primary-alpha-20: rgba(131, 210, 229, 0.2);
+  --jp-primary-alpha-25: rgba(131, 210, 229, 0.25);
+  --jp-primary-alpha-30: rgba(131, 210, 229, 0.3);
+  --jp-primary-alpha-35: rgba(131, 210, 229, 0.35);
 
   /* ── Secondary Color Alpha Tokens ── */
-  --jp-secondary-alpha-08: rgba(244, 63, 94, 0.08);
-  --jp-secondary-alpha-12: rgba(244, 63, 94, 0.12);
-  --jp-secondary-alpha-15: rgba(244, 63, 94, 0.15);
-  --jp-secondary-alpha-20: rgba(244, 63, 94, 0.2);
-  --jp-secondary-alpha-25: rgba(244, 63, 94, 0.25);
-  --jp-secondary-alpha-30: rgba(244, 63, 94, 0.3);
-  --jp-secondary-alpha-35: rgba(244, 63, 94, 0.35);
-  --jp-secondary-alpha-40: rgba(244, 63, 94, 0.4);
-  --jp-secondary-alpha-50: rgba(244, 63, 94, 0.5);
-  --jp-secondary-alpha-70: rgba(244, 63, 94, 0.7);
+  --jp-secondary-alpha-08: rgba(178, 203, 210, 0.08);
+  --jp-secondary-alpha-12: rgba(178, 203, 210, 0.12);
+  --jp-secondary-alpha-15: rgba(178, 203, 210, 0.15);
+  --jp-secondary-alpha-20: rgba(178, 203, 210, 0.2);
+  --jp-secondary-alpha-25: rgba(178, 203, 210, 0.25);
+  --jp-secondary-alpha-30: rgba(178, 203, 210, 0.3);
+  --jp-secondary-alpha-35: rgba(178, 203, 210, 0.35);
+  --jp-secondary-alpha-40: rgba(178, 203, 210, 0.4);
+  --jp-secondary-alpha-50: rgba(178, 203, 210, 0.5);
+  --jp-secondary-alpha-70: rgba(178, 203, 210, 0.7);
 
   /* ── Slate / Gray Utility Scales ── */
   --jp-color-slate-100: #f1f5f9;
@@ -240,12 +212,154 @@
   --jp-white-alpha-25: rgba(255, 255, 255, 0.25);
   --jp-slate-100-alpha-80: rgba(241, 245, 249, 0.8);
   --jp-secondary-alpha-00: rgba(244, 63, 94, 0);
+
+  /* ── Tooltip Tokens ── */
+  --jp-tooltip-bg: rgba(15, 12, 30, 0.98);
+  --jp-tooltip-text: #ffffff;
 }
+
+[data-theme="light"] {
+  --md-sys-color-primary: #006878;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #A6EEFF;
+  --md-sys-color-on-primary-container: #004E5B;
+  
+  --md-sys-color-secondary: #4B6268;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #CDE7EE;
+  --md-sys-color-on-secondary-container: #334A50;
+  
+  --md-sys-color-tertiary: #555D7E;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  
+  --md-sys-color-error: #BA1A1A;
+  --md-sys-color-on-error: #FFFFFF;
+  
+  --md-sys-color-surface: #F5FAFC;
+  --md-sys-color-on-surface: #171D1E;
+  
+  --md-sys-color-surface-variant: #DBE4E7;
+  --md-sys-color-on-surface-variant: #3F484B;
+  
+  --md-sys-color-surface-dim: #FFFFFF;
+  --md-sys-color-surface-bright: #DEE3E5;
+  
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #EFF4F6;
+  --md-sys-color-surface-container: #E9EFF1;
+  --md-sys-color-surface-container-high: #E4E9EB;
+  --md-sys-color-surface-container-highest: #DEE3E5;
+
+  --jp-glow-primary: rgba(0, 104, 120, 0.15);
+  --jp-glow-accent: rgba(75, 98, 104, 0.1);
+  --jp-glass-bg: rgba(245, 250, 252, 0.65);
+  --jp-glass-border: rgba(0, 0, 0, 0.04);
+  
+  /* Invert text tokens for light mode */
+  --jp-color-white: #0F172A;
+  --jp-color-slate-500: #64748b;
+  --jp-color-slate-400: #475569;
+  --jp-color-slate-300: #334155;
+  --jp-color-slate-200: #1e293b;
+  --jp-color-slate-100: #0f172a;
+  --jp-color-lavender: #334155;
+  --jp-color-app-bg: var(--md-sys-color-surface);
+  
+  /* Brand State Variants for Light Mode */
+  --jp-color-primary-hover: #004E5B;
+  --jp-color-primary-active: #008296;
+  --jp-color-primary-light: #004E5B;
+  --jp-color-secondary-hover: #334A50;
+  --jp-color-secondary-light: #334A50;
+  
+  /* Invert lavender alphas for light mode */
+  --jp-lavender-alpha-35: rgba(51, 65, 85, 0.35);
+  --jp-lavender-alpha-50: rgba(51, 65, 85, 0.5);
+  --jp-lavender-alpha-60: rgba(51, 65, 85, 0.6);
+  --jp-lavender-alpha-70: rgba(51, 65, 85, 0.7);
+  --jp-lavender-alpha-80: rgba(51, 65, 85, 0.8);
+  --jp-lavender-alpha-85: rgba(51, 65, 85, 0.85);
+  
+  /* Invert alphas */
+  --jp-white-alpha-02: rgba(0, 0, 0, 0.02);
+  --jp-white-alpha-04: rgba(0, 0, 0, 0.04);
+  --jp-white-alpha-05: rgba(0, 0, 0, 0.05);
+  --jp-white-alpha-06: rgba(0, 0, 0, 0.06);
+  --jp-white-alpha-08: rgba(0, 0, 0, 0.08);
+  --jp-white-alpha-10: rgba(0, 0, 0, 0.1);
+  --jp-white-alpha-12: rgba(0, 0, 0, 0.12);
+  --jp-white-alpha-15: rgba(0, 0, 0, 0.15);
+  --jp-white-alpha-20: rgba(0, 0, 0, 0.2);
+  --jp-white-alpha-30: rgba(0, 0, 0, 0.3);
+  --jp-white-alpha-35: rgba(0, 0, 0, 0.35);
+  --jp-white-alpha-40: rgba(0, 0, 0, 0.4);
+  --jp-white-alpha-45: rgba(0, 0, 0, 0.45);
+  --jp-white-alpha-50: rgba(0, 0, 0, 0.5);
+  --jp-white-alpha-85: rgba(0, 0, 0, 0.85);
+  --jp-white-alpha-90: rgba(0, 0, 0, 0.9);
+  
+  /* Primary & Secondary Alphas for Light Mode */
+  --jp-primary-alpha-06: rgba(0, 104, 120, 0.06);
+  --jp-primary-alpha-10: rgba(0, 104, 120, 0.1);
+  --jp-primary-alpha-12: rgba(0, 104, 120, 0.12);
+  --jp-primary-alpha-15: rgba(0, 104, 120, 0.15);
+  --jp-primary-alpha-20: rgba(0, 104, 120, 0.2);
+  --jp-primary-alpha-25: rgba(0, 104, 120, 0.25);
+  --jp-primary-alpha-30: rgba(0, 104, 120, 0.3);
+  --jp-primary-alpha-35: rgba(0, 104, 120, 0.35);
+
+  --jp-secondary-alpha-08: rgba(75, 98, 104, 0.08);
+  --jp-secondary-alpha-12: rgba(75, 98, 104, 0.12);
+  --jp-secondary-alpha-15: rgba(75, 98, 104, 0.15);
+  --jp-secondary-alpha-20: rgba(75, 98, 104, 0.2);
+  --jp-secondary-alpha-25: rgba(75, 98, 104, 0.25);
+  --jp-secondary-alpha-30: rgba(75, 98, 104, 0.3);
+  --jp-secondary-alpha-35: rgba(75, 98, 104, 0.35);
+  --jp-secondary-alpha-40: rgba(75, 98, 104, 0.4);
+  --jp-secondary-alpha-50: rgba(75, 98, 104, 0.5);
+  --jp-secondary-alpha-70: rgba(75, 98, 104, 0.7);
+
+  /* ── Premium Light Mode Custom Overrides ── */
+  --jp-color-slate-600: #64748b;
+  --jp-color-green-accent: #10b981;
+  --jp-slate-100-alpha-80: rgba(15, 23, 42, 0.8);
+
+  /* Glassmorphism & Layout surface containers */
+  --jp-surface-alpha-70: rgba(245, 250, 252, 0.7);
+  --jp-surface-alpha-85: rgba(245, 250, 252, 0.85);
+  --jp-surface-alpha-98: rgba(245, 250, 252, 0.98);
+  --jp-surface-container-alpha-40: rgba(233, 239, 241, 0.4);
+  --jp-surface-container-alpha-60: rgba(233, 239, 241, 0.6);
+  --jp-surface-container-alpha-70: rgba(233, 239, 241, 0.7);
+  --jp-surface-container-alpha-80: rgba(233, 239, 241, 0.8);
+  --jp-purple-container-alpha-40: rgba(166, 238, 255, 0.25);
+  --jp-purple-container-alpha-80: rgba(166, 238, 255, 0.4);
+
+  /* Tooltip overrides */
+  --jp-tooltip-bg: #0F172A;
+  --jp-tooltip-text: #ffffff;
+}
+
+[data-theme="oled"] {
+  --md-sys-color-surface: #000000;
+  --md-sys-color-surface-dim: #000000;
+  --md-sys-color-surface-bright: #222222;
+  
+  --md-sys-color-surface-container-lowest: #000000;
+  --md-sys-color-surface-container-low: #0A0A0A;
+  --md-sys-color-surface-container: #111111;
+  --md-sys-color-surface-container-high: #1A1A1A;
+  --md-sys-color-surface-container-highest: #222222;
+
+  --jp-glass-bg: rgba(0, 0, 0, 0.65);
+}
+
+
 
 /* ── Material Component Overrides ── */
 md-filled-button {
   --md-filled-button-container-color: var(--md-sys-color-primary);
-  --md-filled-button-label-text-color: var(--jp-color-white);
+  --md-filled-button-label-text-color: var(--jp-color-absolute-white);
   --md-filled-button-container-shape: 9999px;
   --md-filled-button-label-text-font: 'Inter', sans-serif;
   --md-filled-button-label-text-weight: 600;
@@ -262,15 +376,21 @@ md-outlined-button {
 
 md-assist-chip {
   --md-assist-chip-container-color: var(--jp-surface-container);
-  --md-assist-chip-outline-color: var(--jp-white-alpha-06);
-  --md-assist-chip-label-text-color: rgba(241, 245, 249, 0.85);
+  --md-assist-chip-outline-color: var(--jp-white-alpha-12);
+  --md-assist-chip-label-text-color: var(--jp-color-slate-100);
   --md-assist-chip-label-text-font: 'Inter', sans-serif;
-  --md-assist-chip-container-shape: 10px;
-  --md-assist-chip-hover-state-layer-color: var(--jp-white-alpha-06);
+  --md-assist-chip-container-shape: 9999px; /* Pill corners */
+  --md-assist-chip-hover-state-layer-color: var(--jp-white-alpha-08);
+
+  /* Enhanced dimensions and horizontal/vertical padding for premium spacing */
+  --md-assist-chip-container-height: 40px;
+  --md-assist-chip-leading-space: 18px;
+  --md-assist-chip-trailing-space: 18px;
+  --md-assist-chip-icon-label-padding: 12px; /* Increased space between icon and label */
 }
 
 md-assist-chip md-icon {
-  margin-right: 8px;
+  margin-right: 12px; /* Fallback explicit spacing for robust styling */
 }
 
 md-icon {
@@ -305,10 +425,7 @@ md-icon:not(:defined) {
 }
 
 .gradient-text {
-  background: var(--jp-gradient-text);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--jp-gradient-text);
 }
 
 /* ── Custom Link Buttons ── */
@@ -324,14 +441,14 @@ md-icon:not(:defined) {
   font-weight: 600;
   text-decoration: none;
   box-sizing: border-box;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s var(--jp-ease-spring);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .btn-filled {
   background: var(--jp-gradient);
-  color: var(--jp-color-white) !important;
+  color: var(--jp-color-absolute-white) !important;
   padding: 0 28px;
   border: none;
   box-shadow: 0 4px 20px var(--jp-primary-alpha-25);
@@ -349,7 +466,7 @@ md-icon:not(:defined) {
 
 .btn-filled md-icon {
   margin-right: 8px;
-  --md-icon-color: var(--jp-color-white);
+  --md-icon-color: var(--jp-color-absolute-white);
   --md-icon-size: 20px;
 }
 
@@ -395,19 +512,17 @@ md-icon:not(:defined) {
   justify-content: center;
   height: 48px;
   padding: 0 24px;
-  color: var(--jp-color-white) !important;
+  color: var(--jp-color-absolute-white) !important;
   font-family: 'Inter', sans-serif;
   font-size: 0.9375rem;
   font-weight: 600;
   text-decoration: none;
   border: none;
   background: var(--jp-gradient);
-  background-size: 170% 100%;
-  background-position: left center;
   border-radius: 24px 8px 8px 24px; /* Pill curved outer, slightly rounded inner */
   box-shadow: 0 4px 15px var(--jp-primary-alpha-25);
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s var(--jp-ease-spring);
 }
 
 .btn-split-left:hover {
@@ -423,7 +538,7 @@ md-icon:not(:defined) {
 
 .btn-split-left md-icon {
   margin-right: 8px;
-  --md-icon-color: var(--jp-color-white);
+  --md-icon-color: var(--jp-color-absolute-white);
   --md-icon-size: 20px;
 }
 
@@ -433,15 +548,13 @@ md-icon:not(:defined) {
   justify-content: center;
   height: 48px;
   width: 48px;
-  color: var(--jp-color-white);
+  color: var(--jp-color-absolute-white);
   border: none;
   background: var(--jp-gradient);
-  background-size: 170% 100%;
-  background-position: right center;
   border-radius: 8px 24px 24px 8px; /* Slightly rounded inner, pill curved outer */
   box-shadow: 0 4px 15px var(--jp-primary-alpha-25);
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s var(--jp-ease-spring);
 }
 
 .btn-split-right:hover {
@@ -456,7 +569,7 @@ md-icon:not(:defined) {
 }
 
 .btn-split-right md-icon {
-  --md-icon-color: var(--jp-color-white);
+  --md-icon-color: var(--jp-color-absolute-white);
   --md-icon-size: 20px;
 }
 
@@ -477,7 +590,7 @@ md-icon:not(:defined) {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-8px);
-  transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.15s;
+  transition: opacity 0.15s var(--jp-ease-spring), transform 0.15s var(--jp-ease-spring), visibility 0.15s;
   padding: 6px 0; /* Vertical padding only, like standard menus */
   box-sizing: border-box;
   max-height: 200px;
@@ -599,14 +712,14 @@ md-icon:not(:defined) {
   font-weight: 500;
   color: var(--jp-color-slate-300);
   box-sizing: border-box;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s var(--jp-ease-spring);
   overflow: hidden;
 }
 
 .github-badge:hover {
   background: var(--jp-white-alpha-08);
   border-color: var(--jp-white-alpha-20);
-  color: var(--jp-color-white);
+  color: var(--jp-color-absolute-white);
   transform: translateY(-1px);
   box-shadow: 0 4px 16px var(--jp-black-alpha-30);
 }
@@ -620,7 +733,7 @@ md-icon:not(:defined) {
 }
 
 .github-badge-logo svg {
-  color: var(--jp-color-white);
+  color: var(--jp-color-absolute-white);
 }
 
 .github-badge-divider {
@@ -648,7 +761,7 @@ md-icon:not(:defined) {
 }
 
 .github-badge:hover #github-stars-count {
-  color: var(--jp-color-white);
+  color: var(--jp-color-absolute-white);
 }
 
 
@@ -903,7 +1016,7 @@ th.highlight-col {
   background: var(--jp-surface-container-alpha-40);
   border-radius: 16px;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.3s var(--jp-ease-spring);
 }
 
 .faq-item:hover {
@@ -940,7 +1053,7 @@ th.highlight-col {
 
 .faq-icon {
   color: var(--md-sys-color-primary);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.3s var(--jp-ease-spring);
 }
 
 .faq-item.active .faq-icon {
@@ -950,7 +1063,7 @@ th.highlight-col {
 .faq-content {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: max-height 0.3s var(--jp-ease-spring);
 }
 
 .faq-answer {
