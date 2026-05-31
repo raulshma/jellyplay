@@ -19,8 +19,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-family: 'Inter', sans-serif;
-  background: #0a0614;
-  color: #e6e0f0;
+  background: var(--jp-color-app-bg);
+  color: var(--jp-color-lavender);
 }
 
 img,
