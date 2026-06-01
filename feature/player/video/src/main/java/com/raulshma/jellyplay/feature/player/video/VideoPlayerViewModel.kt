@@ -1066,6 +1066,9 @@ class VideoPlayerViewModel @Inject constructor(
     val isConnectedFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
         get() = castManager.isConnectedFlow
 
+    val isConnectingFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.isConnectingFlow
+
     /** Reactive flow of cast session events — consumed by the UI to auto-trigger [castToDevice]. */
     val castSessionEvents: kotlinx.coroutines.flow.SharedFlow<CastSessionEvent>
         get() = castManager.sessionEvents

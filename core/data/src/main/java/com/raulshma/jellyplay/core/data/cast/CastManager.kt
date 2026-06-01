@@ -17,6 +17,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +51,9 @@ class CastManager @Inject constructor(
     private var sessionAvailabilityListener: SessionAvailabilityListener? = null
     private var externalListener: Player.Listener? = null
 
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var tickerJob: Job? = null
+
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
 
@@ -62,10 +72,12 @@ class CastManager @Inject constructor(
     private val castPlayerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateCastState()
+            toggleTicker()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _castIsPlaying.value = isPlaying
+            toggleTicker()
         }
 
         override fun onPositionDiscontinuity(
@@ -87,6 +99,19 @@ class CastManager @Inject constructor(
         _castDurationMs.value = player.duration.coerceAtLeast(0)
         _castBufferedPositionMs.value = player.bufferedPosition.coerceAtLeast(0)
         _castIsPlaying.value = player.isPlaying
+    }
+
+    private fun toggleTicker() {
+        tickerJob?.cancel()
+        val player = castPlayer
+        if (player != null && player.isPlaying) {
+            tickerJob = coroutineScope.launch {
+                while (isActive) {
+                    delay(500)
+                    updateCastState()
+                }
+            }
+        }
     }
 
     private val googleSessionListener = object : SessionManagerListener<CastSession> {
@@ -148,11 +173,17 @@ class CastManager @Inject constructor(
     val isConnected: Boolean
         get() = activeStrategy?.isConnected?.value == true
 
+    val isConnecting: Boolean
+        get() = activeStrategy?.isConnecting?.value == true
+
     val isAvailableFlow: StateFlow<Boolean>
         get() = activeStrategy?.isAvailable ?: googleCastStrategy.isAvailable
 
     val isConnectedFlow: StateFlow<Boolean>
         get() = activeStrategy?.isConnected ?: googleCastStrategy.isConnected
+
+    val isConnectingFlow: StateFlow<Boolean>
+        get() = activeStrategy?.isConnecting ?: googleCastStrategy.isConnecting
 
     val discoveredDevices: StateFlow<List<CastDevice>>
         get() = activeStrategy?.discoveredDevices ?: googleCastStrategy.discoveredDevices
@@ -228,9 +259,13 @@ class CastManager @Inject constructor(
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.play()
+        updateCastState()
+        toggleTicker()
     }
 
     fun release() {
+        tickerJob?.cancel()
+        tickerJob = null
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
         castPlayer?.release()
@@ -242,6 +277,8 @@ class CastManager @Inject constructor(
     }
 
     private fun resetCastState() {
+        tickerJob?.cancel()
+        tickerJob = null
         _castPositionMs.value = 0L
         _castDurationMs.value = 0L
         _castIsPlaying.value = false

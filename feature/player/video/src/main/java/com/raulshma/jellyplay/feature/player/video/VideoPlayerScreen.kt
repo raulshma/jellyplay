@@ -363,6 +363,7 @@ fun VideoPlayerScreen(
     val title = uiState.title
     val subtitle = uiState.subtitle
     val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val isCastConnecting by viewModel.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
     val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
     val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
     val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
@@ -757,8 +758,9 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
-        if (isCastConnected) {
+        if (isCastConnected || isCastConnecting) {
             CastIndicatorOverlay(
+                isConnecting = isCastConnecting,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = 60.dp, start = 16.dp),

@@ -26,6 +26,9 @@ class LibVlcCastStrategy(
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    private val _isConnecting = MutableStateFlow(false)
+    override val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+
     private val _discoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<CastDevice>> = _discoveredDevices.asStateFlow()
 
