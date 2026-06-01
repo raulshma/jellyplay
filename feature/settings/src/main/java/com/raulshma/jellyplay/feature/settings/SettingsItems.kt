@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -230,6 +232,133 @@ internal fun SettingToggleItem(
                 interactionSource = interactionSource,
                 indication = null,
             ) { onClick?.invoke() ?: onCheckedChange(!checked) },
+    )
+}
+
+@Composable
+internal fun SettingReorderableToggleItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    index: Int = 0,
+    count: Int = 1,
+    isDragging: Boolean = false,
+    modifier: Modifier = Modifier,
+    onCheckedChange: (Boolean) -> Unit,
+    onClick: (() -> Unit)? = null,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+) {
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "reorderableToggleScale",
+    )
+    val pressAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "reorderableToggleAlpha",
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "reorderableToggleIconColor",
+    )
+
+    val shape = expressiveListShape(index, count)
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        supportingContent = {
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    onDragStart()
+                                },
+                                onDragEnd = {
+                                    onDragEnd()
+                                },
+                                onDragCancel = {
+                                    onDragEnd()
+                                },
+                            ) { change, dragAmount ->
+                                change.consume()
+                                onDrag(dragAmount.y)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Tabler.Outline.GripVertical,
+                        contentDescription = "Reorder section",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDragging) 0.9f else 0.6f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = if (isDragging) 0.85f else pressAlpha
+            }
+            .clip(shape)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick ?: { onCheckedChange(!checked) },
+            ),
     )
 }
 

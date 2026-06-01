@@ -38,7 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +68,7 @@ fun SeerrSettingsScreen(
     onBack: () -> Unit,
     viewModel: SeerrSettingsViewModel = hiltViewModel(),
 ) {
-    val preferences by viewModel.preferences.collectAsState()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val connectionStatus = viewModel.connectionStatus
     val isTesting = viewModel.isTesting
     val isConnected = connectionStatus is ConnectionStatus.Connected

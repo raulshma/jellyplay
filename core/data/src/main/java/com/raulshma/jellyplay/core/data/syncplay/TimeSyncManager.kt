@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -24,6 +25,8 @@ class TimeSyncManager @Inject constructor(
     private val lastPingMs = AtomicLong(0)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isSyncing = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var syncJob: Job? = null
+    private var forceUpdateJob: Job? = null
 
     private val measurements = ArrayDeque<Measurement>(maxCapacity + 1)
     private val _pingUpdated = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -41,7 +44,8 @@ class TimeSyncManager @Inject constructor(
 
     fun start() {
         if (!isSyncing.compareAndSet(false, true)) return
-        scope.launch {
+        syncJob?.cancel()
+        syncJob = scope.launch {
             repeat(3) {
                 sync()
                 delay(1000)
@@ -57,13 +61,18 @@ class TimeSyncManager @Inject constructor(
 
     fun stop() {
         isSyncing.set(false)
+        syncJob?.cancel()
+        syncJob = null
+        forceUpdateJob?.cancel()
+        forceUpdateJob = null
         synchronized(measurements) {
             measurements.clear()
         }
     }
 
     fun forceUpdate() {
-        scope.launch {
+        forceUpdateJob?.cancel()
+        forceUpdateJob = scope.launch {
             repeat(3) {
                 sync()
                 delay(500)

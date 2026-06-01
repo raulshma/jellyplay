@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -14,7 +13,7 @@ import okhttp3.Request
 
 internal object LyricsApi {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = JellyfinApiClientImpl.sharedJson
     private val lyricsRegex = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""")
 
     private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =

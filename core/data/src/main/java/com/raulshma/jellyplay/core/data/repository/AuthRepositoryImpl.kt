@@ -12,14 +12,20 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import androidx.room.withTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import android.util.Log
+import androidx.collection.LruCache
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,13 +40,16 @@ class AuthRepositoryImpl @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
 ) : AuthRepository {
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
+        private val folderIdsCache = LruCache<String, List<String>>(16)
     }
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->
         entities.map { it.toServerInfo() }
-    }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     override val currentServer: Flow<ServerInfo?> = apiClient.currentServer
 
@@ -50,6 +59,7 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.currentServer,
         apiClient.currentUser,
     ) { server, user -> server != null && user != null }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     override val currentServerUsers: Flow<List<UserInfo>> =
         apiClient.currentServer.flatMapLatest { server ->
@@ -58,7 +68,7 @@ class AuthRepositoryImpl @Inject constructor(
                     list.map { it.toUserInfo(server.address) }
                 }
             } ?: flowOf(emptyList())
-        }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     override suspend fun addServer(address: String): Result<ServerInfo> {
         return apiClient.connectToServer(address).onSuccess { serverInfo ->
@@ -338,9 +348,9 @@ class AuthRepositoryImpl @Inject constructor(
         isAdmin = isAdmin,
         maxParentalAgeRating = maxParentalAgeRating,
         primaryImageTag = primaryImageTag,
-        enabledFolderIds = enabledFolderIds?.let {
-            try {
-                json.decodeFromString<List<String>>(it)
+        enabledFolderIds = enabledFolderIds?.let { raw ->
+            folderIdsCache[raw] ?: try {
+                json.decodeFromString<List<String>>(raw).also { folderIdsCache.put(raw, it) }
             } catch (_: Exception) { emptyList() }
         } ?: emptyList(),
     )

@@ -34,8 +34,12 @@ class SyncPlayQueueCore @Inject constructor(
     val shuffleMode: SyncPlayShuffleMode
         get() = lastPlayQueueUpdate?.shuffleMode ?: SyncPlayShuffleMode.SORTED
 
+    @Volatile
+    private var cachedPlaylistItemMap: Map<String, String>? = null
+
     val playlistItemMap: Map<String, String>
         get() {
+            cachedPlaylistItemMap?.let { return it }
             val update = lastPlayQueueUpdate ?: return emptyMap()
             val map = mutableMapOf<String, String>()
             for (i in update.playlistItemIds.indices) {
@@ -43,7 +47,9 @@ class SyncPlayQueueCore @Inject constructor(
                     map[update.playlistItemIds[i]] = update.itemIds[i]
                 }
             }
-            return map
+            val result = map.toMap()
+            cachedPlaylistItemMap = result
+            return result
         }
 
     fun updatePlayQueue(data: SyncPlayQueueUpdateData): Boolean {
@@ -54,6 +60,7 @@ class SyncPlayQueueCore @Inject constructor(
                 return false
             }
         }
+        cachedPlaylistItemMap = null
         lastPlayQueueUpdate = data
         Log.d(TAG, "Queue updated: reason=${data.reason}, playing=${data.playingItemId}, items=${data.itemIds.size}")
         return true
@@ -80,6 +87,7 @@ class SyncPlayQueueCore @Inject constructor(
     }
 
     fun clear() {
+        cachedPlaylistItemMap = null
         lastPlayQueueUpdate = null
     }
 

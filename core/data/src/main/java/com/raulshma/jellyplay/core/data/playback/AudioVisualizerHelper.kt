@@ -18,6 +18,9 @@ class AudioVisualizerHelper {
     private val _waveformData = MutableStateFlow(ByteArray(0))
     val waveformData: StateFlow<ByteArray> = _waveformData.asStateFlow()
 
+    private var lastFft: ByteArray? = null
+    private var lastWaveform: ByteArray? = null
+
     var isEnabled: Boolean = false
         private set
 
@@ -38,7 +41,8 @@ class AudioVisualizerHelper {
                             waveform: ByteArray?,
                             samplingRate: Int,
                         ) {
-                            if (waveform != null) {
+                            if (waveform != null && !waveform.contentEquals(lastWaveform)) {
+                                lastWaveform = waveform
                                 _waveformData.value = waveform
                             }
                         }
@@ -48,7 +52,8 @@ class AudioVisualizerHelper {
                             fft: ByteArray?,
                             samplingRate: Int,
                         ) {
-                            if (fft != null) {
+                            if (fft != null && !fft.contentEquals(lastFft)) {
+                                lastFft = fft
                                 _fftData.value = fft
                             }
                         }

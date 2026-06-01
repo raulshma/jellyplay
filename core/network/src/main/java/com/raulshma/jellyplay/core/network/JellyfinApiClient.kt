@@ -71,7 +71,7 @@ interface JellyfinApiClient {
     ): Result<UserInfo>
 
     suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
         hiddenLibraryIds: Set<String> = emptySet(),
     ): Result<List<HomeSection>>
 
@@ -161,7 +161,7 @@ interface JellyfinApiClient {
 
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
-    suspend fun toggleFavorite(itemId: String): Result<Boolean>
+    suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean? = null): Result<Boolean>
 
     suspend fun reportPlaybackStart(
         itemId: String,
@@ -442,4 +442,11 @@ interface JellyfinApiClient {
     ): Result<List<ActivityLogEntry>>
 
     suspend fun getSessions(): Result<List<SessionInfo>>
+
+    suspend fun sendMessageToSession(
+        sessionId: String,
+        header: String,
+        text: String,
+        timeoutMs: Long = 5000,
+    ): Result<Unit>
 }

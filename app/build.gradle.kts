@@ -18,6 +18,7 @@ android {
         versionName = project.findProperty("versionName") as? String ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
     }
 
     flavorDimensions += "platform"
@@ -36,7 +37,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "x86_64")
-            isUniversalApk = true
+            isUniversalApk = false
         }
     }
 
@@ -120,12 +121,11 @@ dependencies {
     implementation(project(":feature:syncplay"))
     implementation(project(":feature:editor"))
     implementation(project(":feature:admin"))
+    implementation(project(":feature:onboarding"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.appcompat)
-
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
@@ -135,9 +135,9 @@ dependencies {
     implementation(libs.compose.material3.adaptive.layout)
     implementation(libs.compose.material3.adaptive.navigation)
     implementation(libs.compose.material3.adaptive.navigation.suite)
-    implementation("androidx.compose.animation:animation-android")
+    implementation(libs.compose.animation)
 
-    // Android TV
+    // Android TV - shared dependency so src/main can compile. R8 will strip it for phone release builds.
     implementation(libs.tv.material)
 
     implementation(libs.navigation3.runtime)
@@ -156,8 +156,6 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-    implementation(libs.smooth.corner.rect)
-
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

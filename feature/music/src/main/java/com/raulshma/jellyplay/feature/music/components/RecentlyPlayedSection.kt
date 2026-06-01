@@ -93,7 +93,7 @@ fun RecentlyPlayedSection(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(tracks) { track ->
+            items(tracks, key = { it.id }) { track ->
                 RecentTrackCard(
                     track = track,
                     onClick = { onTrackClick(track.id) },

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -25,6 +26,7 @@ interface OfflineMediaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: OfflineMediaEntity)
 
+    @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<OfflineMediaEntity>)
 
@@ -42,6 +44,12 @@ interface OfflineMediaDao {
 
     @Query("DELETE FROM offline_media WHERE mediaType = 'SERIES' AND id NOT IN (SELECT DISTINCT seriesId FROM offline_media WHERE mediaType IN ('SEASON', 'EPISODE') AND seriesId IS NOT NULL)")
     suspend fun deleteOrphanedSeries()
+
+    @Transaction
+    suspend fun cleanupOrphans() {
+        deleteOrphanedSeasons()
+        deleteOrphanedSeries()
+    }
 
     @Query("SELECT COUNT(*) FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')")
     fun getOfflineItemCount(): Flow<Int>

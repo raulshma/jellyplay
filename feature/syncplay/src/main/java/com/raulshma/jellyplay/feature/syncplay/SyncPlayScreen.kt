@@ -26,8 +26,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -105,6 +109,7 @@ fun SyncPlayScreen(
         hasError = error != null,
         networkStatus = networkStatus,
     )
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     LaunchedEffect(Unit) {
         viewModel.loadGroups()
@@ -246,7 +251,12 @@ fun SyncPlayScreen(
                     text = { Text("Create group") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(16.dp),
+                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                        },
                 )
             }
         }
@@ -483,7 +493,7 @@ private fun ActiveGroupView(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(groupInfo.participants, contentType = { "participant" }) { participant ->
+            items(groupInfo.participants, key = { it.userId }, contentType = { "participant" }) { participant ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(

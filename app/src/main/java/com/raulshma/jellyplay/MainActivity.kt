@@ -1,17 +1,22 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
+import android.animation.ObjectAnimator
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.animation.DecelerateInterpolator
 import androidx.activity.result.contract.ActivityResultContracts
 import android.util.Rational
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import android.graphics.Color
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -36,7 +41,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
     @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
 
@@ -53,7 +58,28 @@ class MainActivity : AppCompatActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
-        enableEdgeToEdge()
+        splashScreen.setOnExitAnimationListener { splashScreenView ->
+            ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f).apply {
+                duration = 400L
+                interpolator = DecelerateInterpolator()
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        splashScreenView.remove()
+                    }
+                })
+                start()
+            }
+        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
+        window.navigationBarColor = android.graphics.Color.parseColor("#66000000") // Translucent black
+        window.statusBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -82,6 +108,13 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
             var pinError by rememberSaveable { mutableStateOf<String?>(null) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            androidx.compose.runtime.LaunchedEffect(viewModel) {
+                viewModel.globalMessage.collect { msg ->
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
 
             val hasLockEnabled = preferences.pinLockEnabled || preferences.biometricLockEnabled
             val showLockScreen = hasLockEnabled && !isPinUnlocked.value

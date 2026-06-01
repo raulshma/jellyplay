@@ -1,0 +1,169 @@
+package com.raulshma.jellyplay.feature.onboarding.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+
+@Composable
+fun SecurityStep(
+    pinLockEnabled: Boolean,
+    biometricLockEnabled: Boolean,
+    autoLockTimerMs: Long,
+    onPinLockEnabledChange: (Boolean) -> Unit,
+    onPinHashSet: (String?) -> Unit,
+    biometricAvailable: Boolean,
+    onBiometricLockEnabledChange: (Boolean) -> Unit,
+    onAutoLockTimerMsChange: (Long) -> Unit,
+    hashPin: (String) -> String,
+    modifier: Modifier = Modifier,
+) {
+    var pinInput by remember { mutableStateOf("") }
+    var pinConfirm by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var showPinSetup by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        OnboardingStepScaffold(
+            title = "Privacy & Security",
+            subtitle = "Protect your app with a PIN or biometrics",
+            icon = Tabler.Outline.Lock,
+            onNext = {},
+        ) {
+            OnboardingToggleRow(
+                title = "PIN Lock",
+                subtitle = "Require a PIN to open the app",
+                checked = pinLockEnabled,
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        showPinSetup = true
+                    } else {
+                        onPinLockEnabledChange(false)
+                        onPinHashSet(null)
+                        showPinSetup = false
+                    }
+                },
+            )
+
+            if (showPinSetup || pinLockEnabled) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = { pinInput = it; pinError = null },
+                        label = { Text("Enter PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = pinConfirm,
+                        onValueChange = { pinConfirm = it; pinError = null },
+                        label = { Text("Confirm PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (pinError != null) {
+                        Text(
+                            text = pinError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (pinInput.length >= 4 && pinConfirm.length >= 4 && pinError == null) {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                if (pinInput == pinConfirm) {
+                                    onPinHashSet(hashPin(pinInput))
+                                    onPinLockEnabledChange(true)
+                                    showPinSetup = false
+                                } else {
+                                    pinError = "PINs do not match"
+                                }
+                            },
+                        ) {
+                            Text("Save PIN")
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            if (biometricAvailable) {
+                OnboardingToggleRow(
+                    title = "Biometric lock",
+                    subtitle = "Use fingerprint or face unlock",
+                    checked = biometricLockEnabled,
+                    onCheckedChange = onBiometricLockEnabledChange,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = "Auto-lock Timer",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                listOf(15_000L, 30_000L, 60_000L, 300_000L).forEach { duration ->
+                    val selected = duration == autoLockTimerMs
+                    OnboardingOptionCard(
+                        label = when (duration) {
+                            15_000L -> "15s"
+                            30_000L -> "30s"
+                            60_000L -> "1m"
+                            300_000L -> "5m"
+                            else -> "?"
+                        },
+                        selected = selected,
+                        onClick = { onAutoLockTimerMsChange(duration) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}

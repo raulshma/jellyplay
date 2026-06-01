@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +44,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.pow
 
+@Immutable
 data class AudioQueueItem(
     val id: String,
     val name: String,

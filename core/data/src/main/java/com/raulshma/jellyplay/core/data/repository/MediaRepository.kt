@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.Flow
 interface MediaRepository {
 
     suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
         hiddenLibraryIds: Set<String> = emptySet(),
     ): Result<List<HomeSection>>
 

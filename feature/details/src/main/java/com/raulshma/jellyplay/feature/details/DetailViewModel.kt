@@ -211,12 +211,20 @@ class DetailViewModel @Inject constructor(
                     selectedSubtitleIndex = if (hasStoredSelection) {
                         storedSelection?.subtitleStreamIndex
                     } else {
-                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.isDefault }?.index
+                        val subStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE }
+                        subStreams.firstOrNull { it.isDefault }?.index
+                            ?: preferences.value.preferredSubtitleLanguage?.let { lang ->
+                                subStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
+                            }
                     }
                     selectedAudioIndex = if (hasStoredSelection) {
                         storedSelection?.audioStreamIndex
                     } else {
-                        streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.isDefault }?.index
+                        val audioStreams = streams.filter { it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO }
+                        audioStreams.firstOrNull { it.isDefault }?.index
+                            ?: preferences.value.preferredAudioLanguage?.let { lang ->
+                                audioStreams.firstOrNull { it.language.equals(lang, ignoreCase = true) }?.index
+                            }
                     }
 
                     viewModelScope.launch {

@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
     implementation(project(":core:datastore"))
+    implementation(project(":core:network"))
     implementation(project(":core:ui"))
 
     implementation(platform(libs.compose.bom))
@@ -44,5 +45,4 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
-    implementation(libs.smooth.corner.rect)
 }

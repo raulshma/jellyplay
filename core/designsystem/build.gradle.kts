@@ -39,7 +39,4 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(project(":core:model"))
     api(libs.smooth.corner.rect)
-
-    // Android TV
-    implementation(libs.tv.material)
 }

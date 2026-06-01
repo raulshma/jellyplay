@@ -50,5 +50,4 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.work.runtime.ktx)
-    implementation(libs.smooth.corner.rect)
 }

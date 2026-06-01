@@ -173,6 +173,7 @@ internal fun PlayerControls(
     onVideoFilterClick: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
+    onOverflowMenuChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -430,6 +431,7 @@ internal fun PlayerControls(
                         PipButton(onClick = onPipClick)
 
                         var showOverflow by remember { mutableStateOf(false) }
+                        LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
                         Box {
                             PlayerIconButton(
                                 icon = Tabler.Outline.DotsVertical,

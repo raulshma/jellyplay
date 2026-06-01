@@ -39,6 +39,8 @@ data class UserEntity(
         Index(value = ["mediaItemId"]),
         Index(value = ["status"]),
         Index(value = ["createdAt"]),
+        Index(value = ["seriesId"]),
+        Index(value = ["seasonId"]),
     ],
 )
 data class DownloadEntity(

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -29,11 +30,18 @@ import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,6 +51,11 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class UserPreferencesStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val sharedPrefs: StateFlow<Preferences> = context.dataStore.data
+        .stateIn(scope, SharingStarted.Eagerly, androidx.datastore.preferences.core.emptyPreferences())
+
     private object Keys {
         val ACTIVE_SERVER_ID = stringPreferencesKey("active_server_id")
         val ACTIVE_USER_ID = stringPreferencesKey("active_user_id")
@@ -124,10 +137,14 @@ class UserPreferencesStore @Inject constructor(
         val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
         val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
+        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
+        val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
+        val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val sha256Digest by lazy { MessageDigest.getInstance("SHA-256") }
 
     private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
         val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
@@ -150,6 +167,12 @@ class UserPreferencesStore @Inject constructor(
                 }.toMap()
             } catch (_: Exception) { emptyMap() }
         }
+
+        val hasLegacyKeys = prefs.contains(Keys.SKIP_INTRO_ENABLED) ||
+            prefs.contains(Keys.SKIP_OUTRO_ENABLED) ||
+            prefs.contains(Keys.AUTO_SKIP_INTRO) ||
+            prefs.contains(Keys.AUTO_SKIP_OUTRO)
+        if (!hasLegacyKeys) return SegmentBehavior.DEFAULT_BEHAVIORS
 
         val migrated = mutableMapOf<MediaSegmentType, SegmentBehavior>()
         val skipIntro = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true
@@ -188,7 +211,7 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
-    val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+    val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
         val subtitleStyle = try {
             prefs[Keys.SUBTITLE_STYLE]?.let { json.decodeFromString<SubtitleStyle>(it) }
         } catch (_: Exception) { null }
@@ -318,6 +341,20 @@ class UserPreferencesStore @Inject constructor(
                     json.decodeFromString<Set<String>>(it)
                         .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
                         .toSet()
+                } ?: HomeSectionType.CONFIGURABLE.toSet()
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() },
+            homeSectionOrder = try {
+                prefs[Keys.HOME_SECTION_ORDER]?.let {
+                    val parsed = try {
+                        json.decodeFromString<List<String>>(it)
+                    } catch (_: Exception) {
+                        json.decodeFromString<Set<String>>(it).toList()
+                    }
+                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                    buildList {
+                        addAll(mapped)
+                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
+                    }
                 } ?: HomeSectionType.CONFIGURABLE
             } catch (_: Exception) { HomeSectionType.CONFIGURABLE },
             hiddenLibrarySectionIds = try {
@@ -325,11 +362,13 @@ class UserPreferencesStore @Inject constructor(
                     json.decodeFromString<Set<String>>(it)
                 } ?: emptySet()
             } catch (_: Exception) { emptySet() },
+            navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
+            onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]?.toBoolean() ?: false,
         )
-    }.distinctUntilChanged()
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
-    val activeServerId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_SERVER_ID] }
-    val activeUserId: Flow<String?> = context.dataStore.data.map { it[Keys.ACTIVE_USER_ID] }
+    val activeServerId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_SERVER_ID] }.distinctUntilChanged()
+    val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
 
     suspend fun setActiveServer(serverId: String) {
         context.dataStore.edit { it[Keys.ACTIVE_SERVER_ID] = serverId }
@@ -426,7 +465,8 @@ class UserPreferencesStore @Inject constructor(
     }
 
     fun hashPin(pin: String): String {
-        return java.security.MessageDigest.getInstance("SHA-256")
+        val digest = (sha256Digest.clone() as MessageDigest)
+        return digest
             .digest(pin.toByteArray())
             .joinToString("") { "%02x".format(it) }
     }
@@ -675,10 +715,28 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    suspend fun setHomeSectionOrder(order: List<HomeSectionType>) {
+        context.dataStore.edit {
+            val normalized = buildList {
+                addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
+                addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
+            }
+            it[Keys.HOME_SECTION_ORDER] = json.encodeToString(normalized.map { t -> t.name })
+        }
+    }
+
     suspend fun setHiddenLibrarySectionIds(ids: Set<String>) {
         context.dataStore.edit {
             it[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(ids)
         }
+    }
+
+    suspend fun setNavBarShowLabels(show: Boolean) {
+        context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show.toString() }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =

@@ -83,7 +83,7 @@
   function initMobileNav() {
     const toggle = document.getElementById('nav-toggle');
     const menu = document.getElementById('mobile-menu');
-    const links = document.querySelectorAll('.mobile-link');
+    const links = document.querySelectorAll('.mobile-link, .mobile-menu a, .nav-logo');
 
     if (!toggle || !menu) return;
 
