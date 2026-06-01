@@ -126,7 +126,7 @@ internal fun <T> SettingsListPickerSheet(
             )
             Spacer(Modifier.height(12.dp))
             LazyColumn {
-                itemsIndexed(items, contentType = { _, _ -> "option" }) { index, item ->
+                itemsIndexed(items, key = { _, item -> label(item) }, contentType = { _, _ -> "option" }) { index, item ->
                     val selected = isSelected(item)
                     val shape = when {
                         items.size == 1 -> ShapeCache.smooth16

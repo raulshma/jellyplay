@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
@@ -58,6 +59,27 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextOverflow
+import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -103,6 +125,7 @@ import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
+import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -112,8 +135,15 @@ fun JellyPlayApp(
     viewModel: MainViewModel,
 ) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     when {
+        isAuthenticated && !preferences.onboardingCompleted -> {
+            OnboardingContent(
+                onComplete = {},
+                viewModel = viewModel,
+            )
+        }
         isAuthenticated -> {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
@@ -156,6 +186,16 @@ private fun AuthContent(
 }
 
 @Composable
+private fun OnboardingContent(
+    onComplete: () -> Unit,
+    viewModel: MainViewModel,
+) {
+    com.raulshma.jellyplay.feature.onboarding.OnboardingScreen(
+        onComplete = onComplete,
+    )
+}
+
+@Composable
 private fun MainContent(
     onLogout: () -> Unit,
     viewModel: MainViewModel,
@@ -176,6 +216,9 @@ private fun MainContent(
 
     val isAudioPlayerScreen = currentRoute is Route.AudioPlayer
 
+    val isFullScreenRoute = isPlayerScreen || isAudioPlayerScreen ||
+            currentRoute is Route.Onboarding
+
     val activeTopLevelRoutes: LinkedHashMap<Route, String> = when (homeMode) {
         HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
         HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
@@ -193,7 +236,7 @@ private fun MainContent(
     val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
     val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
-    val showMiniPlayer = audioItemId != null && !isAudioPlayerScreen && !isPlayerScreen && !isMiniPlayerDismissed
+    val showMiniPlayer = audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed
 
     LaunchedEffect(audioItemId) {
         if (audioItemId != null) {
@@ -245,6 +288,24 @@ private fun MainContent(
 
     val tvTypography = if (isTv) TvTypography else null
 
+    val bottomNavHeight = 80.dp // Approximate height
+    val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
+    val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
+    var isBottomNavVisible by remember { mutableStateOf(true) }
+
+    val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 300,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing
+        ),
+        label = "bottomNavOffset"
+    )
+
+    LaunchedEffect(animatedBottomNavOffset) {
+        bottomNavOffsetHeightPx.floatValue = animatedBottomNavOffset
+    }
+
     CompositionLocalProvider(
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
@@ -256,9 +317,10 @@ private fun MainContent(
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
-                LocalNavigationBarColor provides navBarColorState
+                LocalNavigationBarColor provides navBarColorState,
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
-            if (isTv && !isPlayerScreen) {
+            if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
                         background = MaterialTheme.colorScheme.background,
@@ -305,15 +367,31 @@ private fun MainContent(
                 }
                 }
             } else {
-                val noPadding = PaddingValues(0.dp)
-                if (!isPlayerScreen) {
+                val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val contentPadding = PaddingValues(0.dp)
+                if (!isFullScreenRoute) {
+                    val nestedScrollConnection = remember {
+                        object : NestedScrollConnection {
+                            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                                val delta = available.y
+                                if (delta < -15f) {
+                                    isBottomNavVisible = false
+                                } else if (delta > 15f) {
+                                    isBottomNavVisible = true
+                                }
+                                return Offset.Zero
+                            }
+                        }
+                    }
+
                     NavigationSuiteScaffold(
+                        navigationSuiteType = if (!isExpanded) NavigationSuiteType.None else NavigationSuiteType.NavigationRail,
                         navigationItems = {
                             activeTopLevelRoutes.forEach { (route, label) ->
                                 NavigationSuiteItem(
                                     selected = route == currentTopLevel,
                                     onClick = { navigator.navigate(route) },
-                                    icon = { NavIcon(route, label) },
+                                    icon = { NavIcon(route, label, selected = route == currentTopLevel) },
                                     label = { Text(label) },
                                 )
                             }
@@ -327,6 +405,7 @@ private fun MainContent(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(MaterialTheme.colorScheme.background)
+                                .then(if (!isExpanded) Modifier.nestedScroll(nestedScrollConnection) else Modifier)
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 MainNavDisplay(
@@ -337,7 +416,7 @@ private fun MainContent(
                                     onModeChange = onModeChange,
                                     enterPip = enterPip,
                                     enterVideoMiniMode = enterVideoMiniMode,
-                                    innerPadding = noPadding,
+                                    innerPadding = contentPadding,
                                     onNowPlayingClick = {
                                         val itemId = audioItemId ?: return@MainNavDisplay
                                         navigator.navigate(Route.AudioPlayer(itemId))
@@ -357,7 +436,7 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = 2.dp)
+                                        .padding(bottom = systemNavBarBottom + 2.dp)
                                 ) {
                                     MiniPlayer(
                                         isVisible = true,
@@ -386,7 +465,7 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = 2.dp)
+                                        .padding(bottom = systemNavBarBottom + 82.dp)
                                 ) {
                                     MiniPlayer(
                                         isVisible = true,
@@ -430,8 +509,22 @@ private fun MainContent(
                                     },
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
-                                        .padding(end = 8.dp, bottom = 8.dp)
+                                        .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 88.dp else 8.dp))
                                         .fillMaxWidth(0.45f),
+                                )
+                            }
+                            if (!isExpanded) {
+                                FloatingNavigationBar(
+                                    routes = activeTopLevelRoutes,
+                                    currentTopLevel = currentTopLevel,
+                                    onNavigate = { navigator.navigate(it) },
+                                    showLabels = preferences.navBarShowLabels,
+                                    containerColor = animatedNavBarColor,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = systemNavBarBottom + 8.dp)
+                                        .padding(horizontal = 16.dp)
+                                        .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
                                 )
                             }
                         }
@@ -450,7 +543,7 @@ private fun MainContent(
                             onModeChange = onModeChange,
                             enterPip = enterPip,
                             enterVideoMiniMode = enterVideoMiniMode,
-                            innerPadding = noPadding,
+                            innerPadding = contentPadding,
                             onNowPlayingClick = {
                                 val itemId = audioItemId ?: return@MainNavDisplay
                                 navigator.navigate(Route.AudioPlayer(itemId))
@@ -604,15 +697,28 @@ private fun TvMainLayout(
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String, tint: Color = MaterialTheme.colorScheme.onSurface) {
-    when (route) {
-        Route.Home -> Icon(Tabler.Outline.Home, contentDescription = label, tint = tint)
-        Route.Library -> Icon(Tabler.Outline.Music, contentDescription = label, tint = tint)
-        Route.Search -> Icon(Tabler.Outline.Search, contentDescription = label, tint = tint)
-        Route.LiveTv -> Icon(Tabler.Outline.DeviceTv, contentDescription = label, tint = tint)
-        Route.MusicBrowse -> Icon(Tabler.Outline.Disc, contentDescription = label, tint = tint)
-        else -> {}
+private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = MaterialTheme.colorScheme.onSurface) {
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (selected) 1.15f else 1.0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "iconScale"
+    )
+    
+    val icon = when (route) {
+        Route.Home -> Tabler.Outline.Home
+        Route.Library -> Tabler.Outline.Music
+        Route.Search -> Tabler.Outline.Search
+        Route.LiveTv -> Tabler.Outline.DeviceTv
+        Route.MusicBrowse -> Tabler.Outline.Disc
+        else -> Tabler.Outline.Home // Fallback
     }
+
+    Icon(
+        imageVector = icon,
+        contentDescription = label,
+        tint = tint,
+        modifier = androidx.compose.ui.Modifier.scale(scale)
+    )
 }
 
 @Composable
@@ -825,11 +931,58 @@ private fun MainNavDisplay(
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout)
+            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
             adminSection(navigator)
             musicSection(navigator)
             syncPlaySection(navigator)
+            onboardingSection { navigator.goBack() }
         },
         modifier = modifier,
     )
+}
+
+@Composable
+private fun FloatingNavigationBar(
+    routes: Map<Route, String>,
+    currentTopLevel: NavKey,
+    onNavigate: (Route) -> Unit,
+    showLabels: Boolean,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = containerColor.copy(alpha = 0.90f),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp,
+    ) {
+        androidx.compose.material3.NavigationBar(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 0.dp,
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        ) {
+            routes.forEach { (route, label) ->
+                val selected = route == currentTopLevel
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { onNavigate(route) },
+                    icon = { NavIcon(route, label, selected = selected) },
+                    label = if (showLabels) { { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) } } else null,
+                    alwaysShowLabel = showLabels,
+                    colors = NavigationBarItemDefaults.colors(
+                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+        }
+    }
 }

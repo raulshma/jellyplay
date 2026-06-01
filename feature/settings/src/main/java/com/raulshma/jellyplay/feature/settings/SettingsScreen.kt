@@ -37,11 +37,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,9 +58,11 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import android.widget.Toast
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -103,6 +108,7 @@ fun SettingsScreen(
     onUserManagement: () -> Unit = {},
     onSeerrSettings: () -> Unit = {},
     onAdminDashboard: () -> Unit = {},
+    onSetupWizard: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -119,6 +125,7 @@ fun SettingsScreen(
         }
     }
 
+    val currentServerAddress by viewModel.currentServerAddress.collectAsStateWithLifecycle()
     var showPinDialog by remember { mutableStateOf(false) }
     var showPlayerPicker by remember { mutableStateOf(false) }
     var showAudioLanguagePicker by remember { mutableStateOf(false) }
@@ -163,6 +170,15 @@ fun SettingsScreen(
         backgroundColor = backgroundColor,
     ) {
         val scrollState = rememberScrollState()
+        val context = LocalContext.current
+
+        LaunchedEffect(viewModel.messageSentEvent) {
+            viewModel.messageSentEvent?.let { msg ->
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                viewModel.clearMessageEvent()
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,7 +204,18 @@ fun SettingsScreen(
                 if (userName.isNotBlank()) {
                     SettingsProfileBanner(
                         userName = userName,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(1) {
+                if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
+                    ActiveDevicesRow(
+                        sessions = viewModel.activeSessions,
+                        serverAddress = currentServerAddress,
+                        onSendMessage = viewModel::sendMessageToSession,
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
             }
@@ -199,7 +226,7 @@ fun SettingsScreen(
                     title = "Account",
                     summary = { "Signed in as $userName" },
                     initiallyExpanded = true,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Server,
@@ -230,12 +257,29 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(2) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Wand,
+                    title = "Setup Wizard",
+                    summary = { "Re-run the initial setup experience" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Wand,
+                        title = "Re-run Setup",
+                        subtitle = "Configure your preferences again",
+                        index = 0, count = 1,
+                        onClick = onSetupWizard,
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(3) {
                 if (viewModel.currentUser?.isAdmin == true) {
                     SettingsGroup(
                         icon = Tabler.Outline.Server,
                         title = "Administration",
                         summary = { "Server management dashboard" },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     ) {
                         SettingListItem(
                             icon = Tabler.Outline.Server,
@@ -253,7 +297,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Puzzle,
                     title = "Integrations",
                     summary = { "Seerr" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
@@ -273,29 +317,101 @@ fun SettingsScreen(
                         val enabled = preferences.enabledHomeSectionTypes
                         "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    val sectionItems = buildList {
-                        add(HomeSectionType.CONTINUE_WATCHING)
-                        add(HomeSectionType.NEXT_UP)
-                        if (HomeSectionType.LATEST_MEDIA in preferences.enabledHomeSectionTypes) {
-                            add(HomeSectionType.RECENTLY_ADDED)
+                    val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
+                    val itemHeights = remember { mutableStateMapOf<HomeSectionType, Int>() }
+                    var draggingSection by remember { mutableStateOf<HomeSectionType?>(null) }
+                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+
+                    LaunchedEffect(preferences.homeSectionOrder) {
+                        if (draggingSection == null) {
+                            homeSectionOrder.clear()
+                            homeSectionOrder.addAll(preferences.homeSectionOrder)
                         }
-                        add(HomeSectionType.LATEST_MEDIA)
                     }
-                    val totalCount = sectionItems.size + viewModel.libraryFolders.size
+
+                    fun persistHomeSectionOrder() {
+                        val currentOrder = homeSectionOrder.toList()
+                        if (currentOrder != preferences.homeSectionOrder) {
+                            viewModel.setHomeSectionOrder(currentOrder)
+                        }
+                    }
+
+                    fun moveSection(type: HomeSectionType, deltaY: Float) {
+                        if (draggingSection != type) return
+                        dragOffsetY += deltaY
+
+                        while (true) {
+                            val currentIndex = homeSectionOrder.indexOf(type)
+                            if (currentIndex == -1) return
+
+                            val draggedHeight = itemHeights[type] ?: return
+
+                            if (dragOffsetY > 0f && currentIndex < homeSectionOrder.lastIndex) {
+                                val nextType = homeSectionOrder[currentIndex + 1]
+                                val nextHeight = itemHeights[nextType] ?: draggedHeight
+                                val threshold = (draggedHeight + nextHeight) / 2f
+                                if (dragOffsetY > threshold) {
+                                    homeSectionOrder.removeAt(currentIndex)
+                                    homeSectionOrder.add(currentIndex + 1, type)
+                                    dragOffsetY -= nextHeight.toFloat()
+                                    continue
+                                }
+                            }
+
+                            if (dragOffsetY < 0f && currentIndex > 0) {
+                                val prevType = homeSectionOrder[currentIndex - 1]
+                                val prevHeight = itemHeights[prevType] ?: draggedHeight
+                                val threshold = (draggedHeight + prevHeight) / 2f
+                                if (-dragOffsetY > threshold) {
+                                    homeSectionOrder.removeAt(currentIndex)
+                                    homeSectionOrder.add(currentIndex - 1, type)
+                                    dragOffsetY += prevHeight.toFloat()
+                                    continue
+                                }
+                            }
+
+                            break
+                        }
+                    }
+
+                    val totalCount = homeSectionOrder.size + viewModel.libraryFolders.size
                     var idx = 0
 
-                    sectionItems.forEach { type ->
+                    homeSectionOrder.forEach { type ->
+                        val isChecked = type in preferences.enabledHomeSectionTypes
+                        val icon = when (type) {
+                            HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
+                            HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
+                            HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
+                            HomeSectionType.LATEST_MEDIA -> Tabler.Outline.LayersLinked
+                            else -> Tabler.Outline.LayersLinked
+                        }
+                        SettingReorderableToggleItem(
+                            icon = icon,
+                            title = type.displayName,
+                            subtitle = if (isChecked) type.description else "Hidden",
+                            checked = isChecked,
+                            index = idx++, count = totalCount,
+                            isDragging = draggingSection == type,
+                            modifier = Modifier.onSizeChanged { itemHeights[type] = it.height },
+                            onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
+                            onClick = { viewModel.toggleHomeSectionType(type, !isChecked) },
+                            onDragStart = {
+                                draggingSection = type
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { delta -> moveSection(type, delta) },
+                            onDragEnd = {
+                                val wasDragging = draggingSection == type
+                                draggingSection = null
+                                dragOffsetY = 0f
+                                if (wasDragging) persistHomeSectionOrder()
+                            },
+                        )
+
                         if (type == HomeSectionType.LATEST_MEDIA) {
-                            SettingToggleItem(
-                                icon = Tabler.Outline.LayersLinked,
-                                title = type.displayName,
-                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
-                                checked = type in preferences.enabledHomeSectionTypes,
-                                index = idx++, count = totalCount,
-                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
-                            )
                             viewModel.libraryFolders.forEach { folder ->
                                 val isLibraryVisible = folder.id !in preferences.hiddenLibrarySectionIds
                                 SettingToggleItem(
@@ -307,20 +423,6 @@ fun SettingsScreen(
                                     onCheckedChange = { viewModel.toggleLibrarySection(folder.id, it) },
                                 )
                             }
-                        } else {
-                            SettingToggleItem(
-                                icon = when (type) {
-                                    HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
-                                    HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
-                                    HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
-                                    else -> Tabler.Outline.LayersLinked
-                                },
-                                title = type.displayName,
-                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
-                                checked = type in preferences.enabledHomeSectionTypes,
-                                index = idx++, count = totalCount,
-                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
-                            )
                         }
                     }
                 }
@@ -331,7 +433,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.PlayerPlay,
                     title = "Video Player",
                     summary = { "Player Engine: ${preferences.preferredPlayer.displayName}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val videoItems = buildList {
                         add("player" to 0)
@@ -475,7 +577,7 @@ fun SettingsScreen(
                         val buttonCount = preferences.segmentBehaviors.count { it.value == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON }
                         "$autoCount auto-skip, $buttonCount show button"
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size
@@ -504,7 +606,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.BadgeHd,
                     title = "Advanced Video",
                     summary = { "Decoder: ${preferences.decoderMode.displayName}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val advancedItems = mutableListOf<Pair<String, Int>>()
                     advancedItems.add("dialogue" to 0)
@@ -600,7 +702,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Users,
                     title = "SyncPlay",
                     summary = { "Watch together with friends" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                 }
             }
@@ -610,7 +712,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Music,
                     title = "Audio Player",
                     summary = { "Default speed: ${if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val audioItems = mutableListOf<Int>()
                     for (i in 0..20) audioItems.add(i)
@@ -850,7 +952,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Language,
                     title = "Language",
                     summary = { "Audio: ${preferences.preferredAudioLanguage ?: "Default"}" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Language,
@@ -876,7 +978,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Subtitles,
                     title = "Subtitles",
                     summary = { "Font size: ${preferences.subtitleStyle.fontSize}sp" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val subTotal = 6
                     SettingListItem(
@@ -934,7 +1036,7 @@ fun SettingsScreen(
                     icon = Tabler.Outline.Database,
                     title = "Storage",
                     summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val storageTotal = 4
                     SettingInfoItem(
@@ -986,7 +1088,7 @@ fun SettingsScreen(
                         if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val isAndroid12 = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
                     val isDarkActive = when (preferences.themeMode) {
@@ -1066,26 +1168,77 @@ fun SettingsScreen(
                             },
                         )
                     } else {
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Video,
-                            title = "Dynamic Theming",
-                            subtitle = "Colors extracted from artwork",
-                            checked = preferences.dynamicTheming,
-                            index = 0, count = 2,
-                            onCheckedChange = { viewModel.setDynamicTheming(it) },
+                        val baseCount = if (isDarkActive) 5 else 4
+                        SettingListItem(
+                            icon = Tabler.Outline.Moon,
+                            title = "Theme Mode",
+                            subtitle = when (preferences.themeMode) {
+                                ThemeMode.SYSTEM -> "Follow system setting"
+                                ThemeMode.LIGHT -> "Always light"
+                                ThemeMode.DARK -> "Always dark"
+                            },
+                            trailingText = preferences.themeMode.name,
+                            index = 0, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.themeMode) {
+                                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                                    ThemeMode.LIGHT -> ThemeMode.DARK
+                                    ThemeMode.DARK -> ThemeMode.SYSTEM
+                                }
+                                viewModel.setThemeMode(next)
+                            },
+                        )
+                        if (isDarkActive) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.BrightnessHalf,
+                                title = "OLED Mode",
+                                subtitle = "Pure black backgrounds for AMOLED displays",
+                                checked = preferences.oledMode,
+                                index = 1, count = baseCount,
+                                onCheckedChange = { viewModel.setOledMode(it) },
+                            )
+                        }
+                        val contrastIndex = if (isDarkActive) 2 else 1
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Contrast",
+                            subtitle = when (preferences.contrastLevel) {
+                                ContrastLevel.DEFAULT -> "Standard contrast"
+                                ContrastLevel.MEDIUM -> "Medium contrast"
+                                ContrastLevel.HIGH -> "High contrast"
+                            },
+                            trailingText = preferences.contrastLevel.name,
+                            index = contrastIndex, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.contrastLevel) {
+                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
+                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
+                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
+                                }
+                                viewModel.setContrastLevel(next)
+                            },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
-                            index = 1, count = 2,
+                            index = if (isDarkActive) 3 else 2, count = baseCount,
                             onClick = {
                                 val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
                                 viewModel.setHomeMode(next)
                             },
                         )
                     }
+                    SettingToggleItem(
+                        icon = Tabler.Outline.TextSize,
+                        title = "Show Navigation Labels",
+                        subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
+                        checked = preferences.navBarShowLabels,
+                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3), 
+                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4),
+                        onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                    )
                 }
             }
 
@@ -1098,7 +1251,7 @@ fun SettingsScreen(
                             val cats = preferences.dreamImageCategories.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                             cats.joinToString(", ")
                         },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     ) {
                         val dreamTotal = 5
                         SettingToggleItem(
@@ -1187,7 +1340,7 @@ fun SettingsScreen(
                             else -> "Lock: Off"
                         }
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 ) {
                     val secTotal = if (canShowBiometric) 3 else 2
                     SettingToggleItem(
@@ -1289,7 +1442,7 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(if (isTv) 14 else 13) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     SettingInfoItem(
                         icon = Tabler.Outline.Video,
                         title = "Version",
@@ -1855,7 +2008,9 @@ fun SettingsScreen(
     }
 
     if (showEqualizerEditor) {
-        val bandLevels = preferences.equalizerSettings.bandLevels.toMutableStateList()
+        val bandLevels = remember(preferences.equalizerSettings.bandLevels) {
+            mutableStateListOf<Int>().apply { addAll(preferences.equalizerSettings.bandLevels) }
+        }
         AdaptiveSheet(onDismissRequest = { showEqualizerEditor = false }) {
             Column(
                 modifier = Modifier
@@ -1873,7 +2028,7 @@ fun SettingsScreen(
                 LazyColumn(
                     modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f),
                 ) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { _ -> "band" }) { i ->
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, key = { it }, contentType = { "band" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",

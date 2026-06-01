@@ -152,6 +152,7 @@ fun VideoPlayerScreen(
     var controlsHasFocus by remember { mutableStateOf(false) }
     var currentSheet by remember { mutableStateOf<PlayerSheet>(PlayerSheet.None) }
     var isSeeking by remember { mutableStateOf(false) }
+    var isOverflowMenuOpen by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
@@ -189,8 +190,9 @@ fun VideoPlayerScreen(
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    val mpvSubtitleText = uiState.currentSubtitleText
-        ?.takeIf { uiState.usesSubtitleOverlay && it.isNotBlank() }
+    val mpvSubtitleCues = uiState.currentSubtitleCues
+        .takeIf { uiState.usesSubtitleOverlay && it.isNotEmpty() }
+        ?: emptyList()
 
     LaunchedEffect(itemId) {
         viewModel.initialize(
@@ -566,7 +568,7 @@ fun VideoPlayerScreen(
         }
 
         MpvSubtitleOverlay(
-            text = mpvSubtitleText,
+            cues = mpvSubtitleCues,
             style = uiState.subtitleStyle,
             visible = !isInPipMode,
         )
@@ -859,6 +861,7 @@ fun VideoPlayerScreen(
                 showControls = false
             },
             onControlsFocusChange = { controlsHasFocus = it },
+            onOverflowMenuChange = { isOverflowMenuOpen = it },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -915,8 +918,8 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, controlsHasFocus) {
-        if (showControls && !controlsHasFocus) {
+    LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen) {
+        if (showControls && !controlsHasFocus && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
             delay(uiState.controlsTimeoutMs)
             showControls = false
         }
@@ -978,13 +981,47 @@ fun VideoPlayerScreen(
 
 @Composable
 private fun BoxScope.MpvSubtitleOverlay(
-    text: String?,
+    cues: List<String>,
     style: SubtitleStyle,
     visible: Boolean,
 ) {
-    if (!visible || text.isNullOrBlank()) return
+    if (!visible || cues.isEmpty()) return
 
     val bottomPadding = (24 + style.verticalPosition.coerceIn(0f, 0.4f) * 240).dp
+    val topPadding = bottomPadding
+
+    if (cues.size >= 2) {
+        SubtitleCueBox(
+            text = cues[0],
+            style = style,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 32.dp, end = 32.dp, bottom = bottomPadding),
+        )
+        SubtitleCueBox(
+            text = cues[1],
+            style = style,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(start = 32.dp, end = 32.dp, top = topPadding),
+        )
+    } else {
+        SubtitleCueBox(
+            text = cues[0],
+            style = style,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 32.dp, end = 32.dp, bottom = bottomPadding),
+        )
+    }
+}
+
+@Composable
+private fun SubtitleCueBox(
+    text: String,
+    style: SubtitleStyle,
+    modifier: Modifier = Modifier,
+) {
     val backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 1f)
     val backgroundColor = Color(style.backgroundColor.value)
         .copy(alpha = backgroundOpacity)
@@ -999,9 +1036,7 @@ private fun BoxScope.MpvSubtitleOverlay(
     val annotatedText = remember(text) { VttTagParser.parseAnnotated(text) }
 
     Box(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(start = 32.dp, end = 32.dp, bottom = bottomPadding)
+        modifier = modifier
             .then(
                 if (backgroundOpacity > 0f) {
                     Modifier.background(backgroundColor, RoundedCornerShape(6.dp))

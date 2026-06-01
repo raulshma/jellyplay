@@ -213,7 +213,8 @@ fun MediaDetailScreen(
         darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
     ) {
-        val activeDownload by viewModel.getDownloadFlow(itemId).collectAsStateWithLifecycle(initialValue = null)
+        val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
+        val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
         // Seerr integration state
         val seerrRecommendations by viewModel.seerrRecommendations.collectAsStateWithLifecycle()
@@ -595,7 +596,7 @@ private fun DetailContent(
                             ),
                             startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
                             endY = with(density) { backdropHeight.toPx() }
-                        )
+                            )
                     )
             )
         }

@@ -791,7 +791,7 @@ private fun EqualizerSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 val presets = com.raulshma.jellyplay.core.model.EqualizerPreset.entries.filter { it != com.raulshma.jellyplay.core.model.EqualizerPreset.CUSTOM }
-                items(presets.size) { index ->
+                items(presets.size, key = { presets[it].name }) { index ->
                     val preset = presets[index]
                     androidx.compose.material3.FilterChip(
                         selected = currentPreset == preset,
@@ -894,7 +894,7 @@ private fun LyricsSearchSheet(
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                 ) {
-                    items(searchResults.size, contentType = { "searchResult" }) { index ->
+                    items(searchResults.size, key = { it }, contentType = { "searchResult" }) { index ->
                         val track = searchResults[index]
                         Card(
                             onClick = { onApplyTrack(track) },
@@ -1043,7 +1043,7 @@ private fun LyricsOverlay(
                     contentPadding = PaddingValues(vertical = 200.dp),
                     userScrollEnabled = false,
                 ) {
-                    items(lyrics.size, contentType = { "lyricsLine" }) { index ->
+                    items(lyrics.size, key = { it }, contentType = { "lyricsLine" }) { index ->
                         val isCurrent = index == currentIndex && hasSyncedLyrics
                         val distance = if (currentIndex >= 0) kotlin.math.abs(index - currentIndex) else 99
                         val targetAlpha = when {
@@ -1331,7 +1331,7 @@ private fun AudioEffectsSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     val reverbPresets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
-                    items(reverbPresets.size) { index ->
+                    items(reverbPresets.size, key = { reverbPresets[it].name }) { index ->
                         val preset = reverbPresets[index]
                         androidx.compose.material3.FilterChip(
                             selected = viewModel.reverbPreset == preset,

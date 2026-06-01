@@ -35,7 +35,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.tabler.icons.outline)
     implementation(libs.tabler.icons.filled)
-    implementation("androidx.compose.animation:animation-android")
+    implementation(libs.compose.animation)
 
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
@@ -49,5 +49,4 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
-    implementation(libs.smooth.corner.rect)
 }

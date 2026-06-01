@@ -34,7 +34,7 @@ data class VideoPlayerUiState(
     val playbackSpeed: Float = 1.0f,
     val audioTracks: List<TrackOption> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
-    val currentSubtitleText: String? = null,
+    val currentSubtitleCues: List<String> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,

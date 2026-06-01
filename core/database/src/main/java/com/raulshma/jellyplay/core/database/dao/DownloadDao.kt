@@ -39,6 +39,9 @@ interface DownloadDao {
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun deleteDownloadById(id: String)
 
+    @Query("DELETE FROM downloads WHERE id IN (:ids)")
+    suspend fun deleteDownloadsByIds(ids: List<String>)
+
     @Query("SELECT COALESCE(SUM(downloadedBytes), 0) FROM downloads WHERE status = 'COMPLETED'")
     suspend fun getTotalDownloadedBytes(): Long
 
@@ -61,11 +64,17 @@ interface DownloadDao {
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
     @Query("SELECT * FROM downloads WHERE status = :status")
-    fun getDownloadsByStatus(status: String): List<DownloadEntity>
+    suspend fun getDownloadsByStatus(status: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
     suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE seasonId = :seasonId")
     suspend fun getDownloadsForSeason(seasonId: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
+    suspend fun getDownloadsByMediaItemIds(mediaItemIds: List<String>): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
+    fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
 }

@@ -287,6 +287,7 @@ class LibVlcPlayerEngine(
     }
 
     private fun releaseInternal(releaseVlc: Boolean) {
+        mainHandler.removeCallbacksAndMessages(null)
         pendingPlay = false
         currentPlaybackRequest = null
         dialogueBoost.detach()

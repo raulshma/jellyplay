@@ -18,6 +18,16 @@ class PlaybackRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
 ) : PlaybackRepository {
 
+    private data class CachedSegments(val segments: List<MediaSegment>, val timestamp: Long)
+    // LRU cache capped at 50 entries — prevents unbounded growth when many distinct
+    // items are played in a single session. LinkedHashMap with accessOrder=true evicts
+    // the least-recently-accessed entry when the limit is exceeded.
+    private val segmentsCache: MutableMap<String, CachedSegments> =
+        object : LinkedHashMap<String, CachedSegments>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSegments>?): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
+
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
         apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
 
@@ -66,9 +76,17 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getCreditTimestamps(itemId)
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
+        val cached = segmentsCache[itemId]
+        if (cached != null && System.currentTimeMillis() - cached.timestamp < 5 * 60 * 1000L) {
+            return Result.success(cached.segments)
+        }
+
         val segmentsResult = apiClient.getMediaSegments(itemId)
         val segments = segmentsResult.getOrDefault(emptyList())
-        if (segments.isNotEmpty()) return Result.success(segments)
+        if (segments.isNotEmpty()) {
+            segmentsCache[itemId] = CachedSegments(segments, System.currentTimeMillis())
+            return Result.success(segments)
+        }
 
         return coroutineScope {
             val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
@@ -103,7 +121,9 @@ class PlaybackRepositoryImpl @Inject constructor(
                     )
                 }
             }
-            Result.success(fallbackSegments)
+            val result = Result.success(fallbackSegments)
+            segmentsCache[itemId] = CachedSegments(fallbackSegments, System.currentTimeMillis())
+            result
         }
     }
 
@@ -115,4 +135,9 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
         apiClient.getTrickplayTileImage(itemId, width, index)
+
+    companion object {
+        /** Maximum number of distinct items whose segment data is kept in memory. */
+        private const val MAX_CACHE_ENTRIES = 50
+    }
 }

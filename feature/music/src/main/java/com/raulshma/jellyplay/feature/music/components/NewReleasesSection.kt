@@ -85,7 +85,7 @@ fun NewReleasesSection(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(albums) { album ->
+            items(albums, key = { it.id }) { album ->
                 CloverShapeAlbumCard(
                     album = album,
                     onClick = { onAlbumClick(album.id) },

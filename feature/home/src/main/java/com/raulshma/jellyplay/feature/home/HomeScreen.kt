@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -74,6 +78,9 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+
+private val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)
+private val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 
 @Composable
 fun HomeScreen(
@@ -182,7 +189,7 @@ private fun MainHomeContent(
         featuredCandidates.getOrNull(featuredIndex)
     }
 
-    val backdropUrl = featuredItem?.let { viewModel.getBackdropUrl(it.id) }
+    val backdropUrl = remember(featuredItem?.id) { featuredItem?.let { viewModel.getBackdropUrl(it.id) } }
 
     val savedScrollPos = viewModel.getHomeScrollPosition()
     val listState = rememberSaveable(saver = LazyListState.Saver) {
@@ -282,6 +289,8 @@ private fun MainHomeContent(
     var isSearchExpanded by remember { mutableStateOf(false) }
     val isSearchFocused by remember { derivedStateOf { state.searchState.query.isNotBlank() || isSearchExpanded } }
 
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+
     BackHandler(enabled = isFabExpanded || isSearchFocused) {
         if (isFabExpanded) isFabExpanded = false
         else if (isSearchFocused) {
@@ -297,6 +306,12 @@ private fun MainHomeContent(
         onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
         modifier = Modifier.fillMaxSize(),
     ) {
+        ArtworkThemeWrapper(
+            imageUrl = backdropUrl,
+            dynamicTheming = state.dynamicTheming,
+            darkTheme = !isLightTheme,
+            oledMode = state.oledMode,
+        ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
                 state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE -> {
@@ -345,12 +360,6 @@ private fun MainHomeContent(
                 }
             }
 
-            ArtworkThemeWrapper(
-                imageUrl = backdropUrl,
-                dynamicTheming = state.dynamicTheming,
-                darkTheme = !isLightTheme,
-                oledMode = state.oledMode,
-            ) {
                 HomeTopDock(
                     scrollFraction = scrollFraction,
                     isSearchFocused = isSearchFocused,
@@ -388,14 +397,7 @@ private fun MainHomeContent(
                         )
                     },
                 )
-            }
 
-            ArtworkThemeWrapper(
-                imageUrl = backdropUrl,
-                dynamicTheming = state.dynamicTheming,
-                darkTheme = !isLightTheme,
-                oledMode = state.oledMode,
-            ) {
                 HomeFabMenu(
                     isExpanded = isFabExpanded,
                     onToggle = { isFabExpanded = it },
@@ -409,9 +411,16 @@ private fun MainHomeContent(
                     onDownloadsClick = onDownloadsClick,
                     onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
                     onSettingsClick = onSettingsClick,
-                    modifier = Modifier.align(Alignment.BottomEnd),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                        },
                 )
-            }
+        }
         }
     }
 
@@ -500,24 +509,17 @@ private fun HomeContentList(
         ) {
             if (featuredItem != null) {
                 item {
-                    ArtworkThemeWrapper(
-                        imageUrl = viewModel.getBackdropUrl(featuredItem.id),
-                        dynamicTheming = state.dynamicTheming,
-                        darkTheme = !isLightTheme,
-                        oledMode = state.oledMode,
-                    ) {
-                        AnimatedHeroHeader(
-                            featuredItem = featuredItem,
-                            getBackdropUrl = { viewModel.getBackdropUrl(it) },
-                            height = headerHeight,
-                            backgroundColor = backgroundColor,
-                            contentPadding = contentPad,
-                            listState = listState,
-                            onItemClick = onItemClick,
-                            onDetailsClick = onItemClick,
-                            onFocusChange = onFocusChange,
-                        )
-                    }
+                    AnimatedHeroHeader(
+                        featuredItem = featuredItem,
+                        getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                        height = headerHeight,
+                        backgroundColor = backgroundColor,
+                        contentPadding = contentPad,
+                        listState = listState,
+                        onItemClick = onItemClick,
+                        onDetailsClick = onItemClick,
+                        onFocusChange = onFocusChange,
+                    )
                 }
             } else {
                 item { Spacer(Modifier.height(100.dp)) }
@@ -538,17 +540,18 @@ private fun HomeContentList(
                     label = "sectionAnimation",
                 )
 
+                val heroTransitionBrush = remember(backgroundColor, density) {
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, backgroundColor),
+                        startY = 0f,
+                        endY = with(density) { 10.dp.toPx() },
+                    )
+                }
                 val sectionModifier = Modifier
                     .fillMaxWidth()
                     .then(
                         if (isFirstAfterHero) {
-                            Modifier.background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, backgroundColor),
-                                    startY = 0f,
-                                    endY = with(density) { 10.dp.toPx() },
-                                )
-                            )
+                            Modifier.background(heroTransitionBrush)
                         } else Modifier.background(backgroundColor)
                     )
                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
@@ -602,7 +605,7 @@ private fun HomeContentList(
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
                     val rowItems = discoverRows[rowIndex]
-                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) listOf(3, 2, 3) else listOf(5, 4, 6, 5)
+                    val pattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
                     val targetSize = pattern[rowIndex % pattern.size]
                     val spacing = 8.dp
 

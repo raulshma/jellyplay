@@ -72,7 +72,7 @@ object ArtworkColorExtractor {
 
     fun extractColors(bitmap: Bitmap): ArtworkColors {
         val palette = Palette.from(bitmap)
-            .maximumColorCount(16)
+            .maximumColorCount(8)
             .generate()
 
         return ArtworkColors(

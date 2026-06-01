@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -9,6 +10,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 
+@Stable
 class NavigationState(
     val startRoute: NavKey,
     val topLevelRoute: MutableState<NavKey>,

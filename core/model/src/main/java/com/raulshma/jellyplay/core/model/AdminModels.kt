@@ -163,6 +163,8 @@ data class SessionNowPlayingItem(
     val mediaType: String? = null,
     val runTimeTicks: Long? = null,
     val primaryImageTag: String? = null,
+    val seriesName: String? = null,
+    val backdropImageTag: String? = null,
 )
 
 @Immutable

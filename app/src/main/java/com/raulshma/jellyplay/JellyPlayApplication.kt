@@ -19,7 +19,11 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -27,52 +31,58 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var downloadDao: DownloadDao
+    @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
-        recoverPendingDownloads()
+        applicationScope.launch { recoverPendingDownloads() }
     }
 
-    private fun recoverPendingDownloads() {
-        Thread {
-            try {
-                val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
-                for (download in pending) {
-                    val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                        .setInputData(
-                            Data.Builder()
-                                .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                                .build()
-                        )
-                        .build()
-                    WorkManager.getInstance(this).enqueueUniqueWork(
-                        "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                        ExistingWorkPolicy.REPLACE,
-                        workRequest,
+    private suspend fun recoverPendingDownloads() {
+        try {
+            val pending = downloadDao.getDownloadsByStatus(DownloadStatus.PENDING.name)
+            for (download in pending) {
+                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
+                            .build()
                     )
-                }
-                val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
-                for (download in stale) {
-                    runBlocking { downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name) }
-                    val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                        .setInputData(
-                            Data.Builder()
-                                .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                                .build()
-                        )
-                        .build()
-                    WorkManager.getInstance(this).enqueueUniqueWork(
-                        "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
-                        ExistingWorkPolicy.REPLACE,
-                        workRequest,
-                    )
-                }
-            } catch (_: Exception) {
+                    .build()
+                WorkManager.getInstance(this).enqueueUniqueWork(
+                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest,
+                )
             }
-        }.start()
+            val stale = downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADING.name)
+            for (download in stale) {
+                downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
+                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
+                            .build()
+                    )
+                    .build()
+                WorkManager.getInstance(this).enqueueUniqueWork(
+                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest,
+                )
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private val imageLoader by lazy {
+        val cacheMb = kotlinx.coroutines.runBlocking {
+            userPreferencesStore.preferences.first().maxCacheSizeMb
+        }
+        val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
+        
         ImageLoader.Builder(this)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
@@ -85,9 +95,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache").absolutePath.toPath())
-                    .maxSizeBytes(256L * 1024 * 1024)
+                    .maxSizeBytes(cacheSize)
                     .build()
             }
+            .crossfade(true)
             .build()
     }
 

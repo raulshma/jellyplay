@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -21,13 +22,25 @@ class TrickplayManager(
 
     private val thumbnailCache = object : LruCache<Int, Bitmap>((MAX_THUMBNAIL_CACHE_BYTES / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
+        override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
+            // Recycle the native bitmap memory when it is evicted from the cache.
+            // Guard against double-recycle: if a caller still holds a reference the
+            // system will silently ignore further operations on the recycled bitmap.
+            if (!oldValue.isRecycled) oldValue.recycle()
+        }
     }
     private val spriteSheetCache = object : LruCache<Int, Bitmap>((MAX_SPRITE_SHEET_CACHE_BYTES / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
+        override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
+            // Only recycle sprite sheets when the cache evicts them automatically;
+            // explicit clear() handles the remaining entries via evictAll() which
+            // also triggers this callback, so all paths are covered.
+            if (!oldValue.isRecycled) oldValue.recycle()
+        }
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
@@ -36,7 +49,6 @@ class TrickplayManager(
 
     fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
         this.localCacheDir = null
@@ -45,7 +57,6 @@ class TrickplayManager(
 
     fun initializeWithCache(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
         clear()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
         this.localCacheDir = null
@@ -54,7 +65,6 @@ class TrickplayManager(
 
     fun initializeLocal(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
         clear()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         this.itemId = itemId
         this.info = trickplayInfo
         this.localCacheDir = cacheDir
@@ -176,20 +186,15 @@ class TrickplayManager(
         preloadJob?.cancel()
         preloadJob = null
 
-        val thumbnails = thumbnailCache.snapshot().values.toList()
         thumbnailCache.evictAll()
-        thumbnails.forEach { it.recycle() }
-
-        val sheets = spriteSheetCache.snapshot().values.toList()
         spriteSheetCache.evictAll()
-        sheets.forEach { it.recycle() }
 
         info = null
         itemId = null
         localCacheDir = null
         persistDir = null
         sheetMutexes.clear()
-        scope.cancel()
+        scope.coroutineContext.cancelChildren()
     }
 
     companion object {

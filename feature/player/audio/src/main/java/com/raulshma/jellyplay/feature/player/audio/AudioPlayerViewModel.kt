@@ -20,7 +20,10 @@ import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -121,8 +124,8 @@ class AudioPlayerViewModel @Inject constructor(
     var autoEqByGenre by mutableStateOf(false)
         private set
 
-    var fftData by mutableStateOf(ByteArray(0))
-        private set
+    private val _fftData = MutableStateFlow(ByteArray(0))
+    val fftData: StateFlow<ByteArray> = _fftData.asStateFlow()
 
     var normalizationMode by mutableStateOf(AudioNormalizationMode.NONE)
         private set
@@ -260,7 +263,7 @@ class AudioPlayerViewModel @Inject constructor(
                 lrBalance = lr
                 pitchSemitones = pitch
                 autoEqByGenre = autoEq
-                fftData = fft
+                _fftData.value = fft
             }.collect {}
         }
         viewModelScope.launch {
@@ -327,18 +330,19 @@ class AudioPlayerViewModel @Inject constructor(
         fetchBlurHash(itemId)
     }
 
-    private val blurHashCache = mutableMapOf<String, String?>()
+    private val blurHashCache = android.util.LruCache<String, String?>(50)
 
     private fun fetchBlurHash(itemId: String) {
-        if (blurHashCache.containsKey(itemId)) {
-            albumArtBlurHash = blurHashCache[itemId]
+        if (blurHashCache.get(itemId) != null || blurHashCache[keySentinel(itemId)] != null) {
+            albumArtBlurHash = blurHashCache.get(itemId)
             return
         }
         viewModelScope.launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     val hash = detail.item.blurHashes.primary
-                    blurHashCache[itemId] = hash
+                    blurHashCache.put(itemId, hash)
+                    if (hash == null) blurHashCache.put(keySentinel(itemId), "")
                     albumArtBlurHash = hash
                 }
         }
@@ -604,4 +608,11 @@ class AudioPlayerViewModel @Inject constructor(
 
     val currentPlayingItemId: String?
         get() = audioPlaybackManager.currentPlayingItemId.value
+
+    private fun keySentinel(id: String) = "§null§$id"
+
+    override fun onCleared() {
+        super.onCleared()
+        stopPlayback()
+    }
 }

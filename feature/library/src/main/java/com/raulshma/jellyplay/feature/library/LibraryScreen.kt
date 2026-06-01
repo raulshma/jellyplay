@@ -26,9 +26,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -73,6 +77,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -82,9 +87,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import androidx.compose.animation.animateColorAsState
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
-import com.raulshma.jellyplay.feature.library.components.ExpressiveGridItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -129,25 +132,17 @@ fun LibraryScreen(
         }
     }
 
-    val bgColor = MaterialTheme.colorScheme.background
-    val isLightTheme = remember(bgColor) {
-        (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
-    }
+    val isLightTheme = LocalIsLightTheme.current
 
     val artworkColors = LocalArtworkColors.current
     val baseColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
-    val targetBackgroundColor = if (isLightTheme) {
+    val backgroundColor = if (isLightTheme) {
         MaterialTheme.colorScheme.background
     } else {
         lerp(baseColor, Color.Black, 0.65f)
     }
-    val backgroundColor by animateColorAsState(
-        targetValue = targetBackgroundColor,
-        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-        label = "backgroundColor",
-    )
 
     var headerVisible by remember { mutableStateOf(true) }
 
@@ -173,6 +168,7 @@ fun LibraryScreen(
     )
 
     val gridCellSize = adaptiveInfo.gridCellSize(isTv)
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     Box(
         modifier = Modifier
@@ -263,7 +259,7 @@ fun LibraryScreen(
                                     onClick = { viewModel.selectFolder(null) },
                                 )
                             }
-                            items(folders.size, contentType = { "folder" }) { index ->
+                            items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
                                 val folder = folders[index]
                                 GlassPill(
                                     label = folder.name,
@@ -452,20 +448,18 @@ fun LibraryScreen(
                                     ) { index ->
                                         val item = pagedItems[index]
                                         if (item != null) {
-                                            ExpressiveGridItem(index = index) {
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = viewModel.getImageUrl(item.id),
-                                                    onClick = { onItemClick(item.id) },
-                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                        (item.playbackPositionTicks?.toFloat()
-                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                    } else 0f,
-                                                    blurHash = item.blurHashes.primary,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                )
-                                            }
+                                            PosterCard(
+                                                item = item,
+                                                imageUrl = viewModel.getImageUrl(item.id),
+                                                onClick = { onItemClick(item.id) },
+                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                    (item.playbackPositionTicks?.toFloat()
+                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                } else 0f,
+                                                blurHash = item.blurHashes.primary,
+                                                sharedElementKey = "poster_${item.id}",
+                                            )
                                         }
                                     }
                                 }
@@ -479,7 +473,12 @@ fun LibraryScreen(
                             visible = toolbarExpanded,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 16.dp),
+                                .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                                .offset {
+                                    val maxOffset = 88.dp.toPx()
+                                    val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                                    androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                                },
                             enter = fadeIn(
                                 spring(stiffness = Spring.StiffnessMedium)
                             ) + slideInVertically(
@@ -726,9 +725,7 @@ private fun GlassPill(
         if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
     }
 
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLight = LocalIsLightTheme.current
     val surfaceColor = when {
         selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
         else -> if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
@@ -798,9 +795,7 @@ private fun GlassDismissTag(
         if (shapeMorphProgress > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
     }
 
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLight = LocalIsLightTheme.current
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
     val textColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
     val iconTint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)

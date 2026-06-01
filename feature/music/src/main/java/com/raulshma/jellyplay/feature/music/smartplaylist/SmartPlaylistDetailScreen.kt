@@ -3,7 +3,11 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -39,6 +43,7 @@ fun SmartPlaylistDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     val playlist = viewModel.playlists.find { it.id == playlistId }
 
@@ -111,7 +116,12 @@ fun SmartPlaylistDetailScreen(
                     text = { Text("Play All") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(16.dp),
+                        .padding(end = 16.dp, bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                        },
                 )
             }
         }

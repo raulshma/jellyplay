@@ -22,6 +22,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -81,9 +84,8 @@ class DownloadRepositoryImpl @Inject constructor(
                 return@runCatching existing.toDownloadItem()
             }
             if (existing.downloadPath.isNotBlank()) {
-                val oldFile = File(existing.downloadPath)
-                if (oldFile.exists()) oldFile.delete()
-                oldFile.parentFile?.let { parent ->
+                File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
+                File(existing.downloadPath).parentFile?.let { parent ->
                     val oldTrickplayDir = File(parent, "trickplay")
                     if (oldTrickplayDir.exists()) oldTrickplayDir.deleteRecursively()
                 }
@@ -104,7 +106,7 @@ class DownloadRepositoryImpl @Inject constructor(
         val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
             ?: File(context.filesDir, "downloads")
         if (!dir.exists()) dir.mkdirs()
-        val safeName = name.replace(Regex("[^a-zA-Z0-9.\\-]"), "_")
+        val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
         val extension = if (mediaType == MediaType.AUDIO.name) "mp3" else "mp4"
         val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
 
@@ -134,16 +136,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        val file = File(entity.downloadPath)
-        if (file.exists()) file.delete()
-        file.parentFile?.let { parent ->
-            val trickplayDir = File(parent, "trickplay")
-            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
-        }
-        downloadDao.deleteDownloadById(id)
-        offlineMediaDao.deleteById(entity.mediaItemId)
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        cleanupDownloadFiles(entity)
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
@@ -162,16 +155,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        val file = File(entity.downloadPath)
-        if (file.exists()) file.delete()
-        file.parentFile?.let { parent ->
-            val trickplayDir = File(parent, "trickplay")
-            if (trickplayDir.exists()) trickplayDir.deleteRecursively()
-        }
-        downloadDao.deleteDownloadById(id)
-        offlineMediaDao.deleteById(entity.mediaItemId)
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        cleanupDownloadFiles(entity)
     }
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
@@ -260,48 +244,64 @@ class DownloadRepositoryImpl @Inject constructor(
                 }
                 val offlineEntities = mutableListOf<OfflineMediaEntity>()
 
-                for (episode in episodes) {
-                    try {
-                        val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
-                        val source = episodeDetail?.mediaSources?.firstOrNull()
-                        val streamUrl = if (source != null) {
-                            playbackRepository.getStreamUrl(episode.id, source.id)
-                        } else {
-                            playbackRepository.getStreamUrl(episode.id, episode.id)
-                        }
-
-                        if (streamUrl.isNotBlank()) {
-                            val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
-                            offlineEntities.add(episode.toOfflineMediaEntity(epImageUrl, null))
-
-                            val download = startDownload(
-                                mediaItemId = episode.id,
-                                name = episode.name,
-                                mediaType = MediaType.EPISODE.name,
-                                mediaSourceId = source?.id ?: episode.id,
-                                downloadUrl = streamUrl,
-                                imageUrl = epImageUrl,
-                                imageBlurHash = episode.blurHashes.primary,
-                                seriesId = seriesId,
-                                seasonId = season.id,
-                                seriesName = seriesItem.name,
-                                seasonName = season.name,
-                                episodeNumber = episode.episodeNumber,
-                                seasonNumber = episode.seasonNumber,
-                            ).getOrNull()
-
-                            if (download != null) {
-                                preloadImageToCache(epImageUrl)
-                                enqueueDownloadWorker(download.id)
-                                downloadIds.add(download.id)
-                                source?.trickplayInfo?.let { info ->
-                                    try {
-                                        downloadTrickplayData(episode.id, info, download.downloadPath)
-                                    } catch (_: Exception) { }
+                val episodeResults = coroutineScope {
+                    episodes.map { episode ->
+                        async {
+                            try {
+                                val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
+                                val source = episodeDetail?.mediaSources?.firstOrNull()
+                                val streamUrl = if (source != null) {
+                                    playbackRepository.getStreamUrl(episode.id, source.id)
+                                } else {
+                                    playbackRepository.getStreamUrl(episode.id, episode.id)
                                 }
+
+                                if (streamUrl.isNotBlank()) {
+                                    val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
+                                    val offlineEntity = episode.toOfflineMediaEntity(epImageUrl, null)
+
+                                    val download = startDownload(
+                                        mediaItemId = episode.id,
+                                        name = episode.name,
+                                        mediaType = MediaType.EPISODE.name,
+                                        mediaSourceId = source?.id ?: episode.id,
+                                        downloadUrl = streamUrl,
+                                        imageUrl = epImageUrl,
+                                        imageBlurHash = episode.blurHashes.primary,
+                                        seriesId = seriesId,
+                                        seasonId = season.id,
+                                        seriesName = seriesItem.name,
+                                        seasonName = season.name,
+                                        episodeNumber = episode.episodeNumber,
+                                        seasonNumber = episode.seasonNumber,
+                                    ).getOrNull()
+
+                                    if (download != null) {
+                                        preloadImageToCache(epImageUrl)
+                                        enqueueDownloadWorker(download.id)
+                                        source?.trickplayInfo?.let { info ->
+                                            try {
+                                                downloadTrickplayData(episode.id, info, download.downloadPath)
+                                            } catch (_: Exception) { }
+                                        }
+                                        Pair(offlineEntity, download.id)
+                                    } else {
+                                        Pair(offlineEntity, null)
+                                    }
+                                } else {
+                                    null
+                                }
+                            } catch (_: Exception) {
+                                null
                             }
                         }
-                    } catch (_: Exception) {
+                    }.awaitAll()
+                }
+
+                for (result in episodeResults) {
+                    if (result != null) {
+                        offlineEntities.add(result.first)
+                        result.second?.let { downloadIds.add(it) }
                     }
                 }
 
@@ -414,6 +414,21 @@ class DownloadRepositoryImpl @Inject constructor(
         genres = genres.joinToString(","),
     )
 
+    private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
+        if (entity.downloadPath.isNotBlank()) {
+            val file = File(entity.downloadPath)
+            if (file.exists()) file.delete()
+            file.parentFile?.let { parent ->
+                val trickplayDir = File(parent, "trickplay")
+                if (trickplayDir.exists()) trickplayDir.deleteRecursively()
+            }
+        }
+        downloadDao.deleteDownloadById(entity.id)
+        offlineMediaDao.deleteById(entity.mediaItemId)
+        offlineMediaDao.deleteOrphanedSeasons()
+        offlineMediaDao.deleteOrphanedSeries()
+    }
+
     private fun DownloadEntity.toDownloadItem() = DownloadItem(
         id = id,
         mediaItemId = mediaItemId,
@@ -435,4 +450,8 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
     )
+
+    companion object {
+        private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
+    }
 }

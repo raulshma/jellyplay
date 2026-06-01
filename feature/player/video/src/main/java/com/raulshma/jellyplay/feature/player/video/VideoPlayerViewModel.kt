@@ -183,7 +183,7 @@ class VideoPlayerViewModel @Inject constructor(
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
                         usesSubtitleOverlay = engine is MpvPlayerEngine,
-                        currentSubtitleText = null,
+                        currentSubtitleCues = emptyList(),
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
@@ -215,9 +215,9 @@ class VideoPlayerViewModel @Inject constructor(
                                 syncPlayBridge.onPlaybackStateChanged(stateInt)
                             } }
                             launch { engine.currentCues.collect { cues ->
-                                val subtitleText = cues.joinToString("\n").takeIf { it.isNotBlank() }
+                                val filteredCues = cues.filter { it.isNotBlank() }
                                 _uiState.update { s ->
-                                    if (s.currentSubtitleText == subtitleText) s else s.copy(currentSubtitleText = subtitleText)
+                                    if (s.currentSubtitleCues == filteredCues) s else s.copy(currentSubtitleCues = filteredCues)
                                 }
                             } }
                             launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
@@ -469,6 +469,10 @@ class VideoPlayerViewModel @Inject constructor(
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
         }
+        persistStreamSelectionFromPlayer(
+            audioTrackOption = option,
+            subtitleTrackOption = null,
+        )
     }
 
     fun selectSubtitleTrack(option: TrackOption) {
@@ -493,15 +497,57 @@ class VideoPlayerViewModel @Inject constructor(
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
         }
+        persistStreamSelectionFromPlayer(
+            audioTrackOption = null,
+            subtitleTrackOption = option,
+        )
     }
 
-    
+    private fun persistStreamSelectionFromPlayer(
+        audioTrackOption: TrackOption?,
+        subtitleTrackOption: TrackOption?,
+    ) {
+        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        val streams = _uiState.value.mediaStreams
+        val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+        val audioStreamIndex = if (audioTrackOption != null) {
+            if (audioTrackOption.index < 0) null
+            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption.label)
+        } else {
+            currentSelection?.audioStreamIndex
+        }
+        val subtitleStreamIndex = if (subtitleTrackOption != null) {
+            if (subtitleTrackOption.index < 0) null
+            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption.label)
+        } else {
+            currentSelection?.subtitleStreamIndex
+        }
+        viewModelScope.launch {
+            preferencesStore.setMediaStreamSelection(
+                itemId = itemId,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
+            )
+        }
+    }
+
+    private fun resolveMediaStreamIndex(
+        streams: List<MediaStream>,
+        type: StreamType,
+        trackLabel: String?,
+    ): Int? {
+        if (trackLabel == null) return null
+        val typedStreams = streams.filter { it.type == type }
+        return typedStreams.firstOrNull {
+            it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
+        }?.index ?: typedStreams.firstOrNull { it.index >= 0 }?.index
+    }
 
     fun getCurrentPrimarySubtitleText(): String? {
         val engine = playerSessionManager.engine ?: return null
         val cues = engine.currentCues.value
         if (cues.isEmpty()) return null
-        return cues.joinToString("\n").takeIf { it.isNotBlank() }
+        return cues.firstOrNull() ?: return null
     }
 
     fun setAspectRatio(ratio: AspectRatio) {
@@ -1160,6 +1206,24 @@ class VideoPlayerViewModel @Inject constructor(
                 audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
             } else null
             (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it) }
+        } else {
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            if (itemId != null) {
+                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val audioIdx = stored?.audioStreamIndex
+                val prefLang = preferencesStore.preferences.value.preferredAudioLanguage
+                if (audioIdx != null) {
+                    val targetStream = streams.firstOrNull {
+                        it.type == com.raulshma.jellyplay.core.model.StreamType.AUDIO && it.index == audioIdx
+                    }
+                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                    if (targetLabel != null) {
+                        audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it) }
+                    }
+                } else if (prefLang != null) {
+                    audioTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectAudioTrack(it) }
+                }
+            }
         }
 
         // Apply pending subtitle selection from detail screen
@@ -1173,6 +1237,24 @@ class VideoPlayerViewModel @Inject constructor(
                 val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
                 if (match != null) {
                     selectSubtitleTrack(match)
+                }
+            }
+        } else {
+            val itemId = playerSessionManager.sessionState.value.currentItemId
+            if (itemId != null) {
+                val stored = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+                val subIdx = stored?.subtitleStreamIndex
+                val prefLang = preferencesStore.preferences.value.preferredSubtitleLanguage
+                if (subIdx != null) {
+                    val targetStream = streams.firstOrNull {
+                        it.type == com.raulshma.jellyplay.core.model.StreamType.SUBTITLE && it.index == subIdx
+                    }
+                    val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+                    if (targetLabel != null) {
+                        subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it) }
+                    }
+                } else if (prefLang != null) {
+                    subtitleTracks.firstOrNull { it.index >= 0 && it.language.equals(prefLang, ignoreCase = true) }?.let { selectSubtitleTrack(it) }
                 }
             }
         }
@@ -1331,6 +1413,15 @@ class VideoPlayerViewModel @Inject constructor(
     fun release() {
         if (released) return
         released = true
+        performRelease()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        release()
+    }
+
+    private fun performRelease() {
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = playSessionId
         val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
@@ -1338,31 +1429,19 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            viewModelScope.launch(Dispatchers.IO) {
+            // Use a transient IO scope instead of runBlocking to avoid potential ANR
+            // if the network call blocks. The scope is intentionally short-lived;
+            // a GlobalScope approach is acceptable here since the app process is
+            // exiting and there is no ViewModel lifecycle to track against.
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+            ).launch {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(
                         itemId = itemId,
                         sessionId = sessionId,
                         positionTicks = positionTicks,
                     )
-                }
-            }
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        if (released) return
-        released = true
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        val sessionId = playSessionId
-        val positionTicks = playerSessionManager.engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
-        releaseInternals()
-        castManager.release()
-        if (itemId != null && positionTicks > 0) {
-            viewModelScope.launch(Dispatchers.IO) {
-                runCatching {
-                    playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
                 }
             }
         }

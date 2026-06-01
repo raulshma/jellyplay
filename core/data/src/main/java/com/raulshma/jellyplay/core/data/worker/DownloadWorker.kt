@@ -29,6 +29,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.SocketTimeoutException
@@ -85,6 +87,8 @@ class DownloadWorker(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+            .dispatcher(Dispatcher().apply { maxRequests = 10; maxRequestsPerHost = 10 })
             .build()
 
         val numConnections = prefs.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
@@ -648,6 +652,7 @@ class DownloadWorker(
     }
 
     private fun createNotificationChannel() {
+        if (channelCreated) return
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
@@ -660,6 +665,7 @@ class DownloadWorker(
             }
             manager.createNotificationChannel(channel)
         }
+        channelCreated = true
     }
 
     private data class ChunkInfo(
@@ -675,5 +681,8 @@ class DownloadWorker(
         private const val BUFFER_SIZE = 65536
         private const val MIN_MULTI_SIZE = 2L * 1024 * 1024
         private const val PROGRESS_UPDATE_INTERVAL_MS = 2000L
+
+        @Volatile
+        private var channelCreated = false
     }
 }

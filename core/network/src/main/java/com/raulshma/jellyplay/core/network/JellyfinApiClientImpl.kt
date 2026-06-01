@@ -68,7 +68,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.jellyfin.sdk.Jellyfin
-import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.ApiClient
@@ -98,7 +97,7 @@ class JellyfinApiClientImpl @Inject constructor(
     private suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
         runCatching { withContext(Dispatchers.IO) { block() } }
 
-    private companion object {
+    internal companion object {
         val sharedJson = Json { ignoreUnknownKeys = true }
         private val CACHED_CAPABILITIES by lazy {
             org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
@@ -418,7 +417,8 @@ class JellyfinApiClientImpl @Inject constructor(
                         HomeSectionType.RECENTLY_ADDED,
                         recentlyAddedItems,
                     )
-                    val insertIndex = sections.indexOfFirst { it.type == HomeSectionType.LATEST_MEDIA }.coerceAtLeast(0)
+                    val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
+                    val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
                     sections.add(insertIndex, recentlyAddedSection)
                 }
             }
@@ -895,10 +895,10 @@ class JellyfinApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun toggleFavorite(itemId: String): Result<Boolean> = apiResult {
+    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = apiResult {
         val uuid = itemId.toUUID()
-        val item = requireApi().userLibraryApi.getItem(itemId = uuid).content
-        if (item.userData?.isFavorite == true) {
+        val isFavorite = currentIsFavorite ?: requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+        if (isFavorite) {
             requireApi().userLibraryApi.unmarkFavoriteItem(
                 userId = _currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
@@ -1743,47 +1743,57 @@ class JellyfinApiClientImpl @Inject constructor(
             )
         } ?: emptyList()
 
-        val cultures = try {
-            val culturesUrl = "${server.address}/Localization/Cultures"
-            val culturesRequest = Request.Builder()
-                .url(culturesUrl)
-                .header("X-Emby-Token", user.accessToken)
-                .build()
-            okHttpClient.newCall(culturesRequest).execute().use { response ->
-                response.body?.string()?.let { body ->
-                    sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
-                        val obj = elem.jsonObject
-                        com.raulshma.jellyplay.core.model.CultureInfo(
-                            name = obj["Name"]?.jsonPrimitive?.content ?: "",
-                            displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
-                            twoLetterISOLanguageName = obj["TwoLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
-                            threeLetterISOLanguageName = obj["ThreeLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
-                        )
+        val result = coroutineScope {
+            val culturesDeferred = async {
+                try {
+                    val culturesUrl = "${server.address}/Localization/Cultures"
+                    val culturesRequest = Request.Builder()
+                        .url(culturesUrl)
+                        .header("X-Emby-Token", user.accessToken)
+                        .build()
+                    okHttpClient.newCall(culturesRequest).execute().use { response ->
+                        response.body?.string()?.let { body ->
+                            sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
+                                val obj = elem.jsonObject
+                                com.raulshma.jellyplay.core.model.CultureInfo(
+                                    name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                                    displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
+                                    twoLetterISOLanguageName = obj["TwoLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
+                                    threeLetterISOLanguageName = obj["ThreeLetterISOLanguageName"]?.jsonPrimitive?.contentOrNull,
+                                )
+                            }
+                        } ?: emptyList()
                     }
-                } ?: emptyList()
+                } catch (_: Exception) { emptyList() }
             }
-        } catch (_: Exception) { emptyList() }
 
-        val countries = try {
-            val countriesUrl = "${server.address}/Localization/Countries"
-            val countriesRequest = Request.Builder()
-                .url(countriesUrl)
-                .header("X-Emby-Token", user.accessToken)
-                .build()
-            okHttpClient.newCall(countriesRequest).execute().use { response ->
-                response.body?.string()?.let { body ->
-                    sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
-                        val obj = elem.jsonObject
-                        com.raulshma.jellyplay.core.model.CountryInfo(
-                            name = obj["Name"]?.jsonPrimitive?.content ?: "",
-                            displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
-                            twoLetterISORegionName = obj["TwoLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
-                            threeLetterISORegionName = obj["ThreeLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
-                        )
+            val countriesDeferred = async {
+                try {
+                    val countriesUrl = "${server.address}/Localization/Countries"
+                    val countriesRequest = Request.Builder()
+                        .url(countriesUrl)
+                        .header("X-Emby-Token", user.accessToken)
+                        .build()
+                    okHttpClient.newCall(countriesRequest).execute().use { response ->
+                        response.body?.string()?.let { body ->
+                            sharedJson.parseToJsonElement(body).jsonArray.map { elem ->
+                                val obj = elem.jsonObject
+                                com.raulshma.jellyplay.core.model.CountryInfo(
+                                    name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                                    displayName = obj["DisplayName"]?.jsonPrimitive?.content ?: "",
+                                    twoLetterISORegionName = obj["TwoLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
+                                    threeLetterISORegionName = obj["ThreeLetterISORegionName"]?.jsonPrimitive?.contentOrNull,
+                                )
+                            }
+                        } ?: emptyList()
                     }
-                } ?: emptyList()
+                } catch (_: Exception) { emptyList() }
             }
-        } catch (_: Exception) { emptyList() }
+
+            culturesDeferred.await() to countriesDeferred.await()
+        }
+
+        val (cultures, countries) = result
 
         com.raulshma.jellyplay.core.model.MetadataEditorInfo(
             parentalRatingOptions = parentalRatings,
@@ -2189,6 +2199,36 @@ class JellyfinApiClientImpl @Inject constructor(
         sessions.map { it.toSessionModel() }
     }
 
+    override suspend fun sendMessageToSession(
+        sessionId: String,
+        header: String,
+        text: String,
+        timeoutMs: Long,
+    ): Result<Unit> = apiResult {
+        val server = _currentServer.value ?: throw IllegalStateException("No server")
+        val user = _currentUser.value ?: throw IllegalStateException("No user")
+        val url = "${server.address}/Sessions/$sessionId/Command"
+        val body = buildJsonObject {
+            put("Name", JsonPrimitive("DisplayMessage"))
+            put("Arguments", buildJsonObject {
+                put("Header", JsonPrimitive(header))
+                put("Text", JsonPrimitive(text))
+                put("TimeoutMs", JsonPrimitive(timeoutMs.toString()))
+            })
+        }
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", user.accessToken)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Failed to send message: ${response.code}")
+            }
+        }
+    }
+
     private fun okHttp3MultipartBody(bytes: ByteArray): okhttp3.RequestBody =
         bytes.toRequestBody("image/*".toMediaType())
 
@@ -2293,7 +2333,9 @@ class JellyfinApiClientImpl @Inject constructor(
         type = type.serialName,
         mediaType = mediaType?.serialName,
         runTimeTicks = runTimeTicks,
-        primaryImageTag = imageTags?.entries?.firstOrNull()?.value,
+        primaryImageTag = imageTags?.entries?.firstOrNull { it.key == org.jellyfin.sdk.model.api.ImageType.PRIMARY }?.value ?: imageTags?.entries?.firstOrNull()?.value,
+        seriesName = seriesName,
+        backdropImageTag = backdropImageTags?.firstOrNull() ?: imageTags?.entries?.firstOrNull { it.key == org.jellyfin.sdk.model.api.ImageType.BACKDROP }?.value,
     )
 
     private fun org.jellyfin.sdk.model.api.PlayerStateInfo.toSessionPlayStateModel() = SessionPlayState(

@@ -52,6 +52,9 @@ class SyncPlayPlaybackCore @Inject constructor(
     private var enableSyncJob: Job? = null
 
     @Volatile
+    private var speedToSyncJob: Job? = null
+
+    @Volatile
     private var pendingItemLoad = false
 
     @Volatile
@@ -324,7 +327,8 @@ class SyncPlayPlaybackCore @Inject constructor(
             val speed = (1.0 + diffMs / speedToSyncTime).toFloat().coerceAtLeast(MIN_SPEED.toFloat())
             cb.setPlaybackRate(speed)
             cb.onSyncStateChanged(synced = false, syncing = true)
-            scope.launch {
+            speedToSyncJob?.cancel()
+            speedToSyncJob = scope.launch {
                 delay(speedToSyncTime.toLong())
                 if (syncEnabled) {
                     cb.setPlaybackRate(1.0f)
@@ -377,6 +381,7 @@ class SyncPlayPlaybackCore @Inject constructor(
     fun reset() {
         scheduledCommandJob?.cancel()
         enableSyncJob?.cancel()
+        speedToSyncJob?.cancel()
         stopSyncCorrection()
         lastCommand = null
         lastScheduledCommand = null

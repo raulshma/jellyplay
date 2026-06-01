@@ -60,22 +60,16 @@
 -keepclassmembers class is.xyz.mpv.** { *; }
 -dontwarn is.xyz.mpv.**
 
-# LibVLC - JNI library, must keep all classes and methods
--keep class org.videolan.libvlc.** { *; }
--keep class org.videolan.medialibrary.** { *; }
--keepclassmembers class org.videolan.libvlc.** { *; }
--keepclassmembers class org.videolan.medialibrary.** { *; }
--keep class org.videolan.** { *; }
+# LibVLC - Only the JNI bridge classes need full retention; R8 shrinks the rest.
+# VLC ships its own consumer ProGuard rules via the AAR, so we only need to
+# suppress warnings. The broad wildcard keep is intentionally removed to allow
+# R8 to eliminate unused VLC internals.
 -dontwarn org.videolan.**
 
-# Media3 / ExoPlayer
--keep class androidx.media3.session.** { *; }
--keep class androidx.media3.exoplayer.** { *; }
+# Media3 / ExoPlayer - consumer rules provided by library
 -dontwarn androidx.media3.**
 
-# Coil
--keep class coil3.SingletonImageLoader { *; }
--keep class coil3.ImageLoader { *; }
+# Coil - consumer rules provided by library
 -dontwarn coil3.**
 
 # Paging
@@ -111,3 +105,10 @@
 -dontwarn org.jellyfin.sdk.**
 -dontwarn org.slf4j.**
 -dontwarn io.github.oshai.kotlinlogging.**
+
+# ML Kit Text Recognition - keep only the public API, not all GMS internals.
+# The broad com.google.android.gms.internal.** rule prevented R8 from shrinking
+# Cast / ML Kit transitive dependencies. ML Kit ships its own consumer rules.
+-keep class com.google.mlkit.vision.text.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.**

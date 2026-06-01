@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,18 +22,14 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
         combine(
             offlineMediaDao.getTopLevelItems(),
-            downloadDao.getAllDownloads(),
+            downloadDao.getAllDownloads().conflate(),
         ) { entities, downloads ->
             val downloadMap = downloads.associateBy { it.mediaItemId }
             entities.map { entity ->
                 val download = downloadMap[entity.id]
                 entity.toOfflineMediaItem().copy(
                     downloadPath = download?.downloadPath,
-                    downloadStatus = try {
-                        download?.status?.let { DownloadStatus.valueOf(it) }
-                    } catch (_: Exception) {
-                        null
-                    },
+                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                     downloadedBytes = download?.downloadedBytes ?: 0L,
                     totalSizeBytes = download?.totalSizeBytes ?: 0L,
                 )
@@ -47,18 +44,14 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         combine(
             offlineMediaDao.getEpisodesForSeason(seasonId),
-            downloadDao.getAllDownloads(),
+            downloadDao.getAllDownloads().conflate(),
         ) { episodes, downloads ->
             val downloadMap = downloads.associateBy { it.mediaItemId }
             episodes.map { entity ->
                 val download = downloadMap[entity.id]
                 entity.toOfflineMediaItem().copy(
                     downloadPath = download?.downloadPath,
-                    downloadStatus = try {
-                        download?.status?.let { DownloadStatus.valueOf(it) }
-                    } catch (_: Exception) {
-                        null
-                    },
+                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                     downloadedBytes = download?.downloadedBytes ?: 0L,
                     totalSizeBytes = download?.totalSizeBytes ?: 0L,
                 )
@@ -98,8 +91,10 @@ class OfflineRepositoryImpl @Inject constructor(
                     if (trickplayDir.exists()) trickplayDir.deleteRecursively()
                 }
             }
-            downloadDao.deleteDownloadById(download.id)
         }
+        // Batch-delete all download records in a single SQL statement.
+        val ids = downloads.map { it.id }
+        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
         offlineMediaDao.deleteBySeriesId(seriesId)
         cleanupOrphans()
     }
@@ -115,21 +110,28 @@ class OfflineRepositoryImpl @Inject constructor(
                     if (trickplayDir.exists()) trickplayDir.deleteRecursively()
                 }
             }
-            downloadDao.deleteDownloadById(download.id)
         }
+        // Batch-delete all download records in a single SQL statement.
+        val ids = downloads.map { it.id }
+        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
         offlineMediaDao.deleteBySeasonId(seasonId)
         cleanupOrphans()
     }
 
     override suspend fun cleanupOrphans() {
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        offlineMediaDao.cleanupOrphans()
     }
+
+    private fun safeMediaTypeOf(name: String): MediaType =
+        MediaType.entries.find { it.name == name } ?: MediaType.UNKNOWN
+
+    private fun safeDownloadStatusOf(name: String): DownloadStatus? =
+        DownloadStatus.entries.find { it.name == name }
 
     private fun OfflineMediaEntity.toOfflineMediaItem() = OfflineMediaItem(
         id = id,
         name = name,
-        mediaType = try { MediaType.valueOf(mediaType) } catch (_: Exception) { MediaType.UNKNOWN },
+        mediaType = safeMediaTypeOf(mediaType),
         overview = overview,
         year = year,
         communityRating = communityRating,

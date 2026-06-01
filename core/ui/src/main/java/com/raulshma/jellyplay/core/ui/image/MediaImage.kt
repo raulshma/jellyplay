@@ -45,9 +45,10 @@ fun MediaImage(
             .build()
     }
 
-    val allUrls = remember(url, fallbackUrls) { listOf(url) + fallbackUrls }
-    var currentIndex by remember(url, fallbackUrls) { mutableIntStateOf(0) }
-    var isError by remember(url, fallbackUrls) { mutableStateOf(false) }
+    val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
+    val allUrls = remember(url, fallbackKey) { listOf(url) + fallbackUrls }
+    var currentIndex by remember(url, fallbackKey) { mutableIntStateOf(0) }
+    var isError by remember(url, fallbackKey) { mutableStateOf(false) }
 
     Box(modifier = modifier) {
         if (!blurHash.isNullOrEmpty()) {

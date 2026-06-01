@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.PlayedStatus
@@ -76,9 +77,7 @@ fun LibraryFilterSheet(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLight = LocalIsLightTheme.current
     val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
 
     ModalBottomSheet(
@@ -317,9 +316,7 @@ fun LibraryFilterSheet(
 
 @Composable
 private fun SectionLabel(text: String) {
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLight = LocalIsLightTheme.current
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
@@ -361,9 +358,7 @@ private fun GlassFilterChip(
         if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
     }
 
-    val isLight = MaterialTheme.colorScheme.background.let { bg ->
-        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
-    }
+    val isLight = LocalIsLightTheme.current
     val bgColor = when {
         selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
         else -> if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
