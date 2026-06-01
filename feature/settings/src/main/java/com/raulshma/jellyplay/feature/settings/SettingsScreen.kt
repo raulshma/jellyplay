@@ -1168,20 +1168,62 @@ fun SettingsScreen(
                             },
                         )
                     } else {
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Video,
-                            title = "Dynamic Theming",
-                            subtitle = "Colors extracted from artwork",
-                            checked = preferences.dynamicTheming,
-                            index = 0, count = 2,
-                            onCheckedChange = { viewModel.setDynamicTheming(it) },
+                        val baseCount = if (isDarkActive) 5 else 4
+                        SettingListItem(
+                            icon = Tabler.Outline.Moon,
+                            title = "Theme Mode",
+                            subtitle = when (preferences.themeMode) {
+                                ThemeMode.SYSTEM -> "Follow system setting"
+                                ThemeMode.LIGHT -> "Always light"
+                                ThemeMode.DARK -> "Always dark"
+                            },
+                            trailingText = preferences.themeMode.name,
+                            index = 0, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.themeMode) {
+                                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                                    ThemeMode.LIGHT -> ThemeMode.DARK
+                                    ThemeMode.DARK -> ThemeMode.SYSTEM
+                                }
+                                viewModel.setThemeMode(next)
+                            },
+                        )
+                        if (isDarkActive) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.BrightnessHalf,
+                                title = "OLED Mode",
+                                subtitle = "Pure black backgrounds for AMOLED displays",
+                                checked = preferences.oledMode,
+                                index = 1, count = baseCount,
+                                onCheckedChange = { viewModel.setOledMode(it) },
+                            )
+                        }
+                        val contrastIndex = if (isDarkActive) 2 else 1
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Contrast",
+                            subtitle = when (preferences.contrastLevel) {
+                                ContrastLevel.DEFAULT -> "Standard contrast"
+                                ContrastLevel.MEDIUM -> "Medium contrast"
+                                ContrastLevel.HIGH -> "High contrast"
+                            },
+                            trailingText = preferences.contrastLevel.name,
+                            index = contrastIndex, count = baseCount,
+                            onClick = {
+                                val next = when (preferences.contrastLevel) {
+                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
+                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
+                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
+                                }
+                                viewModel.setContrastLevel(next)
+                            },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Home,
                             title = "Home Mode",
                             subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
                             trailingText = preferences.homeMode.name,
-                            index = 1, count = 2,
+                            index = if (isDarkActive) 3 else 2, count = baseCount,
                             onClick = {
                                 val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
                                 viewModel.setHomeMode(next)
@@ -1193,8 +1235,8 @@ fun SettingsScreen(
                         title = "Show Navigation Labels",
                         subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
                         checked = preferences.navBarShowLabels,
-                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else 2, 
-                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else 3,
+                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3), 
+                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4),
                         onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                     )
                 }
