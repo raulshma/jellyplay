@@ -60,10 +60,9 @@
 -keepclassmembers class is.xyz.mpv.** { *; }
 -dontwarn is.xyz.mpv.**
 
-# LibVLC - Only the JNI bridge classes need full retention; R8 shrinks the rest.
-# VLC ships its own consumer ProGuard rules via the AAR, so we only need to
-# suppress warnings. The broad wildcard keep is intentionally removed to allow
-# R8 to eliminate unused VLC internals.
+# LibVLC - JNI library, must keep all classes and methods
+-keep class org.videolan.** { *; }
+-keepclassmembers class org.videolan.** { *; }
 -dontwarn org.videolan.**
 
 # Media3 / ExoPlayer - consumer rules provided by library
