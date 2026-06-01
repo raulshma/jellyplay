@@ -37,7 +37,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 
