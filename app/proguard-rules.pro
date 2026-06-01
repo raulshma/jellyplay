@@ -105,9 +105,7 @@
 -dontwarn org.slf4j.**
 -dontwarn io.github.oshai.kotlinlogging.**
 
-# ML Kit Text Recognition - keep only the public API, not all GMS internals.
-# The broad com.google.android.gms.internal.** rule prevented R8 from shrinking
-# Cast / ML Kit transitive dependencies. ML Kit ships its own consumer rules.
--keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.** { *; }
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.internal.**
