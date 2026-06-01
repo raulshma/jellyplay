@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import android.app.AlertDialog
-import android.content.Context
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -15,136 +14,85 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.mediarouter.media.MediaRouter
-import com.google.android.gms.cast.framework.CastContext
-import com.google.android.gms.cast.framework.CastSession
-import com.google.android.gms.cast.framework.SessionManagerListener
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-/**
- * A pure Compose cast button that avoids all [androidx.mediarouter.app] UI components
- * (MediaRouteButton, MediaRouteChooserDialog, etc.) which crash when the Activity theme
- * lacks an opaque `android:windowBackground`.
- *
- * Instead, tapping the button shows a simple [AlertDialog] listing available cast routes,
- * built with the platform [AlertDialog] which has no theme dependency on the Activity.
- */
 @Composable
-internal fun CastButton() {
+internal fun CastButton(
+    castManager: CastManager,
+) {
     val context = LocalContext.current
-    var isConnected by remember { mutableStateOf(false) }
+    val isConnected by castManager.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val discoveredDevices by castManager.discoveredDevices.collectAsStateWithLifecycle(initialValue = emptyList())
     var showDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
-        val listener = object : SessionManagerListener<CastSession> {
-            override fun onSessionStarted(session: CastSession, sessionId: String) {
-                isConnected = true
-            }
-            override fun onSessionEnded(session: CastSession, error: Int) {
-                isConnected = false
-            }
-            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-                isConnected = true
-            }
-            override fun onSessionSuspended(session: CastSession, reason: Int) {
-                isConnected = false
-            }
-            override fun onSessionStarting(session: CastSession) {}
-            override fun onSessionEnding(session: CastSession) {}
-            override fun onSessionResumeFailed(session: CastSession, error: Int) {}
-            override fun onSessionStartFailed(session: CastSession, error: Int) {}
-            override fun onSessionResuming(session: CastSession, sessionId: String) {}
-        }
-
-        try {
-            val castContext = CastContext.getSharedInstance(context)
-            castContext.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
-            isConnected = castContext.sessionManager.currentCastSession?.isConnected == true
-        } catch (_: Exception) {
-            // Cast SDK unavailable on this device
-        }
-
+        castManager.startDiscovery(context)
         onDispose {
-            try {
-                CastContext.getSharedInstance(context)
-                    .sessionManager
-                    .removeSessionManagerListener(listener, CastSession::class.java)
-            } catch (_: Exception) { }
+            castManager.stopDiscovery()
         }
     }
 
     if (showDialog) {
-        DisposableEffect(Unit) {
-            val dialog = buildRouteListDialog(context) { showDialog = false }
-            dialog?.show()
-            onDispose { dialog?.dismiss() }
-        }
+        CastDeviceDialog(
+            devices = discoveredDevices,
+            onSelect = { device ->
+                castManager.connect(context, device)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false },
+        )
     }
 
     IconButton(
         onClick = {
-            try {
-                val sessionManager = CastContext.getSharedInstance(context).sessionManager
-                val session = sessionManager.currentCastSession
-                if (session != null && session.isConnected) {
-                    sessionManager.endCurrentSession(true)
-                } else {
-                    showDialog = true
-                }
-            } catch (_: Exception) { }
+            if (isConnected) {
+                castManager.disconnect(context)
+            } else {
+                showDialog = true
+            }
         },
         modifier = Modifier.size(40.dp),
     ) {
         Icon(
-            imageVector = if (isConnected) Tabler.Outline.Cast else Tabler.Outline.Cast,
+            imageVector = Tabler.Outline.Cast,
             contentDescription = if (isConnected) "Cast connected" else "Cast",
-            tint = Color.White,
+            tint = if (isConnected) Color(0xFF4285F4) else Color.White,
         )
     }
 }
 
-/**
- * Builds a platform [AlertDialog] listing discovered cast routes.
- * Uses [MediaRouter] directly — no [androidx.mediarouter.app] theme-dependent components.
- */
-private fun buildRouteListDialog(
-    context: Context,
+@Composable
+private fun CastDeviceDialog(
+    devices: List<com.raulshma.jellyplay.core.data.cast.CastDevice>,
+    onSelect: (com.raulshma.jellyplay.core.data.cast.CastDevice) -> Unit,
     onDismiss: () -> Unit,
-): AlertDialog? {
-    val router: MediaRouter
-    try {
-        val castContext = CastContext.getSharedInstance(context)
-        router = MediaRouter.getInstance(context)
-    } catch (_: Exception) {
-        return null
-    }
+) {
+    val context = LocalContext.current
 
-    val routes = router.routes.filter { route ->
-        route.isEnabled && route.playbackType == MediaRouter.RouteInfo.PLAYBACK_TYPE_REMOTE
-    }
-
-    if (routes.isEmpty()) {
-        return AlertDialog.Builder(context)
-            .setTitle("Cast")
-            .setMessage("No cast devices found. Make sure your device is on the same network.")
-            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); onDismiss() }
-            .setOnDismissListener { onDismiss() }
-            .create()
-    }
-
-    val routeNames = routes.map { it.name }.toTypedArray()
-    return AlertDialog.Builder(context)
-        .setTitle("Cast to device")
-        .setItems(routeNames) { dialog, which ->
-            val route = routes[which]
-            router.selectRoute(route)
-            dialog.dismiss()
-            onDismiss()
+    DisposableEffect(devices) {
+        val dialog = if (devices.isEmpty()) {
+            AlertDialog.Builder(context)
+                .setTitle("Cast")
+                .setMessage("No cast devices found. Make sure your device is on the same network.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); onDismiss() }
+                .setOnDismissListener { onDismiss() }
+                .create()
+        } else {
+            val deviceNames = devices.map { it.name }.toTypedArray()
+            AlertDialog.Builder(context)
+                .setTitle("Cast to device")
+                .setItems(deviceNames) { dialog, which ->
+                    onSelect(devices[which])
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss(); onDismiss() }
+                .setOnDismissListener { onDismiss() }
+                .create()
         }
-        .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss(); onDismiss() }
-        .setOnDismissListener { onDismiss() }
-        .create()
+        dialog.show()
+        onDispose { dialog.dismiss() }
+    }
 }
-
-

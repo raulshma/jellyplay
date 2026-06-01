@@ -862,6 +862,7 @@ fun VideoPlayerScreen(
             },
             onControlsFocusChange = { controlsHasFocus = it },
             onOverflowMenuChange = { isOverflowMenuOpen = it },
+            castManager = viewModel.castManagerField,
             modifier = Modifier.fillMaxSize(),
         )
 

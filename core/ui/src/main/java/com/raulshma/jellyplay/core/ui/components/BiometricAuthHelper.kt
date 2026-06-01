@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import android.content.ContextWrapper
 
 private const val TAG = "BiometricAuthHelper"
 
@@ -104,4 +105,10 @@ fun rememberBiometricAvailability(): BiometricAuthHelper.Availability {
         availability.value = BiometricAuthHelper.checkAvailability(context)
     }
     return availability.value
+}
+
+tailrec fun Context.findFragmentActivity(): FragmentActivity? {
+    if (this is FragmentActivity) return this
+    if (this is ContextWrapper) return baseContext.findFragmentActivity()
+    return null
 }
