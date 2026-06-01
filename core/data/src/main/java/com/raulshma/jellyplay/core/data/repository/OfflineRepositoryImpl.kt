@@ -91,8 +91,10 @@ class OfflineRepositoryImpl @Inject constructor(
                     if (trickplayDir.exists()) trickplayDir.deleteRecursively()
                 }
             }
-            downloadDao.deleteDownloadById(download.id)
         }
+        // Batch-delete all download records in a single SQL statement.
+        val ids = downloads.map { it.id }
+        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
         offlineMediaDao.deleteBySeriesId(seriesId)
         cleanupOrphans()
     }
@@ -108,8 +110,10 @@ class OfflineRepositoryImpl @Inject constructor(
                     if (trickplayDir.exists()) trickplayDir.deleteRecursively()
                 }
             }
-            downloadDao.deleteDownloadById(download.id)
         }
+        // Batch-delete all download records in a single SQL statement.
+        val ids = downloads.map { it.id }
+        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
         offlineMediaDao.deleteBySeasonId(seasonId)
         cleanupOrphans()
     }

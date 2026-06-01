@@ -1429,7 +1429,13 @@ class VideoPlayerViewModel @Inject constructor(
         releaseInternals()
         castManager.release()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            // Use a transient IO scope instead of runBlocking to avoid potential ANR
+            // if the network call blocks. The scope is intentionally short-lived;
+            // a GlobalScope approach is acceptable here since the app process is
+            // exiting and there is no ViewModel lifecycle to track against.
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+            ).launch {
                 runCatching {
                     playbackRepository.reportPlaybackStopped(
                         itemId = itemId,

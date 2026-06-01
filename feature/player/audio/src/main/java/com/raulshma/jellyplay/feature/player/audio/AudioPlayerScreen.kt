@@ -791,7 +791,7 @@ private fun EqualizerSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 val presets = com.raulshma.jellyplay.core.model.EqualizerPreset.entries.filter { it != com.raulshma.jellyplay.core.model.EqualizerPreset.CUSTOM }
-                items(presets.size) { index ->
+                items(presets.size, key = { presets[it].name }) { index ->
                     val preset = presets[index]
                     androidx.compose.material3.FilterChip(
                         selected = currentPreset == preset,
@@ -1331,7 +1331,7 @@ private fun AudioEffectsSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     val reverbPresets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
-                    items(reverbPresets.size) { index ->
+                    items(reverbPresets.size, key = { reverbPresets[it].name }) { index ->
                         val preset = reverbPresets[index]
                         androidx.compose.material3.FilterChip(
                             selected = viewModel.reverbPreset == preset,

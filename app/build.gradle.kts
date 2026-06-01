@@ -135,9 +135,9 @@ dependencies {
     implementation(libs.compose.material3.adaptive.layout)
     implementation(libs.compose.material3.adaptive.navigation)
     implementation(libs.compose.material3.adaptive.navigation.suite)
-    implementation("androidx.compose.animation:animation-android")
+    implementation(libs.compose.animation)
 
-    // Android TV
+    // Android TV - shared dependency so src/main can compile. R8 will strip it for phone release builds.
     implementation(libs.tv.material)
 
     implementation(libs.navigation3.runtime)

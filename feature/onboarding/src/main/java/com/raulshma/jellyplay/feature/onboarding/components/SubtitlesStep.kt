@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.onboarding.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -126,6 +127,7 @@ fun SubtitlesStep(
                                 if (selected) Modifier.background(borderColor, ShapeCache.smooth8)
                                 else Modifier
                             )
+                            .clickable { onSubtitleStyleChange(subtitleStyle.copy(fontColor = color)) }
                             .padding(3.dp),
                     )
                 }

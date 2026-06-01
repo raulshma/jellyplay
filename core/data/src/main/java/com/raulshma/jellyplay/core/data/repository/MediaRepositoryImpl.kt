@@ -43,6 +43,17 @@ class MediaRepositoryImpl @Inject constructor(
     private val lyricsCacheDao: LyricsCacheDao,
 ) : MediaRepository {
 
+    // Short-lived in-process cache for MediaDetail. Prevents redundant network calls
+    // when the same item is opened from multiple screens (detail + player) in quick
+    // succession. TTL is intentionally short (2 min) so server-side changes are
+    // reflected promptly.
+    private data class CachedDetail(val detail: MediaDetail, val fetchedAt: Long)
+    private val detailCache: MutableMap<String, CachedDetail> =
+        object : LinkedHashMap<String, CachedDetail>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedDetail>?): Boolean =
+                size > DETAIL_CACHE_MAX_ENTRIES
+        }
+
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
         hiddenLibraryIds: Set<String>,
@@ -72,8 +83,17 @@ class MediaRepositoryImpl @Inject constructor(
         limit = limit,
     )
 
-    override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> =
-        apiClient.getMediaDetail(itemId)
+    override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
+        val cached = detailCache[itemId]
+        if (cached != null && System.currentTimeMillis() - cached.fetchedAt < DETAIL_CACHE_TTL_MS) {
+            return Result.success(cached.detail)
+        }
+        return apiClient.getMediaDetail(itemId).also { result ->
+            result.getOrNull()?.let { detail ->
+                detailCache[itemId] = CachedDetail(detail, System.currentTimeMillis())
+            }
+        }
+    }
 
     override suspend fun search(
         query: String,
@@ -439,6 +459,9 @@ class MediaRepositoryImpl @Inject constructor(
     companion object {
         private const val PAGE_SIZE = 50
         private const val PREFETCH_DISTANCE = 20
+        private const val DETAIL_CACHE_MAX_ENTRIES = 30
+        /** 2 minutes — short enough that server changes are reflected quickly. */
+        private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
         private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
 
         private fun parseLrc(lrcContent: String): List<LyricsLine> {

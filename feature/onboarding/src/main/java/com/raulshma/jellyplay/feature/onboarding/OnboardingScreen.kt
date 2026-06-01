@@ -43,6 +43,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -89,7 +94,30 @@ fun OnboardingScreen(
             ) {
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                            when (keyEvent.key) {
+                                Key.DirectionRight -> {
+                                    if (pagerState.currentPage < OnboardingStep.count - 1) {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                        }
+                                        true
+                                    } else false
+                                }
+                                Key.DirectionLeft -> {
+                                    if (pagerState.currentPage > 0) {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                        }
+                                        true
+                                    } else false
+                                }
+                                else -> false
+                            }
+                        },
                     beyondViewportPageCount = 1,
                 ) { page ->
                     when (OnboardingStep.entries[page]) {

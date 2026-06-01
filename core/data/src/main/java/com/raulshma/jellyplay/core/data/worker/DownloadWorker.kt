@@ -29,6 +29,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.SocketTimeoutException
@@ -85,6 +87,8 @@ class DownloadWorker(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+            .dispatcher(Dispatcher().apply { maxRequests = 10; maxRequestsPerHost = 10 })
             .build()
 
         val numConnections = prefs.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
