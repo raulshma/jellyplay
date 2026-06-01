@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -228,7 +229,8 @@ class PlayerSessionManager(
                 audioNormalizationEnabled = prefs.audioNormalizationEnabled,
                 channelMixMode = prefs.channelMixMode,
                 channelMixEnabled = prefs.channelMixEnabled,
-            )
+            ),
+            engineSpecific = resolveEngineConfig(playerType, prefs),
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
@@ -286,6 +288,16 @@ class PlayerSessionManager(
         eng.load(request)
     }
 
+    private fun resolveEngineConfig(
+        playerType: PlayerType,
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+    ): EngineSpecificConfig? = when (playerType) {
+        PlayerType.MPV -> prefs.mpvConfig
+        PlayerType.LIBVLC -> prefs.libVlcConfig
+        PlayerType.EXO_PLAYER -> prefs.exoPlayerConfig
+        PlayerType.EXTERNAL -> null
+    }
+
     suspend fun reloadWithEngine(
         playerType: PlayerType,
         currentPositionMs: Long,
@@ -323,7 +335,8 @@ class PlayerSessionManager(
                 audioNormalizationEnabled = prefs.audioNormalizationEnabled,
                 channelMixMode = prefs.channelMixMode,
                 channelMixEnabled = prefs.channelMixEnabled,
-            )
+            ),
+            engineSpecific = resolveEngineConfig(playerType, prefs),
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(playbackSpeed)

@@ -63,7 +63,7 @@ internal fun TrackPickerSheet(
             )
             Spacer(Modifier.height(12.dp))
             LazyColumn {
-                itemsIndexed(tracks, key = { _, track -> track.label }, contentType = { _, _ -> "track" }) { index, track ->
+                itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
                     val isLast = index == tracks.lastIndex
                     val shape = when {
                         tracks.size == 1 -> ShapeCache.smooth16
