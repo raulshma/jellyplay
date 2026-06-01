@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,7 @@ data class EngineConfig(
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val audioEffects: AudioEffectsConfig = AudioEffectsConfig(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
+    val engineSpecific: EngineSpecificConfig? = null,
 )
 
 data class AudioEffectsConfig(

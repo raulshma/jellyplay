@@ -27,6 +27,9 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -141,6 +144,9 @@ class UserPreferencesStore @Inject constructor(
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
         val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
         val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
+        val MPV_CONFIG = stringPreferencesKey("mpv_config")
+        val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
+        val EXO_CONFIG = stringPreferencesKey("exo_config")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -364,6 +370,15 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { emptySet() },
             navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]?.toBoolean() ?: false,
+            mpvConfig = try {
+                prefs[Keys.MPV_CONFIG]?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
+            } catch (_: Exception) { MpvEngineConfig() },
+            libVlcConfig = try {
+                prefs[Keys.LIBVLC_CONFIG]?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
+            } catch (_: Exception) { LibVlcEngineConfig() },
+            exoPlayerConfig = try {
+                prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
+            } catch (_: Exception) { ExoPlayerEngineConfig() },
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -737,6 +752,18 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed.toString() }
+    }
+
+    suspend fun setMpvConfig(config: MpvEngineConfig) {
+        context.dataStore.edit { it[Keys.MPV_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setLibVlcConfig(config: LibVlcEngineConfig) {
+        context.dataStore.edit { it[Keys.LIBVLC_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
+        context.dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
