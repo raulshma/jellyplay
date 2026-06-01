@@ -62,6 +62,9 @@ class JellyPlayPlaybackService : MediaSessionService(), PlaybackSessionManager.L
             sessionManager.clearSession(session)
             try { session.release() } catch (_: Exception) { }
         }
+        // Release ExoPlayer, audio effects, and the audio MediaSession held by
+        // AudioPlaybackManager so they don't linger after the service is destroyed.
+        audioPlaybackManager.stopAndRelease()
         super.onDestroy()
     }
 }

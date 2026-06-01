@@ -43,7 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,7 +73,7 @@ private val IMAGE_TYPES = listOf("Primary", "Art", "Backdrop", "Banner", "Box", 
 fun ImagesTab(
     viewModel: EditorViewModel,
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showUploadSheet by remember { mutableStateOf(false) }
     var showBrowseSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<ImageInfo?>(null) }
@@ -203,6 +203,7 @@ private fun ImageCard(
     onDelete: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeCache.smooth16,
@@ -211,10 +212,12 @@ private fun ImageCard(
     ) {
         Box {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .size(512, 512)
-                    .build(),
+                model = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(512, 512)
+                        .build()
+                },
                 contentDescription = imageInfo.imageType,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -270,6 +273,7 @@ private fun ImageUploadSheet(
     onUploadFile: (ByteArray, String) -> Unit,
     onUploadUrl: (String, String) -> Unit,
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableStateOf(0) }
     var imageUrl by remember { mutableStateOf("") }
@@ -306,10 +310,12 @@ private fun ImageUploadSheet(
             if (selectedTab == 0) {
                 selectedUri?.let { uri ->
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(uri)
-                            .size(512, 512)
-                            .build(),
+                        model = remember(uri) {
+                            ImageRequest.Builder(context)
+                                .data(uri)
+                                .size(512, 512)
+                                .build()
+                        },
                         contentDescription = "Preview",
                         modifier = Modifier
                             .fillMaxWidth()
@@ -343,10 +349,12 @@ private fun ImageUploadSheet(
                 )
                 if (imageUrl.isNotBlank()) {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(imageUrl)
-                            .size(512, 512)
-                            .build(),
+                        model = remember(imageUrl) {
+                            ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                .size(512, 512)
+                                .build()
+                        },
                         contentDescription = "Preview",
                         modifier = Modifier
                             .fillMaxWidth()
@@ -514,6 +522,7 @@ private fun RemoteImageCard(
     remoteImage: RemoteImageInfo,
     onDownload: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeCache.smooth12,
@@ -521,10 +530,12 @@ private fun RemoteImageCard(
     ) {
         Box {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(remoteImage.thumbnailUrl.ifBlank { remoteImage.url })
-                    .size(512, 512)
-                    .build(),
+                model = remember(remoteImage.thumbnailUrl, remoteImage.url) {
+                    ImageRequest.Builder(context)
+                        .data(remoteImage.thumbnailUrl.ifBlank { remoteImage.url })
+                        .size(512, 512)
+                        .build()
+                },
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()

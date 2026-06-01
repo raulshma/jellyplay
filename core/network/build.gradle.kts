@@ -20,6 +20,7 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:datastore"))
 
     implementation(libs.jellyfin.core)
     implementation(libs.hilt.android)

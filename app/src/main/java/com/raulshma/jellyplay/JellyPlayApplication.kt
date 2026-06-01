@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -30,6 +31,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var downloadDao: DownloadDao
+    @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -76,6 +78,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
     }
 
     private val imageLoader by lazy {
+        val cacheMb = kotlinx.coroutines.runBlocking {
+            userPreferencesStore.preferences.first().maxCacheSizeMb
+        }
+        val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
+        
         ImageLoader.Builder(this)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
@@ -88,7 +95,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache").absolutePath.toPath())
-                    .maxSizeBytes(256L * 1024 * 1024)
+                    .maxSizeBytes(cacheSize)
                     .build()
             }
             .crossfade(true)

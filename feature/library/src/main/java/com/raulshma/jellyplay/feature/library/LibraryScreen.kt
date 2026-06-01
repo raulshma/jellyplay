@@ -259,7 +259,7 @@ fun LibraryScreen(
                                     onClick = { viewModel.selectFolder(null) },
                                 )
                             }
-                            items(folders.size, contentType = { "folder" }) { index ->
+                            items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
                                 val folder = folders[index]
                                 GlassPill(
                                     label = folder.name,

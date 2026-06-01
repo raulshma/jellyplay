@@ -82,7 +82,7 @@ fun LibraryStatsRow(
             contentPadding = PaddingValues(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(stats) { stat ->
+            items(stats, key = { it.label }) { stat ->
                 StatCard(stat)
             }
         }

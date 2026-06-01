@@ -18,6 +18,7 @@ paging = "3.5.0"
 pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
+kotlinxCoroutines = "1.11.0"
 palette = "1.0.0"
 coreKtx = "1.18.0"
 activityCompose = "1.13.0"
@@ -54,6 +55,7 @@ compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-animation = { group = "androidx.compose.animation", name = "animation-android" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 compose-ui-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
@@ -116,6 +118,7 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

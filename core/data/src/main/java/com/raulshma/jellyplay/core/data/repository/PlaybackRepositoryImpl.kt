@@ -19,7 +19,14 @@ class PlaybackRepositoryImpl @Inject constructor(
 ) : PlaybackRepository {
 
     private data class CachedSegments(val segments: List<MediaSegment>, val timestamp: Long)
-    private val segmentsCache = mutableMapOf<String, CachedSegments>()
+    // LRU cache capped at 50 entries — prevents unbounded growth when many distinct
+    // items are played in a single session. LinkedHashMap with accessOrder=true evicts
+    // the least-recently-accessed entry when the limit is exceeded.
+    private val segmentsCache: MutableMap<String, CachedSegments> =
+        object : LinkedHashMap<String, CachedSegments>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSegments>?): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
         apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
@@ -128,4 +135,9 @@ class PlaybackRepositoryImpl @Inject constructor(
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
         apiClient.getTrickplayTileImage(itemId, width, index)
+
+    companion object {
+        /** Maximum number of distinct items whose segment data is kept in memory. */
+        private const val MAX_CACHE_ENTRIES = 50
+    }
 }

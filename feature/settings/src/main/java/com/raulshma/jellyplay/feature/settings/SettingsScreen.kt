@@ -1986,7 +1986,7 @@ fun SettingsScreen(
                 LazyColumn(
                     modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f),
                 ) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { "band" }) { i ->
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, key = { it }, contentType = { "band" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
