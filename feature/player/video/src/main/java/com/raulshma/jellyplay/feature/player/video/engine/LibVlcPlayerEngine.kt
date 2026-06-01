@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.RendererItem
 import org.videolan.libvlc.util.VLCVideoLayout
 
 class LibVlcPlayerEngine(
@@ -88,6 +89,7 @@ class LibVlcPlayerEngine(
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
     private var libVLC: LibVLC? = null
+    val libVlc: LibVLC? get() = libVLC
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
     private var currentPlaybackRequest: PlaybackRequest? = null
@@ -619,6 +621,17 @@ class LibVlcPlayerEngine(
     }
 
     override fun captureViewBitmap(): Bitmap? = null
+
+    val vlcMediaPlayer: MediaPlayer? get() = mediaPlayer
+
+    override fun setRenderer(renderer: Any?) {
+        try {
+            val item = renderer as? RendererItem
+            mediaPlayer?.setRenderer(item)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set renderer", e)
+        }
+    }
 
     override val currentPositionMs: Long
         get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }

@@ -113,6 +113,7 @@ import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import androidx.fragment.app.FragmentActivity
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
+import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1660,7 +1661,7 @@ fun SettingsScreen(
                     )
                     if (canShowBiometric) {
                         val bioContext = LocalContext.current
-                        val bioActivity = remember(bioContext) { bioContext as? FragmentActivity }
+                        val bioActivity = remember(bioContext) { bioContext.findFragmentActivity() }
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
                             title = "Biometric Unlock",

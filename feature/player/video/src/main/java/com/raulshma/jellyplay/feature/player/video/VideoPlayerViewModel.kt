@@ -43,11 +43,13 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 
+import com.raulshma.jellyplay.feature.player.video.cast.LibVlcCastStrategy
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -110,6 +112,16 @@ class VideoPlayerViewModel @Inject constructor(
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
     private val trickplayManager = TrickplayManager(playbackRepository)
     private var videoMediaSession: MediaSession? = null
+
+    val castManagerField: CastManager = castManager
+
+    private val libVlcCastStrategy = LibVlcCastStrategy(
+        libVlcProvider = {
+            (playerSessionManager.engine as? LibVlcPlayerEngine)?.libVlc
+        }
+    ).also {
+        castManager.registerStrategy(CastManager.STRATEGY_LIBVLC, it)
+    }
 
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
@@ -197,6 +209,7 @@ class VideoPlayerViewModel @Inject constructor(
                         channelMixMode = prefs.channelMixMode,
                         channelMixEnabled = prefs.channelMixEnabled,
                     )}
+                    updateCastStrategyForEngine(engine)
                     engineCollectionJob = viewModelScope.launch {
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
@@ -1049,26 +1062,48 @@ class VideoPlayerViewModel @Inject constructor(
         get() = syncPlayBridge.isInSession
 
     fun castToDevice() {
-        val state = _uiState.value
         val engine = playerSessionManager.engine ?: return
-        val currentItemId = playerSessionManager.sessionState.value.currentItemId
 
-        val url = state.streamUrl ?: return
-        val artworkUri = currentItemId?.let {
-            try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
+        if (engine is LibVlcPlayerEngine) {
+            val renderer = libVlcCastStrategy.currentRenderer ?: return
+            engine.setRenderer(renderer)
+            return
         }
+
+        val sessionState = playerSessionManager.sessionState.value
+        val currentItemId = sessionState.currentItemId ?: return
+
+        val positionMs = engine.currentPositionMs
+        val startTimeTicks = positionMs * 10_000
+        val sourceId = sessionState.currentMediaSource?.id ?: ""
+        val url = playbackRepository.getStreamUrl(currentItemId, sourceId, startTimeTicks)
+        if (url.isBlank()) return
+
+        val state = _uiState.value
+        val artworkUri = try {
+            Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
+        } catch (_: Exception) { null }
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(state.title)
-                    .setSubtitle(state.subtitle)
+                    .setTitle(sessionState.title)
+                    .setSubtitle(sessionState.subtitle)
                     .setArtworkUri(artworkUri)
                     .build()
             )
             .build()
-        val positionMs = engine.currentPositionMs
         castManager.loadMedia(mediaItem, positionMs, object : androidx.media3.common.Player.Listener {})
+    }
+
+    private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
+        if (engine is LibVlcPlayerEngine) {
+            castManager.setActiveStrategy(CastManager.STRATEGY_LIBVLC)
+            libVlcCastStrategy.setMediaPlayer(engine.vlcMediaPlayer)
+        } else {
+            castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
+            libVlcCastStrategy.setMediaPlayer(null)
+        }
     }
 
     fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
