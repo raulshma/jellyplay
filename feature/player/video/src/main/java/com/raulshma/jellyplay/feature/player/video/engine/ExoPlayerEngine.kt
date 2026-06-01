@@ -40,6 +40,10 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
+import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import kotlinx.coroutines.channels.awaitClose
@@ -161,6 +165,8 @@ class ExoPlayerEngine(
         release()
         engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+        val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+
         val selector = DefaultTrackSelector(context)
         if (request.preferredAudioLanguage != null) {
             selector.setParameters(
@@ -177,6 +183,11 @@ class ExoPlayerEngine(
                 selector.buildUponParameters().setMaxVideoBitrate(request.maxVideoBitrate)
             )
         }
+        if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
+            selector.setParameters(
+                selector.buildUponParameters().setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
+            )
+        }
         trackSelector = selector
 
         val rendererMode = when (currentConfig.decoderMode) {
@@ -186,11 +197,12 @@ class ExoPlayerEngine(
         }
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(rendererMode)
-            .setEnableDecoderFallback(true)
+            .setEnableDecoderFallback(exoCfg.enableDecoderFallback)
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
             .setTargetBufferBytes(-1)
+            .setBackBuffer(exoCfg.backBufferDurationMs.coerceAtLeast(0), false)
             .build()
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
@@ -218,6 +230,9 @@ class ExoPlayerEngine(
             .setAudioAttributes(audioAttrs, true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setBandwidthMeter(bandwidthMeter)
+            .setVideoScalingMode(exoCfg.videoScalingMode.value)
+            .setVideoChangeFrameRateStrategy(exoCfg.frameRateStrategy.value)
+            .setSkipSilenceEnabled(exoCfg.skipSilence)
             .build()
 
         exo.addListener(listener)
