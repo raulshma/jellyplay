@@ -183,7 +183,7 @@ class VideoPlayerViewModel @Inject constructor(
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
                         usesSubtitleOverlay = engine is MpvPlayerEngine,
-                        currentSubtitleText = null,
+                        currentSubtitleCues = emptyList(),
                         audioDelayMs = prefs.audioDelayMs,
                         decoderMode = prefs.decoderMode,
                         audioPassthrough = prefs.audioPassthrough,
@@ -215,9 +215,9 @@ class VideoPlayerViewModel @Inject constructor(
                                 syncPlayBridge.onPlaybackStateChanged(stateInt)
                             } }
                             launch { engine.currentCues.collect { cues ->
-                                val subtitleText = cues.joinToString("\n").takeIf { it.isNotBlank() }
+                                val filteredCues = cues.filter { it.isNotBlank() }
                                 _uiState.update { s ->
-                                    if (s.currentSubtitleText == subtitleText) s else s.copy(currentSubtitleText = subtitleText)
+                                    if (s.currentSubtitleCues == filteredCues) s else s.copy(currentSubtitleCues = filteredCues)
                                 }
                             } }
                             launch { engine.availableTracks.collect { updateTracksFromEngine(engine) } }
@@ -547,7 +547,7 @@ class VideoPlayerViewModel @Inject constructor(
         val engine = playerSessionManager.engine ?: return null
         val cues = engine.currentCues.value
         if (cues.isEmpty()) return null
-        return cues.joinToString("\n").takeIf { it.isNotBlank() }
+        return cues.firstOrNull() ?: return null
     }
 
     fun setAspectRatio(ratio: AspectRatio) {
