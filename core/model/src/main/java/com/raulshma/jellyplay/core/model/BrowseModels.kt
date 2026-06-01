@@ -55,11 +55,11 @@ enum class HomeSectionType {
         }
 
     companion object {
-        val CONFIGURABLE = setOf(
+        val CONFIGURABLE = listOf(
             CONTINUE_WATCHING,
             NEXT_UP,
-            RECENTLY_ADDED,
             LATEST_MEDIA,
+            RECENTLY_ADDED,
         )
     }
 }

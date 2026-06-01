@@ -39,10 +39,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +58,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -316,27 +319,99 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    val sectionItems = buildList {
-                        add(HomeSectionType.CONTINUE_WATCHING)
-                        add(HomeSectionType.NEXT_UP)
-                        if (HomeSectionType.LATEST_MEDIA in preferences.enabledHomeSectionTypes) {
-                            add(HomeSectionType.RECENTLY_ADDED)
+                    val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
+                    val itemHeights = remember { mutableStateMapOf<HomeSectionType, Int>() }
+                    var draggingSection by remember { mutableStateOf<HomeSectionType?>(null) }
+                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+
+                    LaunchedEffect(preferences.homeSectionOrder) {
+                        if (draggingSection == null) {
+                            homeSectionOrder.clear()
+                            homeSectionOrder.addAll(preferences.homeSectionOrder)
                         }
-                        add(HomeSectionType.LATEST_MEDIA)
                     }
-                    val totalCount = sectionItems.size + viewModel.libraryFolders.size
+
+                    fun persistHomeSectionOrder() {
+                        val currentOrder = homeSectionOrder.toList()
+                        if (currentOrder != preferences.homeSectionOrder) {
+                            viewModel.setHomeSectionOrder(currentOrder)
+                        }
+                    }
+
+                    fun moveSection(type: HomeSectionType, deltaY: Float) {
+                        if (draggingSection != type) return
+                        dragOffsetY += deltaY
+
+                        while (true) {
+                            val currentIndex = homeSectionOrder.indexOf(type)
+                            if (currentIndex == -1) return
+
+                            val draggedHeight = itemHeights[type] ?: return
+
+                            if (dragOffsetY > 0f && currentIndex < homeSectionOrder.lastIndex) {
+                                val nextType = homeSectionOrder[currentIndex + 1]
+                                val nextHeight = itemHeights[nextType] ?: draggedHeight
+                                val threshold = (draggedHeight + nextHeight) / 2f
+                                if (dragOffsetY > threshold) {
+                                    homeSectionOrder.removeAt(currentIndex)
+                                    homeSectionOrder.add(currentIndex + 1, type)
+                                    dragOffsetY -= nextHeight.toFloat()
+                                    continue
+                                }
+                            }
+
+                            if (dragOffsetY < 0f && currentIndex > 0) {
+                                val prevType = homeSectionOrder[currentIndex - 1]
+                                val prevHeight = itemHeights[prevType] ?: draggedHeight
+                                val threshold = (draggedHeight + prevHeight) / 2f
+                                if (-dragOffsetY > threshold) {
+                                    homeSectionOrder.removeAt(currentIndex)
+                                    homeSectionOrder.add(currentIndex - 1, type)
+                                    dragOffsetY += prevHeight.toFloat()
+                                    continue
+                                }
+                            }
+
+                            break
+                        }
+                    }
+
+                    val totalCount = homeSectionOrder.size + viewModel.libraryFolders.size
                     var idx = 0
 
-                    sectionItems.forEach { type ->
+                    homeSectionOrder.forEach { type ->
+                        val isChecked = type in preferences.enabledHomeSectionTypes
+                        val icon = when (type) {
+                            HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
+                            HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
+                            HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
+                            HomeSectionType.LATEST_MEDIA -> Tabler.Outline.LayersLinked
+                            else -> Tabler.Outline.LayersLinked
+                        }
+                        SettingReorderableToggleItem(
+                            icon = icon,
+                            title = type.displayName,
+                            subtitle = if (isChecked) type.description else "Hidden",
+                            checked = isChecked,
+                            index = idx++, count = totalCount,
+                            isDragging = draggingSection == type,
+                            modifier = Modifier.onSizeChanged { itemHeights[type] = it.height },
+                            onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
+                            onClick = { viewModel.toggleHomeSectionType(type, !isChecked) },
+                            onDragStart = {
+                                draggingSection = type
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { delta -> moveSection(type, delta) },
+                            onDragEnd = {
+                                val wasDragging = draggingSection == type
+                                draggingSection = null
+                                dragOffsetY = 0f
+                                if (wasDragging) persistHomeSectionOrder()
+                            },
+                        )
+
                         if (type == HomeSectionType.LATEST_MEDIA) {
-                            SettingToggleItem(
-                                icon = Tabler.Outline.LayersLinked,
-                                title = type.displayName,
-                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
-                                checked = type in preferences.enabledHomeSectionTypes,
-                                index = idx++, count = totalCount,
-                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
-                            )
                             viewModel.libraryFolders.forEach { folder ->
                                 val isLibraryVisible = folder.id !in preferences.hiddenLibrarySectionIds
                                 SettingToggleItem(
@@ -348,20 +423,6 @@ fun SettingsScreen(
                                     onCheckedChange = { viewModel.toggleLibrarySection(folder.id, it) },
                                 )
                             }
-                        } else {
-                            SettingToggleItem(
-                                icon = when (type) {
-                                    HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
-                                    HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
-                                    HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
-                                    else -> Tabler.Outline.LayersLinked
-                                },
-                                title = type.displayName,
-                                subtitle = if (type in preferences.enabledHomeSectionTypes) type.description else "Hidden",
-                                checked = type in preferences.enabledHomeSectionTypes,
-                                index = idx++, count = totalCount,
-                                onCheckedChange = { viewModel.toggleHomeSectionType(type, it) },
-                            )
                         }
                     }
                 }
@@ -1905,7 +1966,9 @@ fun SettingsScreen(
     }
 
     if (showEqualizerEditor) {
-        val bandLevels = preferences.equalizerSettings.bandLevels.toMutableStateList()
+        val bandLevels = remember(preferences.equalizerSettings.bandLevels) {
+            mutableStateListOf<Int>().apply { addAll(preferences.equalizerSettings.bandLevels) }
+        }
         AdaptiveSheet(onDismissRequest = { showEqualizerEditor = false }) {
             Column(
                 modifier = Modifier
@@ -1923,7 +1986,7 @@ fun SettingsScreen(
                 LazyColumn(
                     modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f),
                 ) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { _ -> "band" }) { i ->
+                    items(EqualizerSettings.BAND_FREQUENCIES.size, contentType = { "band" }) { i ->
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +18,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -32,8 +37,13 @@ fun OnboardingPagerIndicator(
     ) {
         repeat(pageCount) { index ->
             val isSelected = index == currentPage
+            val isNeighbor = kotlin.math.abs(index - currentPage) == 1
             val width by animateDpAsState(
-                targetValue = if (isSelected) 24.dp else 8.dp,
+                targetValue = when {
+                    isSelected -> 24.dp
+                    isNeighbor -> 12.dp
+                    else -> 8.dp
+                },
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium,
@@ -41,18 +51,28 @@ fun OnboardingPagerIndicator(
                 label = "indicatorWidth_$index",
             )
             val alpha by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0.4f,
+                targetValue = when {
+                    isSelected -> 1f
+                    isNeighbor -> 0.6f
+                    else -> 0.3f
+                },
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessHigh,
                 ),
                 label = "indicatorAlpha_$index",
             )
+            val color by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                label = "indicatorColor_$index",
+            )
             Box(
                 modifier = Modifier
                     .size(width = width, height = 8.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha)),
+                    .background(color.copy(alpha = alpha)),
             )
         }
     }

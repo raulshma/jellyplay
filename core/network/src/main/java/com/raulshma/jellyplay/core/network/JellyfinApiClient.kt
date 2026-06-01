@@ -71,7 +71,7 @@ interface JellyfinApiClient {
     ): Result<UserInfo>
 
     suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
         hiddenLibraryIds: Set<String> = emptySet(),
     ): Result<List<HomeSection>>
 

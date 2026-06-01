@@ -417,7 +417,8 @@ class JellyfinApiClientImpl @Inject constructor(
                         HomeSectionType.RECENTLY_ADDED,
                         recentlyAddedItems,
                     )
-                    val insertIndex = sections.indexOfFirst { it.type == HomeSectionType.LATEST_MEDIA }.coerceAtLeast(0)
+                    val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
+                    val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
                     sections.add(insertIndex, recentlyAddedSection)
                 }
             }

@@ -67,7 +67,8 @@ class HomeViewModel @Inject constructor(
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
-    private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE
+    private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
+    private var homeSectionOrder = HomeSectionType.CONFIGURABLE
     private var hiddenLibrarySectionIds = emptySet<String>()
     private var lastContinueWatchingIds: Set<String> = emptySet()
     private var seerrPreferences = SeerrPreferences()
@@ -102,14 +103,27 @@ class HomeViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            var hasSeenHomePreferences = false
             preferencesStore.preferences.collect { prefs ->
+                val homeSectionPrefsChanged = hasSeenHomePreferences && (
+                    prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
+                        prefs.homeSectionOrder != homeSectionOrder ||
+                        prefs.hiddenLibrarySectionIds != hiddenLibrarySectionIds
+                    )
+
+                hasSeenHomePreferences = true
                 enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
+                homeSectionOrder = prefs.homeSectionOrder
                 hiddenLibrarySectionIds = prefs.hiddenLibrarySectionIds
                 _uiState.update { it.copy(
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
                 ) }
+
+                if (homeSectionPrefsChanged) {
+                    fetchAndUpdateSections()
+                }
             }
         }
 
@@ -345,14 +359,23 @@ class HomeViewModel @Inject constructor(
             }
 
             lastRefreshTime = System.currentTimeMillis()
-            val prefs = preferencesStore.preferences.first()
             val enabledSections = enabledHomeSectionTypes
             val hiddenLibIds = hiddenLibrarySectionIds
             mediaRepository.getHomeSections(enabledSections, hiddenLibIds)
                 .onSuccess { fetchedSections ->
-                    _uiState.update { it.copy(sections = fetchedSections) }
+                    val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
+                    val orderedSections = fetchedSections
+                        .mapIndexed { index, section -> index to section }
+                        .sortedWith(
+                            compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
+                                orderIndex[it.second.type] ?: Int.MAX_VALUE
+                            }.thenBy { it.first },
+                        )
+                        .map { it.second }
 
-                    val continueWatching = fetchedSections
+                    _uiState.update { it.copy(sections = orderedSections) }
+
+                    val continueWatching = orderedSections
                         .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                         ?.items ?: emptyList()
                     val currentIds = continueWatching.map { it.id }.toSet()

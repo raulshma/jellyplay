@@ -506,6 +506,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setEnabledHomeSectionTypes(types) }
     }
 
+    fun setHomeSectionOrder(order: List<HomeSectionType>) {
+        viewModelScope.launch { preferencesStore.setHomeSectionOrder(order) }
+    }
+
     fun setHiddenLibrarySectionIds(ids: Set<String>) {
         viewModelScope.launch { preferencesStore.setHiddenLibrarySectionIds(ids) }
     }
