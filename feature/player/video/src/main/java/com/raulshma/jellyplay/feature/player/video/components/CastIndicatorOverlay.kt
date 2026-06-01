@@ -7,9 +7,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +33,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
 fun CastIndicatorOverlay(
+    isConnecting: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "castPulse")
@@ -46,24 +51,49 @@ fun CastIndicatorOverlay(
         modifier = modifier
             .clip(ShapeCache.smoothPill)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(
-            imageVector = Tabler.Outline.Cast,
-            contentDescription = null,
-            tint = Color(0xFF4285F4),
-            modifier = Modifier
-                .size(14.dp)
-                .graphicsLayer { alpha = pulseAlpha },
-        )
-        Text(
-            text = "Casting",
-            color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.3.sp,
-            modifier = Modifier.padding(start = 6.dp),
-        )
+        if (isConnecting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = "Connecting…",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.3.sp,
+            )
+        } else {
+            Icon(
+                imageVector = Tabler.Outline.Cast,
+                contentDescription = null,
+                tint = Color(0xFF4285F4),
+                modifier = Modifier
+                    .size(14.dp)
+                    .graphicsLayer { alpha = pulseAlpha },
+            )
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .graphicsLayer {
+                        scaleX = pulseAlpha * 0.3f + 0.7f
+                        scaleY = pulseAlpha * 0.3f + 0.7f
+                        alpha = pulseAlpha
+                    }
+                    .background(Color(0xFF2ECC71), shape = CircleShape),
+            )
+            Text(
+                text = "Casting",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.3.sp,
+            )
+        }
     }
 }

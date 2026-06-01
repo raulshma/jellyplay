@@ -32,6 +32,9 @@ class GoogleCastStrategy @Inject constructor(
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    private val _isConnecting = MutableStateFlow(false)
+    override val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+
     private val _discoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<CastDevice>> = _discoveredDevices.asStateFlow()
 
@@ -71,21 +74,31 @@ class GoogleCastStrategy @Inject constructor(
     private val sessionListener = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) {
             _isConnected.value = true
+            _isConnecting.value = false
         }
         override fun onSessionEnded(session: CastSession, error: Int) {
             _isConnected.value = false
+            _isConnecting.value = false
         }
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
             _isConnected.value = true
+            _isConnecting.value = false
         }
         override fun onSessionSuspended(session: CastSession, reason: Int) {}
-        override fun onSessionStarting(session: CastSession) {}
+        override fun onSessionStarting(session: CastSession) {
+            _isConnecting.value = true
+        }
         override fun onSessionEnding(session: CastSession) {}
         override fun onSessionResumeFailed(session: CastSession, error: Int) {
             _isConnected.value = false
+            _isConnecting.value = false
         }
-        override fun onSessionStartFailed(session: CastSession, error: Int) {}
-        override fun onSessionResuming(session: CastSession, sessionId: String) {}
+        override fun onSessionStartFailed(session: CastSession, error: Int) {
+            _isConnecting.value = false
+        }
+        override fun onSessionResuming(session: CastSession, sessionId: String) {
+            _isConnecting.value = true
+        }
     }
 
     private fun ensureListenersRegistered() {

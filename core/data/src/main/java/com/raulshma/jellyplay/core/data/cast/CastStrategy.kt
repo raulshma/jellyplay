@@ -12,6 +12,7 @@ data class CastDevice(
 interface CastStrategy {
     val isAvailable: StateFlow<Boolean>
     val isConnected: StateFlow<Boolean>
+    val isConnecting: StateFlow<Boolean>
     val discoveredDevices: StateFlow<List<CastDevice>>
     fun startDiscovery(context: android.content.Context)
     fun stopDiscovery()
