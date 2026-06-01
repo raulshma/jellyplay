@@ -1,12 +1,16 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,10 +29,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -36,6 +42,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @Composable
 fun AppearanceStep(
@@ -148,9 +155,21 @@ fun OnboardingOptionCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
+        targetValue = when {
+            isPressed -> AnimationTokens.CardPressScale
+            selected -> 1f
+            else -> 1f
+        },
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "optionCardScale",
+    )
+    val selectionScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "optionCardSelectionScale",
     )
     val containerColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -164,38 +183,63 @@ fun OnboardingOptionCard(
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "optionCardContentColor",
     )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary
+        else Color.Transparent,
+        animationSpec = tween(250),
+        label = "optionCardBorder",
+    )
 
-    Column(
+    Box(
         modifier = modifier
+            .height(72.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .clip(ShapeCache.smooth16)
             .background(containerColor)
+            .drawBehind {
+                if (selectionScale > 0.01f) {
+                    val strokeWidth = 2.dp.toPx()
+                    val cornerRadius = 16.dp.toPx()
+                    drawRoundRect(
+                        color = borderColor,
+                        topLeft = Offset.Zero,
+                        size = size,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius),
+                        style = Stroke(width = strokeWidth),
+                        alpha = selectionScale,
+                    )
+                }
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
             )
-            .padding(vertical = 16.dp, horizontal = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(24.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                color = contentColor,
             )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = contentColor,
-        )
     }
 }
 
@@ -206,12 +250,34 @@ fun OnboardingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "toggleRowScale",
+    )
+    val backgroundColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "toggleRowBg",
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable { onCheckedChange(!checked) }
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = { onCheckedChange(!checked) },
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

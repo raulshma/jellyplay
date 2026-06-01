@@ -1,5 +1,14 @@
 package com.raulshma.jellyplay.feature.onboarding
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,19 +27,28 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ArrowRight
 import com.raulshma.jellyplay.feature.onboarding.components.AppearanceStep
 import com.raulshma.jellyplay.feature.onboarding.components.AudioPlayerStep
 import com.raulshma.jellyplay.feature.onboarding.components.CompletionStep
@@ -52,6 +70,9 @@ fun OnboardingScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { OnboardingStep.count })
     val scope = rememberCoroutineScope()
+    var bottomBarVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { bottomBarVisible = true }
 
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -192,25 +213,36 @@ fun OnboardingScreen(
                 }
             }
 
-            OnboardingBottomBar(
-                pagerState = pagerState,
-                onSkip = {
-                    viewModel.skipOnboarding()
-                    onComplete()
-                },
-                onNext = {
-                    scope.launch {
-                        if (pagerState.currentPage < OnboardingStep.count - 1) {
-                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+            AnimatedVisibility(
+                visible = bottomBarVisible,
+                enter = slideInVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    initialOffsetY = { it },
+                ) + fadeIn(),
+            ) {
+                OnboardingBottomBar(
+                    pagerState = pagerState,
+                    onSkip = {
+                        viewModel.skipOnboarding()
+                        onComplete()
+                    },
+                    onNext = {
+                        scope.launch {
+                            if (pagerState.currentPage < OnboardingStep.count - 1) {
+                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                            }
                         }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 12.dp),
-            )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 12.dp),
+                )
+            }
         }
     }
 }
@@ -234,17 +266,26 @@ private fun OnboardingBottomBar(
             modifier = modifier.padding(vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!isLastPage) {
-                TextButton(onClick = onSkip) {
-                    Text(
-                        text = "Skip",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            AnimatedContent(
+                targetState = isLastPage,
+                transitionSpec = {
+                    fadeIn(spring(stiffness = Spring.StiffnessMedium)) togetherWith
+                            fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                },
+                label = "skipButtonTransition",
+            ) { last ->
+                if (!last) {
+                    TextButton(onClick = onSkip) {
+                        Text(
+                            text = "Skip",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(48.dp))
                 }
-            } else {
-                Spacer(Modifier.width(48.dp))
             }
 
             Spacer(Modifier.weight(1f))
@@ -256,17 +297,32 @@ private fun OnboardingBottomBar(
 
             Spacer(Modifier.weight(1f))
 
-            if (!isLastPage) {
-                TextButton(onClick = onNext) {
-                    Text(
-                        text = "Next",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+            AnimatedContent(
+                targetState = isLastPage,
+                transitionSpec = {
+                    fadeIn(spring(stiffness = Spring.StiffnessMedium)) togetherWith
+                            fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                },
+                label = "nextButtonTransition",
+            ) { last ->
+                if (!last) {
+                    FilledTonalButton(
+                        onClick = onNext,
+                    ) {
+                        Text(
+                            text = "Next",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Tabler.Outline.ArrowRight,
+                            contentDescription = null,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(96.dp))
                 }
-            } else {
-                Spacer(Modifier.width(48.dp))
             }
         }
     }

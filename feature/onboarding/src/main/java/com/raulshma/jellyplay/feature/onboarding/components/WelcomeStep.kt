@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.feature.onboarding.components
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,8 +15,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,13 +43,83 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayExpressiveTitles
+import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 
 @Composable
 fun WelcomeStep(
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
+    val floatingOffset = remember { Animatable(-6f) }
+    val glowScale = remember { Animatable(0.85f) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+        floatingOffset.animateTo(
+            targetValue = 6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2500, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        glowScale.animateTo(
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 3000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        )
+    }
+
+    val iconScale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.3f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "welcomeIconScale",
+    )
+
+    val titleAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(500),
+        label = "welcomeTitleAlpha",
+    )
+    val titleOffset by animateFloatAsState(
+        targetValue = if (visible) 0f else 20f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "welcomeTitleOffset",
+    )
+
+    val subtitleAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(600, 100),
+        label = "welcomeSubtitleAlpha",
+    )
+
+    val featuresAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(600, 200),
+        label = "welcomeFeaturesAlpha",
+    )
+    val featuresOffset by animateFloatAsState(
+        targetValue = if (visible) 0f else 24f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "welcomeFeaturesOffset",
+    )
+
+    val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val glowColor = MaterialTheme.colorScheme.primaryContainer
 
     Column(
         modifier = modifier
@@ -54,21 +128,25 @@ fun WelcomeStep(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        val scale by animateFloatAsState(
-            targetValue = if (visible) 1f else 0.3f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
-            label = "welcomeIconScale",
-        )
-
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .offset(y = floatingOffset.value.dp)
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                glowColor.copy(alpha = 0.3f * glowScale.value),
+                                glowColor.copy(alpha = 0f),
+                            ),
+                            center = Offset(size.width / 2f, size.height / 2f),
+                            radius = size.minDimension * 0.8f * glowScale.value,
+                        ),
+                    )
                 }
                 .clip(CircleShape)
                 .background(
@@ -84,68 +162,94 @@ fun WelcomeStep(
             Icon(
                 imageVector = Tabler.Outline.PlayerPlay,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = iconColor,
                 modifier = Modifier.size(48.dp),
             )
         }
 
         Spacer(Modifier.height(32.dp))
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
-        ) {
-            Text(
-                text = "Welcome to\nJellyPlay",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                lineHeight = 40.sp,
-            )
-        }
+        Text(
+            text = "Welcome to\nJellyPlay",
+            style = JellyPlayExpressiveTitles.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            lineHeight = 44.sp,
+            modifier = Modifier.graphicsLayer {
+                alpha = titleAlpha
+                translationY = titleOffset
+            },
+        )
 
         Spacer(Modifier.height(16.dp))
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
-        ) {
-            Text(
-                text = "Your personal Jellyfin client. Let's set up a few things to get you started.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text(
+            text = "Your personal Jellyfin client. Let's set up a few things to get you started.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.graphicsLayer { alpha = subtitleAlpha },
+        )
 
         Spacer(Modifier.height(32.dp))
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .graphicsLayer {
+                    alpha = featuresAlpha
+                    translationY = featuresOffset
+                },
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(horizontal = 16.dp),
-            ) {
-                FeatureHighlight(Tabler.Outline.PlayerPlay, "Stream movies & TV shows")
-                FeatureHighlight(Tabler.Outline.Headphones, "Music player with advanced audio effects")
-                FeatureHighlight(Tabler.Outline.CloudDownload, "Download for offline playback")
-                FeatureHighlight(Tabler.Outline.Users, "SyncPlay \u2014 watch together")
-            }
+            StaggeredFeatureHighlight(
+                icon = Tabler.Outline.PlayerPlay,
+                text = "Stream movies & TV shows",
+                index = 0,
+            )
+            StaggeredFeatureHighlight(
+                icon = Tabler.Outline.Headphones,
+                text = "Music player with advanced audio effects",
+                index = 1,
+            )
+            StaggeredFeatureHighlight(
+                icon = Tabler.Outline.CloudDownload,
+                text = "Download for offline playback",
+                index = 2,
+            )
+            StaggeredFeatureHighlight(
+                icon = Tabler.Outline.Users,
+                text = "SyncPlay \u2014 watch together",
+                index = 3,
+            )
         }
     }
 }
 
 @Composable
-private fun FeatureHighlight(
+private fun StaggeredFeatureHighlight(
     icon: ImageVector,
     text: String,
+    index: Int,
 ) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * AnimationTokens.StaggerDelayPerItem.toLong())
+        visible = true
+    }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(300),
+        label = "featureAlpha_$index",
+    )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.graphicsLayer { this.alpha = alpha },
     ) {
         Icon(
             imageVector = icon,

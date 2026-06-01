@@ -137,6 +137,7 @@ class UserPreferencesStore @Inject constructor(
         val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
         val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
+        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
         val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
         val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
@@ -340,6 +341,20 @@ class UserPreferencesStore @Inject constructor(
                     json.decodeFromString<Set<String>>(it)
                         .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
                         .toSet()
+                } ?: HomeSectionType.CONFIGURABLE.toSet()
+            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() },
+            homeSectionOrder = try {
+                prefs[Keys.HOME_SECTION_ORDER]?.let {
+                    val parsed = try {
+                        json.decodeFromString<List<String>>(it)
+                    } catch (_: Exception) {
+                        json.decodeFromString<Set<String>>(it).toList()
+                    }
+                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                    buildList {
+                        addAll(mapped)
+                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
+                    }
                 } ?: HomeSectionType.CONFIGURABLE
             } catch (_: Exception) { HomeSectionType.CONFIGURABLE },
             hiddenLibrarySectionIds = try {
@@ -697,6 +712,16 @@ class UserPreferencesStore @Inject constructor(
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
         context.dataStore.edit {
             it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(types.map { t -> t.name }.toSet())
+        }
+    }
+
+    suspend fun setHomeSectionOrder(order: List<HomeSectionType>) {
+        context.dataStore.edit {
+            val normalized = buildList {
+                addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
+                addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
+            }
+            it[Keys.HOME_SECTION_ORDER] = json.encodeToString(normalized.map { t -> t.name })
         }
     }
 
