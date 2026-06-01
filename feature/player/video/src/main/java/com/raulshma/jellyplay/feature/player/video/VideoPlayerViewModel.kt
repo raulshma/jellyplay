@@ -1054,6 +1054,18 @@ class VideoPlayerViewModel @Inject constructor(
     val isCastConnected: Boolean
         get() = castManager.isConnected
 
+    val castPositionMs: kotlinx.coroutines.flow.StateFlow<Long>
+        get() = castManager.castPositionMs
+
+    val castDurationMs: kotlinx.coroutines.flow.StateFlow<Long>
+        get() = castManager.castDurationMs
+
+    val castIsPlaying: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.castIsPlaying
+
+    val isConnectedFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.isConnectedFlow
+
     /** Reactive flow of cast session events — consumed by the UI to auto-trigger [castToDevice]. */
     val castSessionEvents: kotlinx.coroutines.flow.SharedFlow<CastSessionEvent>
         get() = castManager.sessionEvents
@@ -1079,7 +1091,6 @@ class VideoPlayerViewModel @Inject constructor(
         val url = playbackRepository.getStreamUrl(currentItemId, sourceId, startTimeTicks)
         if (url.isBlank()) return
 
-        val state = _uiState.value
         val artworkUri = try {
             Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
         } catch (_: Exception) { null }
@@ -1094,6 +1105,26 @@ class VideoPlayerViewModel @Inject constructor(
             )
             .build()
         castManager.loadMedia(mediaItem, positionMs, object : androidx.media3.common.Player.Listener {})
+        engine.pause()
+    }
+
+    fun onCastDisconnected() {
+        val engine = playerSessionManager.engine ?: return
+        if (!engine.isPlaying.value) {
+            engine.play()
+        }
+    }
+
+    fun castPlay() {
+        castManager.play()
+    }
+
+    fun castPause() {
+        castManager.pause()
+    }
+
+    fun castSeekTo(positionMs: Long) {
+        castManager.seekTo(positionMs)
     }
 
     private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {

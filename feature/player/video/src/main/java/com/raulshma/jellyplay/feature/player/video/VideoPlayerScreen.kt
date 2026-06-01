@@ -93,6 +93,7 @@ import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialo
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
+import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
@@ -360,9 +361,14 @@ fun VideoPlayerScreen(
     val engine = viewModel.playerEngineRef
     val title = uiState.title
     val subtitle = uiState.subtitle
-    val isPlaying = uiState.isPlaying
-    val currentPosition = uiState.currentPosition
-    val duration = uiState.duration
+    val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
+    val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
+
+    val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
+    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
+    val duration = if (isCastConnected) castDuration else uiState.duration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
@@ -404,38 +410,38 @@ fun VideoPlayerScreen(
     }
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
-    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession) {
+    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else if (isCastConnected) viewModel.castPlay()
             else engine?.play()
         }
     }
-    val doPause: () -> Unit = remember(engine, isInSyncPlaySession) {
+    val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else if (isCastConnected) viewModel.castPause()
             else engine?.pause()
         }
     }
-    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession) {
+    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         { ms ->
             if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
+            else if (isCastConnected) viewModel.castSeekTo(ms)
             else engine?.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition) {
         {
-            engine?.let { eng ->
-                val target = (eng.currentPositionMs - uiState.seekDurationMs).coerceAtLeast(0)
-                doSeekTo(target)
-            }
+            val pos = currentPosition
+            val target = (pos - uiState.seekDurationMs).coerceAtLeast(0)
+            doSeekTo(target)
         }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition, duration) {
         {
-            engine?.let { eng ->
-                val target = (eng.currentPositionMs + uiState.seekDurationMs).coerceAtMost(eng.durationMs.coerceAtLeast(0))
-                doSeekTo(target)
-            }
+            val target = (currentPosition + uiState.seekDurationMs).coerceAtMost(duration.coerceAtLeast(0))
+            doSeekTo(target)
         }
     }
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
@@ -746,6 +752,14 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
+        if (isCastConnected) {
+            CastIndicatorOverlay(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 60.dp, start = 16.dp),
+            )
+        }
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -932,7 +946,7 @@ fun VideoPlayerScreen(
                 viewModel.castSessionEvents.collect { event ->
                     when (event) {
                         is CastSessionEvent.Connected -> viewModel.castToDevice()
-                        is CastSessionEvent.Disconnected -> { /* local playback continues */ }
+                        is CastSessionEvent.Disconnected -> viewModel.onCastDisconnected()
                     }
                 }
             }
