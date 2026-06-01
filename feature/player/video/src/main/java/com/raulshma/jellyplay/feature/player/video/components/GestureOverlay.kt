@@ -24,10 +24,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -140,9 +142,7 @@ internal fun GestureOverlay(
             SeekCircleOverlay(
                 isLeft = isLeft,
                 seekOffsetMs = seekOffsetMs,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 100.dp),
+                modifier = Modifier.fillMaxSize(),
             )
         }
 
@@ -189,6 +189,7 @@ private fun SeekCircleOverlay(
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
+    val circleSize = 90.dp
 
     AnimatedVisibility(
         visible = true,
@@ -196,25 +197,33 @@ private fun SeekCircleOverlay(
         exit = playerGestureFeedbackExit(),
         modifier = modifier,
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (isLeft) Modifier.padding(end = 200.dp)
-                    else Modifier.padding(start = 200.dp)
-                ),
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize(),
         ) {
+            val screenWidthPx = constraints.maxWidth
+            val screenHeightPx = constraints.maxHeight
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val circleSizePx = with(density) { circleSize.toPx() }
+            val xOffsetPx = if (isLeft) {
+                screenWidthPx * 0.15f - circleSizePx / 2f
+            } else {
+                screenWidthPx * 0.85f - circleSizePx / 2f
+            }
+            val yOffsetPx = screenHeightPx / 2f - circleSizePx / 2f
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(90.dp)
+                    .offset(
+                        x = with(density) { xOffsetPx.toDp() },
+                        y = with(density) { yOffsetPx.toDp() },
+                    )
+                    .size(circleSize)
                     .clip(ShapeCache.smooth24)
                     .background(Color.Black.copy(alpha = 0.55f))
                     .border(1.dp, Color.White.copy(alpha = 0.1f), ShapeCache.smooth24),
             ) {
                 androidx.compose.foundation.Canvas(
-                    modifier = Modifier.size(90.dp),
+                    modifier = Modifier.size(circleSize),
                 ) {
                     val strokeWidth = 3.dp.toPx()
                     val arcSize = size.minDimension - strokeWidth * 2
