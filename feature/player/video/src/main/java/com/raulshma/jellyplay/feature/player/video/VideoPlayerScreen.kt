@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -447,6 +448,10 @@ fun VideoPlayerScreen(
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
         { if (isPlaying) doPause() else doPlay() }
     }
+    val currentDoSeekBack by rememberUpdatedState(doSeekBack)
+    val currentDoSeekForward by rememberUpdatedState(doSeekForward)
+    val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
+
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
     Box(
@@ -528,16 +533,16 @@ fun VideoPlayerScreen(
                                 seekDirection = -1
                                 seekOffsetMs = uiState.seekDurationMs
                                 seekTimestamp++
-                                doSeekBack()
+                                currentDoSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
                                 seekOffsetMs = uiState.seekDurationMs
                                 seekTimestamp++
-                                doSeekForward()
+                                currentDoSeekForward()
                             }
                             else -> {
-                                doTogglePlayPause()
+                                currentDoTogglePlayPause()
                             }
                         }
                     },
