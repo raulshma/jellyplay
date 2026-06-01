@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -186,21 +187,49 @@ class LibVlcPlayerEngine(
 
         currentPlaybackRequest = request
 
+        val vlcCfg = (currentConfig.engineSpecific as? LibVlcEngineConfig) ?: LibVlcEngineConfig()
+
         val options = arrayListOf(
-            "--aout=aaudio",
-            "--audio-time-stretch",
-            "--avcodec-skiploopfilter", "1",
-            "--avcodec-skip-frame", "0",
-            "--avcodec-skip-idct", "0",
+            "--aout=${vlcCfg.audioOutput.key}",
+            "--vout=${vlcCfg.videoOutput.key}",
         )
 
+        if (vlcCfg.audioTimeStretch) {
+            options.add("--audio-time-stretch")
+        }
+
+        if (vlcCfg.skipLoopFilter > 0) {
+            options.add("--avcodec-skiploopfilter")
+            options.add(vlcCfg.skipLoopFilter.toString())
+        }
+        if (vlcCfg.skipFrame > 0) {
+            options.add("--avcodec-skip-frame")
+            options.add(vlcCfg.skipFrame.toString())
+        }
+        options.add("--avcodec-skip-idct")
+        options.add("0")
+
+        if (vlcCfg.decoderThreads > 0) {
+            options.add("--avcodec-threads=${vlcCfg.decoderThreads}")
+        }
+
+        val networkCaching = when {
+            vlcCfg.networkCaching > 0 -> vlcCfg.networkCaching
+            isLowRamDevice -> 1500
+            else -> 3000
+        }
+        options.add("--network-caching=$networkCaching")
+
         if (isLowRamDevice) {
-            options.add("--avcodec-threads=2")
-            options.add("--network-caching=1500")
             options.add("--clock-jitter=0")
             options.add("--clock-synchro=0")
-        } else {
-            options.add("--network-caching=3000")
+        }
+
+        if (vlcCfg.dropLateFrames) {
+            options.add("--drop-late-frames")
+        }
+        if (vlcCfg.skipFrames) {
+            options.add("--skip-frames")
         }
 
         if (currentConfig.audioDelayMs != 0L) {

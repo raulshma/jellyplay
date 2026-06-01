@@ -119,6 +119,9 @@ data class UserPreferences(
     val hiddenLibrarySectionIds: Set<String> = emptySet(),
     val navBarShowLabels: Boolean = true,
     val onboardingCompleted: Boolean = false,
+    val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
+    val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
+    val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
 )
 
 @Immutable

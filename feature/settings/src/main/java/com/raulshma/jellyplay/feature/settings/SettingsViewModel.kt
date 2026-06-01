@@ -15,10 +15,14 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -528,5 +532,17 @@ class SettingsViewModel @Inject constructor(
 
     fun setNavBarShowLabels(show: Boolean) {
         viewModelScope.launch { preferencesStore.setNavBarShowLabels(show) }
+    }
+
+    fun setMpvConfig(config: MpvEngineConfig) {
+        viewModelScope.launch { preferencesStore.setMpvConfig(config) }
+    }
+
+    fun setLibVlcConfig(config: LibVlcEngineConfig) {
+        viewModelScope.launch { preferencesStore.setLibVlcConfig(config) }
+    }
+
+    fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
+        viewModelScope.launch { preferencesStore.setExoPlayerConfig(config) }
     }
 }

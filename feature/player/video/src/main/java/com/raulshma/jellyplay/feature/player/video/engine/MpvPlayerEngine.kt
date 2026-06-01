@@ -18,6 +18,14 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.MpvAudioOutput
+import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.MpvFrameDrop
+import com.raulshma.jellyplay.core.model.MpvHwdec
+import com.raulshma.jellyplay.core.model.MpvScaler
+import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
+import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.channels.awaitClose
@@ -195,14 +203,21 @@ class MpvPlayerEngine(
         }
 
         override fun initOptions() {
-            mpv.setOptionString("hwdec", when (currentConfig.decoderMode) {
+            val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+
+            val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (currentConfig.decoderMode) {
                 DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
                 DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
-            })
+            }
+            mpv.setOptionString("hwdec", hwdecValue)
             mpv.setOptionString("hwdec-codecs", "all")
 
-            mpv.setOptionString("ao", "audiotrack,aaudio")
+            val aoValue = buildString {
+                append(mpvCfg.audioOutput.key)
+                mpvCfg.audioFallback?.let { append(",").append(it.key) }
+            }
+            mpv.setOptionString("ao", aoValue)
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
             mpv.setOptionString("secondary-sub-visibility", "yes")
@@ -212,16 +227,31 @@ class MpvPlayerEngine(
             mpv.setOptionString("keep-open", "yes")
             applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
 
-            if (isLowRamDevice) {
-                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_LOW.toString())
-                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_LOW.toString())
-                mpv.setOptionString("vd-lavc-skiploopfilter", "bidir")
-                mpv.setOptionString("vd-lavc-skipframe", "nonref")
-                mpv.setOptionString("opengl-swapinterval", "1")
-            } else {
-                mpv.setOptionString("demuxer-max-bytes", DEMUXER_MAX_BYTES_NORMAL.toString())
-                mpv.setOptionString("demuxer-max-back-bytes", DEMUXER_MAX_BACK_BYTES_NORMAL.toString())
+            mpv.setOptionString("scale", mpvCfg.scaler.key)
+            if (mpvCfg.deband) {
+                mpv.setOptionString("deband", "yes")
             }
+            if (mpvCfg.interpolation) {
+                mpv.setOptionString("interpolation", "yes")
+                mpv.setOptionString("video-sync", "display-resample")
+            }
+            mpv.setOptionString("framedrop", mpvCfg.frameDrop.key)
+            mpv.setOptionString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
+
+            val demuxerMax = when (mpvCfg.demuxerMaxBytes) {
+                MpvDemuxerMaxBytes.AUTO -> {
+                    if (isLowRamDevice) DEMUXER_MAX_BYTES_LOW else DEMUXER_MAX_BYTES_NORMAL
+                }
+                else -> mpvCfg.demuxerMaxBytes.bytes
+            }
+            val demuxerMaxBack = when (mpvCfg.demuxerMaxBytes) {
+                MpvDemuxerMaxBytes.AUTO -> {
+                    if (isLowRamDevice) DEMUXER_MAX_BACK_BYTES_LOW else DEMUXER_MAX_BACK_BYTES_NORMAL
+                }
+                else -> mpvCfg.demuxerMaxBytes.bytes / 2
+            }
+            mpv.setOptionString("demuxer-max-bytes", demuxerMax.toString())
+            mpv.setOptionString("demuxer-max-back-bytes", demuxerMaxBack.toString())
 
             mpv.setOptionString("msg-level", "all=warn")
 
@@ -351,22 +381,39 @@ class MpvPlayerEngine(
 
     override fun updateConfig(config: EngineConfig) {
         currentConfig = config
+        val mpvCfg = (config.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
         
         try {
             mpvView?.mpv?.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
             mpvView?.mpv?.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
             
-            mpvView?.mpv?.setPropertyString("hwdec", when (config.decoderMode) {
+            val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (config.decoderMode) {
                 DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
                 DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
                 DecoderMode.SW_ONLY -> "no"
-            })
+            }
+            mpvView?.mpv?.setPropertyString("hwdec", hwdecValue)
             
             if (config.audioPassthrough) {
                 mpvView?.mpv?.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             } else {
                 mpvView?.mpv?.setOptionString("audio-spdif", "")
             }
+
+            val aoValue = buildString {
+                append(mpvCfg.audioOutput.key)
+                mpvCfg.audioFallback?.let { append(",").append(it.key) }
+            }
+            mpvView?.mpv?.setPropertyString("ao", aoValue)
+
+            mpvView?.mpv?.setPropertyString("scale", mpvCfg.scaler.key)
+            mpvView?.mpv?.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
+            mpvView?.mpv?.setPropertyString("interpolation", if (mpvCfg.interpolation) "yes" else "no")
+            if (mpvCfg.interpolation) {
+                mpvView?.mpv?.setPropertyString("video-sync", "display-resample")
+            }
+            mpvView?.mpv?.setPropertyString("framedrop", mpvCfg.frameDrop.key)
+            mpvView?.mpv?.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
 
             applySubtitleStyleInternal(config.subtitleStyle)
 
@@ -486,7 +533,8 @@ class MpvPlayerEngine(
         mpvView = view
 
         try {
-            view.initialize("gpu", "android")
+            val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+            view.initialize(mpvCfg.videoOutput.key, "android")
             applySubtitleStyleInternal(currentConfig.subtitleStyle)
         } catch (e: Exception) {
             Log.e(TAG, "MPV initialize failed", e)

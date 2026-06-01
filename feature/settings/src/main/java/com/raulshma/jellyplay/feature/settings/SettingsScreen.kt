@@ -74,9 +74,22 @@ import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
+import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MpvAudioOutput
+import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.MpvFrameDrop
+import com.raulshma.jellyplay.core.model.MpvHwdec
+import com.raulshma.jellyplay.core.model.MpvScaler
+import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
+import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -84,6 +97,8 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.VlcAudioOutput
+import com.raulshma.jellyplay.core.model.VlcVideoOutput
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -144,6 +159,28 @@ fun SettingsScreen(
     var showSkipPrevThresholdPicker by remember { mutableStateOf(false) }
     var showCrossfadePicker by remember { mutableStateOf(false) }
     var showAudioDelayPicker by remember { mutableStateOf(false) }
+
+    var showMpvVideoOutputPicker by remember { mutableStateOf(false) }
+    var showMpvScalerPicker by remember { mutableStateOf(false) }
+    var showMpvAudioOutputPicker by remember { mutableStateOf(false) }
+    var showMpvAudioFallbackPicker by remember { mutableStateOf(false) }
+    var showMpvDemuxerPicker by remember { mutableStateOf(false) }
+    var showMpvHwdecPicker by remember { mutableStateOf(false) }
+    var showMpvSkipLoopFilterPicker by remember { mutableStateOf(false) }
+    var showMpvFrameDropPicker by remember { mutableStateOf(false) }
+
+    var showVlcAudioOutputPicker by remember { mutableStateOf(false) }
+    var showVlcVideoOutputPicker by remember { mutableStateOf(false) }
+    var showVlcNetworkCachingPicker by remember { mutableStateOf(false) }
+    var showVlcSkipLoopFilterPicker by remember { mutableStateOf(false) }
+    var showVlcSkipFramePicker by remember { mutableStateOf(false) }
+    var showVlcDecoderThreadsPicker by remember { mutableStateOf(false) }
+
+    var showExoScalingPicker by remember { mutableStateOf(false) }
+    var showExoFrameRatePicker by remember { mutableStateOf(false) }
+    var showExoAudioOffloadPicker by remember { mutableStateOf(false) }
+    var showExoBackBufferPicker by remember { mutableStateOf(false) }
+    var showExoCodecPicker by remember { mutableStateOf(false) }
 
     var showSubtitleFontPicker by remember { mutableStateOf(false) }
     var showSubtitleColorPicker by remember { mutableStateOf(false) }
@@ -694,6 +731,269 @@ fun SettingsScreen(
                         index = idx, count = total,
                         onClick = { showAudioDelayPicker = true },
                     )
+                }
+            }
+
+            AnimatedSettingsEntrance(6) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Settings,
+                    title = "Engine Config",
+                    summary = { preferences.preferredPlayer.displayName },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    when (preferences.preferredPlayer) {
+                        PlayerType.MPV -> {
+                            val mpvCfg = preferences.mpvConfig
+                            val mpvDefault = MpvEngineConfig()
+                            val mpvTotal = 11
+                            var mpvIdx = 0
+
+                            SettingListItem(
+                                icon = Tabler.Outline.Video,
+                                title = "Video Output",
+                                subtitle = "${mpvCfg.videoOutput.displayName} (${mpvCfg.videoOutput.key})",
+                                trailingText = mpvCfg.videoOutput.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvVideoOutputPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.ArrowAutofitHeight,
+                                title = "Scaler",
+                                subtitle = "${mpvCfg.scaler.displayName} (${mpvCfg.scaler.key})",
+                                trailingText = mpvCfg.scaler.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvScalerPicker = true },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.ColorFilter,
+                                title = "Debanding",
+                                subtitle = if (mpvCfg.deband) "GPU debanding enabled" else "No debanding",
+                                checked = mpvCfg.deband,
+                                index = mpvIdx++, count = mpvTotal,
+                                onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(deband = it)) },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.Clock,
+                                title = "Interpolation",
+                                subtitle = if (mpvCfg.interpolation) "Smooth motion enabled" else "No frame interpolation",
+                                checked = mpvCfg.interpolation,
+                                index = mpvIdx++, count = mpvTotal,
+                                onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(interpolation = it)) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Volume,
+                                title = "Audio Output",
+                                subtitle = "${mpvCfg.audioOutput.displayName} (${mpvCfg.audioOutput.key})",
+                                trailingText = mpvCfg.audioOutput.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvAudioOutputPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.ArrowBackUp,
+                                title = "Audio Fallback",
+                                subtitle = mpvCfg.audioFallback?.let { "${it.displayName} (${it.key})" } ?: "None",
+                                trailingText = mpvCfg.audioFallback?.key ?: "None",
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvAudioFallbackPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Database,
+                                title = "Buffer Size",
+                                subtitle = "${mpvCfg.demuxerMaxBytes.displayName} (${mpvCfg.demuxerMaxBytes.key})",
+                                trailingText = mpvCfg.demuxerMaxBytes.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvDemuxerPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.BadgeHd,
+                                title = "HW Dec Override",
+                                subtitle = mpvCfg.hwdecOverride?.let { "${it.displayName} (${it.key})" } ?: "Use universal setting",
+                                trailingText = mpvCfg.hwdecOverride?.key ?: "Auto",
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvHwdecPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Filter,
+                                title = "Skip Loop Filter",
+                                subtitle = "${mpvCfg.skipLoopFilter.displayName} (${mpvCfg.skipLoopFilter.key})",
+                                trailingText = mpvCfg.skipLoopFilter.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvSkipLoopFilterPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.PlayerSkipForward,
+                                title = "Frame Drop",
+                                subtitle = "${mpvCfg.frameDrop.displayName} (${mpvCfg.frameDrop.key})",
+                                trailingText = mpvCfg.frameDrop.key,
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = { showMpvFrameDropPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Refresh,
+                                title = "Reset to Default",
+                                subtitle = if (mpvCfg == mpvDefault) "Already using defaults" else "Restore all MPV settings to default",
+                                index = mpvIdx, count = mpvTotal,
+                                onClick = { viewModel.setMpvConfig(MpvEngineConfig()) },
+                            )
+                        }
+                        PlayerType.LIBVLC -> {
+                            val vlcCfg = preferences.libVlcConfig
+                            val vlcDefault = LibVlcEngineConfig()
+                            val vlcTotal = 10
+                            var vlcIdx = 0
+
+                            SettingListItem(
+                                icon = Tabler.Outline.Volume,
+                                title = "Audio Output",
+                                subtitle = "${vlcCfg.audioOutput.displayName} (${vlcCfg.audioOutput.key})",
+                                trailingText = vlcCfg.audioOutput.key,
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcAudioOutputPicker = true },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.Clock,
+                                title = "Audio Time Stretch",
+                                subtitle = if (vlcCfg.audioTimeStretch) "Speed change without pitch shift" else "No time stretching",
+                                checked = vlcCfg.audioTimeStretch,
+                                index = vlcIdx++, count = vlcTotal,
+                                onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Video,
+                                title = "Video Output",
+                                subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
+                                trailingText = vlcCfg.videoOutput.key,
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcVideoOutputPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Wifi,
+                                title = "Network Caching",
+                                subtitle = if (vlcCfg.networkCaching == 0) "Auto (device-based)" else "${vlcCfg.networkCaching}ms",
+                                trailingText = if (vlcCfg.networkCaching == 0) "auto" else "${vlcCfg.networkCaching}ms",
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcNetworkCachingPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Filter,
+                                title = "Skip Loop Filter",
+                                subtitle = vlcSkipLoopFilterLabel(vlcCfg.skipLoopFilter),
+                                trailingText = "${vlcCfg.skipLoopFilter}",
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcSkipLoopFilterPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.PlayerSkipForward,
+                                title = "Skip Frames",
+                                subtitle = vlcSkipFrameLabel(vlcCfg.skipFrame),
+                                trailingText = "${vlcCfg.skipFrame}",
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcSkipFramePicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Cpu,
+                                title = "Decoder Threads",
+                                subtitle = if (vlcCfg.decoderThreads == 0) "Auto" else "${vlcCfg.decoderThreads} threads",
+                                trailingText = if (vlcCfg.decoderThreads == 0) "auto" else "${vlcCfg.decoderThreads}",
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = { showVlcDecoderThreadsPicker = true },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.PlayerPause,
+                                title = "Drop Late Frames",
+                                subtitle = if (vlcCfg.dropLateFrames) "Drop late frames" else "Render all frames",
+                                checked = vlcCfg.dropLateFrames,
+                                index = vlcIdx++, count = vlcTotal,
+                                onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(dropLateFrames = it)) },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.PlayerSkipForward,
+                                title = "Skip Frames Toggle",
+                                subtitle = if (vlcCfg.skipFrames) "Enable frame skipping" else "No frame skipping",
+                                checked = vlcCfg.skipFrames,
+                                index = vlcIdx++, count = vlcTotal,
+                                onCheckedChange = { viewModel.setLibVlcConfig(vlcCfg.copy(skipFrames = it)) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Refresh,
+                                title = "Reset to Default",
+                                subtitle = if (vlcCfg == vlcDefault) "Already using defaults" else "Restore all LibVLC settings to default",
+                                index = vlcIdx, count = vlcTotal,
+                                onClick = { viewModel.setLibVlcConfig(LibVlcEngineConfig()) },
+                            )
+                        }
+                        PlayerType.EXO_PLAYER -> {
+                            val exoCfg = preferences.exoPlayerConfig
+                            val exoDefault = ExoPlayerEngineConfig()
+                            val exoTotal = 8
+                            var exoIdx = 0
+
+                            SettingListItem(
+                                icon = Tabler.Outline.ArrowsMaximize,
+                                title = "Video Scaling",
+                                subtitle = "${exoCfg.videoScalingMode.displayName} (${exoCfg.videoScalingMode.key})",
+                                trailingText = exoCfg.videoScalingMode.key,
+                                index = exoIdx++, count = exoTotal,
+                                onClick = { showExoScalingPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Clock,
+                                title = "Frame Rate Strategy",
+                                subtitle = "${exoCfg.frameRateStrategy.displayName} (${exoCfg.frameRateStrategy.key})",
+                                trailingText = exoCfg.frameRateStrategy.key,
+                                index = exoIdx++, count = exoTotal,
+                                onClick = { showExoFrameRatePicker = true },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.Volume,
+                                title = "Skip Silence",
+                                subtitle = if (exoCfg.skipSilence) "Skip silent sections" else "Play all audio",
+                                checked = exoCfg.skipSilence,
+                                index = exoIdx++, count = exoTotal,
+                                onCheckedChange = { viewModel.setExoPlayerConfig(exoCfg.copy(skipSilence = it)) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Cpu,
+                                title = "Audio Offload",
+                                subtitle = "${exoCfg.audioOffloadMode.displayName} (${exoCfg.audioOffloadMode.key})",
+                                trailingText = exoCfg.audioOffloadMode.key,
+                                index = exoIdx++, count = exoTotal,
+                                onClick = { showExoAudioOffloadPicker = true },
+                            )
+                            SettingToggleItem(
+                                icon = Tabler.Outline.BadgeHd,
+                                title = "Decoder Fallback",
+                                subtitle = if (exoCfg.enableDecoderFallback) "Fallback to secondary decoders" else "Primary decoder only",
+                                checked = exoCfg.enableDecoderFallback,
+                                index = exoIdx++, count = exoTotal,
+                                onCheckedChange = { viewModel.setExoPlayerConfig(exoCfg.copy(enableDecoderFallback = it)) },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Database,
+                                title = "Back Buffer",
+                                subtitle = if (exoCfg.backBufferDurationMs == 0) "Disabled" else "${exoCfg.backBufferDurationMs / 1000}s",
+                                trailingText = if (exoCfg.backBufferDurationMs == 0) "off" else "${exoCfg.backBufferDurationMs / 1000}s",
+                                index = exoIdx++, count = exoTotal,
+                                onClick = { showExoBackBufferPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Photo,
+                                title = "Preferred Codecs",
+                                subtitle = if (exoCfg.preferredVideoMimeTypes.isEmpty()) "All codecs" else exoCfg.preferredVideoMimeTypes.joinToString { it.removePrefix("video/") },
+                                trailingText = if (exoCfg.preferredVideoMimeTypes.isEmpty()) "All" else "Custom",
+                                index = exoIdx++, count = exoTotal,
+                                onClick = { showExoCodecPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Refresh,
+                                title = "Reset to Default",
+                                subtitle = if (exoCfg == exoDefault) "Already using defaults" else "Restore all ExoPlayer settings to default",
+                                index = exoIdx, count = exoTotal,
+                                onClick = { viewModel.setExoPlayerConfig(ExoPlayerEngineConfig()) },
+                            )
+                        }
+                        else -> {}
+                    }
                 }
             }
 
@@ -2091,6 +2391,324 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (showMpvVideoOutputPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Video Output (vo)",
+            items = MpvVideoOutput.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.videoOutput },
+            onDismiss = { showMpvVideoOutputPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(videoOutput = it))
+                showMpvVideoOutputPicker = false
+            },
+        )
+    }
+
+    if (showMpvScalerPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Scaler (dscale)",
+            items = MpvScaler.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.scaler },
+            onDismiss = { showMpvScalerPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(scaler = it))
+                showMpvScalerPicker = false
+            },
+        )
+    }
+
+    if (showMpvAudioOutputPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Audio Output (ao)",
+            items = MpvAudioOutput.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.audioOutput },
+            onDismiss = { showMpvAudioOutputPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(audioOutput = it))
+                showMpvAudioOutputPicker = false
+            },
+        )
+    }
+
+    if (showMpvAudioFallbackPicker) {
+        val mpvCfg = preferences.mpvConfig
+        val options = listOf(null) + MpvAudioOutput.entries
+        SettingsListPickerSheet(
+            title = "Audio Fallback (ao-fallback)",
+            items = options,
+            label = { it?.displayName ?: "None" },
+            subtitle = { it?.key ?: "no fallback" },
+            isSelected = { it == mpvCfg.audioFallback },
+            onDismiss = { showMpvAudioFallbackPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(audioFallback = it))
+                showMpvAudioFallbackPicker = false
+            },
+        )
+    }
+
+    if (showMpvDemuxerPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Buffer Size (demuxer-max-bytes)",
+            items = MpvDemuxerMaxBytes.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.demuxerMaxBytes },
+            onDismiss = { showMpvDemuxerPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(demuxerMaxBytes = it))
+                showMpvDemuxerPicker = false
+            },
+        )
+    }
+
+    if (showMpvHwdecPicker) {
+        val mpvCfg = preferences.mpvConfig
+        val options = listOf(null) + MpvHwdec.entries
+        SettingsListPickerSheet(
+            title = "HW Decoder Override (hwdec)",
+            items = options,
+            label = { it?.displayName ?: "Use universal setting" },
+            subtitle = { it?.key ?: "auto" },
+            isSelected = { it == mpvCfg.hwdecOverride },
+            onDismiss = { showMpvHwdecPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(hwdecOverride = it))
+                showMpvHwdecPicker = false
+            },
+        )
+    }
+
+    if (showMpvSkipLoopFilterPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Skip Loop Filter (vd-lavc-skiploopfilter)",
+            items = MpvSkipLoopFilter.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.skipLoopFilter },
+            onDismiss = { showMpvSkipLoopFilterPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(skipLoopFilter = it))
+                showMpvSkipLoopFilterPicker = false
+            },
+        )
+    }
+
+    if (showMpvFrameDropPicker) {
+        val mpvCfg = preferences.mpvConfig
+        SettingsListPickerSheet(
+            title = "Frame Drop (framedrop)",
+            items = MpvFrameDrop.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == mpvCfg.frameDrop },
+            onDismiss = { showMpvFrameDropPicker = false },
+            onSelect = {
+                viewModel.setMpvConfig(mpvCfg.copy(frameDrop = it))
+                showMpvFrameDropPicker = false
+            },
+        )
+    }
+
+    if (showVlcAudioOutputPicker) {
+        val vlcCfg = preferences.libVlcConfig
+        SettingsListPickerSheet(
+            title = "Audio Output (aout)",
+            items = VlcAudioOutput.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == vlcCfg.audioOutput },
+            onDismiss = { showVlcAudioOutputPicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(audioOutput = it))
+                showVlcAudioOutputPicker = false
+            },
+        )
+    }
+
+    if (showVlcVideoOutputPicker) {
+        val vlcCfg = preferences.libVlcConfig
+        SettingsListPickerSheet(
+            title = "Video Output (vout)",
+            items = VlcVideoOutput.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == vlcCfg.videoOutput },
+            onDismiss = { showVlcVideoOutputPicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(videoOutput = it))
+                showVlcVideoOutputPicker = false
+            },
+        )
+    }
+
+    if (showVlcNetworkCachingPicker) {
+        val vlcCfg = preferences.libVlcConfig
+        val options = listOf(0, 500, 1000, 1500, 2000, 3000, 5000)
+        SettingsListPickerSheet(
+            title = "Network Caching (network-caching)",
+            items = options,
+            label = { if (it == 0) "Auto (device-based)" else "${it}ms" },
+            subtitle = { if (it == 0) "auto" else "${it}ms" },
+            isSelected = { it == vlcCfg.networkCaching },
+            onDismiss = { showVlcNetworkCachingPicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(networkCaching = it))
+                showVlcNetworkCachingPicker = false
+            },
+        )
+    }
+
+    if (showVlcSkipLoopFilterPicker) {
+        val vlcCfg = preferences.libVlcConfig
+        val options = (0..4).toList()
+        SettingsListPickerSheet(
+            title = "Skip Loop Filter (skiploopfilter)",
+            items = options,
+            label = { vlcSkipLoopFilterLabel(it) },
+            subtitle = { "level $it" },
+            isSelected = { it == vlcCfg.skipLoopFilter },
+            onDismiss = { showVlcSkipLoopFilterPicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(skipLoopFilter = it))
+                showVlcSkipLoopFilterPicker = false
+            },
+        )
+    }
+
+    if (showVlcSkipFramePicker) {
+        val vlcCfg = preferences.libVlcConfig
+        val options = (0..4).toList()
+        SettingsListPickerSheet(
+            title = "Skip Frames (skip-frames)",
+            items = options,
+            label = { vlcSkipFrameLabel(it) },
+            subtitle = { "level $it" },
+            isSelected = { it == vlcCfg.skipFrame },
+            onDismiss = { showVlcSkipFramePicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(skipFrame = it))
+                showVlcSkipFramePicker = false
+            },
+        )
+    }
+
+    if (showVlcDecoderThreadsPicker) {
+        val vlcCfg = preferences.libVlcConfig
+        val options = listOf(0, 1, 2, 4, 6, 8)
+        SettingsListPickerSheet(
+            title = "Decoder Threads (codec-dr-threads)",
+            items = options,
+            label = { if (it == 0) "Auto" else "$it threads" },
+            subtitle = { if (it == 0) "auto" else "$it" },
+            isSelected = { it == vlcCfg.decoderThreads },
+            onDismiss = { showVlcDecoderThreadsPicker = false },
+            onSelect = {
+                viewModel.setLibVlcConfig(vlcCfg.copy(decoderThreads = it))
+                showVlcDecoderThreadsPicker = false
+            },
+        )
+    }
+
+    if (showExoScalingPicker) {
+        val exoCfg = preferences.exoPlayerConfig
+        SettingsListPickerSheet(
+            title = "Video Scaling (scalingMode)",
+            items = ExoVideoScalingMode.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == exoCfg.videoScalingMode },
+            onDismiss = { showExoScalingPicker = false },
+            onSelect = {
+                viewModel.setExoPlayerConfig(exoCfg.copy(videoScalingMode = it))
+                showExoScalingPicker = false
+            },
+        )
+    }
+
+    if (showExoFrameRatePicker) {
+        val exoCfg = preferences.exoPlayerConfig
+        SettingsListPickerSheet(
+            title = "Frame Rate Strategy (setVideoAspectRatio)",
+            items = ExoFrameRateStrategy.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == exoCfg.frameRateStrategy },
+            onDismiss = { showExoFrameRatePicker = false },
+            onSelect = {
+                viewModel.setExoPlayerConfig(exoCfg.copy(frameRateStrategy = it))
+                showExoFrameRatePicker = false
+            },
+        )
+    }
+
+    if (showExoAudioOffloadPicker) {
+        val exoCfg = preferences.exoPlayerConfig
+        SettingsListPickerSheet(
+            title = "Audio Offload (audioOffloadMode)",
+            items = ExoAudioOffloadMode.entries,
+            label = { it.displayName },
+            subtitle = { it.key },
+            isSelected = { it == exoCfg.audioOffloadMode },
+            onDismiss = { showExoAudioOffloadPicker = false },
+            onSelect = {
+                viewModel.setExoPlayerConfig(exoCfg.copy(audioOffloadMode = it))
+                showExoAudioOffloadPicker = false
+            },
+        )
+    }
+
+    if (showExoBackBufferPicker) {
+        val exoCfg = preferences.exoPlayerConfig
+        val options = listOf(0, 5000, 10000, 15000, 20000, 30000)
+        SettingsListPickerSheet(
+            title = "Back Buffer (backBufferDurationMs)",
+            items = options,
+            label = { if (it == 0) "Disabled" else "${it / 1000}s" },
+            subtitle = { if (it == 0) "off" else "${it}ms" },
+            isSelected = { it == exoCfg.backBufferDurationMs },
+            onDismiss = { showExoBackBufferPicker = false },
+            onSelect = {
+                viewModel.setExoPlayerConfig(exoCfg.copy(backBufferDurationMs = it))
+                showExoBackBufferPicker = false
+            },
+        )
+    }
+
+    if (showExoCodecPicker) {
+        val exoCfg = preferences.exoPlayerConfig
+        val presets = listOf(
+            emptyList<String>(),
+            listOf("video/hevc", "video/avc"),
+            listOf("video/av1", "video/hevc", "video/avc"),
+            listOf("video/avc"),
+        )
+        val presetLabels = listOf("All codecs", "HEVC + AVC", "AV1 + HEVC + AVC", "AVC only")
+        SettingsListPickerSheet(
+            title = "Preferred Codecs (preferredVideoMimeTypes)",
+            items = presets,
+            label = { presetLabels[presets.indexOf(it)] },
+            subtitle = { if (it.isEmpty()) "*" else it.joinToString(", ") },
+            isSelected = { it == exoCfg.preferredVideoMimeTypes },
+            onDismiss = { showExoCodecPicker = false },
+            onSelect = {
+                viewModel.setExoPlayerConfig(exoCfg.copy(preferredVideoMimeTypes = it))
+                showExoCodecPicker = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -2175,4 +2793,22 @@ private fun streamingQualityShort(quality: StreamingQuality): String = when (qua
     StreamingQuality.HD_720P -> "720p"
     StreamingQuality.FHD_1080P -> "1080p"
     StreamingQuality.UHD_4K -> "4K"
+}
+
+private fun vlcSkipLoopFilterLabel(level: Int): String = when (level) {
+    0 -> "None (Best Quality)"
+    1 -> "Default"
+    2 -> "Non-Reference"
+    3 -> "Bi-Directional"
+    4 -> "All (Fastest)"
+    else -> "Level $level"
+}
+
+private fun vlcSkipFrameLabel(level: Int): String = when (level) {
+    0 -> "None (No Skipping)"
+    1 -> "Default"
+    2 -> "Non-Reference"
+    3 -> "Bi-Directional"
+    4 -> "All (Aggressive)"
+    else -> "Level $level"
 }
