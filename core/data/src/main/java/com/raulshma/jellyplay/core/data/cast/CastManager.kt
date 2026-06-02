@@ -25,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -73,6 +74,29 @@ class CastManager @Inject constructor(
     private val _castBufferedPositionMs = MutableStateFlow(0L)
     val castBufferedPositionMs: StateFlow<Long> = _castBufferedPositionMs.asStateFlow()
 
+    private val _castVolume = MutableStateFlow(1f)
+    val castVolume: StateFlow<Float> = _castVolume.asStateFlow()
+
+    val castPlayerForSession: Player? get() = castPlayer
+
+    fun isActive(): Boolean = castPlayer != null && isConnected
+
+    fun setVolume(volume: Float) {
+        val player = castPlayer ?: return
+        player.volume = volume.coerceIn(0f, 1f)
+        _castVolume.value = player.volume
+    }
+
+    @Volatile
+    private var released = false
+
+    private val backgroundCasting = AtomicBoolean(false)
+    val isBackgroundCasting: Boolean get() = backgroundCasting.get()
+
+    fun markBackgroundCasting(casting: Boolean) {
+        backgroundCasting.set(casting)
+    }
+
     private val castPlayerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateCastState()
@@ -103,6 +127,7 @@ class CastManager @Inject constructor(
         _castDurationMs.value = player.duration.coerceAtLeast(0)
         _castBufferedPositionMs.value = player.bufferedPosition.coerceAtLeast(0)
         _castIsPlaying.value = player.isPlaying
+        _castVolume.value = player.volume
     }
 
     private fun toggleTicker() {
@@ -253,6 +278,7 @@ class CastManager @Inject constructor(
     private fun ensureCastPlayer(): CastPlayer? {
         if (!googleCastStrategy.isConnected.value) return null
         if (castPlayer != null) return castPlayer
+        if (released) return null
         try {
             val castContext = CastContext.getSharedInstance(context)
             sessionAvailabilityListener = object : SessionAvailabilityListener {
@@ -288,7 +314,14 @@ class CastManager @Inject constructor(
         toggleTicker()
     }
 
+    fun ensurePlayerReady() {
+        ensureGoogleSessionListener()
+        ensureCastPlayer()
+    }
+
     fun release() {
+        released = true
+        backgroundCasting.set(false)
         tickerJob?.cancel()
         tickerJob = null
         strategyObserverJob?.cancel()
@@ -302,6 +335,14 @@ class CastManager @Inject constructor(
         resetCastState()
         strategies.values.forEach { it.stopDiscovery() }
         coroutineScope.cancel()
+    }
+
+    fun softRelease() {
+        tickerJob?.cancel()
+        tickerJob = null
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
+        strategies.values.forEach { it.stopDiscovery() }
     }
 
     private fun resetCastState() {

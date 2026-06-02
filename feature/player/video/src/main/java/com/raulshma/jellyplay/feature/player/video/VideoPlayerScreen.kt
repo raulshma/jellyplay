@@ -197,13 +197,17 @@ fun VideoPlayerScreen(
         ?: emptyList()
 
     LaunchedEffect(itemId) {
-        viewModel.initialize(
-            itemId = itemId,
-            mediaSourceId = mediaSourceId,
-            startPositionTicks = startPositionTicks,
-            subtitleStreamIndex = subtitleStreamIndex,
-            audioStreamIndex = audioStreamIndex,
-        )
+        if (viewModel.isBackgroundCasting) {
+            viewModel.reattachFromBackgroundCast()
+        } else {
+            viewModel.initialize(
+                itemId = itemId,
+                mediaSourceId = mediaSourceId,
+                startPositionTicks = startPositionTicks,
+                subtitleStreamIndex = subtitleStreamIndex,
+                audioStreamIndex = audioStreamIndex,
+            )
+        }
     }
 
     // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
@@ -276,7 +280,25 @@ fun VideoPlayerScreen(
 
         onDispose {
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
-            if (!currentlyInPip) {
+            val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value
+            if (isBgCasting && !currentlyInPip) {
+                activity?.let {
+                    if (!it.isDestroyed && !it.isFinishing) {
+                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        val window = it.window
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        controller.show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+                activity?.let { act ->
+                    if (!act.isDestroyed && !act.isFinishing) {
+                        FrameRateMatcher.restoreOriginalMode(act)
+                    }
+                }
+                playerViewRef = null
+                viewModel.detachForBackgroundCast()
+            } else if (!currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
                         it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -367,11 +389,11 @@ fun VideoPlayerScreen(
     val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
     val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
     val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
-    val useEngineForCast = isCastConnected && viewModel.isVlcCasting
-    val isPlaying = if (useEngineForCast) uiState.isPlaying else if (isCastConnected) castIsPlaying else uiState.isPlaying
-    val currentPosition = if (useEngineForCast) uiState.currentPosition else if (isCastConnected) castPosition else uiState.currentPosition
-    val duration = if (useEngineForCast) uiState.duration else if (isCastConnected) castDuration else uiState.duration
+    val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
+    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
+    val duration = if (isCastConnected) castDuration else uiState.duration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
@@ -619,21 +641,29 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onVolumeGesture = remember(context) {
+            onVolumeGesture = remember(context, isCastConnected, castVolume) {
                 { delta ->
-                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                    audioManager?.let { am ->
-                        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val currentNorm = current.toFloat() / max.toFloat()
-                        val stepThreshold = 1f / max.toFloat()
-                        volumeGestureAccumulator += delta
-                        volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
-                        val steps = (volumeGestureAccumulator / stepThreshold).toInt()
-                        if (steps != 0) {
-                            volumeGestureAccumulator -= steps * stepThreshold
-                            val newVol = (current + steps).coerceIn(0, max)
-                            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                    if (isCastConnected) {
+                        val currentNorm = castVolume
+                        val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
+                        volumeOverlay = newVolume
+                        volumeGestureAccumulator = 0f
+                        viewModel.setCastVolume(newVolume)
+                    } else {
+                        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                        audioManager?.let { am ->
+                            val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                            val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                            val currentNorm = current.toFloat() / max.toFloat()
+                            val stepThreshold = 1f / max.toFloat()
+                            volumeGestureAccumulator += delta
+                            volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
+                            val steps = (volumeGestureAccumulator / stepThreshold).toInt()
+                            if (steps != 0) {
+                                volumeGestureAccumulator -= steps * stepThreshold
+                                val newVol = (current + steps).coerceIn(0, max)
+                                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                            }
                         }
                     }
                 }

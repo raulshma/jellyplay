@@ -5,6 +5,9 @@ import android.content.Intent
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +43,7 @@ class AppShortcutManager @Inject constructor(
         }
     }
 
-    private fun pushContinueListeningShortcut(track: TrackInfo) {
+    private suspend fun pushContinueListeningShortcut(track: TrackInfo) {
         val intent = Intent(context, mainActivityClass).apply {
             action = ACTION_PLAY_AUDIO
             putExtra(EXTRA_ITEM_ID, track.itemId)
@@ -48,28 +51,47 @@ class AppShortcutManager @Inject constructor(
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
 
+        val icon = try {
+            createShortcutIcon()
+        } catch (_: Exception) {
+            createDefaultIcon()
+        }
+
         val shortcut = ShortcutInfoCompat.Builder(context, SHORTCUT_ID_CONTINUE_LISTENING)
             .setShortLabel(track.title.ifBlank { "Continue Listening" })
             .setLongLabel("Play ${track.title}")
-            .setIcon(createShortcutIcon(track))
+            .setIcon(icon)
             .setIntent(intent)
             .setLongLived(true)
             .build()
 
-        ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
+        try {
+            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
+        } catch (_: Exception) {
+            val fallbackShortcut = ShortcutInfoCompat.Builder(context, SHORTCUT_ID_CONTINUE_LISTENING)
+                .setShortLabel(track.title.ifBlank { "Continue Listening" })
+                .setLongLabel("Play ${track.title}")
+                .setIcon(createDefaultIcon())
+                .setIntent(intent)
+                .setLongLived(true)
+                .build()
+            try {
+                ShortcutManagerCompat.pushDynamicShortcut(context, fallbackShortcut)
+            } catch (_: Exception) { }
+        }
     }
 
-    private fun createShortcutIcon(track: TrackInfo): IconCompat {
+    private suspend fun createShortcutIcon(): IconCompat {
         val artworkUrl = audioPlaybackManager.albumArtUrl.value
-        return if (!artworkUrl.isNullOrBlank()) {
-            try {
-                IconCompat.createWithContentUri(artworkUrl)
-            } catch (_: Exception) {
-                createDefaultIcon()
-            }
-        } else {
-            createDefaultIcon()
-        }
+        if (artworkUrl.isNullOrBlank()) return createDefaultIcon()
+
+        val request = ImageRequest.Builder(context)
+            .data(artworkUrl)
+            .size(1080)
+            .build()
+        val result = context.imageLoader.execute(request)
+        val bitmap = result.image?.toBitmap() ?: return createDefaultIcon()
+        return IconCompat.createWithBitmap(bitmap)
     }
 
     private fun createDefaultIcon(): IconCompat {
