@@ -36,12 +36,16 @@ fun MediaImage(
     crossfade: Boolean = true,
     size: CoilSize = CoilSize(512, 512),
 ) {
+    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
+    val effectiveSize = if (performanceMode) CoilSize(256, 256) else size
+    val effectiveBlurHash = if (performanceMode) null else blurHash
+    val effectiveCrossfade = if (performanceMode) false else crossfade
     val context = LocalContext.current
-    val imageRequest = remember(url, size, crossfade) {
+    val imageRequest = remember(url, effectiveSize, effectiveCrossfade) {
         ImageRequest.Builder(context)
             .data(url)
-            .crossfade(crossfade)
-            .size(size)
+            .crossfade(effectiveCrossfade)
+            .size(effectiveSize)
             .build()
     }
 
@@ -51,9 +55,9 @@ fun MediaImage(
     var isError by remember(url, fallbackKey) { mutableStateOf(false) }
 
     Box(modifier = modifier) {
-        if (!blurHash.isNullOrEmpty()) {
+        if (!effectiveBlurHash.isNullOrEmpty()) {
             BlurHashImage(
-                blurHash = blurHash,
+                blurHash = effectiveBlurHash,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
             )
@@ -63,11 +67,11 @@ fun MediaImage(
             val currentRequest = if (currentIndex == 0) {
                 imageRequest
             } else {
-                remember(allUrls[currentIndex], size, crossfade) {
+                remember(allUrls[currentIndex], effectiveSize, effectiveCrossfade) {
                     ImageRequest.Builder(context)
                         .data(allUrls[currentIndex])
-                        .crossfade(crossfade)
-                        .size(size)
+                        .crossfade(effectiveCrossfade)
+                        .size(effectiveSize)
                         .build()
                 }
             }
@@ -86,7 +90,7 @@ fun MediaImage(
                     }
                 }
             )
-        } else if (blurHash.isNullOrEmpty()) {
+        } else if (effectiveBlurHash.isNullOrEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

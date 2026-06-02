@@ -90,6 +90,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -310,13 +311,14 @@ private fun MainContent(
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalTvTypography provides tvTypography,
+        LocalPerformanceMode provides preferences.performanceMode,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
-                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {

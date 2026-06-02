@@ -534,6 +534,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setNavBarShowLabels(show) }
     }
 
+    fun setPerformanceMode(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setPerformanceMode(enabled) }
+    }
+
     fun setMpvConfig(config: MpvEngineConfig) {
         viewModelScope.launch { preferencesStore.setMpvConfig(config) }
     }

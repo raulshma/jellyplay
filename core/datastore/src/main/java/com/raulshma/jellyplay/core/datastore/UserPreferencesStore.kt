@@ -147,6 +147,7 @@ class UserPreferencesStore @Inject constructor(
         val MPV_CONFIG = stringPreferencesKey("mpv_config")
         val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
         val EXO_CONFIG = stringPreferencesKey("exo_config")
+        val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -379,6 +380,7 @@ class UserPreferencesStore @Inject constructor(
             exoPlayerConfig = try {
                 prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
             } catch (_: Exception) { ExoPlayerEngineConfig() },
+            performanceMode = prefs[Keys.PERFORMANCE_MODE]?.toBoolean() ?: false,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -764,6 +766,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
         context.dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setPerformanceMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled.toString() }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
