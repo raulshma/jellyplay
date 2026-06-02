@@ -12,12 +12,14 @@ import android.view.View
 import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -374,6 +376,10 @@ class LibVlcPlayerEngine(
         try { mediaPlayer?.pause() } catch (_: Exception) {}
     }
 
+    override fun stop() {
+        try { mediaPlayer?.stop() } catch (_: Exception) {}
+    }
+
     override fun seekTo(positionMs: Long) {
         try { mediaPlayer?.time = positionMs } catch (_: Exception) {}
     }
@@ -482,6 +488,55 @@ class LibVlcPlayerEngine(
     override fun setMaxVideoBitrate(bps: Int?) {
         // VLC does not support mid-stream bitrate changes for non-adaptive streams.
         // The value is stored and applied when the next load() is called.
+    }
+
+    @Volatile
+    private var lastUnmuteVolume: Float = 1f
+
+    override val volume: Float
+        get() = try {
+            (mediaPlayer?.volume ?: 100).coerceIn(0, 100) / 100f
+        } catch (_: Exception) { 1f }
+
+    override fun setVolume(value: Float) {
+        try {
+            val clamped = value.coerceIn(0f, 1f)
+            val v = (clamped * 100).toInt().coerceIn(0, 100)
+            if (v > 0) lastUnmuteVolume = v / 100f
+            mediaPlayer?.volume = v
+            MediaStreamVolume.setNormalized(context, clamped)
+        } catch (_: Exception) {}
+    }
+
+    override fun increaseVolume(delta: Float) {
+        try {
+            val mp = mediaPlayer ?: return
+            val next = (mp.volume + (delta * 100).toInt()).coerceIn(0, 100)
+            if (next > 0) lastUnmuteVolume = next / 100f
+            mp.volume = next
+            MediaStreamVolume.setNormalized(context, next / 100f)
+        } catch (_: Exception) {}
+    }
+
+    override fun decreaseVolume(delta: Float) {
+        try {
+            val mp = mediaPlayer ?: return
+            val next = (mp.volume - (delta * 100).toInt()).coerceIn(0, 100)
+            if (next > 0) lastUnmuteVolume = next / 100f
+            mp.volume = next
+            MediaStreamVolume.setNormalized(context, next / 100f)
+        } catch (_: Exception) {}
+    }
+
+    override fun setMuted(muted: Boolean) {
+        // libVLC 3.7.x MediaPlayer has no native mute API — emulate it via volume.
+        try {
+            val mp = mediaPlayer ?: return
+            val restored = lastUnmuteVolume.coerceIn(0f, 1f)
+            val target = if (muted) 0f else restored
+            mp.volume = (target * 100).toInt().coerceIn(0, 100)
+            MediaStreamVolume.setNormalized(context, target)
+        } catch (_: Exception) {}
     }
 
     override fun createSurfaceView(context: Context): View {

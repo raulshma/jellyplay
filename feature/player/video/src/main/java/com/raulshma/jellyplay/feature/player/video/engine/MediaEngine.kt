@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -108,8 +109,6 @@ data class MediaTrack(
     val trackGroup: Any? = null,
 )
 
-enum class TrackType { AUDIO, SUBTITLE }
-
 data class EngineVideoStats(
     val videoCodec: String? = null,
     val videoDecoder: String? = null,
@@ -130,22 +129,23 @@ data class EngineVideoStats(
     val bufferSizeBytes: Long = 0,
 )
 
-interface MediaEngine : PlayerLifecycleCallbacks {
+interface MediaEngine : PlayerLifecycleCallbacks, com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine {
     
     // 1. Initialization
     fun load(request: PlaybackRequest)
     fun release()
 
     // 2. Core Controls
-    fun play()
-    fun pause()
-    fun seekTo(positionMs: Long)
+    override fun play()
+    override fun pause()
+    override fun stop()
+    override fun seekTo(positionMs: Long)
     fun setPlaybackSpeed(speed: Float)
 
     // 3. Reactive State
     val playbackState: StateFlow<EnginePlaybackState>
-    val isPlaying: StateFlow<Boolean>
-    val currentPositionMs: Long
+    override val isPlaying: StateFlow<Boolean>
+    override val currentPositionMs: Long
     val durationMs: Long
     val positionFlow: Flow<Long>
     val currentCues: StateFlow<List<String>>
@@ -159,10 +159,10 @@ interface MediaEngine : PlayerLifecycleCallbacks {
 
     // 5. Track Selection
     val availableTracks: StateFlow<List<MediaTrack>>
-    fun selectTrack(type: TrackType, index: Int, trackGroup: Any? = null)
+    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?)
 
     // 5b. Quality
-    fun setMaxVideoBitrate(bps: Int?)
+    override fun setMaxVideoBitrate(bps: Int?)
 
     // 5c. Runtime subtitle addition
     fun addExternalSubtitle(source: SubtitleSource) {}
@@ -172,12 +172,12 @@ interface MediaEngine : PlayerLifecycleCallbacks {
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
     fun setAspectRatio(mode: Int, ratio: Float? = null)
     fun captureViewBitmap(): Bitmap?
-    
+
     // Internal state access (needed for some specific features, but keep to a minimum)
     val playbackSpeed: Float
     val audioSessionId: Int
 
-    val underlyingPlayer: androidx.media3.common.Player? get() = null
+    override val underlyingPlayer: androidx.media3.common.Player? get() = null
 
     fun setRenderer(renderer: Any?) {}
 }

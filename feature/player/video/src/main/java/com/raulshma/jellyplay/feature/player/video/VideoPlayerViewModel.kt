@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
@@ -50,6 +51,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
+import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -83,6 +85,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
+    private val activePlayerController: ActivePlayerController,
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
@@ -236,6 +239,19 @@ class VideoPlayerViewModel @Inject constructor(
             playerLifecycleManager.pipDismissed.collect { dismissed ->
                 if (dismissed) {
                     playerSessionManager.engine?.pause()
+                }
+            }
+        }
+
+        // Publish the current engine to the singleton [ActivePlayerController]
+        // so non-Compose layers (e.g. the Jellyfin remote "Play To" receiver)
+        // can drive playback directly.
+        viewModelScope.launch {
+            playerSessionManager.engineFlow.collect { engine ->
+                if (engine != null) {
+                    activePlayerController.bindEngine(engine)
+                } else {
+                    activePlayerController.clearEngine()
                 }
             }
         }
@@ -459,7 +475,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectAudioTrack(option: TrackOption) {
         val engine = playerSessionManager.engine ?: return
-        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, option.index, option.trackGroup)
+        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, option.index, option.trackGroup)
         if (option.index < 0) {
             selectedAudioTrackId = null
         } else {
@@ -483,7 +499,7 @@ class VideoPlayerViewModel @Inject constructor(
         val engine = playerSessionManager.engine ?: return
         
         // Apply selection to the player engine
-        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, option.index, option.trackGroup)
+        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, option.index, option.trackGroup)
         
         // Update internal state tracking
         if (option.index < 0) {
@@ -1254,23 +1270,23 @@ class VideoPlayerViewModel @Inject constructor(
         val rawTracks = engine.availableTracks.value
 
         // Restore previous manual audio selection if new engine doesn't have it selected yet
-        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO }
+        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.AUDIO }
         val prevAudioSel = selectedAudioTrackId
         if (prevAudioSel != null) {
             val targetTrack = rawAudioTracks.find { it.index == prevAudioSel.first && it.trackGroup == prevAudioSel.second }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
+                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
                 return
             }
         }
 
         // Restore previous manual subtitle selection if new engine doesn't have it selected yet
-        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE }
+        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.SUBTITLE }
         val prevSubSel = selectedSubtitleTrackId
         if (prevSubSel != null) {
             val targetTrack = rawSubTracks.find { it.index == prevSubSel.first && it.trackGroup == prevSubSel.second }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
+                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
                 return
             }
         }
@@ -1564,6 +1580,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager.requestAutoEnterPip(false)
         releaseInternals()
         castManager.release()
+        activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
             // Use a transient IO scope instead of runBlocking to avoid potential ANR
             // if the network call blocks. The scope is intentionally short-lived;

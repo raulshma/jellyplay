@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))
+    implementation(project(":core:ui"))
 
     implementation(libs.room.ktx)
 
@@ -43,4 +44,5 @@ dependencies {
     implementation(libs.lifecycle.process)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.navigation3.runtime)
 }

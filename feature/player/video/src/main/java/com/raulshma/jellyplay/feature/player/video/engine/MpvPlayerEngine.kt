@@ -14,6 +14,7 @@ import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.AudioNormalizationHelper
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
+import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -371,6 +373,12 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyBoolean("pause", true) } catch (_: Exception) {}
     }
 
+    override fun stop() {
+        try {
+            mpvView?.mpv?.command("stop")
+        } catch (_: Exception) {}
+    }
+
     override fun seekTo(positionMs: Long) {
         try { mpvView?.mpv?.command("seek", "%.6f".format(positionMs / 1000.0), "absolute") } catch (_: Exception) {}
     }
@@ -519,6 +527,47 @@ class MpvPlayerEngine(
     override fun setMaxVideoBitrate(bps: Int?) {
         // MPV does not support mid-stream bitrate changes for non-adaptive streams.
         // The value is stored and applied when the next load() is called.
+    }
+
+    override val volume: Float
+        get() = try {
+            ((mpvView?.mpv?.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
+        } catch (_: Exception) { 1f }
+
+    override fun setVolume(value: Float) {
+        try {
+            val clamped = value.coerceIn(0f, 1f)
+            val pct = (clamped * 100.0).coerceIn(0.0, 130.0)
+            mpvView?.mpv?.setPropertyDouble("volume", pct)
+            MediaStreamVolume.setNormalized(context, clamped)
+        } catch (_: Exception) {}
+    }
+
+    override fun increaseVolume(delta: Float) {
+        try {
+            val m = mpvView?.mpv ?: return
+            val current = m.getPropertyDouble("volume") ?: 100.0
+            val next = (current + delta * 100.0).coerceIn(0.0, 130.0)
+            m.setPropertyDouble("volume", next)
+            MediaStreamVolume.setNormalized(context, (next / 100.0).toFloat().coerceIn(0f, 1f))
+        } catch (_: Exception) {}
+    }
+
+    override fun decreaseVolume(delta: Float) {
+        try {
+            val m = mpvView?.mpv ?: return
+            val current = m.getPropertyDouble("volume") ?: 100.0
+            val next = (current - delta * 100.0).coerceAtLeast(0.0)
+            m.setPropertyDouble("volume", next)
+            MediaStreamVolume.setNormalized(context, (next / 100.0).toFloat().coerceIn(0f, 1f))
+        } catch (_: Exception) {}
+    }
+
+    override fun setMuted(muted: Boolean) {
+        try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
+        try {
+            MediaStreamVolume.setNormalized(context, if (muted) 0f else 1f)
+        } catch (_: Exception) {}
     }
 
     override fun createSurfaceView(context: Context): View {

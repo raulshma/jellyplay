@@ -99,13 +99,30 @@ class JellyfinApiClientImpl @Inject constructor(
 
     internal companion object {
         val sharedJson = Json { ignoreUnknownKeys = true }
+        private val SUPPORTED_REMOTE_COMMANDS = listOf(
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_VOLUME,
+            org.jellyfin.sdk.model.api.GeneralCommandType.VOLUME_UP,
+            org.jellyfin.sdk.model.api.GeneralCommandType.VOLUME_DOWN,
+            org.jellyfin.sdk.model.api.GeneralCommandType.MUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.UNMUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.TOGGLE_MUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_AUDIO_STREAM_INDEX,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_SUBTITLE_STREAM_INDEX,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_REPEAT_MODE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_SHUFFLE_QUEUE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_PLAYBACK_ORDER,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_MAX_STREAMING_BITRATE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.TOGGLE_FULLSCREEN,
+            org.jellyfin.sdk.model.api.GeneralCommandType.DISPLAY_MESSAGE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.PLAY,
+        )
         private val CACHED_CAPABILITIES by lazy {
             org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
                 playableMediaTypes = listOf(
                     org.jellyfin.sdk.model.api.MediaType.VIDEO,
                     org.jellyfin.sdk.model.api.MediaType.AUDIO,
                 ),
-                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.entries,
+                supportedCommands = SUPPORTED_REMOTE_COMMANDS,
                 supportsMediaControl = true,
                 supportsPersistentIdentifier = true,
                 deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
