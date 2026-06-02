@@ -459,11 +459,20 @@ class HomeViewModel @Inject constructor(
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         isAppInForeground = true
+        viewModelScope.launch {
+            offlineModeManager.checkNetworkAndAutoDetect()
+            val now = System.currentTimeMillis()
+            if (now - lastRefreshTime >= REFRESH_INTERVAL_FOREGROUND_MS) {
+                fetchAndUpdateSections()
+            }
+        }
+        startPeriodicRefresh()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInForeground = false
+        startPeriodicRefresh()
     }
 
     override fun onCleared() {
