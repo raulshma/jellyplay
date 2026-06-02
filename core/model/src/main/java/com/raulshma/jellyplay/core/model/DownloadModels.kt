@@ -124,6 +124,9 @@ data class UserPreferences(
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
     val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
     val performanceMode: Boolean = false,
+    val newsletterEnabled: Boolean = true,
+    val newsletterDayOfWeek: Int = 7,
+    val newsletterLastViewedMs: Long = 0L,
 )
 
 @Immutable

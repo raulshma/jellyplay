@@ -46,6 +46,16 @@ class JellyfinWebSocketClient @Inject constructor(
     val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
 
     fun connect(serverAddress: String, accessToken: String, device: String, deviceName: String = "JellyPlay", client: String = "JellyPlay") {
+        if (isConnected.value &&
+            serverUrl == serverAddress &&
+            token == accessToken &&
+            deviceId == device &&
+            this.deviceName == deviceName &&
+            clientName == client
+        ) {
+            Log.d(TAG, "WebSocket already connected to this server, skipping connect")
+            return
+        }
         disconnect()
         serverUrl = serverAddress
         token = accessToken

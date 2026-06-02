@@ -150,6 +150,9 @@ class UserPreferencesStore @Inject constructor(
         val EXO_CONFIG = stringPreferencesKey("exo_config")
         val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val NEWSLETTER_ENABLED = stringPreferencesKey("newsletter_enabled")
+        val NEWSLETTER_DAY_OF_WEEK = stringPreferencesKey("newsletter_day_of_week")
+        val NEWSLETTER_LAST_VIEWED_MS = stringPreferencesKey("newsletter_last_viewed_ms")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -384,6 +387,9 @@ class UserPreferencesStore @Inject constructor(
                 prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
             } catch (_: Exception) { ExoPlayerEngineConfig() },
             performanceMode = prefs[Keys.PERFORMANCE_MODE]?.toBoolean() ?: false,
+            newsletterEnabled = prefs[Keys.NEWSLETTER_ENABLED]?.toBoolean() ?: true,
+            newsletterDayOfWeek = prefs[Keys.NEWSLETTER_DAY_OF_WEEK]?.toIntOrNull() ?: 7,
+            newsletterLastViewedMs = prefs[Keys.NEWSLETTER_LAST_VIEWED_MS]?.toLongOrNull() ?: 0L,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -801,4 +807,16 @@ class UserPreferencesStore @Inject constructor(
                 } catch (_: Exception) { emptyList() }
             } ?: emptyList()
         }
+
+    suspend fun setNewsletterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setNewsletterDayOfWeek(day: Int) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day.toString() }
+    }
+
+    suspend fun setNewsletterLastViewed(timestampMs: Long) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs.toString() }
+    }
 }

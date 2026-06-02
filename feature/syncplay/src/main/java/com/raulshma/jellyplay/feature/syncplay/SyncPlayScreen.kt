@@ -244,19 +244,19 @@ fun SyncPlayScreen(
                 visible = !isInGroup,
                 enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
+                    .offset {
+                        val maxOffset = 88.dp.toPx()
+                        val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                        androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                    },
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
                     text = { Text("Create group") },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
-                        .offset {
-                            val maxOffset = 88.dp.toPx()
-                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                        },
                 )
             }
         }

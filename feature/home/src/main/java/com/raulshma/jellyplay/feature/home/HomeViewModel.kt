@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -49,6 +50,7 @@ class HomeViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
+    private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -158,6 +160,12 @@ class HomeViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
+                _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
+            }
+        }
+
+        viewModelScope.launch {
             @OptIn(FlowPreview::class)
             searchQueryFlow
                 .debounce(400)
@@ -188,6 +196,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
             is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
+            is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
         }
     }
 

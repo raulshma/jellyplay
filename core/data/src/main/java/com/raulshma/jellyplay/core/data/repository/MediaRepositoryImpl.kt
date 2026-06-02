@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import kotlinx.coroutines.flow.Flow
@@ -455,6 +456,9 @@ class MediaRepositoryImpl @Inject constructor(
         } catch (_: Exception) {
         }
     }
+
+    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
+        apiClient.getNewsletterData(sinceDate, limit)
 
     companion object {
         private const val PAGE_SIZE = 50

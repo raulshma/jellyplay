@@ -125,6 +125,7 @@ fun SettingsScreen(
     onSeerrSettings: () -> Unit = {},
     onAdminDashboard: () -> Unit = {},
     onSetupWizard: () -> Unit = {},
+    onNewsletterClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -206,6 +207,15 @@ fun SettingsScreen(
         title = "Settings",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            androidx.compose.material3.IconButton(onClick = onNewsletterClick) {
+                Icon(
+                    com.composables.icons.tabler.Tabler.Outline.Mail,
+                    contentDescription = "Newsletter",
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        },
     ) {
         val scrollState = rememberScrollState()
         val context = LocalContext.current
