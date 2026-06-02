@@ -5,20 +5,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,49 +34,89 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ArrowRight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsletterCuratedPicks(
     items: List<MediaItem>,
     imageUrlBuilder: (String) -> String,
     backdropUrlBuilder: (String) -> String,
-    onItemClick: (String) -> Unit,
+    onItemClick: (MediaItem) -> Unit,
+    onViewAllClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    if (items.isEmpty()) return
+    val curatedItems = remember(items) {
+        items.filter { it.mediaType != MediaType.COLLECTION }
+    }
+    if (curatedItems.isEmpty()) return
 
     Column(modifier = modifier.padding(top = 12.dp)) {
-        Text(
-            text = "Fresh Picks",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Fresh Picks",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier = Modifier
+                    .clip(ShapeCache.smooth8)
+                    .clickable(onClick = onViewAllClick)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "View All",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Icon(
+                    imageVector = Tabler.Outline.ArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
 
-        val featured = items.first()
+        val featured = curatedItems.first()
         CuratedFeaturedCard(
             item = featured,
             backdropUrl = backdropUrlBuilder(featured.id),
-            onClick = { onItemClick(featured.id) },
-            modifier = Modifier.fillMaxWidth(),
+            onClick = { onItemClick(featured) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp),
         )
 
-        if (items.size > 1) {
+        if (curatedItems.size > 1) {
             Spacer(Modifier.height(12.dp))
 
+            val dropItems = remember(curatedItems) { curatedItems.drop(1) }
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
             ) {
-                items(items.drop(1), key = { it.id }) { item ->
-                    NewsletterMediaCard(
+                items(dropItems, key = { it.id }) { item ->
+                    CuratedPickCard(
                         item = item,
                         imageUrl = imageUrlBuilder(item.id),
-                        onClick = { onItemClick(item.id) },
-                        modifier = Modifier.width(120.dp),
+                        onClick = { onItemClick(item) },
+                        modifier = Modifier.width(160.dp),
                     )
                 }
             }
@@ -119,10 +165,28 @@ private fun CuratedFeaturedCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                item.mediaType.takeIf { it != MediaType.UNKNOWN }?.let { type ->
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Color.White.copy(alpha = 0.2f),
+                                ShapeCache.smooth4,
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = type.label,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                    }
+                }
                 item.year?.let {
                     Text(
                         text = it.toString(),
@@ -134,8 +198,33 @@ private fun CuratedFeaturedCard(
                     Text(
                         text = "\u2605 ${String.format("%.1f", rating)}",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = Color(0xFFFFC107),
                     )
+                }
+                if (item.runTimeTicks != null && item.runTimeTicks!! > 0 && item.mediaType != MediaType.SERIES) {
+                    Text(
+                        text = remember(item.runTimeTicks) {
+                            formatDurationFromTicks(item.runTimeTicks!!)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
+                }
+                item.officialRating?.let { rating ->
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Color.White.copy(alpha = 0.2f),
+                                ShapeCache.smooth4,
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = rating,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                    }
                 }
             }
             Text(
@@ -145,6 +234,15 @@ private fun CuratedFeaturedCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (item.genres.isNotEmpty()) {
+                Text(
+                    text = item.genres.take(3).joinToString(" \u00B7 "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             item.overview?.let { overview ->
                 Text(
                     text = overview,
@@ -152,7 +250,128 @@ private fun CuratedFeaturedCard(
                     color = Color.White.copy(alpha = 0.7f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CuratedPickCard(
+    item: MediaItem,
+    imageUrl: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(ShapeCache.smooth12)
+                .clickable(onClick = onClick),
+        ) {
+            MediaImage(
+                url = imageUrl,
+                contentDescription = item.name,
+                blurHash = item.blurHashes.primary,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+
+            if (item.communityRating != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                            ShapeCache.smooth4,
+                        )
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "\u2605 ${"%.1f".format(item.communityRating)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color(0xFFFFC107),
+                    )
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(horizontal = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                item.year?.let {
+                    Text(
+                        text = it.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (item.runTimeTicks != null && item.runTimeTicks!! > 0 && item.mediaType != MediaType.SERIES) {
+                    item.year?.let {
+                        Text(
+                            text = "\u00B7",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    }
+                    Text(
+                        text = remember(item.runTimeTicks) {
+                            formatDurationFromTicks(item.runTimeTicks!!)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                item.officialRating?.let { rating ->
+                    Text(
+                        text = "\u00B7",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                ShapeCache.smooth4,
+                            )
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                    ) {
+                        Text(
+                            text = rating,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+
+            if (item.genres.isNotEmpty()) {
+                Text(
+                    text = item.genres.take(3).joinToString(", "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -16,14 +16,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 
 @Composable
 fun NewsletterContent(
     state: NewsletterUiState,
     viewModel: NewsletterViewModel,
-    onItemClick: (String) -> Unit,
+    onItemClick: (MediaItem) -> Unit,
     onPlayClick: (String, String?, Long) -> Unit,
+    onViewAllFreshPicks: () -> Unit = {},
 ) {
     val hasAnyContent = state.recentlyAdded.isNotEmpty() ||
         state.activityDigest.isNotEmpty() ||
@@ -34,7 +36,7 @@ fun NewsletterContent(
 
     if (!hasAnyContent && !state.isLoading) return
 
-    val contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
+    val contentPadding = PaddingValues(bottom = 24.dp)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -43,7 +45,7 @@ fun NewsletterContent(
         item {
             NewsletterHeader(
                 serverName = state.serverName,
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
             )
         }
 
@@ -55,10 +57,12 @@ fun NewsletterContent(
                     recentlyAddedCount = state.recentlyAdded.size,
                     activityCount = state.activityDigest.size,
                     continueWatchingCount = state.continueWatching.size,
-                    modifier = Modifier.graphicsLayer {
-                        this.alpha = alpha
-                        translationY = (1f - alpha) * 8.dp.toPx()
-                    },
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .graphicsLayer {
+                            this.alpha = alpha
+                            translationY = (1f - alpha) * 8.dp.toPx()
+                        },
                 )
             }
         }
@@ -101,7 +105,7 @@ fun NewsletterContent(
                 NewsletterSectionType.ACTIVITY_DIGEST -> {
                     NewsletterActivityDigest(
                         entries = state.activityDigest,
-                        modifier = sectionModifier,
+                        modifier = sectionModifier.padding(horizontal = 16.dp),
                     )
                 }
                 NewsletterSectionType.LIBRARY_STATS -> {}
@@ -130,6 +134,7 @@ fun NewsletterContent(
                         imageUrlBuilder = { viewModel.getImageUrl(it) },
                         backdropUrlBuilder = { viewModel.getBackdropUrl(it) },
                         onItemClick = onItemClick,
+                        onViewAllClick = onViewAllFreshPicks,
                         modifier = sectionModifier,
                     )
                 }

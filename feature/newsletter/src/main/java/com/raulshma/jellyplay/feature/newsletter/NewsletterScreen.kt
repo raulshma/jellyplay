@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -20,8 +21,9 @@ import com.composables.icons.tabler.outline.Mail
 @Composable
 fun NewsletterScreen(
     onBack: () -> Unit,
-    onItemClick: (String) -> Unit = {},
+    onItemClick: (MediaItem) -> Unit = {},
     onPlayClick: (String, String?, Long) -> Unit = { _, _, _ -> },
+    onViewAllFreshPicks: () -> Unit = {},
     viewModel: NewsletterViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -69,6 +71,7 @@ fun NewsletterScreen(
                         viewModel = viewModel,
                         onItemClick = onItemClick,
                         onPlayClick = onPlayClick,
+                        onViewAllFreshPicks = onViewAllFreshPicks,
                     )
                 }
             }
