@@ -40,6 +40,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.palette.ktx)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.lifecycle.process)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 }
