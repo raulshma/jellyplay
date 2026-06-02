@@ -1,16 +1,14 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,16 +25,42 @@ fun NewsletterContent(
     onItemClick: (String) -> Unit,
     onPlayClick: (String, String?, Long) -> Unit,
 ) {
+    val hasAnyContent = state.recentlyAdded.isNotEmpty() ||
+        state.activityDigest.isNotEmpty() ||
+        state.libraryStats != null ||
+        state.continueWatching.isNotEmpty() ||
+        state.nextUp.isNotEmpty() ||
+        state.curatedPicks.isNotEmpty()
+
+    if (!hasAnyContent && !state.isLoading) return
+
+    val contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+        contentPadding = contentPadding,
     ) {
         item {
             NewsletterHeader(
                 serverName = state.serverName,
-                modifier = Modifier.padding(vertical = 8.dp),
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
             )
+        }
+
+        if (state.libraryStats != null) {
+            item(key = "aggregated_stats") {
+                val alpha by animateEntranceAlpha()
+                NewsletterAggregatedStats(
+                    stats = state.libraryStats,
+                    recentlyAddedCount = state.recentlyAdded.size,
+                    activityCount = state.activityDigest.size,
+                    continueWatchingCount = state.continueWatching.size,
+                    modifier = Modifier.graphicsLayer {
+                        this.alpha = alpha
+                        translationY = (1f - alpha) * 8.dp.toPx()
+                    },
+                )
+            }
         }
 
         items(
@@ -49,27 +73,20 @@ fun NewsletterContent(
             val hasContent = when (sectionType) {
                 NewsletterSectionType.RECENTLY_ADDED -> state.recentlyAdded.isNotEmpty()
                 NewsletterSectionType.ACTIVITY_DIGEST -> state.activityDigest.isNotEmpty()
-                NewsletterSectionType.LIBRARY_STATS -> state.libraryStats != null
+                NewsletterSectionType.LIBRARY_STATS -> false
                 NewsletterSectionType.CONTINUE_WATCHING -> state.continueWatching.isNotEmpty()
                 NewsletterSectionType.NEXT_UP -> state.nextUp.isNotEmpty()
                 NewsletterSectionType.CURATED_PICKS -> state.curatedPicks.isNotEmpty()
             }
             if (!hasContent) return@items
 
-            var hasBeenVisible by remember { mutableStateOf(false) }
-            val sectionAlpha by animateFloatAsState(
-                targetValue = if (hasBeenVisible) 1f else 0f,
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "sectionAlpha_$index",
-            )
-            hasBeenVisible = true
-
+            val alpha by animateEntranceAlpha()
             val sectionModifier = Modifier.graphicsLayer {
-                alpha = sectionAlpha
-                val scale = 0.97f + (0.03f * sectionAlpha)
+                this.alpha = alpha
+                val scale = 0.97f + (0.03f * alpha)
                 scaleX = scale
                 scaleY = scale
-                translationY = (1f - sectionAlpha) * 12.dp.toPx()
+                translationY = (1f - alpha) * 8.dp.toPx()
             }
 
             when (sectionType) {
@@ -87,14 +104,7 @@ fun NewsletterContent(
                         modifier = sectionModifier,
                     )
                 }
-                NewsletterSectionType.LIBRARY_STATS -> {
-                    state.libraryStats?.let { stats ->
-                        NewsletterLibraryStats(
-                            stats = stats,
-                            modifier = sectionModifier,
-                        )
-                    }
-                }
+                NewsletterSectionType.LIBRARY_STATS -> {}
                 NewsletterSectionType.CONTINUE_WATCHING -> {
                     NewsletterContinueWatching(
                         items = state.continueWatching,
@@ -125,7 +135,16 @@ fun NewsletterContent(
                 }
             }
         }
-
-        item { Spacer(Modifier.height(32.dp)) }
     }
+}
+
+@Composable
+private fun animateEntranceAlpha(): State<Float> {
+    var hasBeenVisible by remember { mutableStateOf(false) }
+    hasBeenVisible = true
+    return animateFloatAsState(
+        targetValue = if (hasBeenVisible) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "entrance",
+    )
 }

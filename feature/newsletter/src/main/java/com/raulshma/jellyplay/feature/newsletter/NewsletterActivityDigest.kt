@@ -5,12 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +30,7 @@ fun NewsletterActivityDigest(
     entries: List<ActivityLogEntry>,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
             text = "Activity Digest",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -47,8 +44,6 @@ fun NewsletterActivityDigest(
                 isLast = index == entries.take(10).lastIndex,
             )
         }
-
-        Spacer(Modifier.height(20.dp))
     }
 }
 
@@ -63,35 +58,23 @@ private fun ActivityDigestItem(
             .padding(bottom = if (isLast) 0.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    entry.type.contains("Session", ignoreCase = true) -> {
-                        Icon(
-                            imageVector = Tabler.Outline.User,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                    else -> {
-                        Icon(
-                            imageVector = Tabler.Outline.Activity,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
+            val icon = when {
+                entry.type.contains("Session", ignoreCase = true) -> Tabler.Outline.User
+                else -> Tabler.Outline.Activity
             }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
         }
 
         Column(modifier = Modifier.weight(1f)) {
