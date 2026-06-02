@@ -465,7 +465,12 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 82.dp)
+                                        .padding(bottom = systemNavBarBottom + 84.dp)
+                                        .offset {
+                                            val maxOffset = 88.dp.toPx()
+                                            val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                            IntOffset(x = 0, y = yOffset.roundToInt())
+                                        }
                                 ) {
                                     MiniPlayer(
                                         isVisible = true,
@@ -510,7 +515,16 @@ private fun MainContent(
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
                                         .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 88.dp else 8.dp))
-                                        .fillMaxWidth(0.45f),
+                                        .fillMaxWidth(0.45f)
+                                        .offset {
+                                            if (!isExpanded) {
+                                                val maxOffset = 88.dp.toPx()
+                                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                                IntOffset(x = 0, y = yOffset.roundToInt())
+                                            } else {
+                                                IntOffset.Zero
+                                            }
+                                        },
                                 )
                             }
                             if (!isExpanded) {
