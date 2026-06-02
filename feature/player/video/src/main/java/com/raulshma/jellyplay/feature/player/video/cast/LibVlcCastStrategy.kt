@@ -14,6 +14,7 @@ import org.videolan.libvlc.RendererItem
 
 class LibVlcCastStrategy(
     private val libVlcProvider: () -> LibVLC?,
+    private val mediaPlayerProvider: () -> MediaPlayer? = { null },
 ) : CastStrategy {
 
     companion object {
@@ -35,7 +36,6 @@ class LibVlcCastStrategy(
     private val discoverers = mutableListOf<RendererDiscoverer>()
     private val rendererItems = mutableListOf<RendererItem>()
     private var selectedRenderer: RendererItem? = null
-    private var mediaPlayerRef: MediaPlayer? = null
 
     private val eventListener = RendererDiscoverer.EventListener { event ->
         when (event.type) {
@@ -49,6 +49,7 @@ class LibVlcCastStrategy(
                 val item = event.getItem() ?: return@EventListener
                 rendererItems.remove(item)
                 if (selectedRenderer === item) {
+                    selectedRenderer?.release()
                     selectedRenderer = null
                     _isConnected.value = false
                 }
@@ -102,37 +103,35 @@ class LibVlcCastStrategy(
         }
         discoverers.clear()
         rendererItems.clear()
+        selectedRenderer?.release()
+        selectedRenderer = null
         _discoveredDevices.value = emptyList()
         _isAvailable.value = false
     }
 
     override fun connect(context: android.content.Context, device: CastDevice) {
         val item = device.tag as? RendererItem ?: return
+        selectedRenderer?.release()
+        item.retain()
         selectedRenderer = item
         _isConnected.value = true
         applyRendererToPlayer()
     }
 
     override fun disconnect(context: android.content.Context) {
+        selectedRenderer?.release()
         selectedRenderer = null
         _isConnected.value = false
         try {
-            mediaPlayerRef?.setRenderer(null)
+            mediaPlayerProvider()?.setRenderer(null)
         } catch (_: Exception) {}
-    }
-
-    fun setMediaPlayer(mp: MediaPlayer?) {
-        mediaPlayerRef = mp
-        if (_isConnected.value) {
-            applyRendererToPlayer()
-        }
     }
 
     val currentRenderer: RendererItem?
         get() = selectedRenderer
 
     private fun applyRendererToPlayer() {
-        val mp = mediaPlayerRef ?: return
+        val mp = mediaPlayerProvider() ?: return
         val renderer = selectedRenderer ?: return
         try {
             mp.setRenderer(renderer)

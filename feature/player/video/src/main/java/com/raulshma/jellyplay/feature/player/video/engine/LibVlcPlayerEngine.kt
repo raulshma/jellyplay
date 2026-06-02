@@ -102,6 +102,9 @@ class LibVlcPlayerEngine(
 
     private var pendingPlay = false
     private var wasPlayingBeforeActivityPause = false
+    private var hasRenderer = false
+    private var pendingRendererItem: RendererItem? = null
+    private var cachedDurationMs: Long = 0L
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -239,8 +242,14 @@ class LibVlcPlayerEngine(
         }
 
         if (currentConfig.audioPassthrough) {
-            options.add("--aout=android_audiotrack")
-            options.add("--codec=ac3,eac3,dts,dtshd,truehd")
+            if (!hasRenderer) {
+                options.add("--codec=ac3,eac3,dts,dtshd,truehd")
+            }
+        }
+
+        if (hasRenderer) {
+            options.add("--sout-keep")
+            options.add("--sout-chromecast-conversion-quality=2")
         }
 
         when (currentConfig.audioEffects.channelMixMode) {
@@ -278,6 +287,10 @@ class LibVlcPlayerEngine(
         val mp = MediaPlayer(vlc)
         mp.setEventListener(eventListener)
         mediaPlayer = mp
+
+        pendingRendererItem?.let { renderer ->
+            try { mp.setRenderer(renderer) } catch (_: Exception) {}
+        }
         
         val media = buildMedia(
             vlc = vlc,
@@ -285,6 +298,10 @@ class LibVlcPlayerEngine(
             subtitleStyle = currentConfig.subtitleStyle,
             startPositionMs = request.startPositionMs,
         )
+
+        if (hasRenderer) {
+            try { media.parse() } catch (_: Exception) {}
+        }
 
         mp.media = media
         media.release()
@@ -310,11 +327,14 @@ class LibVlcPlayerEngine(
     override fun release() {
         engineScope.cancel()
         releaseInternal(releaseVlc = true)
+        hasRenderer = false
+        pendingRendererItem = null
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        cachedDurationMs = 0L
     }
 
     private fun releaseInternal(releaseVlc: Boolean) {
@@ -512,6 +532,9 @@ class LibVlcPlayerEngine(
                 subtitleStyle = currentConfig.subtitleStyle,
                 startPositionMs = currentPositionMs,
             )
+            if (hasRenderer) {
+                try { media.parse() } catch (_: Exception) {}
+            }
             mp.media = media
             media.release()
             if (currentPositionMs > 0) {
@@ -522,6 +545,44 @@ class LibVlcPlayerEngine(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to reload media for subtitle style change", e)
+        }
+    }
+
+    fun reloadForRenderer(renderer: Any?) {
+        val mp = mediaPlayer ?: return
+        val vlc = libVLC ?: return
+        val request = currentPlaybackRequest ?: return
+        try {
+            val item = renderer as? RendererItem
+            mp.setRenderer(item)
+            hasRenderer = item != null
+            pendingRendererItem = item
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set renderer", e)
+        }
+        if (!hasRenderer) return
+
+        val currentPositionMs = try { mp.time.coerceAtLeast(0L) } catch (_: Exception) { 0L }
+        val wasPlaying = try { mp.isPlaying } catch (_: Exception) { false }
+
+        try {
+            val media = buildMedia(
+                vlc = vlc,
+                request = request,
+                subtitleStyle = currentConfig.subtitleStyle,
+                startPositionMs = currentPositionMs,
+            )
+            try { media.parse() } catch (_: Exception) {}
+            mp.media = media
+            media.release()
+            if (currentPositionMs > 0) {
+                try { mp.time = currentPositionMs } catch (_: Exception) {}
+            }
+            if (wasPlaying) {
+                try { mp.play() } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reload media for renderer", e)
         }
     }
 
@@ -561,6 +622,18 @@ class LibVlcPlayerEngine(
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to add subtitle: ${sub.url}", e)
             }
+        }
+
+        if (request.title.isNotBlank()) {
+            media.addOption(":meta-title=${request.title}")
+        }
+        if (!request.artworkUri.isNullOrBlank()) {
+            media.addOption(":meta-artworkurl=${request.artworkUri}")
+        }
+
+        if (hasRenderer) {
+            media.addOption(":sout-chromecast-audio-passthrough=true")
+            media.addOption(":sout-chromecast-conversion-quality=2")
         }
 
         media.applySubtitleStyle(subtitleStyle)
@@ -628,6 +701,8 @@ class LibVlcPlayerEngine(
         try {
             val item = renderer as? RendererItem
             mediaPlayer?.setRenderer(item)
+            hasRenderer = item != null
+            pendingRendererItem = item
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set renderer", e)
         }
@@ -637,7 +712,12 @@ class LibVlcPlayerEngine(
         get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }
 
     override val durationMs: Long
-        get() = try { (mediaPlayer?.length ?: 0L).coerceAtLeast(0L) } catch (_: Exception) { 0L }
+        get() = try {
+            val len = (mediaPlayer?.length ?: 0L).coerceAtLeast(0L)
+            if (len > 0) { cachedDurationMs = len; len }
+            else if (hasRenderer && cachedDurationMs > 0) cachedDurationMs
+            else 0L
+        } catch (_: Exception) { if (hasRenderer && cachedDurationMs > 0) cachedDurationMs else 0L }
 
     override val playbackSpeed: Float
         get() = try { mediaPlayer?.rate ?: 1f } catch (_: Exception) { 1f }

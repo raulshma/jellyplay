@@ -118,7 +118,10 @@ class VideoPlayerViewModel @Inject constructor(
     private val libVlcCastStrategy = LibVlcCastStrategy(
         libVlcProvider = {
             (playerSessionManager.engine as? LibVlcPlayerEngine)?.libVlc
-        }
+        },
+        mediaPlayerProvider = {
+            (playerSessionManager.engine as? LibVlcPlayerEngine)?.vlcMediaPlayer
+        },
     ).also {
         castManager.registerStrategy(CastManager.STRATEGY_LIBVLC, it)
     }
@@ -1054,6 +1057,9 @@ class VideoPlayerViewModel @Inject constructor(
     val isCastConnected: Boolean
         get() = castManager.isConnected
 
+    val isVlcCasting: Boolean
+        get() = isCastConnected && castManager.currentStrategyName == CastManager.STRATEGY_LIBVLC
+
     val castPositionMs: kotlinx.coroutines.flow.StateFlow<Long>
         get() = castManager.castPositionMs
 
@@ -1119,24 +1125,38 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun castPlay() {
-        castManager.play()
+        if (castManager.currentStrategyName == CastManager.STRATEGY_LIBVLC) {
+            playerSessionManager.engine?.play()
+        } else {
+            castManager.play()
+        }
     }
 
     fun castPause() {
-        castManager.pause()
+        if (castManager.currentStrategyName == CastManager.STRATEGY_LIBVLC) {
+            playerSessionManager.engine?.pause()
+        } else {
+            castManager.pause()
+        }
     }
 
     fun castSeekTo(positionMs: Long) {
-        castManager.seekTo(positionMs)
+        if (castManager.currentStrategyName == CastManager.STRATEGY_LIBVLC) {
+            playerSessionManager.engine?.seekTo(positionMs)
+        } else {
+            castManager.seekTo(positionMs)
+        }
     }
 
     private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
         if (engine is LibVlcPlayerEngine) {
             castManager.setActiveStrategy(CastManager.STRATEGY_LIBVLC)
-            libVlcCastStrategy.setMediaPlayer(engine.vlcMediaPlayer)
+            val renderer = libVlcCastStrategy.currentRenderer
+            if (renderer != null) {
+                engine.setRenderer(renderer)
+            }
         } else {
             castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
-            libVlcCastStrategy.setMediaPlayer(null)
         }
     }
 

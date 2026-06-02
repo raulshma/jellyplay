@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -47,12 +48,15 @@ class CastManager @Inject constructor(
     private val strategies = mutableMapOf<String, CastStrategy>()
     private var activeStrategyName: String = STRATEGY_GOOGLE
 
+    val currentStrategyName: String get() = activeStrategyName
+
     private var castPlayer: CastPlayer? = null
     private var sessionAvailabilityListener: SessionAvailabilityListener? = null
     private var externalListener: Player.Listener? = null
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var tickerJob: Job? = null
+    private var strategyObserverJob: Job? = null
 
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
@@ -162,6 +166,27 @@ class CastManager @Inject constructor(
         if (prevStrategy != null) {
             prevStrategy.stopDiscovery()
         }
+        observeStrategySession()
+    }
+
+    private fun observeStrategySession() {
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
+        val strategy = strategies[activeStrategyName]
+        if (strategy != null && strategy !== googleCastStrategy) {
+            var wasConnected = strategy.isConnected.value
+            strategyObserverJob = coroutineScope.launch {
+                strategy.isConnected.collect { connected ->
+                    if (connected && !wasConnected) {
+                        _sessionEvents.tryEmit(CastSessionEvent.Connected)
+                    } else if (!connected && wasConnected) {
+                        resetCastState()
+                        _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+                    }
+                    wasConnected = connected
+                }
+            }
+        }
     }
 
     private val activeStrategy: CastStrategy?
@@ -266,6 +291,8 @@ class CastManager @Inject constructor(
     fun release() {
         tickerJob?.cancel()
         tickerJob = null
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
         castPlayer?.release()
@@ -274,6 +301,7 @@ class CastManager @Inject constructor(
         externalListener = null
         resetCastState()
         strategies.values.forEach { it.stopDiscovery() }
+        coroutineScope.cancel()
     }
 
     private fun resetCastState() {

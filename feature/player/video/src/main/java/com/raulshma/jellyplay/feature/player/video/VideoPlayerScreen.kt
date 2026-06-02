@@ -368,9 +368,10 @@ fun VideoPlayerScreen(
     val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
     val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
 
-    val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
-    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
-    val duration = if (isCastConnected) castDuration else uiState.duration
+    val useEngineForCast = isCastConnected && viewModel.isVlcCasting
+    val isPlaying = if (useEngineForCast) uiState.isPlaying else if (isCastConnected) castIsPlaying else uiState.isPlaying
+    val currentPosition = if (useEngineForCast) uiState.currentPosition else if (isCastConnected) castPosition else uiState.currentPosition
+    val duration = if (useEngineForCast) uiState.duration else if (isCastConnected) castDuration else uiState.duration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
