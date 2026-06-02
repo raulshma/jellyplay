@@ -42,7 +42,7 @@ fun NewsletterCuratedPicks(
 ) {
     if (items.isEmpty()) return
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
             text = "Fresh Picks",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -75,8 +75,6 @@ fun NewsletterCuratedPicks(
                 }
             }
         }
-
-        Spacer(Modifier.height(20.dp))
     }
 }
 

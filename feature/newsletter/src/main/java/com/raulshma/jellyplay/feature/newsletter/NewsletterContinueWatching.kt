@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,7 +40,7 @@ fun NewsletterContinueWatching(
     onPlayClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
             text = "Continue Watching",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -62,8 +61,6 @@ fun NewsletterContinueWatching(
                 )
             }
         }
-
-        Spacer(Modifier.height(20.dp))
     }
 }
 
@@ -138,7 +135,7 @@ fun NewsletterNextUp(
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
             text = "Next Up",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -159,7 +156,5 @@ fun NewsletterNextUp(
                 )
             }
         }
-
-        Spacer(Modifier.height(20.dp))
     }
 }
