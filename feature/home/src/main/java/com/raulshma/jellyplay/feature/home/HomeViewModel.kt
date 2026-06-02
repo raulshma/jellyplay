@@ -95,7 +95,6 @@ class HomeViewModel @Inject constructor(
                     resetHomeFocusPosition()
                     _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
                     fetchAndUpdateSections()
-                    _uiState.update { it.copy(isLoading = false) }
                     startPeriodicRefresh()
                 }
                 previousUserId = userId
@@ -228,7 +227,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isLoading = false) }
             startPeriodicRefresh()
         }
     }
@@ -240,7 +238,6 @@ class HomeViewModel @Inject constructor(
             resetHomeFocusPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isLoading = false) }
             startPeriodicRefresh()
         }
     }
@@ -249,7 +246,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isRefreshing = false) }
             startPeriodicRefresh()
         }
     }
@@ -400,6 +396,7 @@ class HomeViewModel @Inject constructor(
                 fetchDiscoverSections(seerrPreferences)
             }
         } finally {
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
             refreshMutex.unlock()
         }
     }
