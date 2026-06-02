@@ -74,6 +74,10 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setPerformanceMode(enabled) }
     }
 
+    fun setHomeHeroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setHomeHeroEnabled(enabled) }
+    }
+
     fun setHomeMode(mode: HomeMode) {
         viewModelScope.launch { preferencesStore.setHomeMode(mode) }
     }

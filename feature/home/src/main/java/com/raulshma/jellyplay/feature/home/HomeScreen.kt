@@ -507,7 +507,7 @@ private fun HomeContentList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
-            if (featuredItem != null) {
+            if (featuredItem != null && state.homeHeroEnabled) {
                 item {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
@@ -527,8 +527,8 @@ private fun HomeContentList(
 
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
-                val isFirstAfterHero = index == 0 && featuredItem != null
-                val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
+                val isFirstAfterHero = index == 0 && featuredItem != null && state.homeHeroEnabled
+                val sectionIndexInList = index + (if (featuredItem != null && state.homeHeroEnabled) 1 else 0)
                 val isCurrentlyVisible = sectionIndexInList in visibleItemRange
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }

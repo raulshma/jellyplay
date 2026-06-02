@@ -118,6 +118,7 @@ data class UserPreferences(
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val hiddenLibrarySectionIds: Set<String> = emptySet(),
     val navBarShowLabels: Boolean = true,
+    val homeHeroEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),

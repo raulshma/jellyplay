@@ -119,6 +119,7 @@ class HomeViewModel @Inject constructor(
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
+                    homeHeroEnabled = prefs.homeHeroEnabled,
                 ) }
 
                 if (homeSectionPrefsChanged) {

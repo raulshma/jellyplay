@@ -51,10 +51,12 @@ fun AppearanceStep(
     dynamicTheming: Boolean,
     oledMode: Boolean,
     contrastLevel: ContrastLevel,
+    homeHeroEnabled: Boolean,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicThemingChange: (Boolean) -> Unit,
     onOledModeChange: (Boolean) -> Unit,
     onContrastLevelChange: (ContrastLevel) -> Unit,
+    onHomeHeroEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -140,6 +142,13 @@ fun AppearanceStep(
                 subtitle = "Pure black background for AMOLED displays",
                 checked = oledMode,
                 onCheckedChange = onOledModeChange,
+            )
+
+            OnboardingToggleRow(
+                title = "Home Hero Section",
+                subtitle = "Show featured content banner on home screen",
+                checked = homeHeroEnabled,
+                onCheckedChange = onHomeHeroEnabledChange,
             )
         }
     }
