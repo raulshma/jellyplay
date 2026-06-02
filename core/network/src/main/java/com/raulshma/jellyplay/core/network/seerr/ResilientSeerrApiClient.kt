@@ -127,6 +127,14 @@ class ResilientSeerrApiClient @Inject constructor(
     ): Result<SeerrTvDetails> =
         withRetry { delegate.getTvDetails(baseUrl, apiKey, tmdbId) }
 
+    override suspend fun getTvSeasonDetails(
+        baseUrl: String,
+        apiKey: String,
+        tvId: Int,
+        seasonNumber: Int,
+    ): Result<SeerrSeasonDetail> =
+        withRetry { delegate.getTvSeasonDetails(baseUrl, apiKey, tvId, seasonNumber) }
+
     override suspend fun getMovieRatings(
         baseUrl: String,
         apiKey: String,

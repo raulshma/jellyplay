@@ -112,6 +112,15 @@ class SeerrRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> {
+        getCached<SeerrSeasonDetail>("tv_season_${tvId}_$seasonNumber")?.let { return Result.success(it) }
+        val (serverUrl, apiKey) = getCredentials()
+            ?: return Result.failure(Exception("Seerr not configured"))
+        return seerrApiClient.getTvSeasonDetails(serverUrl, apiKey, tvId, seasonNumber).also { result ->
+            result.getOrNull()?.let { putCached("tv_season_${tvId}_$seasonNumber", it) }
+        }
+    }
+
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> {
         getCached<SeerrRatings>("ratings_${tmdbId}_$mediaType")?.let { return Result.success(it) }
         val (serverUrl, apiKey) = getCredentials()

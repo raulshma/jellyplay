@@ -14,6 +14,8 @@ interface SeerrRepository {
 
     suspend fun getTvDetails(tmdbId: Int): Result<SeerrTvDetails>
 
+    suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail>
+
     suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings>
 
     suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse>
