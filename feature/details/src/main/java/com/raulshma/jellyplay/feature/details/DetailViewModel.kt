@@ -107,6 +107,8 @@ class DetailViewModel @Inject constructor(
     private val episodesMap = mutableMapOf<String, List<MediaItem>>()
     var albumTracks by mutableStateOf<List<MediaItem>>(emptyList())
         private set
+    var collectionItems by mutableStateOf<List<MediaItem>>(emptyList())
+        private set
     // Tracks season IDs where a fetch was attempted (success or failure)
     // so the UI knows when to stop showing the loading skeleton.
     var fetchedSeasonIds by mutableStateOf<Set<String>>(emptySet())
@@ -189,6 +191,7 @@ class DetailViewModel @Inject constructor(
             episodes = emptyMap()
             episodesMap.clear()
             fetchedSeasonIds = emptySet()
+            collectionItems = emptyList()
             smartPlayTarget = null
             selectedSubtitleIndex = null
             selectedAudioIndex = null
@@ -240,6 +243,8 @@ class DetailViewModel @Inject constructor(
                         loadSeasons(detail.item.seriesId!!)
                     } else if (detail.item.mediaType == MediaType.ALBUM) {
                         loadAlbumTracks(itemId)
+                    } else if (detail.item.mediaType == MediaType.COLLECTION) {
+                        loadCollectionItems(itemId)
                     } else {
                         smartPlayTarget = null
                     }
@@ -317,6 +322,13 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             mediaRepository.getAlbumTracks(albumId)
                 .onSuccess { albumTracks = it }
+        }
+    }
+
+    private fun loadCollectionItems(collectionId: String) {
+        viewModelScope.launch {
+            mediaRepository.getCollectionItems(collectionId, limit = 100)
+                .onSuccess { result -> collectionItems = result.items }
         }
     }
 

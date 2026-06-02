@@ -2332,15 +2332,21 @@ class JellyfinApiClientImpl @Inject constructor(
                             org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
                             org.jellyfin.sdk.model.api.BaseItemKind.SERIES,
                         ),
+                        excludeItemTypes = listOf(
+                            org.jellyfin.sdk.model.api.BaseItemKind.BOX_SET,
+                        ),
                         sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED),
                         sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
                         limit = limit,
+                        recursive = true,
                         fields = listOf(
                             org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
                             org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                         ),
                     ).content
-                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                    (response?.items ?: emptyList())
+                        .map { it.toMediaItem() }
+                        .filter { it.mediaType != MediaType.COLLECTION }
                 } catch (_: Exception) { emptyList() }
             }
             NewsletterData(

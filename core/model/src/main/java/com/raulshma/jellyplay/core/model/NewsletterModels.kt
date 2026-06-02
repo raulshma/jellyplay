@@ -27,7 +27,14 @@ enum class NewsletterSectionType {
     ;
 
     companion object {
-        val DEFAULT_ORDER = entries
+        val DEFAULT_ORDER = listOf(
+            RECENTLY_ADDED,
+            LIBRARY_STATS,
+            CONTINUE_WATCHING,
+            NEXT_UP,
+            CURATED_PICKS,
+            ACTIVITY_DIGEST,
+        )
     }
 }
 
