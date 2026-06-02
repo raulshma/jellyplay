@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
@@ -179,4 +180,6 @@ interface MediaRepository {
     suspend fun createTimer(programId: String, channelId: String, startDate: String? = null, endDate: String? = null): Result<Unit>
 
     suspend fun cancelTimer(timerId: String): Result<Unit>
+
+    suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
 }

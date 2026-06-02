@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -2248,6 +2249,111 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private fun okHttp3MultipartBody(bytes: ByteArray): okhttp3.RequestBody =
         bytes.toRequestBody("image/*".toMediaType())
+
+    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = apiResult {
+        coroutineScope {
+            val serverName = async {
+                try {
+                    requireApi().systemApi.getSystemInfo().content.serverName ?: ""
+                } catch (_: Exception) { "" }
+            }
+            val recentlyAdded = async {
+                try {
+                    val folders = requireApi().libraryApi.getMediaFolders().content?.items ?: emptyList()
+                    folders.filter { folder ->
+                        folder.collectionType?.serialName != "music"
+                    }.flatMap { folder ->
+                        requireApi().userLibraryApi.getLatestMedia(
+                            parentId = folder.id,
+                            limit = limit,
+                            fields = listOf(
+                                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                            ),
+                        ).content ?: emptyList()
+                    }.map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
+                } catch (_: Exception) { emptyList() }
+            }
+            val activityDigest = async {
+                try {
+                    val result = requireApi().activityLogApi.getLogEntries(
+                        limit = limit,
+                        minDate = java.time.LocalDateTime.parse(sinceDate),
+                    ).content
+                    result.items.map { it.toActivityModel() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val libraryStats = async {
+                try {
+                    val dto = requireApi().libraryApi.getItemCounts().content
+                    ItemCounts(
+                        movieCount = dto.movieCount.toLong(),
+                        seriesCount = dto.seriesCount.toLong(),
+                        episodeCount = dto.episodeCount.toLong(),
+                        albumCount = dto.albumCount.toLong(),
+                        songCount = dto.songCount.toLong(),
+                        musicVideoCount = dto.musicVideoCount.toLong(),
+                        bookCount = dto.bookCount.toLong(),
+                        totalCount = dto.movieCount.toLong() + dto.seriesCount.toLong() +
+                                dto.episodeCount.toLong() + dto.albumCount.toLong() +
+                                dto.songCount.toLong() + dto.musicVideoCount.toLong() +
+                                dto.bookCount.toLong(),
+                    )
+                } catch (_: Exception) { null }
+            }
+            val continueWatching = async {
+                try {
+                    val response = requireApi().itemsApi.getResumeItems(
+                        limit = 10,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val nextUp = async {
+                try {
+                    val response = requireApi().tvShowsApi.getNextUp(
+                        limit = 10,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val curatedPicks = async {
+                try {
+                    val response = requireApi().itemsApi.getItems(
+                        includeItemTypes = listOf(
+                            org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
+                            org.jellyfin.sdk.model.api.BaseItemKind.SERIES,
+                        ),
+                        sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED),
+                        sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
+                        limit = limit,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                } catch (_: Exception) { emptyList() }
+            }
+            NewsletterData(
+                serverName = serverName.await(),
+                recentlyAdded = recentlyAdded.await(),
+                activityDigest = activityDigest.await(),
+                libraryStats = libraryStats.await(),
+                continueWatching = continueWatching.await(),
+                nextUp = nextUp.await(),
+                curatedPicks = curatedPicks.await(),
+            )
+        }
+    }
 
     private fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskInfo(
         id = id?.toString() ?: "",

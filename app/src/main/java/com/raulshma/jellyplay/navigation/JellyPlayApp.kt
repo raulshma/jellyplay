@@ -127,6 +127,7 @@ import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
+import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -1000,6 +1001,7 @@ private fun MainNavDisplay(
             musicSection(navigator)
             syncPlaySection(navigator)
             onboardingSection { navigator.goBack() }
+            newsletterSection(navigator)
         },
         modifier = modifier,
     )

@@ -29,6 +29,7 @@ data class HomeUiState(
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
+    val newsletterBannerVisible: Boolean = false,
 )
 
 @Immutable

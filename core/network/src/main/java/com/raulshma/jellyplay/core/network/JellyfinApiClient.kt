@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -449,4 +450,6 @@ interface JellyfinApiClient {
         text: String,
         timeoutMs: Long = 5000,
     ): Result<Unit>
+
+    suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
 }

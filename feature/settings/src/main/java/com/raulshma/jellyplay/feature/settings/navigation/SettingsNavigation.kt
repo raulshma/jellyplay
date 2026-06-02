@@ -23,6 +23,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onSeerrSettings = { navigator.navigate(Route.SeerrSettings) },
             onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
             onSetupWizard = onSetupWizard,
+            onNewsletterClick = { navigator.navigate(Route.Newsletter) },
         )
     }
 
