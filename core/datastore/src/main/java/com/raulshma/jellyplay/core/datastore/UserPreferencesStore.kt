@@ -149,6 +149,7 @@ class UserPreferencesStore @Inject constructor(
         val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
         val EXO_CONFIG = stringPreferencesKey("exo_config")
         val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
+        val DEVICE_ID = stringPreferencesKey("device_id")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -388,6 +389,20 @@ class UserPreferencesStore @Inject constructor(
 
     val activeServerId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_SERVER_ID] }.distinctUntilChanged()
     val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
+    val deviceId: Flow<String?> = sharedPrefs.map { it[Keys.DEVICE_ID] }.distinctUntilChanged()
+
+    /**
+     * Resolve the persistent device ID, generating a stable UUID on first
+     * access. Used as the `deviceId` URL parameter for the Jellyfin WebSocket
+     * and as a `ClientCapabilities` identifier.
+     */
+    suspend fun ensureDeviceId(): String {
+        var id: String? = null
+        context.dataStore.edit { prefs ->
+            id = prefs[Keys.DEVICE_ID] ?: java.util.UUID.randomUUID().toString().also { prefs[Keys.DEVICE_ID] = it }
+        }
+        return id ?: error("deviceId could not be resolved")
+    }
 
     suspend fun setActiveServer(serverId: String) {
         context.dataStore.edit { it[Keys.ACTIVE_SERVER_ID] = serverId }

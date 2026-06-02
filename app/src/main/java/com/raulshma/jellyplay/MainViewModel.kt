@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay
 
 import android.content.Intent
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -34,6 +37,8 @@ class MainViewModel @Inject constructor(
     val audioPlaybackManager: AudioPlaybackManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
     val appShortcutManager: AppShortcutManager,
+    val remoteControlReceiver: RemoteControlReceiver,
+    val remoteNavigationBridge: RemoteNavigationBridge,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)
@@ -64,18 +69,20 @@ class MainViewModel @Inject constructor(
             preferences.first()
             _isRestoring.value = false
         }
-        
+
         viewModelScope.launch {
             isAuthenticated.collect { isAuth ->
                 if (isAuth) {
                     val server = authRepository.currentServer.first()
                     val user = authRepository.currentUser.first()
                     if (server != null && user != null) {
+                        val deviceId = preferencesStore.ensureDeviceId()
+                        val deviceName = buildDeviceName(user.name)
                         webSocketClient.connect(
                             serverAddress = server.address,
                             accessToken = user.accessToken,
-                            device = "JellyPlay-${user.id.take(8)}",
-                            deviceName = "JellyPlay",
+                            device = deviceId,
+                            deviceName = deviceName,
                             client = "JellyPlay",
                         )
                         try {
@@ -83,26 +90,22 @@ class MainViewModel @Inject constructor(
                         } catch (e: Exception) {
                             // Ignored
                         }
+                        // Start listening for Play/Playstate/GeneralCommand envelopes.
+                        remoteControlReceiver.start()
                     }
                 } else {
                     webSocketClient.disconnect()
+                    remoteControlReceiver.stop()
                 }
             }
         }
 
+        // DisplayMessage from a remote "Cast" client surfaces as a global toast.
         viewModelScope.launch {
-            webSocketClient.events.collect { event ->
-                if (event.type == "GeneralCommand") {
-                    val name = event.data.optString("Name")
-                    if (name == "DisplayMessage") {
-                        val args = event.data.optJSONObject("Arguments")
-                        val header = args?.optString("Header") ?: ""
-                        val text = args?.optString("Text") ?: ""
-                        val msg = if (header.isNotBlank()) "$header\n$text" else text
-                        if (msg.isNotBlank()) {
-                            _globalMessage.tryEmit(msg)
-                        }
-                    }
+            remoteControlReceiver.displayMessages.collect { msg ->
+                val text = if (msg.header.isNotBlank()) "${msg.header}\n${msg.text}" else msg.text
+                if (text.isNotBlank()) {
+                    _globalMessage.tryEmit(text)
                 }
             }
         }
@@ -129,7 +132,16 @@ class MainViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
+            remoteControlReceiver.stop()
             authRepository.logout()
         }
+    }
+
+    private fun buildDeviceName(userName: String): String {
+        val model = Build.MODEL.orEmpty().ifBlank { "Android" }
+        val name = userName.take(20)
+        val full = if (name.isNotBlank()) "JellyPlay on $model ($name)" else "JellyPlay on $model"
+        // Server caps `deviceName` at 60 chars.
+        return if (full.length > 60) full.take(60) else full
     }
 }

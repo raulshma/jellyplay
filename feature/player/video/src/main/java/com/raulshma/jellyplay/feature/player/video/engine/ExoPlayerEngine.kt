@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -36,6 +38,7 @@ import com.raulshma.jellyplay.core.data.playback.BassBoostHelper
 import com.raulshma.jellyplay.core.data.playback.ChannelMixHelper
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
+import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
@@ -45,6 +48,7 @@ import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -67,6 +71,22 @@ class ExoPlayerEngine(
 ) : MediaEngine {
 
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var cachedVolume: Float = 1f
+
+    @Volatile
+    private var lastUnmuteVolume: Float = 1f
+
+    private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post { block() }
+        }
+    }
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -158,6 +178,10 @@ class ExoPlayerEngine(
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             applyAudioEffects()
+        }
+
+        override fun onVolumeChanged(volume: Float) {
+            cachedVolume = volume
         }
     }
 
@@ -318,6 +342,8 @@ class ExoPlayerEngine(
         currentSubtitleConfigs.clear()
         lastVideoStats = null
         releaseAudioEffects()
+        cachedVolume = 1f
+        lastUnmuteVolume = 1f
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
@@ -325,16 +351,50 @@ class ExoPlayerEngine(
         _videoStats.value = EngineVideoStats()
     }
 
-    override fun play() {
-        val p = player ?: return
+    override fun play() = runOnPlayerThread {
+        val p = player ?: return@runOnPlayerThread
         if (p.playbackState == Player.STATE_ENDED) {
             p.seekTo(0)
         }
         p.play()
     }
-    override fun pause() { player?.pause() }
-    override fun seekTo(positionMs: Long) { player?.seekTo(positionMs) }
-    override fun setPlaybackSpeed(speed: Float) { player?.setPlaybackSpeed(speed) }
+    override fun pause() = runOnPlayerThread { player?.pause() }
+    override fun stop() = runOnPlayerThread { player?.stop() }
+    override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
+    override fun setPlaybackSpeed(speed: Float) = runOnPlayerThread { player?.setPlaybackSpeed(speed) }
+
+    override val volume: Float get() = cachedVolume
+
+    override fun setVolume(value: Float) = runOnPlayerThread {
+        val p = player ?: return@runOnPlayerThread
+        val clamped = value.coerceIn(0f, 1f)
+        if (clamped > 0f) lastUnmuteVolume = clamped
+        p.volume = clamped
+        MediaStreamVolume.setNormalized(context, clamped)
+    }
+
+    override fun increaseVolume(delta: Float) = runOnPlayerThread {
+        val p = player ?: return@runOnPlayerThread
+        val next = (p.volume + delta).coerceAtMost(1f)
+        if (next > 0f) lastUnmuteVolume = next
+        p.volume = next
+        MediaStreamVolume.setNormalized(context, next)
+    }
+
+    override fun decreaseVolume(delta: Float) = runOnPlayerThread {
+        val p = player ?: return@runOnPlayerThread
+        val next = (p.volume - delta).coerceAtLeast(0f)
+        if (next > 0f) lastUnmuteVolume = next
+        p.volume = next
+        MediaStreamVolume.setNormalized(context, next)
+    }
+
+    override fun setMuted(muted: Boolean) = runOnPlayerThread {
+        val p = player ?: return@runOnPlayerThread
+        val target = if (muted) 0f else lastUnmuteVolume.coerceIn(0.05f, 1f)
+        p.volume = target
+        MediaStreamVolume.setNormalized(context, target)
+    }
 
     override fun updateConfig(config: EngineConfig) {
         val oldConfig = currentConfig
@@ -356,12 +416,12 @@ class ExoPlayerEngine(
         playerView?.let { pv -> applySubtitleStyleToView(pv, config.subtitleStyle) }
     }
 
-    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) {
-        val selector = trackSelector ?: return
-        val p = player ?: return
+    override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) = runOnPlayerThread {
+        val selector = trackSelector ?: return@runOnPlayerThread
+        val p = player ?: return@runOnPlayerThread
         val params = selector.buildUponParameters()
         val exoType = if (type == TrackType.AUDIO) C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
-        
+
         if (index < 0) {
             if (type == TrackType.SUBTITLE) {
                 params.setTrackTypeDisabled(exoType, true)
@@ -380,7 +440,7 @@ class ExoPlayerEngine(
                 val groups = p.currentTracks.groups.filter { it.type == exoType }
                 if (groups.isEmpty()) {
                     selector.setParameters(params)
-                    return
+                    return@runOnPlayerThread
                 }
                 val groupIndex = index.coerceIn(groups.indices)
                 if (groupIndex in groups.indices) {
@@ -394,8 +454,8 @@ class ExoPlayerEngine(
         selector.setParameters(params)
     }
 
-    override fun setMaxVideoBitrate(bps: Int?) {
-        val selector = trackSelector ?: return
+    override fun setMaxVideoBitrate(bps: Int?) = runOnPlayerThread {
+        val selector = trackSelector ?: return@runOnPlayerThread
         val params = selector.buildUponParameters()
         if (bps != null) {
             params.setMaxVideoBitrate(bps)
@@ -695,10 +755,10 @@ class ExoPlayerEngine(
         return listOfNotNull(lang, codec, channels).joinToString(" · ").ifBlank { "Unknown" }
     }
 
-    override fun addExternalSubtitle(source: SubtitleSource) {
-        val exo = player ?: return
-        val item = currentMediaItem ?: return
-        val mimeType = source.mimeType ?: mapSubtitleCodecToMime(source.codec ?: source.label) ?: return
+    override fun addExternalSubtitle(source: SubtitleSource) = runOnPlayerThread {
+        val exo = player ?: return@runOnPlayerThread
+        val item = currentMediaItem ?: return@runOnPlayerThread
+        val mimeType = source.mimeType ?: mapSubtitleCodecToMime(source.codec ?: source.label) ?: return@runOnPlayerThread
 
         val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
             .setId(source.id)

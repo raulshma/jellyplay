@@ -264,6 +264,46 @@ private fun MainContent(
         }
     }
 
+    // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
+    // emitted by the WebSocket receiver.
+    LaunchedEffect(viewModel.remoteNavigationBridge) {
+        viewModel.remoteNavigationBridge.targets.collect { target ->
+            when (target) {
+                is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer -> {
+                    // Pop any active player entries from every back stack so the
+                    // player UI actually disappears (not just hidden behind a tab
+                    // switch). This matches Jellyfin web's "Stop" semantics.
+                    navigationState.backStacks.values.forEach { stack ->
+                        while (stack.isNotEmpty()) {
+                            val last = stack.last()
+                            if (last is Route.VideoPlayer ||
+                                last is Route.AudioPlayer ||
+                                last is Route.LiveTvChannelPlayer ||
+                                last is Route.OfflinePlayer
+                            ) {
+                                stack.removeLastOrNull()
+                            } else {
+                                break
+                            }
+                        }
+                    }
+                }
+                else -> navigator.navigate(viewModel.remoteNavigationBridge.toRoute(target))
+            }
+        }
+    }
+
+    val snackbarHostState = androidx.compose.material3.SnackbarHostState()
+    androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {
+        viewModel.remoteControlReceiver.playEvents.collect { event ->
+            val title = event.title.ifBlank { event.itemId }
+            snackbarHostState.showSnackbar(
+                message = "Now playing: $title",
+                withDismissAction = true,
+            )
+        }
+    }
+
     val enterPip: () -> Unit = remember(context) {
         {
             (context as? MainActivity)?.enterPipMode()
@@ -322,6 +362,7 @@ private fun MainContent(
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
+            Box(Modifier.fillMaxSize()) {
             if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -594,12 +635,19 @@ private fun MainContent(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .padding(end = 8.dp, bottom = 8.dp)
-                                    .fillMaxWidth(0.45f),
+                                    .fillMaxWidth(0.5f),
                             )
                         }
                     }
                 }
                 }
+                androidx.compose.material3.SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomCenter)
+                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
+                )
+            }
             }
         }
     }
