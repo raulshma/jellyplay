@@ -1399,7 +1399,7 @@ fun SettingsScreen(
                     }
 
                     if (isAndroid12) {
-                        val baseCount = if (isDarkActive) 5 else 4
+                        val baseCount = if (isDarkActive) 7 else 6
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1469,7 +1469,7 @@ fun SettingsScreen(
                             },
                         )
                     } else {
-                        val baseCount = if (isDarkActive) 5 else 4
+                        val baseCount = if (isDarkActive) 6 else 5
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1532,12 +1532,21 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
+                        icon = Tabler.Outline.LayersLinked,
+                        title = "Show Hero Section",
+                        subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
+                        checked = preferences.homeHeroEnabled,
+                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3),
+                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
+                        onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                    )
+                    SettingToggleItem(
                         icon = Tabler.Outline.TextSize,
                         title = "Show Navigation Labels",
                         subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
                         checked = preferences.navBarShowLabels,
-                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3), 
-                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4),
+                        index = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4), 
+                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
                         onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                     )
                 }

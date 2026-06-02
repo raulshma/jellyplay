@@ -134,10 +134,12 @@ fun OnboardingScreen(
                                 dynamicTheming = preferences.dynamicTheming,
                                 oledMode = preferences.oledMode,
                                 contrastLevel = preferences.contrastLevel,
+                                homeHeroEnabled = preferences.homeHeroEnabled,
                                 onThemeModeChange = viewModel::setThemeMode,
                                 onDynamicThemingChange = viewModel::setDynamicTheming,
                                 onOledModeChange = viewModel::setOledMode,
                                 onContrastLevelChange = viewModel::setContrastLevel,
+                                onHomeHeroEnabledChange = viewModel::setHomeHeroEnabled,
                                 modifier = Modifier.verticalScroll(rememberScrollState()),
                             )
                         }
