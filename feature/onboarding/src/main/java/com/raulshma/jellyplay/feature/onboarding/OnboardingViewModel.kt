@@ -70,6 +70,10 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setContrastLevel(level) }
     }
 
+    fun setPerformanceMode(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setPerformanceMode(enabled) }
+    }
+
     fun setHomeMode(mode: HomeMode) {
         viewModelScope.launch { preferencesStore.setHomeMode(mode) }
     }
