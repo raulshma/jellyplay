@@ -34,6 +34,7 @@ fun EntryProviderScope<NavKey>.homeSection(
             homeMode = homeMode,
             onModeChange = onModeChange,
             musicContent = musicContent,
+            onNewsletterClick = { navigator.navigate(Route.Newsletter) },
         )
     }
 }

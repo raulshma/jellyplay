@@ -21,4 +21,5 @@ sealed interface HomeUiEvent {
     data class LoadSeerrServiceDetails(val mediaType: String) : HomeUiEvent
     data class LoadTvSeasons(val tmdbId: Int) : HomeUiEvent
     data class PrefetchSeerrDetails(val tmdbId: Int, val mediaType: String, val onDone: () -> Unit) : HomeUiEvent
+    data object DismissNewsletterBanner : HomeUiEvent
 }

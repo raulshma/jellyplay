@@ -31,7 +31,7 @@ class SyncPlayPlaybackCore @Inject constructor(
     private val timeSyncManager: TimeSyncManager,
     private val controller: SyncPlayController,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     @Volatile
     private var lastCommand: SyncPlayPlaybackCommand? = null
@@ -91,26 +91,28 @@ class SyncPlayPlaybackCore @Inject constructor(
     }
 
     fun applyCommand(cmd: SyncPlayPlaybackCommand) {
-        if (isDuplicate(cmd)) {
-            Log.d(TAG, "Duplicate command detected: ${cmd.command}")
-            return
-        }
+        scope.launch {
+            if (isDuplicate(cmd)) {
+                Log.d(TAG, "Duplicate command detected: ${cmd.command}")
+                return@launch
+            }
 
-        lastCommand = cmd
-        if (cmd.playlistItemId.isNotBlank()) {
-            currentPlaylistItemId = cmd.playlistItemId
-        }
+            lastCommand = cmd
+            if (cmd.playlistItemId.isNotBlank()) {
+                currentPlaylistItemId = cmd.playlistItemId
+            }
 
-        if (pendingItemLoad) {
-            Log.d(TAG, "Command deferred: waiting for item to finish loading")
-            return
-        }
+            if (pendingItemLoad) {
+                Log.d(TAG, "Command deferred: waiting for item to finish loading")
+                return@launch
+            }
 
-        when (cmd.command) {
-            "Unpause" -> scheduleUnpause(cmd)
-            "Pause" -> schedulePause(cmd)
-            "Stop" -> scheduleStop()
-            "Seek" -> scheduleSeek(cmd)
+            when (cmd.command) {
+                "Unpause" -> scheduleUnpause(cmd)
+                "Pause" -> schedulePause(cmd)
+                "Stop" -> scheduleStop()
+                "Seek" -> scheduleSeek(cmd)
+            }
         }
     }
 
@@ -238,55 +240,57 @@ class SyncPlayPlaybackCore @Inject constructor(
     }
 
     fun onPlaybackStateChanged(state: Int) {
-        val cb = callbacks ?: return
-        val posTicks: Long
-        try {
-            posTicks = cb.currentPositionMs() * 10_000
-        } catch (_: Exception) {
-            return
-        }
-
-        when (state) {
-            STATE_IDLE, STATE_BUFFERING -> {
-                if (state == STATE_BUFFERING) {
-                    val timeSincePlayCmd = System.currentTimeMillis() - lastPlayCommandTimeMs
-                    if (timeSincePlayCmd < 2000 && lastCommand?.command == "Unpause") {
-                        Log.d(TAG, "BUFFERING suppressed (Play command ${timeSincePlayCmd}ms ago)")
-                        return
-                    }
-                }
-                stopSyncCorrection()
-                scope.launch {
-                    controller.reportBuffering(
-                        positionTicks = posTicks,
-                        isPlaying = cb.isPlaying(),
-                        playlistItemId = currentPlaylistItemId,
-                        whenMs = timeSyncManager.remoteNow(),
-                    )
-                }
+        scope.launch {
+            val cb = callbacks ?: return@launch
+            val posTicks: Long
+            try {
+                posTicks = cb.currentPositionMs() * 10_000
+            } catch (_: Exception) {
+                return@launch
             }
-            STATE_READY -> {
-                if (pendingItemLoad) {
-                    pendingItemLoad = false
-                    cb.localPause()
-                    Log.d(TAG, "READY (item load): pausing and reporting ready")
-                    scope.launch {
-                        controller.reportReady(
-                            positionTicks = posTicks,
-                            isPlaying = false,
-                            playlistItemId = currentPlaylistItemId,
-                            whenMs = timeSyncManager.remoteNow(),
-                        )
+
+            when (state) {
+                STATE_IDLE, STATE_BUFFERING -> {
+                    if (state == STATE_BUFFERING) {
+                        val timeSincePlayCmd = System.currentTimeMillis() - lastPlayCommandTimeMs
+                        if (timeSincePlayCmd < 2000 && lastCommand?.command == "Unpause") {
+                            Log.d(TAG, "BUFFERING suppressed (Play command ${timeSincePlayCmd}ms ago)")
+                            return@launch
+                        }
                     }
-                    cb.onSyncStateChanged(synced = false, syncing = true)
-                } else {
+                    stopSyncCorrection()
                     scope.launch {
-                        controller.reportReady(
+                        controller.reportBuffering(
                             positionTicks = posTicks,
                             isPlaying = cb.isPlaying(),
                             playlistItemId = currentPlaylistItemId,
                             whenMs = timeSyncManager.remoteNow(),
                         )
+                    }
+                }
+                STATE_READY -> {
+                    if (pendingItemLoad) {
+                        pendingItemLoad = false
+                        cb.localPause()
+                        Log.d(TAG, "READY (item load): pausing and reporting ready")
+                        scope.launch {
+                            controller.reportReady(
+                                positionTicks = posTicks,
+                                isPlaying = false,
+                                playlistItemId = currentPlaylistItemId,
+                                whenMs = timeSyncManager.remoteNow(),
+                            )
+                        }
+                        cb.onSyncStateChanged(synced = false, syncing = true)
+                    } else {
+                        scope.launch {
+                            controller.reportReady(
+                                positionTicks = posTicks,
+                                isPlaying = cb.isPlaying(),
+                                playlistItemId = currentPlaylistItemId,
+                                whenMs = timeSyncManager.remoteNow(),
+                            )
+                        }
                     }
                 }
             }

@@ -96,6 +96,7 @@ fun HomeScreen(
     musicContent: @Composable () -> Unit = {},
     onSearchItemClick: (String) -> Unit = {},
     onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
+    onNewsletterClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -118,6 +119,7 @@ fun HomeScreen(
         onModeChange = onModeChange,
         onSearchItemClick = onSearchItemClick,
         onSearchSeerrClick = onSearchSeerrClick,
+        onNewsletterClick = onNewsletterClick,
     )
 }
 
@@ -135,6 +137,7 @@ private fun MainHomeContent(
     onModeChange: (HomeMode) -> Unit,
     onSearchItemClick: (String) -> Unit,
     onSearchSeerrClick: (Int, String) -> Unit,
+    onNewsletterClick: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -356,6 +359,7 @@ private fun MainHomeContent(
                         onItemClick = onItemClick,
                         onFocusChange = { focusInHero = it },
                         onSeerrRequest = { viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(it)) },
+                        onNewsletterClick = onNewsletterClick,
                     )
                 }
             }
@@ -478,6 +482,7 @@ private fun HomeContentList(
     onItemClick: (String) -> Unit,
     onFocusChange: (Boolean) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
+    onNewsletterClick: () -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -507,7 +512,7 @@ private fun HomeContentList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
-            if (featuredItem != null) {
+            if (featuredItem != null && state.homeHeroEnabled) {
                 item {
                     AnimatedHeroHeader(
                         featuredItem = featuredItem,
@@ -525,10 +530,19 @@ private fun HomeContentList(
                 item { Spacer(Modifier.height(100.dp)) }
             }
 
+            if (state.newsletterBannerVisible) {
+                item(key = "newsletter_banner") {
+                    NewsletterBanner(
+                        onClick = onNewsletterClick,
+                        onDismiss = { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) },
+                    )
+                }
+            }
+
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
-                val isFirstAfterHero = index == 0 && featuredItem != null
-                val sectionIndexInList = index + (if (featuredItem != null) 1 else 0)
+                val isFirstAfterHero = index == 0 && featuredItem != null && state.homeHeroEnabled
+                val sectionIndexInList = index + (if (featuredItem != null && state.homeHeroEnabled) 1 else 0)
                 val isCurrentlyVisible = sectionIndexInList in visibleItemRange
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }

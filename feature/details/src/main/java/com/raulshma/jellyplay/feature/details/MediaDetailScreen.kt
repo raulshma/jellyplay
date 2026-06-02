@@ -312,6 +312,7 @@ fun MediaDetailScreen(
             onNavigate = onNavigate,
             onEditClick = remember(onEditClick, itemId) { { onEditClick(itemId) } },
             albumTracks = viewModel.albumTracks,
+            collectionItems = viewModel.collectionItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
         )
 
@@ -434,6 +435,7 @@ private fun DetailContent(
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     onEditClick: () -> Unit = {},
     albumTracks: List<MediaItem> = emptyList(),
+    collectionItems: List<MediaItem> = emptyList(),
     onPlayAlbumTrack: (Int) -> Unit = {},
 ) {
     val item = detail?.item
@@ -692,15 +694,15 @@ private fun DetailContent(
                                         smartPlayTarget = smartPlayTarget,
                                         isAudio = isAudio,
                                         isAlbum = isAlbum,
-                                        albumTracks = albumTracks,
-                                        isDownloading = isDownloading,
-                                        isDownloadingSeries = isDownloadingSeries,
-                                        activeDownload = activeDownload,
-                                        onPlayClick = onPlayClick,
-                                        onAudioClick = onAudioClick,
-                                        onPlayAlbumTrack = onPlayAlbumTrack,
-                                        onNavigate = onNavigate,
-                                        onDownloadClick = { showDownloadDialog = true },
+                                    albumTracks = albumTracks,
+                                    isDownloading = isDownloading,
+                                    isDownloadingSeries = isDownloadingSeries,
+                                    activeDownload = activeDownload,
+                                    onPlayClick = onPlayClick,
+                                    onAudioClick = onAudioClick,
+                                    onPlayAlbumTrack = onPlayAlbumTrack,
+                                    onNavigate = onNavigate,
+                                    onDownloadClick = { showDownloadDialog = true },
                                         onDownloadSeriesClick = onDownloadSeriesClick,
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
@@ -739,6 +741,7 @@ private fun DetailContent(
                                     isAudio = isAudio,
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
+                                    collectionItems = collectionItems,
                                     isDownloading = isDownloading,
                                     isDownloadingSeries = isDownloadingSeries,
                                     activeDownload = activeDownload,
@@ -859,6 +862,7 @@ private fun DetailContent(
                                     isAudio = isAudio,
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
+                                    collectionItems = collectionItems,
                                     isDownloading = isDownloading,
                                     isDownloadingSeries = isDownloadingSeries,
                                     activeDownload = activeDownload,
@@ -1855,6 +1859,7 @@ private fun DetailContentBody(
     isAudio: Boolean,
     isAlbum: Boolean,
     albumTracks: List<MediaItem>,
+    collectionItems: List<MediaItem> = emptyList(),
     isDownloading: Boolean,
     isDownloadingSeries: Boolean = false,
     activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
@@ -2177,6 +2182,37 @@ private fun DetailContentBody(
                         },
                         onSeasonSelected = onSeasonSelected,
                     )
+                }
+            }
+        }
+
+        StaggeredDetailSection(visible = showContent, delayIndex = 7) {
+            if (item.mediaType == MediaType.COLLECTION && collectionItems.isNotEmpty()) {
+                Column {
+                    Text(
+                        text = "Items",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(collectionItems, key = { "collection_${it.id}" }, contentType = { "mediaItem" }) { collectionItem ->
+                            PosterCard(
+                                item = collectionItem,
+                                imageUrl = getImageUrl(collectionItem.id),
+                                onClick = { onItemClick(collectionItem.id) },
+                                showProgress = collectionItem.playbackPositionTicks != null && collectionItem.playbackPositionTicks!! > 0,
+                                progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
+                                    (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
+                                } else 0f,
+                                modifier = Modifier.width(160.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -32,3 +32,9 @@ fun Dp.animate(
     label = label,
     finishedListener = finishedListener
 ).value
+
+@Composable
+fun pressScaleValue(isPressed: Boolean, defaultScale: Float = 0.95f): Float {
+    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
+    return if (performanceMode) 1f else if (isPressed) defaultScale else 1f
+}

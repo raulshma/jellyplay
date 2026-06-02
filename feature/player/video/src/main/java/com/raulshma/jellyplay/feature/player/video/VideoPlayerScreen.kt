@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,6 +94,7 @@ import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialo
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDownloadSheet
+import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
@@ -195,13 +197,17 @@ fun VideoPlayerScreen(
         ?: emptyList()
 
     LaunchedEffect(itemId) {
-        viewModel.initialize(
-            itemId = itemId,
-            mediaSourceId = mediaSourceId,
-            startPositionTicks = startPositionTicks,
-            subtitleStreamIndex = subtitleStreamIndex,
-            audioStreamIndex = audioStreamIndex,
-        )
+        if (viewModel.isBackgroundCasting) {
+            viewModel.reattachFromBackgroundCast()
+        } else {
+            viewModel.initialize(
+                itemId = itemId,
+                mediaSourceId = mediaSourceId,
+                startPositionTicks = startPositionTicks,
+                subtitleStreamIndex = subtitleStreamIndex,
+                audioStreamIndex = audioStreamIndex,
+            )
+        }
     }
 
     // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
@@ -274,7 +280,25 @@ fun VideoPlayerScreen(
 
         onDispose {
             val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
-            if (!currentlyInPip) {
+            val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value
+            if (isBgCasting && !currentlyInPip) {
+                activity?.let {
+                    if (!it.isDestroyed && !it.isFinishing) {
+                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        val window = it.window
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        controller.show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+                activity?.let { act ->
+                    if (!act.isDestroyed && !act.isFinishing) {
+                        FrameRateMatcher.restoreOriginalMode(act)
+                    }
+                }
+                playerViewRef = null
+                viewModel.detachForBackgroundCast()
+            } else if (!currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
                         it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -360,9 +384,16 @@ fun VideoPlayerScreen(
     val engine = viewModel.playerEngineRef
     val title = uiState.title
     val subtitle = uiState.subtitle
-    val isPlaying = uiState.isPlaying
-    val currentPosition = uiState.currentPosition
-    val duration = uiState.duration
+    val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val isCastConnecting by viewModel.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
+    val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
+    val castPosition by viewModel.castPositionMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
+
+    val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
+    val currentPosition = if (isCastConnected) castPosition else uiState.currentPosition
+    val duration = if (isCastConnected) castDuration else uiState.duration
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
@@ -404,43 +435,47 @@ fun VideoPlayerScreen(
     }
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
-    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession) {
+    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else if (isCastConnected) viewModel.castPlay()
             else engine?.play()
         }
     }
-    val doPause: () -> Unit = remember(engine, isInSyncPlaySession) {
+    val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
+            else if (isCastConnected) viewModel.castPause()
             else engine?.pause()
         }
     }
-    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession) {
+    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         { ms ->
             if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
+            else if (isCastConnected) viewModel.castSeekTo(ms)
             else engine?.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition) {
         {
-            engine?.let { eng ->
-                val target = (eng.currentPositionMs - uiState.seekDurationMs).coerceAtLeast(0)
-                doSeekTo(target)
-            }
+            val pos = currentPosition
+            val target = (pos - uiState.seekDurationMs).coerceAtLeast(0)
+            doSeekTo(target)
         }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo) {
+    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition, duration) {
         {
-            engine?.let { eng ->
-                val target = (eng.currentPositionMs + uiState.seekDurationMs).coerceAtMost(eng.durationMs.coerceAtLeast(0))
-                doSeekTo(target)
-            }
+            val target = (currentPosition + uiState.seekDurationMs).coerceAtMost(duration.coerceAtLeast(0))
+            doSeekTo(target)
         }
     }
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
         { if (isPlaying) doPause() else doPlay() }
     }
+    val currentDoSeekBack by rememberUpdatedState(doSeekBack)
+    val currentDoSeekForward by rememberUpdatedState(doSeekForward)
+    val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
+
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
     Box(
@@ -522,16 +557,16 @@ fun VideoPlayerScreen(
                                 seekDirection = -1
                                 seekOffsetMs = uiState.seekDurationMs
                                 seekTimestamp++
-                                doSeekBack()
+                                currentDoSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
                                 seekOffsetMs = uiState.seekDurationMs
                                 seekTimestamp++
-                                doSeekForward()
+                                currentDoSeekForward()
                             }
                             else -> {
-                                doTogglePlayPause()
+                                currentDoTogglePlayPause()
                             }
                         }
                     },
@@ -606,21 +641,29 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onVolumeGesture = remember(context) {
+            onVolumeGesture = remember(context, isCastConnected, castVolume) {
                 { delta ->
-                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                    audioManager?.let { am ->
-                        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                        val currentNorm = current.toFloat() / max.toFloat()
-                        val stepThreshold = 1f / max.toFloat()
-                        volumeGestureAccumulator += delta
-                        volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
-                        val steps = (volumeGestureAccumulator / stepThreshold).toInt()
-                        if (steps != 0) {
-                            volumeGestureAccumulator -= steps * stepThreshold
-                            val newVol = (current + steps).coerceIn(0, max)
-                            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                    if (isCastConnected) {
+                        val currentNorm = castVolume
+                        val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
+                        volumeOverlay = newVolume
+                        volumeGestureAccumulator = 0f
+                        viewModel.setCastVolume(newVolume)
+                    } else {
+                        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                        audioManager?.let { am ->
+                            val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                            val current = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                            val currentNorm = current.toFloat() / max.toFloat()
+                            val stepThreshold = 1f / max.toFloat()
+                            volumeGestureAccumulator += delta
+                            volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
+                            val steps = (volumeGestureAccumulator / stepThreshold).toInt()
+                            if (steps != 0) {
+                                volumeGestureAccumulator -= steps * stepThreshold
+                                val newVol = (current + steps).coerceIn(0, max)
+                                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                            }
                         }
                     }
                 }
@@ -746,6 +789,15 @@ fun VideoPlayerScreen(
             aspectRatio = aspectRatio,
         )
 
+        if (isCastConnected || isCastConnecting) {
+            CastIndicatorOverlay(
+                isConnecting = isCastConnecting,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 60.dp, start = 16.dp),
+            )
+        }
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -862,6 +914,7 @@ fun VideoPlayerScreen(
             },
             onControlsFocusChange = { controlsHasFocus = it },
             onOverflowMenuChange = { isOverflowMenuOpen = it },
+            castManager = viewModel.castManagerField,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -931,7 +984,7 @@ fun VideoPlayerScreen(
                 viewModel.castSessionEvents.collect { event ->
                     when (event) {
                         is CastSessionEvent.Connected -> viewModel.castToDevice()
-                        is CastSessionEvent.Disconnected -> { /* local playback continues */ }
+                        is CastSessionEvent.Disconnected -> viewModel.onCastDisconnected()
                     }
                 }
             }

@@ -25,9 +25,11 @@ data class HomeUiState(
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     val discoverEnabled: Boolean = false,
+    val homeHeroEnabled: Boolean = true,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
+    val newsletterBannerVisible: Boolean = false,
 )
 
 @Immutable

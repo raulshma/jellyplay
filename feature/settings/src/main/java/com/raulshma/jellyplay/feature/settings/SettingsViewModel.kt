@@ -534,6 +534,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setNavBarShowLabels(show) }
     }
 
+    fun setHomeHeroEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setHomeHeroEnabled(enabled) }
+    }
+
+    fun setPerformanceMode(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setPerformanceMode(enabled) }
+    }
+
     fun setMpvConfig(config: MpvEngineConfig) {
         viewModelScope.launch { preferencesStore.setMpvConfig(config) }
     }

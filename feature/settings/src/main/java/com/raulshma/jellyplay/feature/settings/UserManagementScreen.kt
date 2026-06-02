@@ -142,19 +142,19 @@ fun UserManagementScreen(
                         slideInVertically(initialOffsetY = { it }),
                 exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
                         androidx.compose.animation.slideOutVertically(targetOffsetY = { it }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                    .offset {
+                        val maxOffset = 88.dp.toPx()
+                        val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                        androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
+                    },
             ) {
                 ExtendedFloatingActionButton(
                     onClick = onAddUser,
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                     text = { Text("Add User") },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                        .offset {
-                            val maxOffset = 88.dp.toPx()
-                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                        },
                 )
             }
         }
