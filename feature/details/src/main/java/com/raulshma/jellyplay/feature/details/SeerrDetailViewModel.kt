@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
@@ -89,6 +90,15 @@ class SeerrDetailViewModel @Inject constructor(
     private val _isLoadingServices = MutableStateFlow(false)
     val isLoadingServices: StateFlow<Boolean> = _isLoadingServices
 
+    private val _selectedSeasonNumber = mutableStateOf<Int?>(null)
+    val selectedSeasonNumber: State<Int?> = _selectedSeasonNumber
+
+    private val _episodesBySeason = MutableStateFlow<Map<Int, List<SeerrEpisode>>>(emptyMap())
+    val episodesBySeason: StateFlow<Map<Int, List<SeerrEpisode>>> = _episodesBySeason
+
+    private val _isLoadingEpisodes = MutableStateFlow(false)
+    val isLoadingEpisodes: StateFlow<Boolean> = _isLoadingEpisodes
+
     fun loadDetails(tmdbId: Int, mediaType: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -98,6 +108,9 @@ class SeerrDetailViewModel @Inject constructor(
             _tvDetails.value = null
             _seerrRecommendations.value = emptyList()
             _seerrSimilar.value = emptyList()
+            _selectedSeasonNumber.value = null
+            _episodesBySeason.value = emptyMap()
+            _isLoadingEpisodes.value = false
 
             var hasRatings = false
 
@@ -220,6 +233,31 @@ class SeerrDetailViewModel @Inject constructor(
             } finally {
                 _isLoadingServices.value = false
             }
+        }
+    }
+
+    fun toggleSeason(tvId: Int, seasonNumber: Int) {
+        if (_selectedSeasonNumber.value == seasonNumber) {
+            _selectedSeasonNumber.value = null
+            return
+        }
+        _selectedSeasonNumber.value = seasonNumber
+        if (!_episodesBySeason.value.containsKey(seasonNumber)) {
+            loadSeasonEpisodes(tvId, seasonNumber)
+        }
+    }
+
+    private fun loadSeasonEpisodes(tvId: Int, seasonNumber: Int) {
+        viewModelScope.launch {
+            _isLoadingEpisodes.value = true
+            try {
+                seerrRepository.getTvSeasonDetails(tvId, seasonNumber).onSuccess { detail ->
+                    val current = _episodesBySeason.value.toMutableMap()
+                    current[seasonNumber] = detail.episodes
+                    _episodesBySeason.value = current
+                }
+            } catch (_: Exception) {}
+            _isLoadingEpisodes.value = false
         }
     }
 

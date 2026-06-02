@@ -86,6 +86,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.formatDuration
+import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -174,6 +175,7 @@ internal fun PlayerControls(
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
+    castManager: CastManager? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -530,7 +532,9 @@ internal fun PlayerControls(
                             )
                         }
 
-                        CastButton()
+                        if (castManager != null) {
+                            CastButton(castManager = castManager)
+                        }
                     }
                 }
             }

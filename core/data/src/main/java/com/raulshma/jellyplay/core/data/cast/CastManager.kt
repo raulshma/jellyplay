@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.cast
 
 import android.content.Context
+import android.util.Log
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
@@ -8,16 +9,26 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
-import com.google.android.gms.cast.framework.CastState
 import com.google.android.gms.cast.framework.SessionManagerListener
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Events emitted by [CastManager] when the cast session state changes. */
 sealed class CastSessionEvent {
     data object Connected : CastSessionEvent()
     data object Disconnected : CastSessionEvent()
@@ -27,103 +38,263 @@ sealed class CastSessionEvent {
 @Singleton
 class CastManager @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val googleCastStrategy: GoogleCastStrategy,
 ) {
+    companion object {
+        private const val TAG = "CastManager"
+        const val STRATEGY_GOOGLE = "google"
+        const val STRATEGY_LIBVLC = "libvlc"
+    }
+
+    private val strategies = mutableMapOf<String, CastStrategy>()
+    private var activeStrategyName: String = STRATEGY_GOOGLE
+
+    val currentStrategyName: String get() = activeStrategyName
+
     private var castPlayer: CastPlayer? = null
-    private var sessionListener: SessionAvailabilityListener? = null
+    private var sessionAvailabilityListener: SessionAvailabilityListener? = null
+    private var externalListener: Player.Listener? = null
+
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var tickerJob: Job? = null
+    private var strategyObserverJob: Job? = null
 
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
-    /** A hot flow of cast session lifecycle events (connect / disconnect). */
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
 
-    /** Tracks whether the global [SessionManagerListener] has been registered. */
+    private val _castPositionMs = MutableStateFlow(0L)
+    val castPositionMs: StateFlow<Long> = _castPositionMs.asStateFlow()
+
+    private val _castDurationMs = MutableStateFlow(0L)
+    val castDurationMs: StateFlow<Long> = _castDurationMs.asStateFlow()
+
+    private val _castIsPlaying = MutableStateFlow(false)
+    val castIsPlaying: StateFlow<Boolean> = _castIsPlaying.asStateFlow()
+
+    private val _castBufferedPositionMs = MutableStateFlow(0L)
+    val castBufferedPositionMs: StateFlow<Long> = _castBufferedPositionMs.asStateFlow()
+
+    private val _castVolume = MutableStateFlow(1f)
+    val castVolume: StateFlow<Float> = _castVolume.asStateFlow()
+
+    val castPlayerForSession: Player? get() = castPlayer
+
+    fun isActive(): Boolean = castPlayer != null && isConnected
+
+    fun setVolume(volume: Float) {
+        val player = castPlayer ?: return
+        player.volume = volume.coerceIn(0f, 1f)
+        _castVolume.value = player.volume
+    }
+
     @Volatile
-    private var sessionManagerListenerRegistered = false
+    private var released = false
+
+    private val backgroundCasting = AtomicBoolean(false)
+    val isBackgroundCasting: Boolean get() = backgroundCasting.get()
+
+    fun markBackgroundCasting(casting: Boolean) {
+        backgroundCasting.set(casting)
+    }
+
+    private val castPlayerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            updateCastState()
+            toggleTicker()
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _castIsPlaying.value = isPlaying
+            toggleTicker()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            updateCastState()
+        }
+
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            updateCastState()
+        }
+    }
+
+    private fun updateCastState() {
+        val player = castPlayer ?: return
+        _castPositionMs.value = player.currentPosition.coerceAtLeast(0)
+        _castDurationMs.value = player.duration.coerceAtLeast(0)
+        _castBufferedPositionMs.value = player.bufferedPosition.coerceAtLeast(0)
+        _castIsPlaying.value = player.isPlaying
+        _castVolume.value = player.volume
+    }
+
+    private fun toggleTicker() {
+        tickerJob?.cancel()
+        val player = castPlayer
+        if (player != null && player.isPlaying) {
+            tickerJob = coroutineScope.launch {
+                while (isActive) {
+                    delay(500)
+                    updateCastState()
+                }
+            }
+        }
+    }
+
+    private val googleSessionListener = object : SessionManagerListener<CastSession> {
+        override fun onSessionStarted(session: CastSession, sessionId: String) {
+            _sessionEvents.tryEmit(CastSessionEvent.Connected)
+        }
+        override fun onSessionEnded(session: CastSession, error: Int) {
+            resetCastState()
+            _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+        }
+        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+            _sessionEvents.tryEmit(CastSessionEvent.Connected)
+        }
+        override fun onSessionSuspended(session: CastSession, reason: Int) {}
+        override fun onSessionStarting(session: CastSession) {}
+        override fun onSessionEnding(session: CastSession) {}
+        override fun onSessionResumeFailed(session: CastSession, error: Int) {
+            resetCastState()
+            _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+        }
+        override fun onSessionStartFailed(session: CastSession, error: Int) {}
+        override fun onSessionResuming(session: CastSession, sessionId: String) {}
+    }
+
+    @Volatile
+    private var googleSessionListenerRegistered = false
+
+    init {
+        strategies[STRATEGY_GOOGLE] = googleCastStrategy
+        ensureGoogleSessionListener()
+    }
+
+    fun registerStrategy(name: String, strategy: CastStrategy) {
+        strategies[name] = strategy
+    }
+
+    fun unregisterStrategy(name: String) {
+        strategies.remove(name)
+        if (activeStrategyName == name) {
+            activeStrategyName = STRATEGY_GOOGLE
+        }
+    }
+
+    fun setActiveStrategy(name: String) {
+        val previous = activeStrategyName
+        activeStrategyName = name
+        val prevStrategy = strategies[previous]
+        if (prevStrategy != null) {
+            prevStrategy.stopDiscovery()
+        }
+        observeStrategySession()
+    }
+
+    private fun observeStrategySession() {
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
+        val strategy = strategies[activeStrategyName]
+        if (strategy != null && strategy !== googleCastStrategy) {
+            var wasConnected = strategy.isConnected.value
+            strategyObserverJob = coroutineScope.launch {
+                strategy.isConnected.collect { connected ->
+                    if (connected && !wasConnected) {
+                        _sessionEvents.tryEmit(CastSessionEvent.Connected)
+                    } else if (!connected && wasConnected) {
+                        resetCastState()
+                        _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+                    }
+                    wasConnected = connected
+                }
+            }
+        }
+    }
+
+    private val activeStrategy: CastStrategy?
+        get() = strategies[activeStrategyName]
 
     val isCastAvailable: Boolean
-        get() = try {
-            val castContext = CastContext.getSharedInstance(context)
-            castContext.sessionManager.currentCastSession?.isConnected == true ||
-                    castContext.castState != CastState.NO_DEVICES_AVAILABLE
-        } catch (_: Exception) {
-            false
-        }
+        get() = activeStrategy?.isAvailable?.value == true
 
     val isConnected: Boolean
-        get() = try {
-            CastContext.getSharedInstance(context)
-                .sessionManager.currentCastSession?.isConnected == true
-        } catch (_: Exception) {
-            false
-        }
+        get() = activeStrategy?.isConnected?.value == true
 
-    private var currentListener: Player.Listener? = null
+    val isConnecting: Boolean
+        get() = activeStrategy?.isConnecting?.value == true
 
-    /**
-     * Lazily registers a [SessionManagerListener] that forwards session lifecycle
-     * events to [sessionEvents]. Safe to call multiple times — registration happens once.
-     */
-    private fun ensureSessionManagerListener() {
-        if (sessionManagerListenerRegistered) return
+    val isAvailableFlow: StateFlow<Boolean>
+        get() = activeStrategy?.isAvailable ?: googleCastStrategy.isAvailable
+
+    val isConnectedFlow: StateFlow<Boolean>
+        get() = activeStrategy?.isConnected ?: googleCastStrategy.isConnected
+
+    val isConnectingFlow: StateFlow<Boolean>
+        get() = activeStrategy?.isConnecting ?: googleCastStrategy.isConnecting
+
+    val discoveredDevices: StateFlow<List<CastDevice>>
+        get() = activeStrategy?.discoveredDevices ?: googleCastStrategy.discoveredDevices
+
+    fun startDiscovery(context: android.content.Context) {
+        activeStrategy?.startDiscovery(context)
+    }
+
+    fun stopDiscovery() {
+        activeStrategy?.stopDiscovery()
+    }
+
+    fun connect(context: android.content.Context, device: CastDevice) {
+        activeStrategy?.connect(context, device)
+    }
+
+    fun disconnect(context: android.content.Context) {
+        activeStrategy?.disconnect(context)
+    }
+
+    fun play() {
+        castPlayer?.play()
+    }
+
+    fun pause() {
+        castPlayer?.pause()
+    }
+
+    fun seekTo(positionMs: Long) {
+        castPlayer?.seekTo(positionMs)
+    }
+
+    private fun ensureGoogleSessionListener() {
+        if (googleSessionListenerRegistered) return
         try {
             val castContext = CastContext.getSharedInstance(context)
-            val listener = object : SessionManagerListener<CastSession> {
-                override fun onSessionStarted(session: CastSession, sessionId: String) {
-                    _sessionEvents.tryEmit(CastSessionEvent.Connected)
-                }
-                override fun onSessionEnded(session: CastSession, error: Int) {
-                    _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
-                }
-                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-                    _sessionEvents.tryEmit(CastSessionEvent.Connected)
-                }
-                override fun onSessionSuspended(session: CastSession, reason: Int) {
-                    // Don't emit disconnect for suspend — the session may resume
-                }
-                override fun onSessionStarting(session: CastSession) {}
-                override fun onSessionEnding(session: CastSession) {}
-                override fun onSessionResumeFailed(session: CastSession, error: Int) {
-                    _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
-                }
-                override fun onSessionStartFailed(session: CastSession, error: Int) {}
-                override fun onSessionResuming(session: CastSession, sessionId: String) {}
-            }
-            castContext.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
-            sessionManagerListenerRegistered = true
-        } catch (_: Exception) { }
+            castContext.sessionManager.addSessionManagerListener(googleSessionListener, CastSession::class.java)
+            googleSessionListenerRegistered = true
+        } catch (_: Exception) {}
     }
 
-    fun getCastPlayer(listener: Player.Listener): CastPlayer? {
-        if (!isConnected) return null
-        if (castPlayer == null) {
-            try {
-                val castContext = CastContext.getSharedInstance(context)
-                sessionListener = object : SessionAvailabilityListener {
-                    override fun onCastSessionAvailable() {}
-                    override fun onCastSessionUnavailable() {
-                        currentListener?.onPlaybackStateChanged(Player.STATE_ENDED)
-                    }
+    private fun ensureCastPlayer(): CastPlayer? {
+        if (!googleCastStrategy.isConnected.value) return null
+        if (castPlayer != null) return castPlayer
+        if (released) return null
+        try {
+            val castContext = CastContext.getSharedInstance(context)
+            sessionAvailabilityListener = object : SessionAvailabilityListener {
+                override fun onCastSessionAvailable() {}
+                override fun onCastSessionUnavailable() {
+                    externalListener?.onPlaybackStateChanged(Player.STATE_ENDED)
                 }
-                castPlayer = CastPlayer(castContext).apply {
-                    addListener(listener)
-                    setSessionAvailabilityListener(sessionListener!!)
-                }
-                currentListener = listener
-            } catch (_: Exception) {
-                return null
             }
-        } else if (currentListener !== listener) {
-            currentListener?.let { castPlayer?.removeListener(it) }
-            castPlayer?.addListener(listener)
-            currentListener = listener
+            castPlayer = CastPlayer(castContext).apply {
+                addListener(castPlayerListener)
+                setSessionAvailabilityListener(sessionAvailabilityListener!!)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create CastPlayer", e)
         }
         return castPlayer
-    }
-
-    fun release() {
-        castPlayer?.release()
-        castPlayer = null
-        sessionListener = null
-        currentListener = null
     }
 
     fun loadMedia(
@@ -131,10 +302,55 @@ class CastManager @Inject constructor(
         startPositionMs: Long = 0,
         listener: Player.Listener,
     ) {
-        ensureSessionManagerListener()
-        val player = getCastPlayer(listener) ?: return
+        ensureGoogleSessionListener()
+        externalListener?.let { castPlayer?.removeListener(it) }
+        externalListener = listener
+        val player = ensureCastPlayer() ?: return
+        player.addListener(listener)
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.play()
+        updateCastState()
+        toggleTicker()
+    }
+
+    fun ensurePlayerReady() {
+        ensureGoogleSessionListener()
+        ensureCastPlayer()
+    }
+
+    fun release() {
+        released = true
+        backgroundCasting.set(false)
+        tickerJob?.cancel()
+        tickerJob = null
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
+        castPlayer?.removeListener(castPlayerListener)
+        externalListener?.let { castPlayer?.removeListener(it) }
+        castPlayer?.release()
+        castPlayer = null
+        sessionAvailabilityListener = null
+        externalListener = null
+        resetCastState()
+        strategies.values.forEach { it.stopDiscovery() }
+        coroutineScope.cancel()
+    }
+
+    fun softRelease() {
+        tickerJob?.cancel()
+        tickerJob = null
+        strategyObserverJob?.cancel()
+        strategyObserverJob = null
+        strategies.values.forEach { it.stopDiscovery() }
+    }
+
+    private fun resetCastState() {
+        tickerJob?.cancel()
+        tickerJob = null
+        _castPositionMs.value = 0L
+        _castDurationMs.value = 0L
+        _castIsPlaying.value = false
+        _castBufferedPositionMs.value = 0L
     }
 }

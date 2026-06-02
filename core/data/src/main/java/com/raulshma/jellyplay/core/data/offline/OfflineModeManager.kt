@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.core.data.offline
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -21,7 +24,7 @@ import javax.inject.Singleton
 class OfflineModeManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor,
-) {
+) : DefaultLifecycleObserver {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -49,6 +52,15 @@ class OfflineModeManager @Inject constructor(
                 }
             }
         }
+
+        scope.launch(Dispatchers.Main) {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(this@OfflineModeManager)
+        }
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        super.onStart(owner)
+        checkNetworkAndAutoDetect()
     }
 
     fun toggleManualOffline() {

@@ -28,6 +28,13 @@ interface SeerrApiClient {
         tmdbId: Int,
     ): Result<SeerrTvDetails>
 
+    suspend fun getTvSeasonDetails(
+        baseUrl: String,
+        apiKey: String,
+        tvId: Int,
+        seasonNumber: Int,
+    ): Result<SeerrSeasonDetail>
+
     suspend fun getMovieRatings(
         baseUrl: String,
         apiKey: String,

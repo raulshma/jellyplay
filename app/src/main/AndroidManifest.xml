@@ -84,7 +84,7 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/continue_watching_widget_info" />
         </receiver>
-
+        <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

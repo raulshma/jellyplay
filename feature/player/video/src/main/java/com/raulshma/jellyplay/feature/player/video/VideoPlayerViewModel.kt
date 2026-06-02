@@ -42,13 +42,16 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
+import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -82,6 +85,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
+    private val activePlayerController: ActivePlayerController,
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
@@ -110,6 +114,8 @@ class VideoPlayerViewModel @Inject constructor(
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
     private val trickplayManager = TrickplayManager(playbackRepository)
     private var videoMediaSession: MediaSession? = null
+
+    val castManagerField: CastManager = castManager
 
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
@@ -197,6 +203,7 @@ class VideoPlayerViewModel @Inject constructor(
                         channelMixMode = prefs.channelMixMode,
                         channelMixEnabled = prefs.channelMixEnabled,
                     )}
+                    updateCastStrategyForEngine(engine)
                     engineCollectionJob = viewModelScope.launch {
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
@@ -232,6 +239,19 @@ class VideoPlayerViewModel @Inject constructor(
             playerLifecycleManager.pipDismissed.collect { dismissed ->
                 if (dismissed) {
                     playerSessionManager.engine?.pause()
+                }
+            }
+        }
+
+        // Publish the current engine to the singleton [ActivePlayerController]
+        // so non-Compose layers (e.g. the Jellyfin remote "Play To" receiver)
+        // can drive playback directly.
+        viewModelScope.launch {
+            playerSessionManager.engineFlow.collect { engine ->
+                if (engine != null) {
+                    activePlayerController.bindEngine(engine)
+                } else {
+                    activePlayerController.clearEngine()
                 }
             }
         }
@@ -455,7 +475,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectAudioTrack(option: TrackOption) {
         val engine = playerSessionManager.engine ?: return
-        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, option.index, option.trackGroup)
+        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, option.index, option.trackGroup)
         if (option.index < 0) {
             selectedAudioTrackId = null
         } else {
@@ -479,7 +499,7 @@ class VideoPlayerViewModel @Inject constructor(
         val engine = playerSessionManager.engine ?: return
         
         // Apply selection to the player engine
-        engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, option.index, option.trackGroup)
+        engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, option.index, option.trackGroup)
         
         // Update internal state tracking
         if (option.index < 0) {
@@ -1041,6 +1061,24 @@ class VideoPlayerViewModel @Inject constructor(
     val isCastConnected: Boolean
         get() = castManager.isConnected
 
+    val castPositionMs: kotlinx.coroutines.flow.StateFlow<Long>
+        get() = castManager.castPositionMs
+
+    val castDurationMs: kotlinx.coroutines.flow.StateFlow<Long>
+        get() = castManager.castDurationMs
+
+    val castIsPlaying: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.castIsPlaying
+
+    val castVolumeFlow: kotlinx.coroutines.flow.StateFlow<Float>
+        get() = castManager.castVolume
+
+    val isConnectedFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.isConnectedFlow
+
+    val isConnectingFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = castManager.isConnectingFlow
+
     /** Reactive flow of cast session events — consumed by the UI to auto-trigger [castToDevice]. */
     val castSessionEvents: kotlinx.coroutines.flow.SharedFlow<CastSessionEvent>
         get() = castManager.sessionEvents
@@ -1049,27 +1087,141 @@ class VideoPlayerViewModel @Inject constructor(
         get() = syncPlayBridge.isInSession
 
     fun castToDevice() {
-        val state = _uiState.value
         val engine = playerSessionManager.engine ?: return
-        val currentItemId = playerSessionManager.sessionState.value.currentItemId
 
-        val url = state.streamUrl ?: return
-        val artworkUri = currentItemId?.let {
-            try { Uri.parse(playbackRepository.getImageUrl(it, maxWidth = 300)) } catch (_: Exception) { null }
-        }
+        val sessionState = playerSessionManager.sessionState.value
+        val currentItemId = sessionState.currentItemId ?: return
+
+        val positionMs = engine.currentPositionMs
+        val startTimeTicks = positionMs * 10_000
+        val sourceId = sessionState.currentMediaSource?.id ?: ""
+        val url = playbackRepository.getStreamUrl(currentItemId, sourceId, startTimeTicks)
+        if (url.isBlank()) return
+
+        val artworkUri = try {
+            Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
+        } catch (_: Exception) { null }
+
+        val subtitleConfigs = buildCastSubtitleConfigurations(
+            itemId = currentItemId,
+            mediaSourceId = sourceId,
+            mediaStreams = sessionState.mediaStreams,
+        )
+
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(state.title)
-                    .setSubtitle(state.subtitle)
+                    .setTitle(sessionState.title)
+                    .setSubtitle(sessionState.subtitle)
                     .setArtworkUri(artworkUri)
                     .build()
             )
+            .setSubtitleConfigurations(subtitleConfigs)
             .build()
-        val positionMs = engine.currentPositionMs
-        castManager.loadMedia(mediaItem, positionMs, object : androidx.media3.common.Player.Listener {})
+        castManager.loadMedia(mediaItem, positionMs, object : Player.Listener {})
+        engine.pause()
     }
+
+    private fun buildCastSubtitleConfigurations(
+        itemId: String,
+        mediaSourceId: String,
+        mediaStreams: List<MediaStream>,
+    ): List<MediaItem.SubtitleConfiguration> {
+        return mediaStreams
+            .filter { it.type == StreamType.SUBTITLE }
+            .mapNotNull { stream ->
+                val subUrl = when {
+                    !stream.deliveryUrl.isNullOrBlank() ->
+                        playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                    stream.isExternal ->
+                        playbackRepository.buildSubtitleDeliveryUrl(
+                            itemId, mediaSourceId, stream.index, "vtt",
+                        )
+                    else -> null
+                }
+                if (subUrl.isNullOrBlank()) return@mapNotNull null
+
+                val mimeType = when ((stream.codec ?: "").lowercase()) {
+                    "vtt", "webvtt" -> MimeTypes.TEXT_VTT
+                    "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
+                    "ttml", "dfxp", "tt" -> MimeTypes.APPLICATION_TTML
+                    "ssa", "ass" -> MimeTypes.TEXT_SSA
+                    else -> MimeTypes.TEXT_VTT
+                }
+
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
+                    .setMimeType(mimeType)
+                    .setLabel(stream.displayTitle ?: stream.title ?: stream.language)
+                    .setLanguage(stream.language)
+                    .build()
+            }
+    }
+
+    fun setCastVolume(volume: Float) {
+        castManager.setVolume(volume)
+    }
+
+    fun onCastDisconnected() {
+        val engine = playerSessionManager.engine ?: return
+        if (!engine.isPlaying.value) {
+            engine.play()
+        }
+    }
+
+    fun castPlay() {
+        castManager.play()
+    }
+
+    fun castPause() {
+        castManager.pause()
+    }
+
+    fun castSeekTo(positionMs: Long) {
+        castManager.seekTo(positionMs)
+    }
+
+    private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
+        castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
+    }
+
+    @OptIn(UnstableApi::class)
+    fun detachForBackgroundCast() {
+        castManager.markBackgroundCasting(true)
+        castManager.softRelease()
+
+        val castPlayer = castManager.castPlayerForSession
+        if (castPlayer != null) {
+            releaseVideoMediaSession()
+            val session = MediaSession.Builder(context, castPlayer)
+                .setId("jellyplay_cast_bg")
+                .build()
+            videoMediaSession = session
+            sessionManager.setActiveSession(session)
+        }
+    }
+
+    @OptIn(UnstableApi::class)
+    fun reattachFromBackgroundCast() {
+        if (!castManager.isBackgroundCasting) return
+        castManager.markBackgroundCasting(false)
+
+        val engine = playerSessionManager.engine
+        if (engine != null) {
+            val sessionState = playerSessionManager.sessionState.value
+            val itemId = sessionState.currentItemId ?: return
+            releaseVideoMediaSession()
+            val player = engine.underlyingPlayer ?: return
+            val session = MediaSession.Builder(context, player)
+                .setId("jellyplay_video_$itemId")
+                .build()
+            videoMediaSession = session
+            sessionManager.setActiveSession(session)
+        }
+    }
+
+    val isBackgroundCasting: Boolean
+        get() = castManager.isBackgroundCasting
 
     fun captureOcrSubtitle(bitmap: android.graphics.Bitmap?) {
         if (_uiState.value.isOcrRunning) return
@@ -1118,23 +1270,23 @@ class VideoPlayerViewModel @Inject constructor(
         val rawTracks = engine.availableTracks.value
 
         // Restore previous manual audio selection if new engine doesn't have it selected yet
-        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO }
+        val rawAudioTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.AUDIO }
         val prevAudioSel = selectedAudioTrackId
         if (prevAudioSel != null) {
             val targetTrack = rawAudioTracks.find { it.index == prevAudioSel.first && it.trackGroup == prevAudioSel.second }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
+                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.AUDIO, targetTrack.index, targetTrack.trackGroup)
                 return
             }
         }
 
         // Restore previous manual subtitle selection if new engine doesn't have it selected yet
-        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE }
+        val rawSubTracks = rawTracks.filter { it.type == com.raulshma.jellyplay.core.model.TrackType.SUBTITLE }
         val prevSubSel = selectedSubtitleTrackId
         if (prevSubSel != null) {
             val targetTrack = rawSubTracks.find { it.index == prevSubSel.first && it.trackGroup == prevSubSel.second }
             if (targetTrack != null && !targetTrack.isSelected) {
-                engine.selectTrack(com.raulshma.jellyplay.feature.player.video.engine.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
+                engine.selectTrack(com.raulshma.jellyplay.core.model.TrackType.SUBTITLE, targetTrack.index, targetTrack.trackGroup)
                 return
             }
         }
@@ -1428,6 +1580,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager.requestAutoEnterPip(false)
         releaseInternals()
         castManager.release()
+        activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
             // Use a transient IO scope instead of runBlocking to avoid potential ANR
             // if the network call blocks. The scope is intentionally short-lived;

@@ -113,6 +113,7 @@ import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import androidx.fragment.app.FragmentActivity
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
+import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -124,6 +125,7 @@ fun SettingsScreen(
     onSeerrSettings: () -> Unit = {},
     onAdminDashboard: () -> Unit = {},
     onSetupWizard: () -> Unit = {},
+    onNewsletterClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -205,6 +207,15 @@ fun SettingsScreen(
         title = "Settings",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            androidx.compose.material3.IconButton(onClick = onNewsletterClick) {
+                Icon(
+                    com.composables.icons.tabler.Tabler.Outline.Mail,
+                    contentDescription = "Newsletter",
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        },
     ) {
         val scrollState = rememberScrollState()
         val context = LocalContext.current
@@ -1398,7 +1409,7 @@ fun SettingsScreen(
                     }
 
                     if (isAndroid12) {
-                        val baseCount = if (isDarkActive) 5 else 4
+                        val baseCount = if (isDarkActive) 7 else 6
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1468,7 +1479,7 @@ fun SettingsScreen(
                             },
                         )
                     } else {
-                        val baseCount = if (isDarkActive) 5 else 4
+                        val baseCount = if (isDarkActive) 6 else 5
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = "Theme Mode",
@@ -1531,19 +1542,48 @@ fun SettingsScreen(
                         )
                     }
                     SettingToggleItem(
+                        icon = Tabler.Outline.LayersLinked,
+                        title = "Show Hero Section",
+                        subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
+                        checked = preferences.homeHeroEnabled,
+                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3),
+                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
+                        onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                    )
+                    SettingToggleItem(
                         icon = Tabler.Outline.TextSize,
                         title = "Show Navigation Labels",
                         subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
                         checked = preferences.navBarShowLabels,
-                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3), 
-                        count = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4),
+                        index = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4), 
+                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
                         onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                     )
                 }
             }
 
+            AnimatedSettingsEntrance(12) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bolt,
+                    title = "Performance",
+                    summary = {
+                        if (preferences.performanceMode) "Reduced animations and effects" else "Standard experience"
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Gauge,
+                        title = "Performance Mode",
+                        subtitle = "Reduces animations and effects for better performance on lower-end devices",
+                        checked = preferences.performanceMode,
+                        index = 0, count = 1,
+                        onCheckedChange = { viewModel.setPerformanceMode(it) },
+                    )
+                }
+            }
+
             if (isTv) {
-                AnimatedSettingsEntrance(12) {
+                AnimatedSettingsEntrance(13) {
                     SettingsGroup(
                         icon = Tabler.Outline.Moon,
                         title = "Screensaver",
@@ -1625,7 +1665,7 @@ fun SettingsScreen(
                 }
             }
 
-            AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                 val biometricAvailability = rememberBiometricAvailability()
                 val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
 
@@ -1660,7 +1700,7 @@ fun SettingsScreen(
                     )
                     if (canShowBiometric) {
                         val bioContext = LocalContext.current
-                        val bioActivity = remember(bioContext) { bioContext as? FragmentActivity }
+                        val bioActivity = remember(bioContext) { bioContext.findFragmentActivity() }
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
                             title = "Biometric Unlock",
@@ -1741,7 +1781,7 @@ fun SettingsScreen(
                 }
             }
 
-            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
+            AnimatedSettingsEntrance(if (isTv) 15 else 14) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     SettingInfoItem(
                         icon = Tabler.Outline.Video,

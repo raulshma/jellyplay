@@ -143,6 +143,21 @@ class SeerrApiClientImpl @Inject constructor(
         return parseAndMap(executeRequest(request))
     }
 
+    override suspend fun getTvSeasonDetails(
+        baseUrl: String,
+        apiKey: String,
+        tvId: Int,
+        seasonNumber: Int,
+    ): Result<SeerrSeasonDetail> {
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/tv/$tvId/season/$seasonNumber"))
+            .withApiKey(apiKey)
+            .get()
+            .build()
+
+        return parseAndMap(executeRequest(request))
+    }
+
     override suspend fun getMovieRatings(
         baseUrl: String,
         apiKey: String,

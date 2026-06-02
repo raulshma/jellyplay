@@ -6,13 +6,14 @@ import androidx.compose.runtime.Immutable
 enum class OnboardingStep(val index: Int) {
     WELCOME(0),
     APPEARANCE(1),
-    HOME_LAYOUT(2),
-    VIDEO_PLAYER(3),
-    AUDIO_PLAYER(4),
-    SUBTITLES(5),
-    SECURITY(6),
-    SEERR(7),
-    COMPLETION(8);
+    PERFORMANCE(2),
+    HOME_LAYOUT(3),
+    VIDEO_PLAYER(4),
+    AUDIO_PLAYER(5),
+    SUBTITLES(6),
+    SECURITY(7),
+    SEERR(8),
+    COMPLETION(9);
 
     companion object {
         val entries get() = OnboardingStep.entries

@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -74,7 +75,7 @@ internal fun SettingsGroup(
     val headerInteractionSource = remember { MutableInteractionSource() }
     val headerPressed by headerInteractionSource.collectIsPressedAsState()
     val headerScale by animateFloatAsState(
-        targetValue = if (headerPressed) 0.98f else 1f,
+        targetValue = pressScaleValue(headerPressed, 0.98f),
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "headerPressScale",
     )

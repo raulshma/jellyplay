@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -99,13 +100,30 @@ class JellyfinApiClientImpl @Inject constructor(
 
     internal companion object {
         val sharedJson = Json { ignoreUnknownKeys = true }
+        private val SUPPORTED_REMOTE_COMMANDS = listOf(
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_VOLUME,
+            org.jellyfin.sdk.model.api.GeneralCommandType.VOLUME_UP,
+            org.jellyfin.sdk.model.api.GeneralCommandType.VOLUME_DOWN,
+            org.jellyfin.sdk.model.api.GeneralCommandType.MUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.UNMUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.TOGGLE_MUTE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_AUDIO_STREAM_INDEX,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_SUBTITLE_STREAM_INDEX,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_REPEAT_MODE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_SHUFFLE_QUEUE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_PLAYBACK_ORDER,
+            org.jellyfin.sdk.model.api.GeneralCommandType.SET_MAX_STREAMING_BITRATE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.TOGGLE_FULLSCREEN,
+            org.jellyfin.sdk.model.api.GeneralCommandType.DISPLAY_MESSAGE,
+            org.jellyfin.sdk.model.api.GeneralCommandType.PLAY,
+        )
         private val CACHED_CAPABILITIES by lazy {
             org.jellyfin.sdk.model.api.ClientCapabilitiesDto(
                 playableMediaTypes = listOf(
                     org.jellyfin.sdk.model.api.MediaType.VIDEO,
                     org.jellyfin.sdk.model.api.MediaType.AUDIO,
                 ),
-                supportedCommands = org.jellyfin.sdk.model.api.GeneralCommandType.entries,
+                supportedCommands = SUPPORTED_REMOTE_COMMANDS,
                 supportsMediaControl = true,
                 supportsPersistentIdentifier = true,
                 deviceProfile = org.jellyfin.sdk.model.api.DeviceProfile(
@@ -2231,6 +2249,117 @@ class JellyfinApiClientImpl @Inject constructor(
 
     private fun okHttp3MultipartBody(bytes: ByteArray): okhttp3.RequestBody =
         bytes.toRequestBody("image/*".toMediaType())
+
+    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = apiResult {
+        coroutineScope {
+            val serverName = async {
+                try {
+                    requireApi().systemApi.getSystemInfo().content.serverName ?: ""
+                } catch (_: Exception) { "" }
+            }
+            val recentlyAdded = async {
+                try {
+                    val folders = requireApi().libraryApi.getMediaFolders().content?.items ?: emptyList()
+                    folders.filter { folder ->
+                        folder.collectionType?.serialName != "music"
+                    }.flatMap { folder ->
+                        requireApi().userLibraryApi.getLatestMedia(
+                            parentId = folder.id,
+                            limit = limit,
+                            fields = listOf(
+                                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                            ),
+                        ).content ?: emptyList()
+                    }.map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
+                } catch (_: Exception) { emptyList() }
+            }
+            val activityDigest = async {
+                try {
+                    val result = requireApi().activityLogApi.getLogEntries(
+                        limit = limit,
+                        minDate = java.time.LocalDateTime.parse(sinceDate),
+                    ).content
+                    result.items.map { it.toActivityModel() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val libraryStats = async {
+                try {
+                    val dto = requireApi().libraryApi.getItemCounts().content
+                    ItemCounts(
+                        movieCount = dto.movieCount.toLong(),
+                        seriesCount = dto.seriesCount.toLong(),
+                        episodeCount = dto.episodeCount.toLong(),
+                        albumCount = dto.albumCount.toLong(),
+                        songCount = dto.songCount.toLong(),
+                        musicVideoCount = dto.musicVideoCount.toLong(),
+                        bookCount = dto.bookCount.toLong(),
+                        totalCount = dto.movieCount.toLong() + dto.seriesCount.toLong() +
+                                dto.episodeCount.toLong() + dto.albumCount.toLong() +
+                                dto.songCount.toLong() + dto.musicVideoCount.toLong() +
+                                dto.bookCount.toLong(),
+                    )
+                } catch (_: Exception) { null }
+            }
+            val continueWatching = async {
+                try {
+                    val response = requireApi().itemsApi.getResumeItems(
+                        limit = 10,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val nextUp = async {
+                try {
+                    val response = requireApi().tvShowsApi.getNextUp(
+                        limit = 10,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList()).map { it.toMediaItem() }
+                } catch (_: Exception) { emptyList() }
+            }
+            val curatedPicks = async {
+                try {
+                    val response = requireApi().itemsApi.getItems(
+                        includeItemTypes = listOf(
+                            org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
+                            org.jellyfin.sdk.model.api.BaseItemKind.SERIES,
+                        ),
+                        excludeItemTypes = listOf(
+                            org.jellyfin.sdk.model.api.BaseItemKind.BOX_SET,
+                        ),
+                        sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED),
+                        sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
+                        limit = limit,
+                        recursive = true,
+                        fields = listOf(
+                            org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                            org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ),
+                    ).content
+                    (response?.items ?: emptyList())
+                        .map { it.toMediaItem() }
+                        .filter { it.mediaType != MediaType.COLLECTION }
+                } catch (_: Exception) { emptyList() }
+            }
+            NewsletterData(
+                serverName = serverName.await(),
+                recentlyAdded = recentlyAdded.await(),
+                activityDigest = activityDigest.await(),
+                libraryStats = libraryStats.await(),
+                continueWatching = continueWatching.await(),
+                nextUp = nextUp.await(),
+                curatedPicks = curatedPicks.await(),
+            )
+        }
+    }
 
     private fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskInfo(
         id = id?.toString() ?: "",

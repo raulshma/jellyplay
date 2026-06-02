@@ -142,11 +142,17 @@ class UserPreferencesStore @Inject constructor(
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
         val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
+        val HOME_HERO_ENABLED = stringPreferencesKey("home_hero_enabled")
         val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
         val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
         val MPV_CONFIG = stringPreferencesKey("mpv_config")
         val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
         val EXO_CONFIG = stringPreferencesKey("exo_config")
+        val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
+        val DEVICE_ID = stringPreferencesKey("device_id")
+        val NEWSLETTER_ENABLED = stringPreferencesKey("newsletter_enabled")
+        val NEWSLETTER_DAY_OF_WEEK = stringPreferencesKey("newsletter_day_of_week")
+        val NEWSLETTER_LAST_VIEWED_MS = stringPreferencesKey("newsletter_last_viewed_ms")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -369,6 +375,7 @@ class UserPreferencesStore @Inject constructor(
                 } ?: emptySet()
             } catch (_: Exception) { emptySet() },
             navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
+            homeHeroEnabled = prefs[Keys.HOME_HERO_ENABLED]?.toBoolean() ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]?.toBoolean() ?: false,
             mpvConfig = try {
                 prefs[Keys.MPV_CONFIG]?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
@@ -379,11 +386,29 @@ class UserPreferencesStore @Inject constructor(
             exoPlayerConfig = try {
                 prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
             } catch (_: Exception) { ExoPlayerEngineConfig() },
+            performanceMode = prefs[Keys.PERFORMANCE_MODE]?.toBoolean() ?: false,
+            newsletterEnabled = prefs[Keys.NEWSLETTER_ENABLED]?.toBoolean() ?: true,
+            newsletterDayOfWeek = prefs[Keys.NEWSLETTER_DAY_OF_WEEK]?.toIntOrNull() ?: 7,
+            newsletterLastViewedMs = prefs[Keys.NEWSLETTER_LAST_VIEWED_MS]?.toLongOrNull() ?: 0L,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
     val activeServerId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_SERVER_ID] }.distinctUntilChanged()
     val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
+    val deviceId: Flow<String?> = sharedPrefs.map { it[Keys.DEVICE_ID] }.distinctUntilChanged()
+
+    /**
+     * Resolve the persistent device ID, generating a stable UUID on first
+     * access. Used as the `deviceId` URL parameter for the Jellyfin WebSocket
+     * and as a `ClientCapabilities` identifier.
+     */
+    suspend fun ensureDeviceId(): String {
+        var id: String? = null
+        context.dataStore.edit { prefs ->
+            id = prefs[Keys.DEVICE_ID] ?: java.util.UUID.randomUUID().toString().also { prefs[Keys.DEVICE_ID] = it }
+        }
+        return id ?: error("deviceId could not be resolved")
+    }
 
     suspend fun setActiveServer(serverId: String) {
         context.dataStore.edit { it[Keys.ACTIVE_SERVER_ID] = serverId }
@@ -750,6 +775,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show.toString() }
     }
 
+    suspend fun setHomeHeroEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled.toString() }
+    }
+
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed.toString() }
     }
@@ -766,6 +795,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
     }
 
+    suspend fun setPerformanceMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled.toString() }
+    }
+
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
         context.dataStore.data.map { prefs ->
             prefs[Keys.CONTINUE_WATCHING]?.let {
@@ -774,4 +807,16 @@ class UserPreferencesStore @Inject constructor(
                 } catch (_: Exception) { emptyList() }
             } ?: emptyList()
         }
+
+    suspend fun setNewsletterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setNewsletterDayOfWeek(day: Int) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day.toString() }
+    }
+
+    suspend fun setNewsletterLastViewed(timestampMs: Long) {
+        context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs.toString() }
+    }
 }

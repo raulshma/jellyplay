@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.designsystem.theme
 
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +60,29 @@ internal val ExpressiveMotionScheme: MotionScheme = object : MotionScheme {
 
     override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> =
         slowEffectsSpec as FiniteAnimationSpec<T>
+}
+
+@Suppress("UNCHECKED_CAST")
+internal val ReducedMotionScheme: MotionScheme = object : MotionScheme {
+    private val instantSpec = snap<Any>()
+
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> =
+        instantSpec as FiniteAnimationSpec<T>
+
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> =
+        instantSpec as FiniteAnimationSpec<T>
+
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> =
+        instantSpec as FiniteAnimationSpec<T>
+
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> =
+        tween<Any>(durationMillis = 0) as FiniteAnimationSpec<T>
+
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> =
+        tween<Any>(durationMillis = 0) as FiniteAnimationSpec<T>
+
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> =
+        tween<Any>(durationMillis = 0) as FiniteAnimationSpec<T>
 }
 
 @Composable

@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.feature.onboarding.components.AudioPlayerStep
 import com.raulshma.jellyplay.feature.onboarding.components.CompletionStep
 import com.raulshma.jellyplay.feature.onboarding.components.HomeLayoutStep
 import com.raulshma.jellyplay.feature.onboarding.components.OnboardingPagerIndicator
+import com.raulshma.jellyplay.feature.onboarding.components.PerformanceStep
 import com.raulshma.jellyplay.feature.onboarding.components.SeerrStep
 import com.raulshma.jellyplay.feature.onboarding.components.SecurityStep
 import com.raulshma.jellyplay.feature.onboarding.components.SubtitlesStep
@@ -133,10 +134,20 @@ fun OnboardingScreen(
                                 dynamicTheming = preferences.dynamicTheming,
                                 oledMode = preferences.oledMode,
                                 contrastLevel = preferences.contrastLevel,
+                                homeHeroEnabled = preferences.homeHeroEnabled,
                                 onThemeModeChange = viewModel::setThemeMode,
                                 onDynamicThemingChange = viewModel::setDynamicTheming,
                                 onOledModeChange = viewModel::setOledMode,
                                 onContrastLevelChange = viewModel::setContrastLevel,
+                                onHomeHeroEnabledChange = viewModel::setHomeHeroEnabled,
+                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                            )
+                        }
+
+                        OnboardingStep.PERFORMANCE -> {
+                            PerformanceStep(
+                                performanceMode = preferences.performanceMode,
+                                onPerformanceModeChange = viewModel::setPerformanceMode,
                                 modifier = Modifier.verticalScroll(rememberScrollState()),
                             )
                         }

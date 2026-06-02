@@ -9,27 +9,29 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.animation.DecelerateInterpolator
-import androidx.activity.result.contract.ActivityResultContracts
-import android.util.Rational
+import android.graphics.Color
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
-import android.graphics.Color
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import android.util.Rational
+import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -41,7 +43,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
 
@@ -110,6 +112,26 @@ class MainActivity : ComponentActivity() {
             var pinError by rememberSaveable { mutableStateOf<String?>(null) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
+            Box(
+                modifier = Modifier
+                    .size(1.dp)
+            ) {
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        try {
+                            com.google.android.gms.cast.framework.CastContext.getSharedInstance(ctx)
+                            androidx.mediarouter.app.MediaRouteButton(ctx).also {
+                                it.visibility = View.INVISIBLE
+                                com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(ctx, it)
+                            }
+                        } catch (_: Exception) {
+                            View(ctx)
+                        }
+                    },
+                    modifier = Modifier.size(1.dp),
+                )
+            }
+
             androidx.compose.runtime.LaunchedEffect(viewModel) {
                 viewModel.globalMessage.collect { msg ->
                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
@@ -131,6 +153,7 @@ class MainActivity : ComponentActivity() {
                 oledMode = preferences.oledMode,
                 contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
+                performanceMode = preferences.performanceMode,
             ) {
                 if (showLockScreen) {
                     AuthChallengeScreen(

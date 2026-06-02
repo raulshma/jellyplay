@@ -90,6 +90,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -126,6 +127,7 @@ import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
+import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -263,6 +265,46 @@ private fun MainContent(
         }
     }
 
+    // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
+    // emitted by the WebSocket receiver.
+    LaunchedEffect(viewModel.remoteNavigationBridge) {
+        viewModel.remoteNavigationBridge.targets.collect { target ->
+            when (target) {
+                is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer -> {
+                    // Pop any active player entries from every back stack so the
+                    // player UI actually disappears (not just hidden behind a tab
+                    // switch). This matches Jellyfin web's "Stop" semantics.
+                    navigationState.backStacks.values.forEach { stack ->
+                        while (stack.isNotEmpty()) {
+                            val last = stack.last()
+                            if (last is Route.VideoPlayer ||
+                                last is Route.AudioPlayer ||
+                                last is Route.LiveTvChannelPlayer ||
+                                last is Route.OfflinePlayer
+                            ) {
+                                stack.removeLastOrNull()
+                            } else {
+                                break
+                            }
+                        }
+                    }
+                }
+                else -> navigator.navigate(viewModel.remoteNavigationBridge.toRoute(target))
+            }
+        }
+    }
+
+    val snackbarHostState = androidx.compose.material3.SnackbarHostState()
+    androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {
+        viewModel.remoteControlReceiver.playEvents.collect { event ->
+            val title = event.title.ifBlank { event.itemId }
+            snackbarHostState.showSnackbar(
+                message = "Now playing: $title",
+                withDismissAction = true,
+            )
+        }
+    }
+
     val enterPip: () -> Unit = remember(context) {
         {
             (context as? MainActivity)?.enterPipMode()
@@ -310,16 +352,18 @@ private fun MainContent(
         LocalTvMode provides isTv,
         LocalAdaptiveInfo provides adaptiveInfo,
         LocalTvTypography provides tvTypography,
+        LocalPerformanceMode provides preferences.performanceMode,
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
-                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides this,
+                com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNavOffsetHeightPx.floatValue else 0f)
             ) {
+            Box(Modifier.fillMaxSize()) {
             if (isTv && !isFullScreenRoute) {
                 TvMaterial3Theme(
                     colorScheme = tvDarkColorScheme(
@@ -465,7 +509,12 @@ private fun MainContent(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarBottom + 82.dp)
+                                        .padding(bottom = systemNavBarBottom + 84.dp)
+                                        .offset {
+                                            val maxOffset = 88.dp.toPx()
+                                            val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                            IntOffset(x = 0, y = yOffset.roundToInt())
+                                        }
                                 ) {
                                     MiniPlayer(
                                         isVisible = true,
@@ -510,7 +559,16 @@ private fun MainContent(
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
                                         .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 88.dp else 8.dp))
-                                        .fillMaxWidth(0.45f),
+                                        .fillMaxWidth(0.45f)
+                                        .offset {
+                                            if (!isExpanded) {
+                                                val maxOffset = 88.dp.toPx()
+                                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                                IntOffset(x = 0, y = yOffset.roundToInt())
+                                            } else {
+                                                IntOffset.Zero
+                                            }
+                                        },
                                 )
                             }
                             if (!isExpanded) {
@@ -578,12 +636,19 @@ private fun MainContent(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .padding(end = 8.dp, bottom = 8.dp)
-                                    .fillMaxWidth(0.45f),
+                                    .fillMaxWidth(0.5f),
                             )
                         }
                     }
                 }
                 }
+                androidx.compose.material3.SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomCenter)
+                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
+                )
+            }
             }
         }
     }
@@ -936,6 +1001,7 @@ private fun MainNavDisplay(
             musicSection(navigator)
             syncPlaySection(navigator)
             onboardingSection { navigator.goBack() }
+            newsletterSection(navigator)
         },
         modifier = modifier,
     )

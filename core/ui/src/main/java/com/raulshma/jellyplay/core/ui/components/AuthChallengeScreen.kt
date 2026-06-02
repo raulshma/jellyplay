@@ -53,7 +53,7 @@ fun AuthChallengeScreen(
     showAsDialog: Boolean = false,
 ) {
     val context = LocalContext.current
-    val activity = remember(context) { context as? FragmentActivity }
+    val activity = remember(context) { context.findFragmentActivity() }
     val biometricAvailability = rememberBiometricAvailability()
     val hasPin = pinHash != null
     val canUseBiometric = biometricEnabled && biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE && activity != null
@@ -64,7 +64,7 @@ fun AuthChallengeScreen(
 
     if (showBiometric && canUseBiometric) {
         BiometricPromptLauncher(
-            activity = activity!!,
+            activity = activity,
             title = title,
             subtitle = subtitle,
             trigger = biometricPromptTrigger,

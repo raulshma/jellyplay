@@ -96,6 +96,12 @@ sealed class Route : NavKey {
     @Serializable data object ScheduledTasks : Route()
     @Serializable data object Devices : Route()
     @Serializable data object Logs : Route()
+
+    @Serializable data object Newsletter : Route()
+
+    @Serializable data class NewsletterSectionList(
+        val sectionType: String,
+    ) : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(

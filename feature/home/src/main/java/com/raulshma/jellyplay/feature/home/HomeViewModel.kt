@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -49,6 +50,7 @@ class HomeViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
+    private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -95,7 +97,6 @@ class HomeViewModel @Inject constructor(
                     resetHomeFocusPosition()
                     _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
                     fetchAndUpdateSections()
-                    _uiState.update { it.copy(isLoading = false) }
                     startPeriodicRefresh()
                 }
                 previousUserId = userId
@@ -119,6 +120,7 @@ class HomeViewModel @Inject constructor(
                     homeMode = prefs.homeMode,
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
+                    homeHeroEnabled = prefs.homeHeroEnabled,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -158,6 +160,12 @@ class HomeViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
+                _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
+            }
+        }
+
+        viewModelScope.launch {
             @OptIn(FlowPreview::class)
             searchQueryFlow
                 .debounce(400)
@@ -188,6 +196,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
             is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
+            is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
         }
     }
 
@@ -227,7 +236,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isLoading = false) }
             startPeriodicRefresh()
         }
     }
@@ -239,7 +247,6 @@ class HomeViewModel @Inject constructor(
             resetHomeFocusPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isLoading = false) }
             startPeriodicRefresh()
         }
     }
@@ -248,7 +255,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             fetchAndUpdateSections()
-            _uiState.update { it.copy(isRefreshing = false) }
             startPeriodicRefresh()
         }
     }
@@ -399,6 +405,7 @@ class HomeViewModel @Inject constructor(
                 fetchDiscoverSections(seerrPreferences)
             }
         } finally {
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
             refreshMutex.unlock()
         }
     }
@@ -458,11 +465,20 @@ class HomeViewModel @Inject constructor(
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         isAppInForeground = true
+        viewModelScope.launch {
+            offlineModeManager.checkNetworkAndAutoDetect()
+            val now = System.currentTimeMillis()
+            if (now - lastRefreshTime >= REFRESH_INTERVAL_FOREGROUND_MS) {
+                fetchAndUpdateSections()
+            }
+        }
+        startPeriodicRefresh()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInForeground = false
+        startPeriodicRefresh()
     }
 
     override fun onCleared() {

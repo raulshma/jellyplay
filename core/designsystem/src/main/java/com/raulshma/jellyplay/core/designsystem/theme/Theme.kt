@@ -261,6 +261,7 @@ fun JellyPlayTheme(
     oledMode: Boolean = false,
     contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     isTv: Boolean = false,
+    performanceMode: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val effectiveDarkTheme = darkTheme || isTv
@@ -307,7 +308,7 @@ fun JellyPlayTheme(
             colorScheme = colorScheme,
             typography = typography,
             shapes = shapes,
-            motionScheme = ExpressiveMotionScheme,
+            motionScheme = if (performanceMode) ReducedMotionScheme else ExpressiveMotionScheme,
             content = content,
         )
     }

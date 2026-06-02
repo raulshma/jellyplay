@@ -425,6 +425,56 @@ data class SeerrSeason(
 
 @Immutable
 @Serializable
+data class SeerrSeasonDetail(
+    val id: Int = 0,
+    val airDate: String? = null,
+    val name: String = "",
+    val overview: String? = null,
+    val posterPath: String? = null,
+    val seasonNumber: Int = 0,
+    val episodes: List<SeerrEpisode> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class SeerrEpisode(
+    val id: Int = 0,
+    val name: String = "",
+    val overview: String? = null,
+    val episodeNumber: Int = 0,
+    val seasonNumber: Int = 0,
+    val airDate: String? = null,
+    val stillPath: String? = null,
+    val runtime: Int? = null,
+    val voteAverage: Float? = null,
+    val voteCount: Int = 0,
+    val crew: List<SeerrEpisodeCrew> = emptyList(),
+    val guestStars: List<SeerrEpisodeGuestStar> = emptyList(),
+) {
+    val stillUrl: String? get() = stillPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+}
+
+@Immutable
+@Serializable
+data class SeerrEpisodeCrew(
+    val id: Int = 0,
+    val name: String = "",
+    val job: String? = null,
+    val department: String? = null,
+    val profilePath: String? = null,
+)
+
+@Immutable
+@Serializable
+data class SeerrEpisodeGuestStar(
+    val id: Int = 0,
+    val name: String = "",
+    val character: String? = null,
+    val profilePath: String? = null,
+)
+
+@Immutable
+@Serializable
 data class SeerrCreator(
     val id: Int = 0,
     val name: String = "",

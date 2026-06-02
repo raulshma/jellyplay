@@ -729,6 +729,88 @@ class AudioPlaybackManager @Inject constructor(
         _repeatMode.value = (_repeatMode.value + 1) % 3
     }
 
+    /**
+     * Set the repeat mode explicitly.
+     * @param mode 0 = RepeatNone, 1 = RepeatAll, 2 = RepeatOne.
+     */
+    fun setRepeatMode(mode: Int) {
+        _repeatMode.value = mode.coerceIn(0, 2)
+    }
+
+    /**
+     * Set the shuffle mode explicitly without rebuilding the queue. Used by
+     * remote-control commands (e.g. the "SetShuffleQueue" / "SetPlaybackOrder"
+     * general command).
+     */
+    fun setShuffleMode(enabled: Boolean) {
+        if (_shuffleMode.value == enabled) return
+        toggleShuffle()
+    }
+
+    /**
+     * Pause the audio player if a session is active.
+     */
+    fun pause() {
+        exoPlayer?.takeIf { it.isPlaying }?.pause()
+    }
+
+    /**
+     * Resume the audio player if a session is active.
+     */
+    fun resume() {
+        exoPlayer?.takeIf { !it.isPlaying }?.play()
+    }
+
+    /**
+     * Set the player volume in [0f, 1f]. Also mirrors the value onto the
+     * system [android.media.AudioManager.STREAM_MUSIC] stream so remote
+     * "SetVolume" is actually audible (the player software gain alone is
+     * silent when the system stream is muted or at zero).
+     */
+    fun setVolume(volume: Float) {
+        val pct = volume.coerceIn(0f, 1f)
+        exoPlayer?.volume = pct
+        crossfadePlayer?.volume = pct
+        MediaStreamVolume.setNormalized(context, pct)
+    }
+
+    /**
+     * Convenience: 5% increment.
+     */
+    fun increaseVolume() {
+        val current = exoPlayer?.volume ?: 1f
+        setVolume(current + 0.05f)
+    }
+
+    /**
+     * Convenience: 5% decrement.
+     */
+    fun decreaseVolume() {
+        val current = exoPlayer?.volume ?: 1f
+        setVolume(current - 0.05f)
+    }
+
+    /**
+     * Mute / unmute the audio player. Uses an internal flag so [toggleMute]
+     * can restore the prior volume.
+     */
+    private var preMuteVolume: Float = 1f
+
+    fun setMuted(muted: Boolean) {
+        val current = exoPlayer?.volume ?: 1f
+        if (muted) {
+            preMuteVolume = if (current > 0f) current else 1f
+            setVolume(0f)
+        } else {
+            setVolume(preMuteVolume.coerceIn(0f, 1f))
+        }
+    }
+
+    fun toggleMute() {
+        val current = exoPlayer?.volume ?: 1f
+        setMuted(current > 0f)
+    }
+
     fun playFromQueue(index: Int) {
         if (queueLoadingJob != null) return
         val q = _queue.value
