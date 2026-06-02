@@ -153,6 +153,7 @@ class MainActivity : FragmentActivity() {
                 oledMode = preferences.oledMode,
                 contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
+                performanceMode = preferences.performanceMode,
             ) {
                 if (showLockScreen) {
                     AuthChallengeScreen(

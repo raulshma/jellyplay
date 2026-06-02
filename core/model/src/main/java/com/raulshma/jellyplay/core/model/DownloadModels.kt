@@ -122,6 +122,7 @@ data class UserPreferences(
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
     val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
+    val performanceMode: Boolean = false,
 )
 
 @Immutable

@@ -1543,8 +1543,28 @@ fun SettingsScreen(
                 }
             }
 
+            AnimatedSettingsEntrance(12) {
+                SettingsGroup(
+                    icon = Tabler.Outline.Bolt,
+                    title = "Performance",
+                    summary = {
+                        if (preferences.performanceMode) "Reduced animations and effects" else "Standard experience"
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Gauge,
+                        title = "Performance Mode",
+                        subtitle = "Reduces animations and effects for better performance on lower-end devices",
+                        checked = preferences.performanceMode,
+                        index = 0, count = 1,
+                        onCheckedChange = { viewModel.setPerformanceMode(it) },
+                    )
+                }
+            }
+
             if (isTv) {
-                AnimatedSettingsEntrance(12) {
+                AnimatedSettingsEntrance(13) {
                     SettingsGroup(
                         icon = Tabler.Outline.Moon,
                         title = "Screensaver",
@@ -1626,7 +1646,7 @@ fun SettingsScreen(
                 }
             }
 
-            AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                 val biometricAvailability = rememberBiometricAvailability()
                 val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
 
@@ -1742,7 +1762,7 @@ fun SettingsScreen(
                 }
             }
 
-            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
+            AnimatedSettingsEntrance(if (isTv) 15 else 14) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     SettingInfoItem(
                         icon = Tabler.Outline.Video,
