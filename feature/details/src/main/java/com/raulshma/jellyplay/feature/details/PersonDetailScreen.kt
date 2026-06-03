@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -60,19 +61,20 @@ fun PersonDetailScreen(
                 navigationIcon = {
                     CircleBgBackButton(onClick = onBack)
                 },
+                actions = {
+                    if (viewModel.isLoading) {
+                        JellyPlayLoadingIndicator(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(24.dp)
+                        )
+                    }
+                },
                 scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
         when {
-            viewModel.isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    JellyPlayLoadingIndicator()
-                }
-            }
             viewModel.error != null -> {
                 ErrorScreen(
                     message = viewModel.error ?: "Unknown error",
