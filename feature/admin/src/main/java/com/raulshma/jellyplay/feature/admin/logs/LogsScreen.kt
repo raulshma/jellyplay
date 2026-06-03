@@ -182,7 +182,13 @@ private fun LogFilesTab(
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
+                val lines = (selectedLogFileContent ?: "").lines()
                 val listState = rememberLazyListState()
+                LaunchedEffect(selectedLogFileContent) {
+                    if (lines.isNotEmpty()) {
+                        listState.scrollToItem(lines.lastIndex)
+                    }
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -190,7 +196,7 @@ private fun LogFilesTab(
                         .padding(horizontal = 8.dp),
                 ) {
                     items(
-                        items = (selectedLogFileContent ?: "").lines(),
+                        items = lines,
                         key = { index -> index },
                     ) { line ->
                         Text(
