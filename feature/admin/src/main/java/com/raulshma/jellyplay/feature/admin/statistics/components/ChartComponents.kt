@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -182,7 +183,7 @@ fun HorizontalBreakdownChart(
                         .clip(ShapeCache.smooth4),
                 ) {
                     val barColor = color
-                    Canvas(modifier = Modifier.fillMaxWidth()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
                         drawRoundRect(
                             color = barColor.copy(alpha = 0.15f),
                             topLeft = Offset.Zero,
