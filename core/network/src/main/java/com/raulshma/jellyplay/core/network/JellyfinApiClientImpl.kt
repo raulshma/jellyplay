@@ -1552,6 +1552,8 @@ class JellyfinApiClientImpl @Inject constructor(
                 ?.values?.firstOrNull(),
         ),
         normalizationGain = normalizationGain,
+        playCount = userData?.playCount ?: 0,
+        lastPlayedDate = userData?.lastPlayedDate?.toString(),
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {
@@ -2447,6 +2449,7 @@ class JellyfinApiClientImpl @Inject constructor(
         parentId: String?,
         startIndex: Int,
         limit: Int,
+        useDateAdded: Boolean,
     ): Result<Pair<Int, List<com.raulshma.jellyplay.core.model.StaleMediaItem>>> = apiResult {
         val api = requireApi()
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
@@ -2478,8 +2481,10 @@ class JellyfinApiClientImpl @Inject constructor(
             val userData = dto.userData
             val lastPlayedStr = userData?.lastPlayedDate?.toString()
             val lastPlayed = userData?.lastPlayedDate
-            val daysSince = if (lastPlayed != null) {
-                java.time.Duration.between(lastPlayed, now).toDays().toInt()
+            val dateCreated = dto.dateCreated
+            val referenceDate = if (useDateAdded) dateCreated else lastPlayed
+            val daysSince = if (referenceDate != null) {
+                java.time.Duration.between(referenceDate, now).toDays().toInt()
             } else {
                 Int.MAX_VALUE
             }
@@ -2498,6 +2503,7 @@ class JellyfinApiClientImpl @Inject constructor(
                         parentId = dto.parentId?.toString(),
                         seriesName = dto.seriesName,
                         seasonName = dto.seasonName,
+                        seasonNumber = dto.parentIndexNumber,
                         episodeNumber = dto.indexNumber,
                         posterBlurHash = dto.imageBlurHashes
                             ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
@@ -2505,6 +2511,7 @@ class JellyfinApiClientImpl @Inject constructor(
                         premiereDate = dto.premiereDate?.toString(),
                         overview = dto.overview,
                         year = dto.productionYear,
+                        dateAdded = dto.dateCreated?.toString(),
                     )
                 )
             }
@@ -2552,6 +2559,7 @@ class JellyfinApiClientImpl @Inject constructor(
                                 parentId = dto.parentId?.toString(),
                                 seriesName = dto.seriesName,
                                 seasonName = dto.seasonName,
+                                seasonNumber = dto.parentIndexNumber,
                                 episodeNumber = dto.indexNumber,
                                 posterBlurHash = dto.imageBlurHashes
                                     ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
@@ -2559,6 +2567,7 @@ class JellyfinApiClientImpl @Inject constructor(
                                 premiereDate = dto.premiereDate?.toString(),
                                 overview = dto.overview,
                                 year = dto.productionYear,
+                                dateAdded = dto.dateCreated?.toString(),
                             )
                         )
                     }
@@ -2627,12 +2636,14 @@ class JellyfinApiClientImpl @Inject constructor(
                 parentId = dto.parentId?.toString(),
                 seriesName = dto.seriesName,
                 seasonName = dto.seasonName,
+                seasonNumber = dto.parentIndexNumber,
                 episodeNumber = dto.indexNumber,
                 posterBlurHash = dto.imageBlurHashes
                     ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
                     ?.values?.firstOrNull(),
                 overview = dto.overview,
                 year = dto.productionYear,
+                sizeBytes = 0,
             )
         }
         Pair(total, watchedItems)
@@ -2767,10 +2778,11 @@ class JellyfinApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int): Result<List<com.raulshma.jellyplay.core.model.ContentBreakdown>> = apiResult {
+    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<com.raulshma.jellyplay.core.model.ContentBreakdown>> = apiResult {
         val server = getServerUrl() ?: throw IllegalStateException("Not connected")
         val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
-        val url = "${server}/user_usage_stats/$breakdownType/BreakdownReport?days=$days"
+        val filterParam = filter?.let { "&filter=$it" } ?: ""
+        val url = "${server}/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", token)
@@ -2782,8 +2794,13 @@ class JellyfinApiClientImpl @Inject constructor(
         json.mapIndexed { index, element ->
             val obj = element.jsonObject
             com.raulshma.jellyplay.core.model.ContentBreakdown(
-                label = obj["label"]?.jsonPrimitive?.content ?: "",
-                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                label = obj["label"]?.jsonPrimitive?.content
+                    ?: obj["name"]?.jsonPrimitive?.content
+                    ?: "",
+                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: 0,
                 colorIndex = index,
             )
         }

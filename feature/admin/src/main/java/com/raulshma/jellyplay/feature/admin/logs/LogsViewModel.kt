@@ -40,6 +40,7 @@ data class LogsState(
     val selectedTabIndex: Int = 0,
     val isLiveStreamActive: Boolean = false,
     val liveEntries: List<ActivityLogEntry> = emptyList(),
+    val liveEntryIds: Set<Long> = emptySet(),
 )
 
 @HiltViewModel
@@ -108,6 +109,7 @@ class LogsViewModel @Inject constructor(
             liveEvents.collect { entry ->
                 state = state.copy(
                     liveEntries = (listOf(entry) + state.liveEntries).take(200),
+                    liveEntryIds = state.liveEntryIds + entry.id,
                     activityEntries = (listOf(entry) + state.activityEntries).take(200),
                 )
             }

@@ -66,11 +66,13 @@ data class StaleMediaItem(
     val parentId: String? = null,
     val seriesName: String? = null,
     val seasonName: String? = null,
+    val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val posterBlurHash: String? = null,
     val premiereDate: String? = null,
     val overview: String? = null,
     val year: Int? = null,
+    val dateAdded: String? = null,
 )
 
 @Immutable
@@ -88,10 +90,12 @@ data class WatchedMediaItem(
     val parentId: String? = null,
     val seriesName: String? = null,
     val seasonName: String? = null,
+    val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val posterBlurHash: String? = null,
     val overview: String? = null,
     val year: Int? = null,
+    val sizeBytes: Long = 0,
 )
 
 @Immutable
@@ -105,6 +109,7 @@ data class MediaCleanupConfig(
     val dryRun: Boolean = true,
     val minDaysSinceWatched: Int = 0,
     val includePartiallyWatched: Boolean = false,
+    val useDateAdded: Boolean = false,
 )
 
 @Immutable
@@ -207,6 +212,11 @@ data class MediaItemStub(
     val type: String = "",
     val sizeText: String = "",
     val detail: String = "",
+    val seriesName: String? = null,
+    val seasonName: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val dateText: String? = null,
 )
 
 @Immutable
