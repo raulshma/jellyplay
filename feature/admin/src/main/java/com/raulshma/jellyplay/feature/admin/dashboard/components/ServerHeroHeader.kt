@@ -182,8 +182,7 @@ fun ServerHeroHeader(
                     modifier = Modifier.weight(1f),
                 ) {
                     if (isRestarting) {
-                        @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-                        androidx.compose.material3.ContainedLoadingIndicator(
+                        com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(8.dp))

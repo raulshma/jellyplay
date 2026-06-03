@@ -45,7 +45,7 @@ import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Surface
@@ -561,12 +561,11 @@ fun LibraryScreen(
                                 .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            LinearWavyProgressIndicator(
+                            JellyPlayLinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth(0.4f)
                                     .clip(ShapeCache.smooth4),
                                 color = MaterialTheme.colorScheme.primary,
-                                trackColor = if (isLightTheme) MaterialTheme.colorScheme.surfaceVariant else Color.White.copy(alpha = 0.1f),
                             )
                         }
                     }

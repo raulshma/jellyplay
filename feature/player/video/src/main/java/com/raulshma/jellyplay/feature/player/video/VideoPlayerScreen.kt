@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -1446,7 +1446,7 @@ private fun OcrResultSheet(
             )
             Spacer(Modifier.height(12.dp))
             if (isOcrRunning) {
-                ContainedLoadingIndicator(
+                JellyPlayLoadingIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             } else if (ocrText != null) {

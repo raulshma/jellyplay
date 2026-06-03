@@ -244,9 +244,8 @@ fun ScreenLoadingState(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
             ) {
-                androidx.compose.material3.ContainedLoadingIndicator(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    indicatorColor = MaterialTheme.colorScheme.primary,
+                JellyPlayLoadingIndicator(
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 if (message != null) {
                     Text(

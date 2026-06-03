@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -216,7 +217,7 @@ private fun ServerCard(
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             } else if (isSwitching) {
-                CircularWavyProgressIndicator(
+                JellyPlayCircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                 )
             } else {

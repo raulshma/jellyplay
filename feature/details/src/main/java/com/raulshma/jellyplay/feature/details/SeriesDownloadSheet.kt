@@ -22,7 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -306,7 +306,7 @@ fun SeriesDownloadSheet(
                                     .padding(horizontal = 48.dp, vertical = 16.dp),
                                 horizontalArrangement = Arrangement.Center,
                             ) {
-                                ContainedLoadingIndicator(
+                                JellyPlayLoadingIndicator(
                                     modifier = Modifier.size(28.dp),
                                 )
                             }
@@ -442,10 +442,9 @@ fun SeriesDownloadSheet(
                 shape = ShapeCache.smoothPill,
             ) {
                 if (isDownloading) {
-                    ContainedLoadingIndicator(
+                    JellyPlayLoadingIndicator(
                         modifier = Modifier.size(18.dp),
-                        indicatorColor = MaterialTheme.colorScheme.onPrimary,
-                        containerColor = Color.Transparent,
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.size(8.dp))
                 }

@@ -23,7 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -154,7 +154,7 @@ fun SeerrDetailScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading && movieDetail == null && tvDetail == null -> {
-                    ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center))
+                    JellyPlayLoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 error != null && movieDetail == null && tvDetail == null -> {
                     ErrorScreen(
@@ -1150,7 +1150,7 @@ private fun SeasonsSection(
                             .padding(vertical = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ContainedLoadingIndicator()
+                        JellyPlayLoadingIndicator()
                     }
                 } else if (episodes != null) {
                     Column(

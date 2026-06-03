@@ -28,7 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -216,7 +216,9 @@ private fun LogFilesTab(
             }
             if (isLoadingContent) {
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                JellyPlayLinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                )
             } else {
                 val listState = rememberLazyListState()
                 

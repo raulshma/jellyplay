@@ -27,9 +27,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -500,11 +500,9 @@ private fun ManualEntrySection(
             modifier = Modifier.fillMaxWidth(),
         ) {
             if (uiState.isConnecting) {
-                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                ContainedLoadingIndicator(
+                JellyPlayLoadingIndicator(
                     modifier = Modifier.size(20.dp),
-                    indicatorColor = MaterialTheme.colorScheme.onPrimary,
-                    containerColor = Color.Transparent,
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
