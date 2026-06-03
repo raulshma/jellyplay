@@ -4,6 +4,22 @@ import android.content.Context
 import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClientImpl
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClientImpl
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import dagger.Binds
@@ -32,6 +48,38 @@ abstract class NetworkModule {
     abstract fun bindJellyfinApiClient(
         impl: JellyfinApiClientImpl,
     ): JellyfinApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthApiClient(impl: AuthApiClientImpl): AuthApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindLibraryApiClient(impl: LibraryApiClientImpl): LibraryApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindPlaybackApiClient(impl: PlaybackApiClientImpl): PlaybackApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncPlayApiClient(impl: SyncPlayApiClientImpl): SyncPlayApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindLiveTvApiClient(impl: LiveTvApiClientImpl): LiveTvApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindAdminApiClient(impl: AdminApiClientImpl): AdminApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindMetadataApiClient(impl: MetadataApiClientImpl): MetadataApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindMediaInfoApiClient(impl: MediaInfoApiClientImpl): MediaInfoApiClient
 
     @Binds
     @Singleton
