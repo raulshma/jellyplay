@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -37,5 +38,6 @@ data class OfflineMediaEntity(
     val blurHashBackdrop: String? = null,
     val premiereDate: String? = null,
     val genres: String? = null,
+    @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
 )

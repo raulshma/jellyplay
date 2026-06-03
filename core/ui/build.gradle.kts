@@ -24,6 +24,11 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -52,4 +57,8 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.smooth.corner.rect)
     implementation(libs.biometric.ktx)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

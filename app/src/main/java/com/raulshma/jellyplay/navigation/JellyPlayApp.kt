@@ -289,7 +289,20 @@ private fun MainContent(
                         }
                     }
                 }
-                else -> navigator.navigate(viewModel.remoteNavigationBridge.toRoute(target))
+                else -> navigator.navigate(
+                    when (target) {
+                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenVideoPlayer -> Route.VideoPlayer(
+                            itemId = target.itemId,
+                            mediaSourceId = target.mediaSourceId,
+                            startPositionTicks = target.startPositionTicks,
+                            audioStreamIndex = target.audioStreamIndex,
+                            subtitleStreamIndex = target.subtitleStreamIndex,
+                        )
+                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenAudioPlayer -> Route.AudioPlayer(target.itemId)
+                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenMediaDetail -> Route.MediaDetail(target.itemId)
+                        else -> Route.Home
+                    }
+                )
             }
         }
     }

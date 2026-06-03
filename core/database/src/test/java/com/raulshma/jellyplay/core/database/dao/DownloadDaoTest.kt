@@ -1,0 +1,167 @@
+package com.raulshma.jellyplay.core.database.dao
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class DownloadDaoTest {
+
+    private lateinit var database: JellyPlayDatabase
+    private lateinit var downloadDao: DownloadDao
+
+    @Before
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, JellyPlayDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        downloadDao = database.downloadDao()
+    }
+
+    @After
+    fun teardown() {
+        database.close()
+    }
+
+    private fun createDownload(
+        id: String = "dl-1",
+        mediaItemId: String = "item-1",
+        name: String = "Test Movie",
+        status: String = "PENDING",
+        seriesId: String? = null,
+        seasonId: String? = null,
+        downloadedBytes: Long = 0L,
+        totalSizeBytes: Long = 1000L,
+    ) = DownloadEntity(
+        id = id,
+        mediaItemId = mediaItemId,
+        name = name,
+        mediaType = "MOVIE",
+        downloadPath = "/downloads/test.mkv",
+        downloadUrl = "https://test.example.com/Videos/item-1/stream",
+        totalSizeBytes = totalSizeBytes,
+        downloadedBytes = downloadedBytes,
+        status = status,
+        seriesId = seriesId,
+        seasonId = seasonId,
+        createdAt = System.currentTimeMillis(),
+    )
+
+    @Test
+    fun `insertDownload and getDownloadById`() = runTest {
+        val download = createDownload()
+        downloadDao.insertDownload(download)
+
+        val result = downloadDao.getDownloadById("dl-1")
+        assertNotNull(result)
+        assertEquals("Test Movie", result!!.name)
+    }
+
+    @Test
+    fun `getDownloadById returns null for non-existent`() = runTest {
+        assertNull(downloadDao.getDownloadById("nonexistent"))
+    }
+
+    @Test
+    fun `getDownloadByMediaItemId finds matching download`() = runTest {
+        downloadDao.insertDownload(createDownload(mediaItemId = "item-1"))
+
+        val result = downloadDao.getDownloadByMediaItemId("item-1")
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `getAllDownloads returns all downloads`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", mediaItemId = "item-1"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", mediaItemId = "item-2"))
+
+        val downloads = downloadDao.getAllDownloads().first()
+        assertEquals(2, downloads.size)
+    }
+
+    @Test
+    fun `updateProgress updates bytes and status`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", status = "DOWNLOADING", downloadedBytes = 0L))
+        downloadDao.updateProgress("dl-1", 500L, "DOWNLOADING")
+
+        val result = downloadDao.getDownloadById("dl-1")
+        assertEquals(500L, result!!.downloadedBytes)
+        assertEquals("DOWNLOADING", result.status)
+    }
+
+    @Test
+    fun `deleteDownloadById removes download`() = runTest {
+        downloadDao.insertDownload(createDownload())
+        downloadDao.deleteDownloadById("dl-1")
+
+        assertNull(downloadDao.getDownloadById("dl-1"))
+    }
+
+    @Test
+    fun `getDownloadsByStatus filters correctly`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", status = "COMPLETED"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", status = "PENDING"))
+
+        val completed = downloadDao.getDownloadsByStatus("COMPLETED")
+        assertEquals(1, completed.size)
+        assertEquals("dl-1", completed[0].id)
+    }
+
+    @Test
+    fun `getActiveDownloadCount counts pending downloading and paused`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", status = "PENDING"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", status = "DOWNLOADING"))
+        downloadDao.insertDownload(createDownload(id = "dl-3", status = "PAUSED"))
+        downloadDao.insertDownload(createDownload(id = "dl-4", status = "COMPLETED"))
+
+        val count = downloadDao.getActiveDownloadCount().first()
+        assertEquals(3, count)
+    }
+
+    @Test
+    fun `getCompletedDownloadByMediaItemId returns completed only`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", mediaItemId = "item-1", status = "DOWNLOADING"))
+
+        assertNull(downloadDao.getCompletedDownloadByMediaItemId("item-1"))
+
+        downloadDao.updateProgress("dl-1", 1000L, "COMPLETED")
+
+        assertNotNull(downloadDao.getCompletedDownloadByMediaItemId("item-1"))
+    }
+
+    @Test
+    fun `getTotalDownloadedBytes sums completed downloads`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", status = "COMPLETED", downloadedBytes = 500L))
+        downloadDao.insertDownload(createDownload(id = "dl-2", status = "COMPLETED", downloadedBytes = 300L))
+        downloadDao.insertDownload(createDownload(id = "dl-3", status = "DOWNLOADING", downloadedBytes = 200L))
+
+        val total = downloadDao.getTotalDownloadedBytes()
+        assertEquals(800L, total)
+    }
+
+    @Test
+    fun `getDownloadsForSeries returns series downloads`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", seriesId = "series-1"))
+        downloadDao.insertDownload(createDownload(id = "dl-2", seriesId = "series-2"))
+        downloadDao.insertDownload(createDownload(id = "dl-3", seriesId = null))
+
+        val result = downloadDao.getDownloadsForSeries("series-1")
+        assertEquals(1, result.size)
+        assertEquals("dl-1", result[0].id)
+    }
+}

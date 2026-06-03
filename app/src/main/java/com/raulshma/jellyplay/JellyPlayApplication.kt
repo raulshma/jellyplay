@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.HiltAndroidApp
+import io.sentry.Sentry
+import io.sentry.android.core.SentryAndroid
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +38,22 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        SentryAndroid.init(this) { options ->
+            options.dsn?.let { dsn ->
+                if (dsn.isNotBlank()) {
+                    configureSentryUserContext()
+                }
+            }
+        }
         applicationScope.launch { recoverPendingDownloads() }
+    }
+
+    private fun configureSentryUserContext() {
+        val user = io.sentry.protocol.User().apply {
+            username = "jellyplay-user"
+        }
+        Sentry.setUser(user)
+        Sentry.setTag("player.engine", userPreferencesStore.preferences.value.preferredPlayer.name)
     }
 
     private suspend fun recoverPendingDownloads() {

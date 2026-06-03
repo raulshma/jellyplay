@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
@@ -53,6 +54,7 @@ class HomeViewModel @Inject constructor(
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
+    private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel(), DefaultLifecycleObserver {
@@ -281,7 +283,7 @@ class HomeViewModel @Inject constructor(
     private fun requestSeerrMedia(event: HomeUiEvent.RequestSeerrMedia) {
         viewModelScope.launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = DiscoverRequestResult(isLoading = true))) }
-            seerrRepository.requestMedia(
+            seerrRequestDelegate.requestMedia(
                 mediaType = event.item.mediaType,
                 tmdbId = event.item.id,
                 seasons = event.seasons,
@@ -305,21 +307,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = true)) }
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
-                        }
-                        _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = details)) }
-                    }
-                } else {
-                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
-                        }
-                        _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(sonarrServers = details)) }
-                    }
-                }
+                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
+                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(radarrServers = result.radarrServers, sonarrServers = result.sonarrServers)) }
             } finally {
                 _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = false)) }
             }
@@ -329,28 +318,14 @@ class HomeViewModel @Inject constructor(
     private fun loadTvSeasons(tmdbId: Int) {
         viewModelScope.launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = emptyList())) }
-            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
-                _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = details.seasons.filter { it.seasonNumber > 0 })) }
-            }
+            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
+            _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
         }
     }
 
     private fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            try {
-                coroutineScope {
-                    if (mediaType == "movie") {
-                        seerrRepository.getMovieDetails(tmdbId)
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId)
-                    }
-                    val type = if (mediaType == "movie") com.raulshma.jellyplay.core.model.MediaType.MOVIE else com.raulshma.jellyplay.core.model.MediaType.SERIES
-                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                    launch { seerrRepository.getRecommendations(tmdbId, type) }
-                    launch { seerrRepository.getSimilar(tmdbId, type) }
-                }
-            } catch (_: Exception) {
-            }
+            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }
     }
