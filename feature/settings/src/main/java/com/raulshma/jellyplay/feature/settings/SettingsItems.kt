@@ -87,7 +87,7 @@ internal fun SettingListItem(
     val iconColor = if (isDestructive) MaterialTheme.colorScheme.error
     else MaterialTheme.colorScheme.onSurfaceVariant
 
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
 
     ListItem(
         headlineContent = {
@@ -191,7 +191,7 @@ internal fun SettingToggleItem(
         label = "toggleIconColor",
     )
 
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
 
     ListItem(
         headlineContent = {
@@ -285,7 +285,7 @@ internal fun SettingReorderableToggleItem(
         label = "reorderableToggleIconColor",
     )
 
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
 
     ListItem(
         headlineContent = {
@@ -384,7 +384,7 @@ internal fun SettingInfoItem(
     index: Int = 0,
     count: Int = 1,
 ) {
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
 
     ListItem(
         headlineContent = {
@@ -426,7 +426,7 @@ internal fun SettingAccentColorPicker(
     index: Int = 0,
     count: Int = 1,
 ) {
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -614,7 +614,7 @@ internal fun SettingColorStylePicker(
     index: Int = 0,
     count: Int = 1,
 ) {
-    val shape = expressiveListShape(index, count)
+    val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
