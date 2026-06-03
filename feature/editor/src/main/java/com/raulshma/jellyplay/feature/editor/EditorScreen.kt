@@ -1,14 +1,19 @@
 package com.raulshma.jellyplay.feature.editor
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -45,20 +50,26 @@ fun EditorScreen(
         title = uiState.mediaDetail?.item?.name ?: "Edit Metadata",
         onBack = onBack,
         actions = {
-            IconButton(
+            FilledTonalButton(
                 onClick = { viewModel.saveMetadata() },
                 enabled = uiState.isDirty && !uiState.isSaving,
                 modifier = Modifier.padding(end = 8.dp),
             ) {
-                Icon(
-                    Tabler.Outline.Check,
-                    contentDescription = "Save",
-                    tint = if (uiState.isDirty) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                if (uiState.isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                } else {
+                    Icon(
+                        Tabler.Outline.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (uiState.isSaving) "Saving..." else "Save")
             }
         },
     ) {
