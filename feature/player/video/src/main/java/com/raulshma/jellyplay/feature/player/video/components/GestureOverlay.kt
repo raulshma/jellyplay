@@ -1,11 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
@@ -40,11 +37,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -176,16 +170,14 @@ private fun SeekCircleOverlay(
     seekOffsetMs: Long,
     modifier: Modifier = Modifier,
 ) {
-    var progress by remember { mutableFloatStateOf(0f) }
+    val progress = remember { Animatable(0f) }
 
     LaunchedEffect(isLeft, seekOffsetMs) {
-        val startTime = withFrameMillis { it }
-        val duration = 700L
-        while (true) {
-            val elapsed = withFrameMillis { it } - startTime
-            progress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
-            if (elapsed >= duration) break
-        }
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 700, easing = LinearEasing),
+        )
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -231,7 +223,7 @@ private fun SeekCircleOverlay(
                     drawArc(
                         color = primaryColor,
                         startAngle = -90f,
-                        sweepAngle = 360 * progress,
+                        sweepAngle = 360 * progress.value,
                         useCenter = false,
                         topLeft = topLeft,
                         size = androidx.compose.ui.geometry.Size(arcSize, arcSize),

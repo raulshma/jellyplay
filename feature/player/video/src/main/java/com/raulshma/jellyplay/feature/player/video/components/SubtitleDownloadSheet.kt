@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -77,7 +77,7 @@ fun SubtitleDownloadSheet(
             Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
-                ContainedLoadingIndicator(
+                JellyPlayLoadingIndicator(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(24.dp),

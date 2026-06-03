@@ -23,6 +23,7 @@ data class UserInfo(
     val accessToken: String,
     val serverId: String? = null,
     val isAdmin: Boolean = false,
+    val canDeleteContent: Boolean = false,
     val maxParentalAgeRating: Int? = null,
     val primaryImageTag: String? = null,
     val enabledFolderIds: List<String> = emptyList(),

@@ -75,8 +75,11 @@ object SubtitleOcrHelper {
     private fun enhanceForOcr(bitmap: Bitmap): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val targetW = (width / OCR_DOWNSCALE_FACTOR).coerceAtLeast(1)
+        val targetH = (height / OCR_DOWNSCALE_FACTOR).coerceAtLeast(1)
+        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
+        canvas.scale(1f / OCR_DOWNSCALE_FACTOR, 1f / OCR_DOWNSCALE_FACTOR)
         val paint = Paint().apply {
             colorFilter = ColorMatrixColorFilter(
                 ColorMatrix(
@@ -103,6 +106,8 @@ object SubtitleOcrHelper {
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
         return result
     }
+
+    private const val OCR_DOWNSCALE_FACTOR = 2
 
     private fun isLikelySubtitleText(text: String): Boolean {
         val cleaned = text.replace("\\s+".toRegex(), " ").trim()

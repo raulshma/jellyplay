@@ -24,7 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.CircularWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -32,7 +32,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -296,7 +296,7 @@ fun SeerrRequestDialog(
                         enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                         exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     ) {
-                        LinearWavyProgressIndicator(
+                        JellyPlayLinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
                             color = colorScheme.primary,
                         )
@@ -313,7 +313,7 @@ fun SeerrRequestDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center,
                             ) {
-                                CircularWavyProgressIndicator(
+                                JellyPlayCircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                 )
                                 Spacer(Modifier.width(12.dp))
@@ -501,7 +501,7 @@ fun SeerrRequestDialog(
                         } else if (isLoadingServices) {
                             // Show loading while services/seasons are being fetched
                             item {
-                                LinearWavyProgressIndicator(
+                                JellyPlayLinearProgressIndicator(
                                     modifier = Modifier.fillMaxWidth(),
                                     color = colorScheme.primary,
                                 )
@@ -563,7 +563,7 @@ fun SeerrRequestDialog(
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                             ) {
                                 if (isRequesting) {
-                                    CircularWavyProgressIndicator(
+                                    JellyPlayCircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                     )
                                     Spacer(Modifier.width(8.dp))

@@ -28,6 +28,13 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import javax.inject.Inject
 
+data class LogLine(
+    val index: Int,
+    val text: String,
+    val isNew: Boolean = false,
+    val addedTime: Long = 0L,
+)
+
 data class LogsState(
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -36,10 +43,13 @@ data class LogsState(
     val activityTotalCount: Int = 0,
     val selectedLogFileContent: String? = null,
     val selectedLogFileName: String? = null,
+    val selectedLogFileLines: List<LogLine> = emptyList(),
+    val isLogPollingActive: Boolean = true,
     val isLoadingLogContent: Boolean = false,
     val selectedTabIndex: Int = 0,
     val isLiveStreamActive: Boolean = false,
     val liveEntries: List<ActivityLogEntry> = emptyList(),
+    val liveEntryIds: Set<Long> = emptySet(),
 )
 
 @HiltViewModel
@@ -56,6 +66,8 @@ class LogsViewModel @Inject constructor(
 
     private var webSocket: WebSocket? = null
     private var pollingJob: Job? = null
+    private var liveCollectJob: Job? = null
+    private var logFilePollingJob: Job? = null
 
     init {
         loadInitialData()
@@ -79,18 +91,79 @@ class LogsViewModel @Inject constructor(
     }
 
     fun loadLogFile(fileName: String) {
-        viewModelScope.launch {
-            state = state.copy(isLoadingLogContent = true, selectedLogFileName = fileName)
-            val result = apiClient.getLogFileContent(fileName)
-            state = state.copy(
-                selectedLogFileContent = result.getOrNull(),
-                isLoadingLogContent = false,
-            )
+        logFilePollingJob?.cancel()
+        state = state.copy(
+            isLoadingLogContent = true,
+            selectedLogFileName = fileName,
+            selectedLogFileContent = null,
+            selectedLogFileLines = emptyList(),
+            isLogPollingActive = true
+        )
+        logFilePollingJob = viewModelScope.launch {
+            // First load
+            val initialResult = apiClient.getLogFileContent(fileName)
+            initialResult.onSuccess { content ->
+                val lines = content.lines().mapIndexed { index, text ->
+                    LogLine(index = index, text = text, isNew = false, addedTime = 0L)
+                }
+                state = state.copy(
+                    selectedLogFileContent = content,
+                    selectedLogFileLines = lines,
+                    isLoadingLogContent = false
+                )
+            }.onFailure { e ->
+                state = state.copy(
+                    error = e.message,
+                    isLoadingLogContent = false
+                )
+            }
+
+            // Polling loop
+            while (state.selectedLogFileName == fileName) {
+                delay(3000)
+                if (state.isLogPollingActive) {
+                    val result = apiClient.getLogFileContent(fileName)
+                    result.onSuccess { content ->
+                        val oldLines = state.selectedLogFileLines
+                        val newLinesText = content.lines()
+                        
+                        if (newLinesText != oldLines.map { it.text }) {
+                            val updatedLines = newLinesText.mapIndexed { index, text ->
+                                if (index < oldLines.size && oldLines[index].text == text) {
+                                    oldLines[index]
+                                } else {
+                                    LogLine(
+                                        index = index,
+                                        text = text,
+                                        isNew = index >= oldLines.size,
+                                        addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L
+                                    )
+                                }
+                            }
+                            state = state.copy(
+                                selectedLogFileContent = content,
+                                selectedLogFileLines = updatedLines
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
+    fun toggleLogPolling() {
+        state = state.copy(isLogPollingActive = !state.isLogPollingActive)
+    }
+
     fun clearSelectedLogFile() {
-        state = state.copy(selectedLogFileContent = null, selectedLogFileName = null)
+        logFilePollingJob?.cancel()
+        logFilePollingJob = null
+        state = state.copy(
+            selectedLogFileContent = null,
+            selectedLogFileName = null,
+            selectedLogFileLines = emptyList(),
+            isLogPollingActive = true
+        )
     }
 
     fun selectTab(index: Int) {
@@ -101,6 +174,17 @@ class LogsViewModel @Inject constructor(
         val serverUrl = apiClient.getServerUrl() ?: return
         val token = apiClient.getAccessToken() ?: return
         state = state.copy(isLiveStreamActive = true, liveEntries = emptyList())
+
+        liveCollectJob?.cancel()
+        liveCollectJob = viewModelScope.launch {
+            liveEvents.collect { entry ->
+                state = state.copy(
+                    liveEntries = (listOf(entry) + state.liveEntries).take(200),
+                    liveEntryIds = state.liveEntryIds + entry.id,
+                    activityEntries = (listOf(entry) + state.activityEntries).take(200),
+                )
+            }
+        }
 
         val wsUrl = serverUrl.replace("http", "ws") +
                 "/socket?api_key=$token&deviceId=JellyPlayAdmin"
@@ -124,15 +208,6 @@ class LogsViewModel @Inject constructor(
                 startPollingFallback()
             }
         })
-
-        viewModelScope.launch {
-            liveEvents.collect { entry ->
-                state = state.copy(
-                    liveEntries = (listOf(entry) + state.liveEntries).take(200),
-                    activityEntries = (listOf(entry) + state.activityEntries).take(200),
-                )
-            }
-        }
     }
 
     fun stopLiveStream() {
@@ -140,18 +215,25 @@ class LogsViewModel @Inject constructor(
         webSocket = null
         pollingJob?.cancel()
         pollingJob = null
+        liveCollectJob?.cancel()
+        liveCollectJob = null
         state = state.copy(isLiveStreamActive = false)
     }
 
     private fun startPollingFallback() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
+            val knownIds = state.activityEntries.map { it.id }.toMutableSet()
             while (true) {
                 delay(3000)
                 val result = apiClient.getActivityLogEntries(limit = 10)
                 result.onSuccess { entries ->
-                    if (entries.isNotEmpty() && entries.first().id != state.activityEntries.firstOrNull()?.id) {
-                        entries.forEach { _liveEvents.tryEmit(it) }
+                    val newEntries = entries.filter { it.id !in knownIds }
+                    if (newEntries.isNotEmpty()) {
+                        newEntries.forEach { entry ->
+                            knownIds.add(entry.id)
+                            _liveEvents.tryEmit(entry)
+                        }
                     }
                 }
             }
@@ -174,5 +256,7 @@ class LogsViewModel @Inject constructor(
         super.onCleared()
         webSocket?.close(1000, "ViewModel cleared")
         pollingJob?.cancel()
+        liveCollectJob?.cancel()
+        logFilePollingJob?.cancel()
     }
 }

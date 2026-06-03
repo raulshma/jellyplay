@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.data.worker
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -29,8 +31,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.ConnectionPool
-import okhttp3.Dispatcher
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.SocketTimeoutException
@@ -87,8 +87,6 @@ class DownloadWorker(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
-            .dispatcher(Dispatcher().apply { maxRequests = 10; maxRequestsPerHost = 10 })
             .build()
 
         val numConnections = prefs.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
@@ -593,16 +591,30 @@ class DownloadWorker(
         downloadedBytes: Long,
         totalBytes: Long,
         speedBytesPerSec: Long,
-    ) = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-        .setContentTitle(name)
-        .setContentText(formatProgressText(downloadedBytes, totalBytes, speedBytesPerSec))
-        .setSmallIcon(android.R.drawable.stat_sys_download)
-        .setOngoing(true)
-        .setOnlyAlertOnce(true)
-        .setProgress(100, progress, false)
-        .setSubText(formatSpeed(speedBytesPerSec))
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .build()
+    ): android.app.Notification {
+        val intent = Intent().apply {
+            setClassName(applicationContext.packageName, "com.raulshma.jellyplay.MainActivity")
+            action = "com.raulshma.jellyplay.action.DOWNLOADS"
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            applicationContext,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setContentTitle(name)
+            .setContentText(formatProgressText(downloadedBytes, totalBytes, speedBytesPerSec))
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setProgress(100, progress, false)
+            .setSubText(formatSpeed(speedBytesPerSec))
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
 
     private fun dismissNotification(notificationId: Int) {
         NotificationManagerCompat.from(applicationContext).cancel(notificationId)

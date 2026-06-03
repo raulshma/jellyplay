@@ -80,6 +80,7 @@ import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
@@ -493,11 +494,12 @@ fun SettingsScreen(
                         add("aspect" to 6)
                         add("autoplay" to 7)
                         add("browser" to 8)
-                        add("swipe" to 9)
-                        add("brightness" to 10)
-                        add("trickplay" to 11)
-                        add("trickplayGesture" to 12)
-                        add("preload" to 13)
+                        add("metadata" to 9)
+                        add("swipe" to 10)
+                        add("brightness" to 11)
+                        add("trickplay" to 12)
+                        add("trickplayGesture" to 13)
+                        add("preload" to 14)
                     }
                     val total = videoItems.size
 
@@ -573,12 +575,20 @@ fun SettingsScreen(
                         index = 8, count = total,
                         onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                     )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        title = "Playback Metadata",
+                        subtitle = if (preferences.videoShowPlaybackMetadata) "Show play method, codecs, HDR and Atmos info above seekbar" else "Metadata display hidden",
+                        checked = preferences.videoShowPlaybackMetadata,
+                        index = 9, count = total,
+                        onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.HandFinger,
                         title = "Swipe Seek Range",
                         subtitle = "Maximum seek distance",
                         trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        index = 9, count = total,
+                        index = 10, count = total,
                         onClick = { showSwipeSeekPicker = true },
                     )
                     SettingToggleItem(
@@ -586,7 +596,7 @@ fun SettingsScreen(
                         title = "Remember Brightness",
                         subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                         checked = preferences.videoRememberBrightness,
-                        index = 10, count = total,
+                        index = 11, count = total,
                         onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
                     )
                     SettingToggleItem(
@@ -594,7 +604,7 @@ fun SettingsScreen(
                         title = "Trickplay Preview",
                         subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
                         checked = preferences.trickplayEnabled,
-                        index = 11, count = total,
+                        index = 12, count = total,
                         onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                     )
                     SettingToggleItem(
@@ -602,7 +612,7 @@ fun SettingsScreen(
                         title = "Trickplay on Gestures",
                         subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
                         checked = preferences.trickplayOnSeekGesture,
-                        index = 12, count = total,
+                        index = 13, count = total,
                         onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                     )
                     SettingListItem(
@@ -610,7 +620,7 @@ fun SettingsScreen(
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during playback",
                         trailingText = preferences.videoPreloadBufferSize.displayName,
-                        index = 13, count = total,
+                        index = 14, count = total,
                         onClick = { showPreloadBufferPicker = true },
                     )
                 }
@@ -1393,8 +1403,11 @@ fun SettingsScreen(
                     title = "Appearance",
                     summary = {
                         val parts = mutableListOf<String>()
-                        if (preferences.dynamicTheming) parts.add("Dynamic theming")
                         parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
+                        val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
+                        parts.add("$accentName accent")
+                        parts.add(preferences.colorStyle.displayName)
+                        if (preferences.dynamicTheming) parts.add("Artwork dynamic")
                         if (preferences.oledMode) parts.add("OLED")
                         if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add("${preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }} contrast")
                         parts.joinToString(", ")
@@ -1408,157 +1421,137 @@ fun SettingsScreen(
                         ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
                     }
 
-                    if (isAndroid12) {
-                        val baseCount = if (isDarkActive) 7 else 6
-                        SettingListItem(
-                            icon = Tabler.Outline.Moon,
-                            title = "Theme Mode",
-                            subtitle = when (preferences.themeMode) {
-                                ThemeMode.SYSTEM -> "Follow system setting"
-                                ThemeMode.LIGHT -> "Always light"
-                                ThemeMode.DARK -> "Always dark"
-                            },
-                            trailingText = preferences.themeMode.name,
-                            index = 0, count = baseCount,
-                            onClick = {
-                                val next = when (preferences.themeMode) {
-                                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
-                                    ThemeMode.LIGHT -> ThemeMode.DARK
-                                    ThemeMode.DARK -> ThemeMode.SYSTEM
-                                }
-                                viewModel.setThemeMode(next)
-                            },
-                        )
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Video,
-                            title = "Dynamic Theming",
-                            subtitle = "Colors extracted from artwork",
-                            checked = preferences.dynamicTheming,
-                            index = 1, count = baseCount,
-                            onCheckedChange = { viewModel.setDynamicTheming(it) },
-                        )
-                        if (isDarkActive) {
-                            SettingToggleItem(
-                                icon = Tabler.Outline.BrightnessHalf,
-                                title = "OLED Mode",
-                                subtitle = "Pure black backgrounds for AMOLED displays",
-                                checked = preferences.oledMode,
-                                index = 2, count = baseCount,
-                                onCheckedChange = { viewModel.setOledMode(it) },
-                            )
+                    val appearanceItems = buildList {
+                        add("theme_mode")
+                        add("accent_color")
+                        add("color_style")
+                        if (isAndroid12) {
+                            add("dynamic_theming")
                         }
-                        val contrastIndex = if (isDarkActive) 3 else 2
-                        SettingListItem(
-                            icon = Tabler.Outline.Adjustments,
-                            title = "Contrast",
-                            subtitle = when (preferences.contrastLevel) {
-                                ContrastLevel.DEFAULT -> "Standard contrast"
-                                ContrastLevel.MEDIUM -> "Medium contrast"
-                                ContrastLevel.HIGH -> "High contrast"
-                            },
-                            trailingText = preferences.contrastLevel.name,
-                            index = contrastIndex, count = baseCount,
-                            onClick = {
-                                val next = when (preferences.contrastLevel) {
-                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
-                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
-                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
-                                }
-                                viewModel.setContrastLevel(next)
-                            },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Home,
-                            title = "Home Mode",
-                            subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
-                            trailingText = preferences.homeMode.name,
-                            index = if (isDarkActive) 4 else 3, count = baseCount,
-                            onClick = {
-                                val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                                viewModel.setHomeMode(next)
-                            },
-                        )
-                    } else {
-                        val baseCount = if (isDarkActive) 6 else 5
-                        SettingListItem(
-                            icon = Tabler.Outline.Moon,
-                            title = "Theme Mode",
-                            subtitle = when (preferences.themeMode) {
-                                ThemeMode.SYSTEM -> "Follow system setting"
-                                ThemeMode.LIGHT -> "Always light"
-                                ThemeMode.DARK -> "Always dark"
-                            },
-                            trailingText = preferences.themeMode.name,
-                            index = 0, count = baseCount,
-                            onClick = {
-                                val next = when (preferences.themeMode) {
-                                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
-                                    ThemeMode.LIGHT -> ThemeMode.DARK
-                                    ThemeMode.DARK -> ThemeMode.SYSTEM
-                                }
-                                viewModel.setThemeMode(next)
-                            },
-                        )
                         if (isDarkActive) {
-                            SettingToggleItem(
-                                icon = Tabler.Outline.BrightnessHalf,
-                                title = "OLED Mode",
-                                subtitle = "Pure black backgrounds for AMOLED displays",
-                                checked = preferences.oledMode,
-                                index = 1, count = baseCount,
-                                onCheckedChange = { viewModel.setOledMode(it) },
-                            )
+                            add("oled_mode")
                         }
-                        val contrastIndex = if (isDarkActive) 2 else 1
-                        SettingListItem(
-                            icon = Tabler.Outline.Adjustments,
-                            title = "Contrast",
-                            subtitle = when (preferences.contrastLevel) {
-                                ContrastLevel.DEFAULT -> "Standard contrast"
-                                ContrastLevel.MEDIUM -> "Medium contrast"
-                                ContrastLevel.HIGH -> "High contrast"
-                            },
-                            trailingText = preferences.contrastLevel.name,
-                            index = contrastIndex, count = baseCount,
-                            onClick = {
-                                val next = when (preferences.contrastLevel) {
-                                    ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
-                                    ContrastLevel.MEDIUM -> ContrastLevel.HIGH
-                                    ContrastLevel.HIGH -> ContrastLevel.DEFAULT
-                                }
-                                viewModel.setContrastLevel(next)
-                            },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Home,
-                            title = "Home Mode",
-                            subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
-                            trailingText = preferences.homeMode.name,
-                            index = if (isDarkActive) 3 else 2, count = baseCount,
-                            onClick = {
-                                val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                                viewModel.setHomeMode(next)
-                            },
-                        )
+                        add("contrast")
+                        add("home_mode")
+                        add("hero_section")
+                        add("nav_labels")
                     }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.LayersLinked,
-                        title = "Show Hero Section",
-                        subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
-                        checked = preferences.homeHeroEnabled,
-                        index = if (isAndroid12) (if (isDarkActive) 5 else 4) else (if (isDarkActive) 4 else 3),
-                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
-                        onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.TextSize,
-                        title = "Show Navigation Labels",
-                        subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
-                        checked = preferences.navBarShowLabels,
-                        index = if (isAndroid12) (if (isDarkActive) 6 else 5) else (if (isDarkActive) 5 else 4), 
-                        count = if (isAndroid12) (if (isDarkActive) 7 else 6) else (if (isDarkActive) 6 else 5),
-                        onCheckedChange = { viewModel.setNavBarShowLabels(it) },
-                    )
+                    val totalCount = appearanceItems.size
+                    var currentIdx = 0
+
+                    appearanceItems.forEach { item ->
+                        when (item) {
+                            "theme_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Moon,
+                                    title = "Theme Mode",
+                                    subtitle = when (preferences.themeMode) {
+                                        ThemeMode.SYSTEM -> "Follow system setting"
+                                        ThemeMode.LIGHT -> "Always light"
+                                        ThemeMode.DARK -> "Always dark"
+                                    },
+                                    trailingText = preferences.themeMode.name,
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.themeMode) {
+                                            ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                                            ThemeMode.LIGHT -> ThemeMode.DARK
+                                            ThemeMode.DARK -> ThemeMode.SYSTEM
+                                        }
+                                        viewModel.setThemeMode(next)
+                                    },
+                                )
+                            }
+                            "accent_color" -> {
+                                SettingAccentColorPicker(
+                                    selectedSwatch = preferences.accentColorSwatch,
+                                    onSwatchSelected = { viewModel.setAccentColorSwatch(it) },
+                                    index = currentIdx++, count = totalCount,
+                                )
+                            }
+                            "color_style" -> {
+                                SettingColorStylePicker(
+                                    selectedStyle = preferences.colorStyle,
+                                    onStyleSelected = { viewModel.setColorStyle(it) },
+                                    index = currentIdx++, count = totalCount,
+                                )
+                            }
+                            "dynamic_theming" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Video,
+                                    title = "Dynamic Theming",
+                                    subtitle = "Colors extracted from artwork",
+                                    checked = preferences.dynamicTheming,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setDynamicTheming(it) },
+                                )
+                            }
+                            "oled_mode" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.BrightnessHalf,
+                                    title = "OLED Mode",
+                                    subtitle = "Pure black backgrounds for AMOLED displays",
+                                    checked = preferences.oledMode,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setOledMode(it) },
+                                )
+                            }
+                            "contrast" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Adjustments,
+                                    title = "Contrast",
+                                    subtitle = when (preferences.contrastLevel) {
+                                        ContrastLevel.DEFAULT -> "Standard contrast"
+                                        ContrastLevel.MEDIUM -> "Medium contrast"
+                                        ContrastLevel.HIGH -> "High contrast"
+                                    },
+                                    trailingText = preferences.contrastLevel.name,
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = when (preferences.contrastLevel) {
+                                            ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
+                                            ContrastLevel.MEDIUM -> ContrastLevel.HIGH
+                                            ContrastLevel.HIGH -> ContrastLevel.DEFAULT
+                                        }
+                                        viewModel.setContrastLevel(next)
+                                    },
+                                )
+                            }
+                            "home_mode" -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Home,
+                                    title = "Home Mode",
+                                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) "Video-focused home screen" else "Music-focused home screen",
+                                    trailingText = preferences.homeMode.name,
+                                    index = currentIdx++, count = totalCount,
+                                    onClick = {
+                                        val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
+                                        viewModel.setHomeMode(next)
+                                    },
+                                )
+                            }
+                            "hero_section" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.LayersLinked,
+                                    title = "Show Hero Section",
+                                    subtitle = if (preferences.homeHeroEnabled) "Featured content banner on home" else "Compact home layout",
+                                    checked = preferences.homeHeroEnabled,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                                )
+                            }
+                            "nav_labels" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.TextSize,
+                                    title = "Show Navigation Labels",
+                                    subtitle = if (preferences.navBarShowLabels) "Icons and text" else "Icons only",
+                                    checked = preferences.navBarShowLabels,
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

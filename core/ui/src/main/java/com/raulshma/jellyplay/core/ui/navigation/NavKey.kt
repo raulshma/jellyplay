@@ -96,6 +96,10 @@ sealed class Route : NavKey {
     @Serializable data object ScheduledTasks : Route()
     @Serializable data object Devices : Route()
     @Serializable data object Logs : Route()
+    @Serializable data object UserStatistics : Route()
+    @Serializable data class UserStatisticsDetail(val userId: String) : Route()
+    @Serializable data object StaleMedia : Route()
+    @Serializable data object WatchedMediaCleanup : Route()
 
     @Serializable data object Newsletter : Route()
 

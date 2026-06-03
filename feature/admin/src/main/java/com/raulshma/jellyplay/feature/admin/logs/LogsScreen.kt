@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,7 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -123,8 +131,10 @@ fun LogsScreen(
                 0 -> LogFilesTab(
                     logFiles = state.logFiles,
                     selectedLogFileName = state.selectedLogFileName,
-                    selectedLogFileContent = state.selectedLogFileContent,
+                    selectedLogFileLines = state.selectedLogFileLines,
                     isLoadingContent = state.isLoadingLogContent,
+                    isPollingActive = state.isLogPollingActive,
+                    onTogglePolling = { viewModel.toggleLogPolling() },
                     onFileClick = { viewModel.loadLogFile(it) },
                     onBackToList = { viewModel.clearSelectedLogFile() },
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
@@ -132,6 +142,7 @@ fun LogsScreen(
                 1 -> ActivityLogTab(
                     entries = state.activityEntries,
                     isLiveActive = state.isLiveStreamActive,
+                    liveEntryIds = state.liveEntryIds,
                     isLoadingMore = false,
                     onLoadMore = { viewModel.loadMoreActivity() },
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
@@ -145,13 +156,15 @@ fun LogsScreen(
 private fun LogFilesTab(
     logFiles: List<LogFile>,
     selectedLogFileName: String?,
-    selectedLogFileContent: String?,
+    selectedLogFileLines: List<LogLine>,
     isLoadingContent: Boolean,
+    isPollingActive: Boolean,
+    onTogglePolling: () -> Unit,
     onFileClick: (String) -> Unit,
     onBackToList: () -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
-    if (selectedLogFileContent != null || isLoadingContent) {
+    if (selectedLogFileName != null || isLoadingContent) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
@@ -177,12 +190,51 @@ private fun LogFilesTab(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!isLoadingContent && selectedLogFileLines.isNotEmpty()) {
+                    IconButton(onClick = onTogglePolling) {
+                        Icon(
+                            imageVector = if (isPollingActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                            contentDescription = if (isPollingActive) "Pause Live Logs" else "Resume Live Logs",
+                            tint = if (isPollingActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    val lineCount = selectedLogFileLines.size
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smoothPill)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            "$lineCount lines",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             if (isLoadingContent) {
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                JellyPlayLinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                )
             } else {
                 val listState = rememberLazyListState()
+                
+                var hasInitialScrolled by remember(selectedLogFileName) { mutableStateOf(false) }
+
+                LaunchedEffect(selectedLogFileLines.size) {
+                    if (selectedLogFileLines.isNotEmpty()) {
+                        if (!hasInitialScrolled) {
+                            listState.scrollToItem(selectedLogFileLines.lastIndex)
+                            hasInitialScrolled = true
+                        } else if (isPollingActive) {
+                            listState.animateScrollToItem(selectedLogFileLines.lastIndex)
+                        }
+                    }
+                }
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -190,18 +242,43 @@ private fun LogFilesTab(
                         .padding(horizontal = 8.dp),
                 ) {
                     items(
-                        items = (selectedLogFileContent ?: "").lines(),
-                        key = { index -> index },
+                        items = selectedLogFileLines,
+                        key = { line -> line.index },
                     ) { line ->
+                        val annotatedLine = remember(line.text) { parseLogLine(line.text) }
+                        
+                        var isHighlighted by remember(line.index, line.addedTime) {
+                            mutableStateOf(line.isNew)
+                        }
+                        LaunchedEffect(line.index, line.addedTime) {
+                            if (line.isNew) {
+                                delay(4000)
+                                isHighlighted = false
+                            }
+                        }
+                        val highlightAlpha by animateFloatAsState(
+                            targetValue = if (isHighlighted) 0.15f else 0.0f,
+                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 1000),
+                            label = "lineHighlightAlpha"
+                        )
+                        
                         Text(
-                            line,
+                            text = annotatedLine,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = FontFamily.Monospace,
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
+                                .animateItem()
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 1.dp),
+                                .background(
+                                    color = if (highlightAlpha > 0f) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = highlightAlpha)
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
                 }
@@ -295,6 +372,7 @@ private fun LogFileItem(file: LogFile, onClick: () -> Unit) {
 private fun ActivityLogTab(
     entries: List<ActivityLogEntry>,
     isLiveActive: Boolean,
+    liveEntryIds: Set<Long>,
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
@@ -354,7 +432,10 @@ private fun ActivityLogTab(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items = entries, key = { it.id }) { entry ->
-                ActivityEntryItem(entry = entry)
+                ActivityEntryItem(
+                    entry = entry,
+                    isNew = entry.id in liveEntryIds,
+                )
             }
             if (isLoadingMore) {
                 item {
@@ -374,7 +455,7 @@ private fun ActivityLogTab(
 }
 
 @Composable
-private fun ActivityEntryItem(entry: ActivityLogEntry) {
+private fun ActivityEntryItem(entry: ActivityLogEntry, isNew: Boolean = false) {
     val severityColor = when (entry.severity) {
         ActivityLogSeverity.ERROR, ActivityLogSeverity.FATAL -> MaterialTheme.colorScheme.error
         ActivityLogSeverity.WARNING -> Color(0xFFFF9800)
@@ -385,7 +466,11 @@ private fun ActivityEntryItem(entry: ActivityLogEntry) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeCache.smooth12,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isNew) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+            else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        border = if (isNew) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)) else null,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -451,4 +536,27 @@ private fun formatFileSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"
     else -> "${"%.1f".format(bytes / (1024.0 * 1024.0))} MB"
+}
+
+private val LOG_LEVEL_REGEX = Regex("\\b(ERROR|FATAL|WARN|WARNING|INFO|DEBUG|TRACE)\\b", RegexOption.IGNORE_CASE)
+
+private fun parseLogLine(line: String): AnnotatedString = buildAnnotatedString {
+    val match = LOG_LEVEL_REGEX.find(line)
+    if (match != null) {
+        append(line.substring(0, match.range.first))
+        val level = match.value.uppercase()
+        val color = when (level) {
+            "ERROR", "FATAL" -> Color(0xFFEF5350)
+            "WARN", "WARNING" -> Color(0xFFFF9800)
+            "INFO" -> Color(0xFF42A5F5)
+            "DEBUG", "TRACE" -> Color(0xFF78909C)
+            else -> Color.Unspecified
+        }
+        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) {
+            append(match.value)
+        }
+        append(line.substring(match.range.last + 1))
+    } else {
+        append(line)
+    }
 }

@@ -18,6 +18,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
@@ -55,10 +57,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,6 +93,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -212,6 +217,7 @@ fun MediaDetailScreen(
         dynamicTheming = preferences.dynamicTheming,
         darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
+        colorStyle = preferences.colorStyle,
     ) {
         val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
         val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -442,6 +448,7 @@ private fun DetailContent(
     val listState = rememberLazyListState()
     val isAudio = item?.mediaType == MediaType.AUDIO || item?.mediaType == MediaType.MUSIC || item?.mediaType == MediaType.ALBUM
     val isAlbum = item?.mediaType == MediaType.ALBUM
+    val isSeries = item?.mediaType == MediaType.SERIES
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
 
@@ -639,34 +646,25 @@ private fun DetailContent(
                         // Left column: poster + action buttons
                         AnimatedVisibility(
                             visible = contentVisible,
-                            enter = fadeIn(
-                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 8 },
-                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                            ) + scaleIn(
-                                initialScale = 0.96f,
-                                animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                            ),
-                            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
-                                targetScale = 0.98f,
-                                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                            ),
+                            enter = EnterTransition.None,
+                            exit = ExitTransition.None,
                         ) {
                             Column(
-                                modifier = Modifier.width(220.dp),
+                                modifier = Modifier
+                                    .width(220.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                MediaImage(
-                                    url = getImageUrl(itemId),
-                                    contentDescription = null,
-                                    blurHash = item?.blurHashes?.primary,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(2f / 3f)
-                                        .clip(ShapeCache.smooth12)
-                                        .graphicsLayer { alpha = contentAlpha }
+                                FadingItem {
+                                    MediaImage(
+                                        url = getImageUrl(itemId),
+                                        contentDescription = null,
+                                        blurHash = item?.blurHashes?.primary,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(2f / 3f)
+                                            .clip(ShapeCache.smooth12)
+                                            .graphicsLayer { alpha = contentAlpha }
                                         .then(
                                             if (itemId != null) {
                                                 val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -684,6 +682,7 @@ private fun DetailContent(
                                         ),
                                     contentScale = ContentScale.Crop,
                                 )
+                                }
                                 if (detail != null && item != null) {
                                     DetailActionButtons(
                                         item = item,
@@ -694,16 +693,11 @@ private fun DetailContent(
                                         smartPlayTarget = smartPlayTarget,
                                         isAudio = isAudio,
                                         isAlbum = isAlbum,
-                                    albumTracks = albumTracks,
-                                    isDownloading = isDownloading,
-                                    isDownloadingSeries = isDownloadingSeries,
-                                    activeDownload = activeDownload,
-                                    onPlayClick = onPlayClick,
-                                    onAudioClick = onAudioClick,
-                                    onPlayAlbumTrack = onPlayAlbumTrack,
-                                    onNavigate = onNavigate,
-                                    onDownloadClick = { showDownloadDialog = true },
-                                        onDownloadSeriesClick = onDownloadSeriesClick,
+                                        albumTracks = albumTracks,
+                                        onPlayClick = onPlayClick,
+                                        onAudioClick = onAudioClick,
+                                        onPlayAlbumTrack = onPlayAlbumTrack,
+                                        onNavigate = onNavigate,
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
                                         onMarkUnplayed = onMarkUnplayed,
@@ -717,15 +711,8 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                        slideInVertically(
-                                            initialOffsetY = { it / 12 },
-                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                        ),
-                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
-                                    targetOffsetY = { -it / 24 },
-                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                ),
+                                enter = EnterTransition.None,
+                                exit = ExitTransition.None,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 DetailContentBody(
@@ -742,13 +729,8 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
-                                    isDownloading = isDownloading,
-                                    isDownloadingSeries = isDownloadingSeries,
-                                    activeDownload = activeDownload,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
-                                    onDownloadClick = { showDownloadDialog = true },
-                                    onDownloadSeriesClick = onDownloadSeriesClick,
                                     onToggleFavorite = onToggleFavorite,
                                     onMarkPlayed = onMarkPlayed,
                                     onMarkUnplayed = onMarkUnplayed,
@@ -770,10 +752,6 @@ private fun DetailContent(
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                     showActionButtons = false
                                 )
-                            }
-                        } else if (isLoading) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                SkeletonDetailBody()
                             }
                         } else if (error != null) {
                             ErrorScreen(
@@ -800,36 +778,27 @@ private fun DetailContent(
                             ) {
                                 AnimatedVisibility(
                                     visible = contentVisible,
-                                    enter = fadeIn(
-                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                                    ) + slideInVertically(
-                                        initialOffsetY = { it / 8 },
-                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                                    ) + scaleIn(
-                                        initialScale = 0.96f,
-                                        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-                                    ),
-                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(
-                                        targetScale = 0.98f,
-                                        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                    ),
+                                    enter = EnterTransition.None,
+                                    exit = ExitTransition.None,
                                 ) {
                                     val posterWidth = when {
                                         isTv -> 160.dp
                                         isExpanded -> 140.dp
                                         else -> 120.dp
                                     }
-                                    MediaImage(
-                                        url = getImageUrl(itemId),
-                                        contentDescription = null,
-                                        blurHash = item?.blurHashes?.primary,
-                                        modifier = Modifier
-                                            .width(posterWidth)
-                                            .aspectRatio(2f / 3f)
-                                            .clip(ShapeCache.smooth8)
-                                            .graphicsLayer { alpha = contentAlpha },
-                                        contentScale = ContentScale.Crop,
-                                    )
+                                    FadingItem {
+                                        MediaImage(
+                                            url = getImageUrl(itemId),
+                                            contentDescription = null,
+                                            blurHash = item?.blurHashes?.primary,
+                                            modifier = Modifier
+                                                .width(posterWidth)
+                                                .aspectRatio(2f / 3f)
+                                                .clip(ShapeCache.smooth8)
+                                                .graphicsLayer { alpha = contentAlpha },
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -839,15 +808,8 @@ private fun DetailContent(
                         if (detail != null && item != null) {
                             AnimatedVisibility(
                                 visible = contentVisible,
-                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                        slideInVertically(
-                                            initialOffsetY = { it / 12 },
-                                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                        ),
-                                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
-                                    targetOffsetY = { -it / 24 },
-                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                ),
+                                enter = EnterTransition.None,
+                                exit = ExitTransition.None,
                             ) {
                                 DetailContentBody(
                                     item = item,
@@ -863,13 +825,8 @@ private fun DetailContent(
                                     isAlbum = isAlbum,
                                     albumTracks = albumTracks,
                                     collectionItems = collectionItems,
-                                    isDownloading = isDownloading,
-                                    isDownloadingSeries = isDownloadingSeries,
-                                    activeDownload = activeDownload,
                                     onPlayClick = onPlayClick,
                                     onAudioClick = onAudioClick,
-                                    onDownloadClick = { showDownloadDialog = true },
-                                    onDownloadSeriesClick = onDownloadSeriesClick,
                                     onToggleFavorite = onToggleFavorite,
                                     onMarkPlayed = onMarkPlayed,
                                     onMarkUnplayed = onMarkUnplayed,
@@ -891,8 +848,6 @@ private fun DetailContent(
                                     onPlayAlbumTrack = onPlayAlbumTrack,
                                 )
                             }
-                        } else if (isLoading) {
-                            SkeletonDetailBody()
                         } else if (error != null) {
                             ErrorScreen(
                                 message = error,
@@ -928,21 +883,89 @@ private fun DetailContent(
                 },
                 actions = {
                     if (!isTv) {
+                        var menuExpanded by remember { mutableStateOf(false) }
                         val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                        IconButton(
-                            onClick = onEditClick,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
+                        Box {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent
+                                    )
+                            ) {
+                                Icon(
+                                    Tabler.Outline.DotsVertical,
+                                    contentDescription = "Options",
+                                    tint = editIconColor,
                                 )
-                        ) {
-                            Icon(
-                                Tabler.Outline.DotsVertical,
-                                contentDescription = "Edit",
-                                tint = editIconColor,
-                            )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onEditClick()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Tabler.Outline.Pencil, contentDescription = null)
+                                    }
+                                )
+                                if (!isAudio && item != null && detail != null && detail.mediaSources.isNotEmpty()) {
+                                    val downloadStatus = activeDownload?.status
+                                    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
+                                            downloadStatus == DownloadStatus.DOWNLOADING ||
+                                            downloadStatus == DownloadStatus.PAUSED
+                                    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
+                                    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
+                                        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+                                    } else 0f
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            val text = when {
+                                                isDownloadCompleted -> "Downloaded"
+                                                isDownloading || isDownloadActive -> {
+                                                    if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                                        "Downloading (${(downloadProgress * 100).toInt()}%)"
+                                                    } else {
+                                                        "Downloading..."
+                                                    }
+                                                }
+                                                else -> "Download"
+                                            }
+                                            Text(text)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showDownloadDialog = true
+                                        },
+                                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
+                                        leadingIcon = {
+                                            val icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download
+                                            Icon(icon, contentDescription = null)
+                                        }
+                                    )
+                                } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(if (isDownloadingSeries) "Downloading Series..." else "Download Series")
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onDownloadSeriesClick()
+                                        },
+                                        enabled = !isDownloadingSeries,
+                                        leadingIcon = {
+                                            Icon(Tabler.Outline.Download, contentDescription = null)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 },
@@ -1023,19 +1046,7 @@ private fun StaggeredDetailSection(
     delayIndex: Int,
     content: @Composable () -> Unit,
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(
-            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        ) + slideInVertically(
-            initialOffsetY = { it / 16 },
-            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        ),
-        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(
-            targetOffsetY = { -it / 24 },
-            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        ),
-    ) {
+    if (visible) {
         content()
     }
 }
@@ -1094,11 +1105,13 @@ private fun MediaInfoSection(
                 append(range.uppercase())
             }
 
-            QuickInfoPill(
-                icon = Tabler.Outline.BadgeHd,
-                text = qualityLabel,
-                modifier = Modifier.weight(1f),
-            )
+            FadingItem(modifier = Modifier.weight(1f)) {
+                QuickInfoPill(
+                    icon = Tabler.Outline.BadgeHd,
+                    text = qualityLabel,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             val audioLabel = buildString {
                 append(
@@ -1121,14 +1134,16 @@ private fun MediaInfoSection(
                 }
             }
 
-            QuickInfoPill(
-                icon = Tabler.Outline.WaveSine,
-                text = audioLabel,
-                showTrailingIndicator = true,
-                onClick = { if (audioStreams.isNotEmpty()) picker = StreamPickerType.AUDIO },
-                containerColor = chipBackgroundColor,
-                modifier = Modifier.weight(1f),
-            )
+            FadingItem(modifier = Modifier.weight(1f)) {
+                QuickInfoPill(
+                    icon = Tabler.Outline.WaveSine,
+                    text = audioLabel,
+                    showTrailingIndicator = true,
+                    onClick = { if (audioStreams.isNotEmpty()) picker = StreamPickerType.AUDIO },
+                    containerColor = chipBackgroundColor,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             val subtitleLabel = selectedSubtitle
                 ?.displayTitle
@@ -1137,14 +1152,16 @@ private fun MediaInfoSection(
                 ?: selectedSubtitle?.language?.uppercase()?.take(3)
                 ?: "OFF"
 
-            QuickInfoPill(
-                icon = Tabler.Outline.Subtitles,
-                text = subtitleLabel,
-                showTrailingIndicator = subtitleStreams.isNotEmpty(),
-                onClick = { picker = StreamPickerType.SUBTITLE },
-                containerColor = chipBackgroundColor,
-                modifier = Modifier.weight(1f),
-            )
+            FadingItem(modifier = Modifier.weight(1f)) {
+                QuickInfoPill(
+                    icon = Tabler.Outline.Subtitles,
+                    text = subtitleLabel,
+                    showTrailingIndicator = subtitleStreams.isNotEmpty(),
+                    onClick = { picker = StreamPickerType.SUBTITLE },
+                    containerColor = chipBackgroundColor,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         if (picker != null) {
@@ -1402,15 +1419,10 @@ private fun DetailActionButtons(
     isAudio: Boolean,
     isAlbum: Boolean,
     albumTracks: List<MediaItem>,
-    isDownloading: Boolean,
-    isDownloadingSeries: Boolean = false,
-    activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onPlayAlbumTrack: (Int) -> Unit,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
-    onDownloadClick: () -> Unit,
-    onDownloadSeriesClick: () -> Unit = {},
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
@@ -1467,22 +1479,6 @@ private fun DetailActionButtons(
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "favoriteButtonScale",
     )
-    val downloadInteractionSource = remember { MutableInteractionSource() }
-    val isDownloadPressed by downloadInteractionSource.collectIsPressedAsState()
-    val downloadScale by animateFloatAsState(
-        targetValue = if (isDownloadPressed) 0.9f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "downloadButtonScale",
-    )
-
-    val downloadStatus = activeDownload?.status
-    val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
-            downloadStatus == DownloadStatus.DOWNLOADING ||
-            downloadStatus == DownloadStatus.PAUSED
-    val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-    } else 0f
 
     val isTv = LocalTvMode.current
 
@@ -1556,7 +1552,9 @@ private fun DetailActionButtons(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            playButton()
+            FadingItem {
+                playButton()
+            }
             Row(
                 modifier = iconsModifier,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1564,115 +1562,55 @@ private fun DetailActionButtons(
                 val isTv = LocalTvMode.current
                 val markTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 val favoriteTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                val downloadTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(ShapeCache.smooth12)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .then(
-                            if (isTv) markTvFocusState.focusModifier else Modifier
-                        )
-                        .then(
-                            if (isTv) Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12) else Modifier
-                        )
-                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                        .clickable(interactionSource = markInteractionSource, indication = null) {
-                            if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
-                        }
-                ) {
-                    Icon(
-                        if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
-                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(ShapeCache.smooth12)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .then(
-                            if (isTv) favoriteTvFocusState.focusModifier else Modifier
-                        )
-                        .then(
-                            if (isTv) Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12) else Modifier
-                        )
-                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                        .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-                ) {
-                    Icon(
-                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
-                        contentDescription = "Favorite",
-                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                if (!isAudio && detail.mediaSources.isNotEmpty()) {
+                FadingItem(modifier = Modifier.weight(1f)) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                             .then(
-                                if (isTv) downloadTvFocusState.focusModifier else Modifier
+                                if (isTv) markTvFocusState.focusModifier else Modifier
                             )
                             .then(
-                                if (isTv) Modifier.tvFocusIndicator(downloadTvFocusState, ShapeCache.smooth12) else Modifier
+                                if (isTv) Modifier.tvFocusIndicator(markTvFocusState, ShapeCache.smooth12) else Modifier
                             )
-                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .clickable(
-                                interactionSource = downloadInteractionSource,
-                                indication = null,
-                                enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                            ) { onDownloadClick() }
-                    ) {
-                        if (isDownloading || isDownloadActive) {
-                            if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                LinearWavyProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp))
-                            } else {
-                                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                                LoadingIndicator(modifier = Modifier.size(22.dp))
+                            .graphicsLayer { scaleX = markScale; scaleY = markScale }
+                            .clickable(interactionSource = markInteractionSource, indication = null) {
+                                if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                             }
-                        } else if (isDownloadCompleted) {
-                            Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        } else {
-                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        }
+                    ) {
+                        Icon(
+                            if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                            contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
+                            tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
-                } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
+                }
+                FadingItem(modifier = Modifier.weight(1f)) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .height(48.dp)
                             .clip(ShapeCache.smooth12)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                             .then(
-                                if (isTv) downloadTvFocusState.focusModifier else Modifier
+                                if (isTv) favoriteTvFocusState.focusModifier else Modifier
                             )
                             .then(
-                                if (isTv) Modifier.tvFocusIndicator(downloadTvFocusState, ShapeCache.smooth12) else Modifier
+                                if (isTv) Modifier.tvFocusIndicator(favoriteTvFocusState, ShapeCache.smooth12) else Modifier
                             )
-                            .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                            .clickable(
-                                interactionSource = downloadInteractionSource,
-                                indication = null,
-                                enabled = !isDownloadingSeries,
-                            ) { onDownloadSeriesClick() }
+                            .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
+                            .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                     ) {
-                        if (isDownloadingSeries) {
-                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                            LoadingIndicator(modifier = Modifier.size(22.dp))
-                        } else {
-                            Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                        }
+                        Icon(
+                            if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                            contentDescription = "Favorite",
+                            tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             }
@@ -1686,162 +1624,102 @@ private fun DetailActionButtons(
         ) {
             // Horizontal: play button fixed width, icon buttons fixed size
             val playHFocusState = rememberTvFocusState(focusedScale = 1.05f)
-            Box(
-                modifier = Modifier
-                    .height(56.dp)
-                    .width(200.dp)
-                    .clip(ShapeCache.smooth16)
-                    .background(
-                        if (canPlayPrimary) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                    )
-                    .then(
-                        if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
-                    )
-                    .then(if (isTv) playHFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16) else Modifier)
-                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .clickable(
-                        interactionSource = playInteractionSource,
-                        indication = null,
-                        enabled = canPlayPrimary,
-                    ) {
-                        if (isAudio) {
-                            onAudioClick()
-                        } else if (target != null) {
-                            onPlayClick(target.episode.id, null, target.startPositionTicks)
-                        } else {
-                            val sourceId = detail.mediaSources.firstOrNull()?.id
-                            val startPos = item.playbackPositionTicks ?: 0L
-                            onPlayClick(item.id, sourceId, startPos)
-                        }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (progress > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(progress)
-                            .align(Alignment.CenterStart)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                    Spacer(Modifier.size(8.dp))
-                    Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+            FadingItem {
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .width(200.dp)
+                        .clip(ShapeCache.smooth16)
+                        .background(
+                            if (canPlayPrimary) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                        )
+                        .then(
+                            if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier
+                        )
+                        .then(if (isTv) playHFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(playHFocusState, ShapeCache.smooth16) else Modifier)
+                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                        .clickable(
+                            interactionSource = playInteractionSource,
+                            indication = null,
+                            enabled = canPlayPrimary,
+                        ) {
+                            if (isAudio) {
+                                onAudioClick()
+                            } else if (target != null) {
+                                onPlayClick(target.episode.id, null, target.startPositionTicks)
+                            } else {
+                                val sourceId = detail.mediaSources.firstOrNull()?.id
+                                val startPos = item.playbackPositionTicks ?: 0L
+                                onPlayClick(item.id, sourceId, startPos)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (progress > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress)
+                                .align(Alignment.CenterStart)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(Modifier.size(8.dp))
+                        Text(playLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+                    }
                 }
             }
 
             val markHFocusState = rememberTvFocusState(focusedScale = 1.08f)
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(ShapeCache.smooth16)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                    .graphicsLayer { scaleX = markScale; scaleY = markScale }
-                    .then(if (isTv) markHFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16) else Modifier)
-                    .clickable(interactionSource = markInteractionSource, indication = null) {
-                        if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
-                    }
-            ) {
-                Icon(
-                    if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
-                    contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
-                    tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(ShapeCache.smooth16)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                    .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
-                    .then(if (isTv) favoriteHFocusState.focusModifier else Modifier)
-                    .then(if (isTv) Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16) else Modifier)
-                    .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
-            ) {
-                Icon(
-                    if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
-                    contentDescription = "Favorite",
-                    tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            if (!isAudio && detail.mediaSources.isNotEmpty()) {
-                val dlStatus = activeDownload?.status
-                val dlActive = dlStatus == DownloadStatus.PENDING ||
-                        dlStatus == DownloadStatus.DOWNLOADING ||
-                        dlStatus == DownloadStatus.PAUSED
-                val dlCompleted = dlStatus == DownloadStatus.COMPLETED
-                val dlProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-                    activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
-                } else 0f
-
-                val downloadHFocusState = rememberTvFocusState(focusedScale = 1.08f)
-
+            FadingItem {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(ShapeCache.smooth16)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                        .then(if (isTv) downloadHFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(downloadHFocusState, ShapeCache.smooth16) else Modifier)
-                        .clickable(
-                            interactionSource = downloadInteractionSource,
-                            indication = null,
-                            enabled = !isDownloading && !dlActive && !dlCompleted,
-                        ) { onDownloadClick() }
-                ) {
-                    if (isDownloading || dlActive) {
-                        if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
-                            LinearWavyProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp))
-                        } else {
-                            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                            LoadingIndicator(modifier = Modifier.size(24.dp))
+                        .graphicsLayer { scaleX = markScale; scaleY = markScale }
+                        .then(if (isTv) markHFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(markHFocusState, ShapeCache.smooth16) else Modifier)
+                        .clickable(interactionSource = markInteractionSource, indication = null) {
+                            if (item.isPlayed) onMarkUnplayed() else onMarkPlayed()
                         }
-                    } else if (dlCompleted) {
-                        Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                    }
+                ) {
+                    Icon(
+                        if (item.isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                        contentDescription = if (item.isPlayed) "Mark as Unwatched" else "Mark as Watched",
+                        tint = if (item.isPlayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
-            } else if (!isAudio && isSeries && seasons.isNotEmpty()) {
-                val downloadHFocusState = rememberTvFocusState(focusedScale = 1.08f)
+            }
 
+            FadingItem {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(ShapeCache.smooth16)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        .graphicsLayer { scaleX = downloadScale; scaleY = downloadScale }
-                        .then(if (isTv) downloadHFocusState.focusModifier else Modifier)
-                        .then(if (isTv) Modifier.tvFocusIndicator(downloadHFocusState, ShapeCache.smooth16) else Modifier)
-                        .clickable(
-                            interactionSource = downloadInteractionSource,
-                            indication = null,
-                            enabled = !isDownloadingSeries,
-                        ) { onDownloadSeriesClick() }
+                        .graphicsLayer { scaleX = favoriteScale; scaleY = favoriteScale }
+                        .then(if (isTv) favoriteHFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(favoriteHFocusState, ShapeCache.smooth16) else Modifier)
+                        .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
-                    if (isDownloadingSeries) {
-                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                        LoadingIndicator(modifier = Modifier.size(24.dp))
-                    } else {
-                        Icon(Tabler.Outline.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                    }
+                    Icon(
+                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                        contentDescription = "Favorite",
+                        tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
-        }
+
+            }
     }
 }
 
@@ -1860,15 +1738,10 @@ private fun DetailContentBody(
     isAlbum: Boolean,
     albumTracks: List<MediaItem>,
     collectionItems: List<MediaItem> = emptyList(),
-    isDownloading: Boolean,
-    isDownloadingSeries: Boolean = false,
-    activeDownload: com.raulshma.jellyplay.core.model.DownloadItem?,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     onAudioClick: () -> Unit,
     onPlayAlbumTrack: (Int) -> Unit = {},
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
-    onDownloadClick: () -> Unit,
-    onDownloadSeriesClick: () -> Unit = {},
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
@@ -1915,38 +1788,40 @@ private fun DetailContentBody(
             ) {
                 if (item.mediaType == MediaType.EPISODE && item.seriesId != null) {
                     val seriesNavFocusState = rememberTvFocusState(focusedScale = 1.02f)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                            .clip(ShapeCache.smooth8)
-                            .then(seriesNavFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
-                            .clickable { onNavigateToSeries(item.seriesId!!) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = item.seriesName ?: "Series",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.seasonName?.let { season ->
+                    FadingItem {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .clip(ShapeCache.smooth8)
+                                .then(seriesNavFocusState.focusModifier)
+                                .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
+                                .clickable { onNavigateToSeries(item.seriesId!!) }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
-                                text = " › ",
+                                text = item.seriesName ?: "Series",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            )
-                            Text(
-                                text = season,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            item.seasonName?.let { season ->
+                                Text(
+                                    text = " › ",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                                Text(
+                                    text = season,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -1966,85 +1841,97 @@ private fun DetailContentBody(
                         }
                     }
                     if (episodeContext.isNotBlank()) {
-                        Text(
-                            text = episodeContext,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(6.dp))
+                        FadingItem {
+                            Column {
+                                Text(
+                                    text = episodeContext,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                            }
+                        }
                     }
                 }
 
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                FadingItem {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 item.originalTitle
                     ?.takeIf { it.isNotBlank() && !it.equals(item.name, ignoreCase = true) }
                     ?.let { originalTitle ->
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = originalTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        FadingItem {
+                            Column {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = originalTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
 
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    item.year?.let {
-                        Text(
-                            text = it.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        )
-                    }
-                    item.runTimeTicks?.let { ticks ->
-                        val minutes = ticks / 600_000_000
-                        Text(
-                            text = "${minutes}m",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        )
-                    }
-                    item.officialRating?.let {
-                        Box(
-                            modifier = Modifier
-                                .clip(ShapeCache.smooth4)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
+                FadingItem {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item.year?.let {
                             Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                    item.communityRating?.let { rating ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Tabler.Outline.Heart,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = String.format("%.1f", rating),
+                                text = it.toString(),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
+                        }
+                        item.runTimeTicks?.let { ticks ->
+                            val minutes = ticks / 600_000_000
+                            Text(
+                                text = "${minutes}m",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                        }
+                        item.officialRating?.let {
+                            Box(
+                                modifier = Modifier
+                                    .clip(ShapeCache.smooth4)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                        item.communityRating?.let { rating ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Tabler.Outline.Heart,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = String.format("%.1f", rating),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                )
+                            }
                         }
                     }
                 }
@@ -2058,17 +1945,19 @@ private fun DetailContentBody(
                             .tvFocusExitHandler(),
                     ) {
                         items(genres, key = { it }, contentType = { "genre" }) { genre ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(ShapeCache.smooth16)
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
-                                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                            ) {
-                                Text(
-                                    text = genre,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
-                                )
+                            FadingItem {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(ShapeCache.smooth16)
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
+                                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        text = genre,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                                    )
+                                }
                             }
                         }
                     }
@@ -2087,15 +1976,10 @@ private fun DetailContentBody(
                 isAudio = isAudio,
                 isAlbum = isAlbum,
                 albumTracks = albumTracks,
-                isDownloading = isDownloading,
-                isDownloadingSeries = isDownloadingSeries,
-                activeDownload = activeDownload,
                 onPlayClick = onPlayClick,
                 onAudioClick = onAudioClick,
                 onPlayAlbumTrack = onPlayAlbumTrack,
                 onNavigate = onNavigate,
-                onDownloadClick = onDownloadClick,
-                onDownloadSeriesClick = onDownloadSeriesClick,
                 onToggleFavorite = onToggleFavorite,
                 onMarkPlayed = onMarkPlayed,
                 onMarkUnplayed = onMarkUnplayed,
@@ -2121,39 +2005,45 @@ private fun DetailContentBody(
 
         StaggeredDetailSection(visible = showContent, delayIndex = 4) {
             item.overview?.let { overview ->
-                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                    Text(
-                        text = overview,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
-                    )
+                FadingItem {
+                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                        Text(
+                            text = overview,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
+                        )
+                    }
                 }
             }
         }
 
         StaggeredDetailSection(visible = showContent && isAudio && albumTracks.isNotEmpty(), delayIndex = 5) {
             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                Text(
-                    text = "Tracks",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                FadingItem {
+                    Text(
+                        text = "Tracks",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     albumTracks.forEachIndexed { index, track ->
-                        AlbumTrackItem(
-                            track = track,
-                            index = index + 1,
-                            imageUrl = getImageUrl(track.id),
-                            onClick = { onItemClick(track.id) },
-                            onPlayClick = {
-                                onPlayAlbumTrack(index)
-                                onItemClick(track.id)
-                            },
-                        )
+                        FadingItem {
+                            AlbumTrackItem(
+                                track = track,
+                                index = index + 1,
+                                imageUrl = getImageUrl(track.id),
+                                onClick = { onItemClick(track.id) },
+                                onPlayClick = {
+                                    onPlayAlbumTrack(index)
+                                    onItemClick(track.id)
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -2189,28 +2079,32 @@ private fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 7) {
             if (item.mediaType == MediaType.COLLECTION && collectionItems.isNotEmpty()) {
                 Column {
-                    Text(
-                        text = "Items",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    FadingItem {
+                        Text(
+                            text = "Items",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(collectionItems, key = { "collection_${it.id}" }, contentType = { "mediaItem" }) { collectionItem ->
-                            PosterCard(
-                                item = collectionItem,
-                                imageUrl = getImageUrl(collectionItem.id),
-                                onClick = { onItemClick(collectionItem.id) },
-                                showProgress = collectionItem.playbackPositionTicks != null && collectionItem.playbackPositionTicks!! > 0,
-                                progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
-                                    (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
-                                } else 0f,
-                                modifier = Modifier.width(160.dp),
-                            )
+                            FadingItem {
+                                PosterCard(
+                                    item = collectionItem,
+                                    imageUrl = getImageUrl(collectionItem.id),
+                                    onClick = { onItemClick(collectionItem.id) },
+                                    showProgress = collectionItem.playbackPositionTicks != null && collectionItem.playbackPositionTicks!! > 0,
+                                    progressPercent = if (collectionItem.runTimeTicks != null && collectionItem.runTimeTicks!! > 0) {
+                                        (collectionItem.playbackPositionTicks?.toFloat() ?: 0f) / collectionItem.runTimeTicks!!.toFloat()
+                                    } else 0f,
+                                    modifier = Modifier.width(160.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -2220,12 +2114,14 @@ private fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 7) {
             if (detail.people.isNotEmpty()) {
                 Column {
-                    Text(
-                        text = "Cast & Crew",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    FadingItem {
+                        Text(
+                            text = "Cast & Crew",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                         LazyRow(
@@ -2236,11 +2132,13 @@ private fun DetailContentBody(
                                 .tvFocusExitHandler(),
                         ) {
                             items(detail.people, key = { "person_${it.id}" }, contentType = { "person" }) { person ->
-                                PersonItem(
-                                    person = person,
-                                    imageUrl = getImageUrl(person.id),
-                                    onClick = { onPersonClick(person.id) },
-                                )
+                                FadingItem {
+                                    PersonItem(
+                                        person = person,
+                                        imageUrl = getImageUrl(person.id),
+                                        onClick = { onPersonClick(person.id) },
+                                    )
+                                }
                 }
             }
 
@@ -2252,12 +2150,14 @@ private fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 8) {
             if (detail.relatedItems.isNotEmpty()) {
                 Column {
-                    Text(
-                        text = "More Like This",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    FadingItem {
+                        Text(
+                            text = "More Like This",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 24.dp),
@@ -2268,14 +2168,16 @@ private fun DetailContentBody(
                     ) {
                         items(detail.relatedItems, key = { "related_${it.id}" }, contentType = { "mediaItem" }) { related ->
                             val adaptiveInfo = LocalAdaptiveInfo.current
-                            PosterCard(
-                                item = related,
-                                imageUrl = getImageUrl(related.id),
-                                onClick = { onItemClick(related.id) },
-                                modifier = Modifier.width(
-                                    if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
-                                ),
-                            )
+                            FadingItem {
+                                PosterCard(
+                                    item = related,
+                                    imageUrl = getImageUrl(related.id),
+                                    onClick = { onItemClick(related.id) },
+                                    modifier = Modifier.width(
+                                        if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -2335,12 +2237,14 @@ private fun SeerrItemsRow(
     val cardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
 
     Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(horizontal = 24.dp),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        FadingItem {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.padding(horizontal = 24.dp),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         Spacer(Modifier.height(16.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
@@ -2355,24 +2259,26 @@ private fun SeerrItemsRow(
                 contentType = { contentType },
             ) { index ->
                 val seerrItem = items[index]
-                SeerrMediaCard(
-                    item = seerrItem,
-                    imageUrl = seerrItem.posterUrl,
-                    isLoading = loadingState?.isLoading(seerrItem.id) == true,
-                    onClick = {
-                        if (loadingState != null && prefetch != null) {
-                            loadingState.startLoading(seerrItem.id)
-                            prefetch(seerrItem.id, seerrItem.mediaType) {
-                                loadingState.stopLoading(seerrItem.id)
+                FadingItem {
+                    SeerrMediaCard(
+                        item = seerrItem,
+                        imageUrl = seerrItem.posterUrl,
+                        isLoading = loadingState?.isLoading(seerrItem.id) == true,
+                        onClick = {
+                            if (loadingState != null && prefetch != null) {
+                                loadingState.startLoading(seerrItem.id)
+                                prefetch(seerrItem.id, seerrItem.mediaType) {
+                                    loadingState.stopLoading(seerrItem.id)
+                                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                }
+                            } else {
                                 onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
                             }
-                        } else {
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                        }
-                    },
-                    onRequestClick = { onSeerrRequest(seerrItem) },
-                    modifier = Modifier.width(cardWidth),
-                )
+                        },
+                        onRequestClick = { onSeerrRequest(seerrItem) },
+                        modifier = Modifier.width(cardWidth),
+                    )
+                }
             }
         }
     }
@@ -2413,12 +2319,14 @@ private fun SeasonsSection(
     }
 
     Column {
-        Text(
-            text = "Seasons",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(horizontal = 24.dp),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        FadingItem {
+            Text(
+                text = "Seasons",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.padding(horizontal = 24.dp),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -2444,21 +2352,23 @@ private fun SeasonsSection(
                     label = "seasonContentColor",
                 )
                 val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                Surface(
-                    modifier = Modifier
-                        .clip(ShapeCache.smooth16)
-                        .then(seasonTabFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
-                        .clickable { selectedSeasonIndex = index },
-                    color = surfaceColor,
-                    contentColor = contentColor,
-                ) {
-                    Text(
-                        text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
+                FadingItem {
+                    Surface(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth16)
+                            .then(seasonTabFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
+                            .clickable { selectedSeasonIndex = index },
+                        color = surfaceColor,
+                        contentColor = contentColor,
+                    ) {
+                        Text(
+                            text = season.name ?: "Season ${season.indexNumber ?: index + 1}",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
@@ -2496,7 +2406,9 @@ private fun SeasonsSection(
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        androidx.compose.material3.ContainedLoadingIndicator()
+                        FadingItem {
+                            JellyPlayLoadingIndicator()
+                        }
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
@@ -2508,13 +2420,15 @@ private fun SeasonsSection(
                             .tvFocusExitHandler(),
                     ) {
                         items(currentEpisodes, key = { "episode_${it.id}" }, contentType = { "episode" }) { episode ->
-                            EpisodeCard(
-                                episode = episode,
-                                getImageUrl = getImageUrl,
-                                isCurrentEpisode = episode.id == currentItemId,
-                                onPlayClick = { onEpisodePlayClick(episode) },
-                                onDetailClick = { onEpisodeDetailClick(episode) },
-                            )
+                            FadingItem {
+                                EpisodeCard(
+                                    episode = episode,
+                                    getImageUrl = getImageUrl,
+                                    isCurrentEpisode = episode.id == currentItemId,
+                                    onPlayClick = { onEpisodePlayClick(episode) },
+                                    onDetailClick = { onEpisodeDetailClick(episode) },
+                                )
+                            }
                         }
                     }
                 }
@@ -2525,7 +2439,9 @@ private fun SeasonsSection(
                             .padding(vertical = 24.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No episodes available", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        FadingItem {
+                            Text("No episodes available", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
                     }
                 }
             }
@@ -2536,7 +2452,7 @@ private fun SeasonsSection(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EpisodeCardSkeleton() {
-    androidx.compose.material3.ContainedLoadingIndicator()
+    JellyPlayLoadingIndicator()
 }
 
 @Composable
@@ -2861,13 +2777,31 @@ private fun AlbumTrackItem(
 }
 
 @Composable
-fun SkeletonDetailBody() {
-    Column(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(40.dp).fillMaxWidth(0.6f).clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(20.dp).fillMaxWidth(0.4f).clip(ShapeCache.smooth4).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
-        Spacer(modifier = Modifier.height(24.dp))
-        Box(modifier = Modifier.height(100.dp).fillMaxWidth().clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)))
+private fun FadingItem(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(1200),
+        label = "itemAlpha"
+    )
+    val blurRadius by animateFloatAsState(
+        targetValue = if (visible) 0f else 16f,
+        animationSpec = tween(1200),
+        label = "itemBlur"
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer { this.alpha = alpha }
+            .blur(blurRadius.dp)
+    ) {
+        content()
     }
 }
+
+

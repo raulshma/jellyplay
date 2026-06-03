@@ -47,7 +47,7 @@ class AssSubtitleParser : SubtitleParser {
         var inEvents = false
         var formatFields: List<String>? = null
 
-        for (line in text.lines()) {
+        for (line in text.lineSequence()) {
             val trimmed = line.trim()
             if (trimmed.startsWith("[Events]")) {
                 inEvents = true

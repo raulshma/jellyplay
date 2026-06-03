@@ -25,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -99,7 +100,7 @@ class CastManager @Inject constructor(
 
     private val castPlayerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            updateCastState()
+            coroutineScope.launch { updateCastState() }
             toggleTicker()
         }
 
@@ -113,21 +114,30 @@ class CastManager @Inject constructor(
             newPosition: Player.PositionInfo,
             reason: Int,
         ) {
-            updateCastState()
+            coroutineScope.launch { updateCastState() }
         }
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-            updateCastState()
+            coroutineScope.launch { updateCastState() }
         }
     }
 
-    private fun updateCastState() {
+    private suspend fun updateCastState() {
         val player = castPlayer ?: return
-        _castPositionMs.value = player.currentPosition.coerceAtLeast(0)
-        _castDurationMs.value = player.duration.coerceAtLeast(0)
-        _castBufferedPositionMs.value = player.bufferedPosition.coerceAtLeast(0)
-        _castIsPlaying.value = player.isPlaying
-        _castVolume.value = player.volume
+        val snapshot = withContext(Dispatchers.Default) {
+            CastPlayerSnapshot(
+                position = player.currentPosition.coerceAtLeast(0),
+                duration = player.duration.coerceAtLeast(0),
+                buffered = player.bufferedPosition.coerceAtLeast(0),
+                isPlaying = player.isPlaying,
+                volume = player.volume,
+            )
+        }
+        _castPositionMs.value = snapshot.position
+        _castDurationMs.value = snapshot.duration
+        _castBufferedPositionMs.value = snapshot.buffered
+        _castIsPlaying.value = snapshot.isPlaying
+        _castVolume.value = snapshot.volume
     }
 
     private fun toggleTicker() {
@@ -310,7 +320,7 @@ class CastManager @Inject constructor(
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.play()
-        updateCastState()
+        coroutineScope.launch { updateCastState() }
         toggleTicker()
     }
 
@@ -354,3 +364,11 @@ class CastManager @Inject constructor(
         _castBufferedPositionMs.value = 0L
     }
 }
+
+private data class CastPlayerSnapshot(
+    val position: Long,
+    val duration: Long,
+    val buffered: Long,
+    val isPlaying: Boolean,
+    val volume: Float,
+)

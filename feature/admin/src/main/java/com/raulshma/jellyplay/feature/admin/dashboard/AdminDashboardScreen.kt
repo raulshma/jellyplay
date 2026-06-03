@@ -56,6 +56,9 @@ fun AdminDashboardScreen(
     onScheduledTasks: () -> Unit,
     onDevices: () -> Unit,
     onLogs: () -> Unit,
+    onUserStatistics: () -> Unit = {},
+    onStaleMedia: () -> Unit = {},
+    onWatchedMediaCleanup: () -> Unit = {},
     viewModel: AdminDashboardViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
@@ -142,6 +145,9 @@ fun AdminDashboardScreen(
                     onScheduledTasks = onScheduledTasks,
                     onDevices = onDevices,
                     onLogs = onLogs,
+                    onUserStatistics = onUserStatistics,
+                    onStaleMedia = onStaleMedia,
+                    onWatchedMediaCleanup = onWatchedMediaCleanup,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -160,6 +166,9 @@ private fun DashboardContent(
     onScheduledTasks: () -> Unit,
     onDevices: () -> Unit,
     onLogs: () -> Unit,
+    onUserStatistics: () -> Unit = {},
+    onStaleMedia: () -> Unit = {},
+    onWatchedMediaCleanup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var staggerIndex = 0
@@ -255,6 +264,9 @@ private fun DashboardContent(
                 onScheduledTasks = onScheduledTasks,
                 onDevices = onDevices,
                 onLogs = onLogs,
+                onUserStatistics = onUserStatistics,
+                onStaleMedia = onStaleMedia,
+                onWatchedMediaCleanup = onWatchedMediaCleanup,
             )
         }
     }

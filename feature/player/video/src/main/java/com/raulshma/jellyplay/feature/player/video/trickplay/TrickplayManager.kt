@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -79,28 +80,30 @@ class TrickplayManager(
 
         thumbnailCache.get(thumbnailIndex)?.let { return it }
 
-        val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
-        val sheetIndex = thumbnailIndex / thumbnailsPerSheet
-        val tileIndex = thumbnailIndex % thumbnailsPerSheet
-        val tileCol = tileIndex % currentInfo.tileWidth
-        val tileRow = tileIndex / currentInfo.tileWidth
+        return withContext(Dispatchers.Default) {
+            val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
+            val sheetIndex = thumbnailIndex / thumbnailsPerSheet
+            val tileIndex = thumbnailIndex % thumbnailsPerSheet
+            val tileCol = tileIndex % currentInfo.tileWidth
+            val tileRow = tileIndex / currentInfo.tileWidth
 
-        val sheet = spriteSheetCache.get(sheetIndex)
-            ?: loadSpriteSheet(id, sheetIndex, currentInfo)
-            ?: return null
+            val sheet = spriteSheetCache.get(sheetIndex)
+                ?: loadSpriteSheet(id, sheetIndex, currentInfo)
+                ?: return@withContext null
 
-        val offsetX = tileCol * currentInfo.width
-        val offsetY = tileRow * currentInfo.height
+            val offsetX = tileCol * currentInfo.width
+            val offsetY = tileRow * currentInfo.height
 
-        try {
-            val thumbnail = Bitmap.createBitmap(
-                sheet, offsetX, offsetY, currentInfo.width, currentInfo.height,
-            )
-            thumbnailCache.put(thumbnailIndex, thumbnail)
-            preloadNeighbors(id, thumbnailIndex, currentInfo)
-            return thumbnail
-        } catch (_: Exception) {
-            return null
+            try {
+                val thumbnail = Bitmap.createBitmap(
+                    sheet, offsetX, offsetY, currentInfo.width, currentInfo.height,
+                )
+                thumbnailCache.put(thumbnailIndex, thumbnail)
+                preloadNeighbors(id, thumbnailIndex, currentInfo)
+                thumbnail
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -112,35 +115,36 @@ class TrickplayManager(
         val mutex = sheetMutexes.getOrPut(sheetIndex) { Mutex() }
         return mutex.withLock {
             spriteSheetCache.get(sheetIndex)?.let { return@withLock it }
-
-            val localDir = localCacheDir
-            val localFile = if (localDir != null) File(localDir, "trickplay_${sheetIndex}.jpg") else null
-            val persistDirectory = persistDir
-            val data = if (localFile != null && localFile.exists()) {
-                localFile.readBytes()
-            } else {
-                val fetched = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
-                    ?: return@withLock null
-                if (persistDirectory != null) {
-                    scope.launch {
-                        try {
-                            persistDirectory.mkdirs()
-                            File(persistDirectory, "trickplay_${sheetIndex}.jpg").writeBytes(fetched)
-                        } catch (_: Exception) { }
+            withContext(Dispatchers.IO) {
+                val localDir = localCacheDir
+                val localFile = if (localDir != null) File(localDir, "trickplay_${sheetIndex}.jpg") else null
+                val persistDirectory = persistDir
+                val data = if (localFile != null && localFile.exists()) {
+                    localFile.readBytes()
+                } else {
+                    val fetched = playbackRepository.getTrickplayTileImage(id, trickplayInfo.width, sheetIndex)
+                        ?: return@withContext null
+                    if (persistDirectory != null) {
+                        scope.launch {
+                            try {
+                                persistDirectory.mkdirs()
+                                File(persistDirectory, "trickplay_${sheetIndex}.jpg").writeBytes(fetched)
+                            } catch (_: Exception) { }
+                        }
                     }
+                    fetched
                 }
-                fetched
-            }
 
-            val options = BitmapFactory.Options().apply {
-                inPreferredConfig = Bitmap.Config.RGB_565
-                inMutable = false
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                    inMutable = false
+                }
+                BitmapFactory.decodeByteArray(data, 0, data.size, options)
+            }.also { bitmap ->
+                if (bitmap != null) {
+                    spriteSheetCache.put(sheetIndex, bitmap)
+                }
             }
-            val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
-            if (bitmap != null) {
-                spriteSheetCache.put(sheetIndex, bitmap)
-            }
-            bitmap
         }
     }
 
@@ -172,12 +176,14 @@ class TrickplayManager(
                 val offsetX = tileCol * trickplayInfo.width
                 val offsetY = tileRow * trickplayInfo.height
 
-                try {
-                    val thumbnail = Bitmap.createBitmap(
-                        sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height,
-                    )
-                    thumbnailCache.put(i, thumbnail)
-                } catch (_: Exception) { }
+                withContext(Dispatchers.Default) {
+                    try {
+                        val thumbnail = Bitmap.createBitmap(
+                            sheet, offsetX, offsetY, trickplayInfo.width, trickplayInfo.height,
+                        )
+                        thumbnailCache.put(i, thumbnail)
+                    } catch (_: Exception) { }
+                }
             }
         }
     }
@@ -200,6 +206,6 @@ class TrickplayManager(
     companion object {
         private const val MAX_THUMBNAIL_CACHE_BYTES = 16 * 1024 * 1024L
         private const val MAX_SPRITE_SHEET_CACHE_BYTES = 64 * 1024 * 1024L
-        private const val PRELOAD_NEIGHBOR_COUNT = 3
+        private const val PRELOAD_NEIGHBOR_COUNT = 1
     }
 }
