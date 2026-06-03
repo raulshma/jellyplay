@@ -479,6 +479,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
     }
 
+    fun setVideoShowPlaybackMetadata(enabled: Boolean) {
+        viewModelScope.launch { preferencesStore.setVideoShowPlaybackMetadata(enabled) }
+    }
+
     fun setGaplessEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setGaplessEnabled(enabled) }
     }
