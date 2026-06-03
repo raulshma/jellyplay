@@ -494,11 +494,12 @@ fun SettingsScreen(
                         add("aspect" to 6)
                         add("autoplay" to 7)
                         add("browser" to 8)
-                        add("swipe" to 9)
-                        add("brightness" to 10)
-                        add("trickplay" to 11)
-                        add("trickplayGesture" to 12)
-                        add("preload" to 13)
+                        add("metadata" to 9)
+                        add("swipe" to 10)
+                        add("brightness" to 11)
+                        add("trickplay" to 12)
+                        add("trickplayGesture" to 13)
+                        add("preload" to 14)
                     }
                     val total = videoItems.size
 
@@ -574,12 +575,20 @@ fun SettingsScreen(
                         index = 8, count = total,
                         onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                     )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        title = "Playback Metadata",
+                        subtitle = if (preferences.videoShowPlaybackMetadata) "Show play method, codecs, HDR and Atmos info above seekbar" else "Metadata display hidden",
+                        checked = preferences.videoShowPlaybackMetadata,
+                        index = 9, count = total,
+                        onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.HandFinger,
                         title = "Swipe Seek Range",
                         subtitle = "Maximum seek distance",
                         trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        index = 9, count = total,
+                        index = 10, count = total,
                         onClick = { showSwipeSeekPicker = true },
                     )
                     SettingToggleItem(
@@ -587,7 +596,7 @@ fun SettingsScreen(
                         title = "Remember Brightness",
                         subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                         checked = preferences.videoRememberBrightness,
-                        index = 10, count = total,
+                        index = 11, count = total,
                         onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
                     )
                     SettingToggleItem(
@@ -595,7 +604,7 @@ fun SettingsScreen(
                         title = "Trickplay Preview",
                         subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
                         checked = preferences.trickplayEnabled,
-                        index = 11, count = total,
+                        index = 12, count = total,
                         onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                     )
                     SettingToggleItem(
@@ -603,7 +612,7 @@ fun SettingsScreen(
                         title = "Trickplay on Gestures",
                         subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
                         checked = preferences.trickplayOnSeekGesture,
-                        index = 12, count = total,
+                        index = 13, count = total,
                         onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                     )
                     SettingListItem(
@@ -611,7 +620,7 @@ fun SettingsScreen(
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during playback",
                         trailingText = preferences.videoPreloadBufferSize.displayName,
-                        index = 13, count = total,
+                        index = 14, count = total,
                         onClick = { showPreloadBufferPicker = true },
                     )
                 }

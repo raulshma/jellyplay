@@ -158,6 +158,9 @@ class VideoPlayerViewModel @Inject constructor(
                 if (_uiState.value.sleepTimerLastUsedDurationMs != prefs.sleepTimerDurationMs) {
                     _uiState.update { it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs) }
                 }
+                if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
+                    _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
+                }
             }
         }
         viewModelScope.launch {
@@ -368,6 +371,7 @@ class VideoPlayerViewModel @Inject constructor(
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
                 segmentBehaviors = prefs.segmentBehaviors,
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
+                showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
             ) }
             autoplayNext = prefs.videoAutoplayNext
 

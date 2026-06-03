@@ -842,6 +842,12 @@ fun VideoPlayerScreen(
             audioPassthrough = uiState.audioPassthrough,
             isOcrRunning = uiState.isOcrRunning,
             segments = uiState.segments,
+            playMethod = uiState.playMethod,
+            hdrType = uiState.hdrType,
+            mediaStreams = uiState.mediaStreams,
+            videoStats = uiState.videoStats,
+            audioTracks = uiState.audioTracks,
+            showPlaybackMetadata = uiState.showPlaybackMetadata,
 
             currentAspectRatio = aspectRatio,
             detectedAspectRatio = detectedAspectRatio,

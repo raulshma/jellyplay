@@ -88,6 +88,12 @@ import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.TrackOption
+import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 
 @Composable
 internal fun PlayerControls(
@@ -175,6 +181,12 @@ internal fun PlayerControls(
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
     castManager: CastManager? = null,
+    playMethod: String = "Direct Play",
+    hdrType: String? = null,
+    mediaStreams: List<MediaStream> = emptyList(),
+    videoStats: EngineVideoStats = EngineVideoStats(),
+    audioTracks: List<TrackOption> = emptyList(),
+    showPlaybackMetadata: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -344,6 +356,17 @@ internal fun PlayerControls(
                     .navigationBarsPadding()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
+                if (showPlaybackMetadata) {
+                    PlaybackMetadataRow(
+                        playMethod = playMethod,
+                        hdrType = hdrType,
+                        mediaStreams = mediaStreams,
+                        videoStats = videoStats,
+                        audioTracks = audioTracks,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+
                 TvControllableSeekBar(
                     currentPosition = currentPosition,
                     duration = duration,
@@ -1198,3 +1221,154 @@ private fun OverflowMenuItem(
         },
     )
 }
+
+@Composable
+private fun PlaybackMetadataRow(
+    playMethod: String,
+    hdrType: String?,
+    mediaStreams: List<MediaStream>,
+    videoStats: EngineVideoStats,
+    audioTracks: List<TrackOption>,
+    modifier: Modifier = Modifier,
+) {
+    val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
+    val videoCodec = (videoStream?.codec ?: videoStats.videoCodec)?.uppercase()
+
+    val isDolbyVision = hdrType?.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi") || 
+                        (videoStream?.videoDoViTitle?.isNotBlank() == true) || 
+                        (videoStream?.videoRangeType?.lowercase()?.contains("dovi") == true) || 
+                        (videoStream?.videoRange?.lowercase()?.contains("dovi") == true) ||
+                        (videoStats.videoHdrType?.lowercase()?.contains("dolby") == true) ||
+                        (videoStats.videoHdrType?.lowercase()?.contains("dovi") == true)
+
+    val hdrLabel = when {
+        isDolbyVision -> "Dolby Vision"
+        hdrType != null -> when (hdrType.lowercase()) {
+            "hdr10" -> "HDR10"
+            "hdr10plus", "hdr10_plus" -> "HDR10+"
+            "hlg" -> "HLG"
+            "hdr" -> "HDR"
+            else -> hdrType.uppercase()
+        }
+        videoStats.videoHdrType != null -> videoStats.videoHdrType
+        else -> null
+    }
+
+    val activeAudioTrack = audioTracks.find { it.isSelected }
+    val audioCodecFromStats = videoStats.audioCodec
+    val audioStream = mediaStreams.firstOrNull { it.type == StreamType.AUDIO }
+    val rawAudioCodec = (audioCodecFromStats ?: audioStream?.codec)?.uppercase()
+
+    val matchText = ((activeAudioTrack?.label ?: "") + " " + (audioStream?.title ?: "") + " " + (audioStream?.displayTitle ?: "") + " " + (audioCodecFromStats ?: "")).lowercase()
+    val isAtmos = matchText.contains("atmos")
+    val isDtsX = matchText.contains("dts:x") || matchText.contains("dtsx")
+
+    val audioLabel = buildString {
+        if (rawAudioCodec != null) {
+            append(rawAudioCodec)
+            if (isAtmos && !rawAudioCodec.contains("ATMOS")) append(" Atmos")
+            else if (isDtsX && !rawAudioCodec.contains("X")) append(" DTS:X")
+        } else if (isAtmos) {
+            append("Dolby Atmos")
+        } else if (isDtsX) {
+            append("DTS:X")
+        }
+    }
+
+    val channels = videoStats.audioChannels ?: audioStream?.channels
+    val channelsLabel = channels?.let { ch ->
+        when (ch) {
+            1 -> "Mono"
+            2 -> "Stereo"
+            6 -> "5.1"
+            8 -> "7.1"
+            else -> "${ch}ch"
+        }
+    }
+
+    val directPlayGreen = Color(0xFF81C784)
+    val transcodeOrange = Color(0xFFFFB74D)
+    val hdrGold = Color(0xFFFFB74D)
+    val dolbyVisionGold = HdrColors.dolbyVisionGold
+
+    val playMethodColor = when {
+        playMethod.equals("Direct Play", ignoreCase = true) -> directPlayGreen
+        playMethod.lowercase().contains("transcod") -> transcodeOrange
+        else -> Color.White
+    }
+
+    val hdrColor = if (isDolbyVision) dolbyVisionGold else hdrGold
+    val audioColor = if (isAtmos || isDtsX) dolbyVisionGold else Color.White
+
+    val items = remember(playMethod, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor) {
+        listOfNotNull(
+            MetadataItem(playMethod, playMethodColor),
+            videoCodec?.let { MetadataItem(it, Color.White) },
+            hdrLabel?.let { MetadataItem(it, hdrColor) },
+            if (audioLabel.isNotBlank()) MetadataItem(audioLabel, audioColor) else null,
+            channelsLabel?.let { MetadataItem(it, Color.White.copy(alpha = 0.9f)) }
+        )
+    }
+
+    if (items.isEmpty()) return
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { index, item ->
+            if (index > 0) {
+                OutlinedText(
+                    text = "•",
+                    textColor = Color.White.copy(alpha = 0.4f)
+                )
+            }
+            OutlinedText(
+                text = item.text,
+                textColor = item.color
+            )
+        }
+    }
+}
+
+@Composable
+private fun OutlinedText(
+    text: String,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelSmall.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.6.sp
+    ),
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        val outlineColor = Color.Black.copy(alpha = 0.8f)
+        val offsets = listOf(
+            -0.8.dp to -0.8.dp,
+            0.8.dp to -0.8.dp,
+            -0.8.dp to 0.8.dp,
+            0.8.dp to 0.8.dp
+        )
+        offsets.forEach { (dx, dy) ->
+            Text(
+                text = text,
+                color = outlineColor,
+                style = style.copy(color = outlineColor),
+                modifier = Modifier.offset(dx, dy)
+            )
+        }
+        Text(
+            text = text,
+            color = textColor,
+            style = style.copy(color = textColor)
+        )
+    }
+}
+
+private data class MetadataItem(
+    val text: String,
+    val color: Color
+)

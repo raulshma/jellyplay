@@ -114,6 +114,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
+        val VIDEO_SHOW_PLAYBACK_METADATA = stringPreferencesKey("video_show_playback_metadata")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
@@ -302,6 +303,7 @@ class UserPreferencesStore @Inject constructor(
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
             segmentBehaviors = readSegmentBehaviors(prefs),
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
+            videoShowPlaybackMetadata = prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA]?.toBoolean() ?: true,
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
@@ -650,6 +652,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
+    }
+
+    suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled.toString() }
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
