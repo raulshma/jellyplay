@@ -28,13 +28,15 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-@Singleton
+    @Singleton
 class DownloadRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadDao: DownloadDao,
@@ -43,6 +45,10 @@ class DownloadRepositoryImpl @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
 ) : DownloadRepository {
+
+    // Caps the number of episodes processed concurrently when queueing a series
+    // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
+    private val downloadPermits = Semaphore(permits = 4)
 
     override fun getAllDownloads(): Flow<List<DownloadItem>> =
         downloadDao.getAllDownloads().map { entities ->
@@ -247,6 +253,7 @@ class DownloadRepositoryImpl @Inject constructor(
                 val episodeResults = coroutineScope {
                     episodes.map { episode ->
                         async {
+                            downloadPermits.withPermit {
                             try {
                                 val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
                                 val source = episodeDetail?.mediaSources?.firstOrNull()
@@ -293,6 +300,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                 }
                             } catch (_: Exception) {
                                 null
+                            }
                             }
                         }
                     }.awaitAll()
@@ -374,18 +382,16 @@ class DownloadRepositoryImpl @Inject constructor(
         )
     }
 
-    private suspend fun preloadImageToCache(url: String?) {
+    private fun preloadImageToCache(url: String?) {
         if (url.isNullOrBlank()) return
-        withContext(Dispatchers.IO) {
-            try {
-                val imageLoader = SingletonImageLoader.get(context)
-                val request = ImageRequest.Builder(context)
-                    .data(url)
-                    .size(512, 512)
-                    .build()
-                imageLoader.execute(request)
-            } catch (_: Exception) { }
-        }
+        try {
+            val imageLoader = SingletonImageLoader.get(context)
+            val request = ImageRequest.Builder(context)
+                .data(url)
+                .size(512, 512)
+                .build()
+            imageLoader.enqueue(request)
+        } catch (_: Exception) { }
     }
 
     private fun MediaItem.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?) = OfflineMediaEntity(

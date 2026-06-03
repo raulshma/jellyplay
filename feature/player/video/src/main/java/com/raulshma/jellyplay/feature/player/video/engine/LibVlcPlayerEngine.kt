@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -785,6 +786,9 @@ class LibVlcPlayerEngine(
         var lastPlayingState = _isPlaying.value
         val ticker = engineScope.launch {
             while (isActive) {
+                if (!_isPlaying.value) {
+                    _isPlaying.first { it }
+                }
                 delay(500)
                 runCatching {
                     trySend(currentPositionMs)

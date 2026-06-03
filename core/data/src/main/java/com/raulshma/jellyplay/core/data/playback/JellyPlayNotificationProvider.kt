@@ -189,11 +189,13 @@ class JellyPlayNotificationProvider(
         }
     }
 
-    private fun extractAccentColor(bitmap: Bitmap): Int {
+    private suspend fun extractAccentColor(bitmap: Bitmap): Int {
         return try {
-            val palette = Palette.from(bitmap)
-                .maximumColorCount(8)
-                .generate()
+            val palette = withContext(Dispatchers.Default) {
+                Palette.from(bitmap)
+                    .maximumColorCount(8)
+                    .generate()
+            }
             palette.vibrantSwatch?.rgb
                 ?: palette.dominantSwatch?.rgb
                 ?: FALLBACK_COLOR

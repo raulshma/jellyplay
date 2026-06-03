@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
@@ -211,7 +212,6 @@ class VideoPlayerViewModel @Inject constructor(
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
-                                _uiState.update { s -> s.copy(isPlaying = engine.isPlaying.value) }
                                 val stateInt = when (state) {
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
                                     com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
@@ -1232,8 +1232,10 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(isOcrRunning = true) }
         viewModelScope.launch {
             try {
-                val text = com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleOcrHelper
-                    .extractSubtitleTextFromFrame(bitmap)
+                val text = withContext(Dispatchers.Default) {
+                    com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleOcrHelper
+                        .extractSubtitleTextFromFrame(bitmap)
+                }
                 _uiState.update { it.copy(ocrText = text) }
             } catch (_: Exception) {
                 _uiState.update { it.copy(ocrText = null) }
