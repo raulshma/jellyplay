@@ -97,22 +97,25 @@ fun ActivityBarChart(
             }
         }
 
-        if (data.size <= 10) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                val step = (data.size / 5).coerceAtLeast(1)
-                data.forEachIndexed { index, point ->
-                    if (index % step == 0 || index == data.lastIndex) {
-                        Text(
-                            text = point.date.takeLast(5),
-                            style = labelStyle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+        val labelStep = when {
+            data.size <= 7 -> 1
+            data.size <= 15 -> 2
+            data.size <= 31 -> 5
+            else -> data.size / 6
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            data.forEachIndexed { index, point ->
+                if (index == 0 || index % labelStep == 0 || index == data.lastIndex) {
+                    Text(
+                        text = point.date.takeLast(5),
+                        style = labelStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }

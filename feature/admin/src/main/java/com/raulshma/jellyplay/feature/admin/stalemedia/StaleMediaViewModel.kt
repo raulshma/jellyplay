@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
@@ -43,6 +44,7 @@ data class StaleMediaState(
     val selectedItems: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,
     val isDeleting: Boolean = false,
+    val canDeleteContent: Boolean = true,
     val auditEntries: List<AuditLogEntry> = emptyList(),
     val selectedTabIndex: Int = 0,
     val sortOption: MediaSortOption = MediaSortOption.DEFAULT,
@@ -78,6 +80,7 @@ private val MediaItemStub.sortSizeBytes: Long
 @HiltViewModel
 class StaleMediaViewModel @Inject constructor(
     private val repository: AdminStatisticsRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -86,6 +89,15 @@ class StaleMediaViewModel @Inject constructor(
 
     init {
         observeAuditHistory()
+        observePermissions()
+    }
+
+    private fun observePermissions() {
+        viewModelScope.launch {
+            authRepository.currentUser.collect { user ->
+                _state.value = _state.value.copy(canDeleteContent = user?.canDeleteContent ?: false)
+            }
+        }
     }
 
     private fun observeAuditHistory() {
@@ -184,7 +196,11 @@ class StaleMediaViewModel @Inject constructor(
                     rawScanResults = _state.value.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
                 )
             }.onFailure { e ->
-                _state.value = _state.value.copy(isDeleting = false, showDeleteConfirmation = false)
+                _state.value = _state.value.copy(
+                    isDeleting = false,
+                    showDeleteConfirmation = false,
+                    error = e.message,
+                )
             }
         }
     }
