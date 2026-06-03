@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.ParentalRating
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.UpdateItemRequest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,6 +35,11 @@ class MetadataApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : MetadataApiClient {
 
+    private val updateItemJson = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+
     override suspend fun updateItem(
         itemId: String, name: String, originalTitle: String?, sortName: String?,
         overview: String?, tagline: String?, genres: List<String>, tags: List<String>,
@@ -50,74 +56,55 @@ class MetadataApiClientImpl @Inject constructor(
         val server = engine._currentServer.value ?: throw IllegalStateException("No server")
         val user = engine._currentUser.value ?: throw IllegalStateException("No user")
         val url = "${server.address}/Items/$itemId"
-        val body = buildJsonObject {
-            put("Id", JsonPrimitive(itemId))
-            put("Name", JsonPrimitive(name))
-            originalTitle?.let { put("OriginalTitle", JsonPrimitive(it)) }
-            sortName?.let { put("ForcedSortName", JsonPrimitive(it)) }
-            overview?.let { put("Overview", JsonPrimitive(it)) }
-            if (taglines.isNotEmpty()) {
-                put("Taglines", buildJsonArray { taglines.forEach { add(JsonPrimitive(it)) } })
-            }
-            put("Genres", buildJsonArray { genres.forEach { add(JsonPrimitive(it)) } })
-            put("Tags", buildJsonArray { tags.forEach { add(JsonPrimitive(it)) } })
-            put("Studios", buildJsonArray {
-                studios.forEach { studio ->
-                    add(buildJsonObject { put("Name", JsonPrimitive(studio)) })
-                }
-            })
-            communityRating?.let { put("CommunityRating", JsonPrimitive(it.toDouble())) }
-            criticRating?.let { put("CriticRating", JsonPrimitive(it.toDouble())) }
-            officialRating?.let { put("OfficialRating", JsonPrimitive(it)) }
-            customRating?.let { put("CustomRating", JsonPrimitive(it)) }
-            productionYear?.let { put("ProductionYear", JsonPrimitive(it)) }
-            premiereDate?.let { put("PremiereDate", JsonPrimitive(it)) }
-            endDate?.let { put("EndDate", JsonPrimitive(it)) }
-            runtimeTicks?.let { put("RunTimeTicks", JsonPrimitive(it)) }
-            indexNumber?.let { put("IndexNumber", JsonPrimitive(it)) }
-            parentIndexNumber?.let { put("ParentIndexNumber", JsonPrimitive(it)) }
-            displayOrder?.let { put("DisplayOrder", JsonPrimitive(it)) }
-            status?.let { put("Status", JsonPrimitive(it)) }
-            if (airDays.isNotEmpty()) {
-                put("AirDays", buildJsonArray { airDays.forEach { add(JsonPrimitive(it)) } })
-            }
-            airTime?.let { put("AirTime", JsonPrimitive(it)) }
-            if (people.isNotEmpty()) {
-                put("People", buildJsonArray {
-                    people.forEach { person ->
-                        add(buildJsonObject {
-                            put("Id", JsonPrimitive(person.id))
-                            put("Name", JsonPrimitive(person.name))
-                            person.role?.let { put("Role", JsonPrimitive(it)) }
-                            put("Type", JsonPrimitive(person.type))
-                            person.primaryImageTag?.let { put("PrimaryImageTag", JsonPrimitive(it)) }
-                            person.sortOrder?.let { put("SortOrder", JsonPrimitive(it)) }
-                        })
-                    }
-                })
-            }
-            if (providerIds.isNotEmpty()) {
-                put("ProviderIds", buildJsonObject {
-                    providerIds.forEach { (k, v) -> put(k, JsonPrimitive(v)) }
-                })
-            }
-            put("LockData", JsonPrimitive(lockData))
-            if (lockedFields.isNotEmpty()) {
-                put("LockedFields", buildJsonArray { lockedFields.forEach { add(JsonPrimitive(it)) } })
-            }
-            preferredMetadataLanguage?.let { put("PreferredMetadataLanguage", JsonPrimitive(it)) }
-            preferredMetadataCountryCode?.let { put("PreferredMetadataCountryCode", JsonPrimitive(it)) }
-            if (productionLocations.isNotEmpty()) {
-                put("ProductionLocations", buildJsonArray { productionLocations.forEach { add(JsonPrimitive(it)) } })
-            }
-        }
-        val request = Request.Builder()
+        val request = UpdateItemRequest(
+            id = itemId,
+            name = name,
+            genres = genres,
+            tags = tags,
+            studios = studios.map { UpdateItemRequest.StudioEntry(name = it) },
+            lockData = lockData,
+            originalTitle = originalTitle,
+            sortName = sortName,
+            overview = overview,
+            taglines = taglines.takeIf { it.isNotEmpty() },
+            communityRating = communityRating?.toDouble(),
+            criticRating = criticRating?.toDouble(),
+            officialRating = officialRating,
+            customRating = customRating,
+            productionYear = productionYear,
+            premiereDate = premiereDate,
+            endDate = endDate,
+            runtimeTicks = runtimeTicks,
+            indexNumber = indexNumber,
+            parentIndexNumber = parentIndexNumber,
+            displayOrder = displayOrder,
+            status = status,
+            airDays = airDays.takeIf { it.isNotEmpty() },
+            airTime = airTime,
+            people = people.takeIf { it.isNotEmpty() }?.map { person ->
+                UpdateItemRequest.PersonEntry(
+                    id = person.id,
+                    name = person.name,
+                    role = person.role,
+                    type = person.type,
+                    primaryImageTag = person.primaryImageTag,
+                    sortOrder = person.sortOrder,
+                )
+            },
+            providerIds = providerIds.takeIf { it.isNotEmpty() },
+            lockedFields = lockedFields.takeIf { it.isNotEmpty() },
+            preferredMetadataLanguage = preferredMetadataLanguage,
+            preferredMetadataCountryCode = preferredMetadataCountryCode,
+            productionLocations = productionLocations.takeIf { it.isNotEmpty() },
+        )
+        val body = updateItemJson.encodeToString(request)
+        val httpRequest = Request.Builder()
             .url(url)
             .header("X-Emby-Token", user.accessToken)
             .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .post(body.toRequestBody("application/json".toMediaType()))
             .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
+        engine.okHttpClient.newCall(httpRequest).execute().use { response ->
             if (!response.isSuccessful) {
                 throw Exception("Failed to update item: ${response.code}")
             }

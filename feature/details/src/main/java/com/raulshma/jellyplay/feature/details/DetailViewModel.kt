@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -56,6 +57,7 @@ class DetailViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val preferencesStore: UserPreferencesStore,
     private val seerrRepository: SeerrRepository,
+    private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
 ) : ViewModel() {
 
@@ -731,7 +733,7 @@ class DetailViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _seerrRequestResult.value = SeerrRequestResult(isLoading = true)
-            seerrRepository.requestMedia(
+            seerrRequestDelegate.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
                 seasons = seasons,
@@ -747,48 +749,24 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Fetches service details (Radarr/Sonarr) for the request dialog.
-     * Uses /service/ endpoints matching the Seerr web UI flow.
-     */
     fun loadSeerrServiceDetails(mediaType: String) {
         viewModelScope.launch {
             _isLoadingSeerrServices.value = true
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
-                        val details = coroutineScope {
-                            servers.map { server ->
-                                async { seerrRepository.getServiceRadarrDetail(server.id).getOrNull() }
-                            }.awaitAll().filterNotNull()
-                        }
-                        _radarrServers.value = details
-                    }
-                } else {
-                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
-                        val details = coroutineScope {
-                            servers.map { server ->
-                                async { seerrRepository.getServiceSonarrDetail(server.id).getOrNull() }
-                            }.awaitAll().filterNotNull()
-                        }
-                        _sonarrServers.value = details
-                    }
-                }
+                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
+                _radarrServers.value = result.radarrServers
+                _sonarrServers.value = result.sonarrServers
             } finally {
                 _isLoadingSeerrServices.value = false
             }
         }
     }
 
-    /**
-     * Fetches TV details on-demand from Seerr to get season data for the request dialog.
-     */
     fun loadSeerrTvSeasons(tmdbId: Int) {
         viewModelScope.launch {
             _seerrTvSeasons.value = emptyList()
-            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
-                _seerrTvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
-            }
+            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
+            _seerrTvSeasons.value = seasons
         }
     }
 
@@ -798,20 +776,7 @@ class DetailViewModel @Inject constructor(
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            try {
-                coroutineScope {
-                    if (mediaType == "movie") {
-                        seerrRepository.getMovieDetails(tmdbId)
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId)
-                    }
-                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                    launch { seerrRepository.getRecommendations(tmdbId, type) }
-                    launch { seerrRepository.getSimilar(tmdbId, type) }
-                }
-            } catch (_: Exception) {
-            }
+            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }
     }
