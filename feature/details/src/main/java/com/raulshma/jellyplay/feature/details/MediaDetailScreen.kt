@@ -2795,12 +2795,12 @@ private fun FadingItem(
     }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(1200),
+        animationSpec = tween(600),
         label = "itemAlpha"
     )
     val blurRadius by animateFloatAsState(
-        targetValue = if (visible) 0f else 16f,
-        animationSpec = tween(1200),
+        targetValue = if (visible) 0f else 8f,
+        animationSpec = tween(800),
         label = "itemBlur"
     )
     Box(
