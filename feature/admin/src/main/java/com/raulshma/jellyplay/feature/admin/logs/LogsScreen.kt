@@ -40,6 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -128,8 +131,10 @@ fun LogsScreen(
                 0 -> LogFilesTab(
                     logFiles = state.logFiles,
                     selectedLogFileName = state.selectedLogFileName,
-                    selectedLogFileContent = state.selectedLogFileContent,
+                    selectedLogFileLines = state.selectedLogFileLines,
                     isLoadingContent = state.isLoadingLogContent,
+                    isPollingActive = state.isLogPollingActive,
+                    onTogglePolling = { viewModel.toggleLogPolling() },
                     onFileClick = { viewModel.loadLogFile(it) },
                     onBackToList = { viewModel.clearSelectedLogFile() },
                     bottomPadding = adaptiveInfo.bottomPadding(isTv),
@@ -151,13 +156,15 @@ fun LogsScreen(
 private fun LogFilesTab(
     logFiles: List<LogFile>,
     selectedLogFileName: String?,
-    selectedLogFileContent: String?,
+    selectedLogFileLines: List<LogLine>,
     isLoadingContent: Boolean,
+    isPollingActive: Boolean,
+    onTogglePolling: () -> Unit,
     onFileClick: (String) -> Unit,
     onBackToList: () -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
-    if (selectedLogFileContent != null || isLoadingContent) {
+    if (selectedLogFileName != null || isLoadingContent) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
@@ -183,8 +190,16 @@ private fun LogFilesTab(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!isLoadingContent && selectedLogFileContent != null) {
-                    val lineCount = selectedLogFileContent.lines().size
+                if (!isLoadingContent && selectedLogFileLines.isNotEmpty()) {
+                    IconButton(onClick = onTogglePolling) {
+                        Icon(
+                            imageVector = if (isPollingActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                            contentDescription = if (isPollingActive) "Pause Live Logs" else "Resume Live Logs",
+                            tint = if (isPollingActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    val lineCount = selectedLogFileLines.size
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smoothPill)
@@ -203,13 +218,21 @@ private fun LogFilesTab(
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
-                val lines = (selectedLogFileContent ?: "").lines()
                 val listState = rememberLazyListState()
-                LaunchedEffect(selectedLogFileContent) {
-                    if (lines.isNotEmpty()) {
-                        listState.scrollToItem(lines.lastIndex)
+                
+                var hasInitialScrolled by remember(selectedLogFileName) { mutableStateOf(false) }
+
+                LaunchedEffect(selectedLogFileLines.size) {
+                    if (selectedLogFileLines.isNotEmpty()) {
+                        if (!hasInitialScrolled) {
+                            listState.scrollToItem(selectedLogFileLines.lastIndex)
+                            hasInitialScrolled = true
+                        } else if (isPollingActive) {
+                            listState.animateScrollToItem(selectedLogFileLines.lastIndex)
+                        }
                     }
                 }
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -217,10 +240,26 @@ private fun LogFilesTab(
                         .padding(horizontal = 8.dp),
                 ) {
                     items(
-                        items = lines,
-                        key = { index -> index },
+                        items = selectedLogFileLines,
+                        key = { line -> line.index },
                     ) { line ->
-                        val annotatedLine = remember(line) { parseLogLine(line) }
+                        val annotatedLine = remember(line.text) { parseLogLine(line.text) }
+                        
+                        var isHighlighted by remember(line.index, line.addedTime) {
+                            mutableStateOf(line.isNew)
+                        }
+                        LaunchedEffect(line.index, line.addedTime) {
+                            if (line.isNew) {
+                                delay(4000)
+                                isHighlighted = false
+                            }
+                        }
+                        val highlightAlpha by animateFloatAsState(
+                            targetValue = if (isHighlighted) 0.15f else 0.0f,
+                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 1000),
+                            label = "lineHighlightAlpha"
+                        )
+                        
                         Text(
                             text = annotatedLine,
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -228,8 +267,16 @@ private fun LogFilesTab(
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
+                                .animateItem()
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 1.dp),
+                                .background(
+                                    color = if (highlightAlpha > 0f) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = highlightAlpha)
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
                 }
