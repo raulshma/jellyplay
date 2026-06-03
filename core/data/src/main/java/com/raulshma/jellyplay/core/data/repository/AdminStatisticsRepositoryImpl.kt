@@ -123,7 +123,15 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         } else emptyList()
 
         val fallbackChart = if (activityChart.isEmpty()) {
-            buildFallbackActivityChart(playedResult.second)
+            val recentlyPlayed = apiClient.getItemsWithUserData(
+                userId = userId,
+                isPlayed = true,
+                sortBy = "DatePlayed",
+                sortOrder = "Descending",
+                startIndex = 0,
+                limit = 200,
+            ).getOrDefault(Pair(0, emptyList()))
+            buildFallbackActivityChart(recentlyPlayed.second)
         } else activityChart
 
         val typeBreakdown = listOf(
@@ -235,13 +243,27 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 val items = result.second.map { staleItem ->
                     val dateStr = if (config.useDateAdded) staleItem.dateAdded else staleItem.lastPlayedDate
                     val formattedDate = dateStr?.take(10)
+                    val neverPlayed = staleItem.daysSincePlay <= 0 && staleItem.playCount == 0
+                    val addedAgoText = staleItem.dateAdded?.let { added ->
+                        try {
+                            val addedDate = java.time.LocalDate.parse(added.take(10))
+                            val days = java.time.temporal.ChronoUnit.DAYS.between(addedDate, java.time.LocalDate.now())
+                            when {
+                                days < 1 -> "Added today"
+                                days == 1L -> "Added 1 day ago"
+                                days < 30 -> "Added ${days}d ago"
+                                days < 365 -> "Added ${days / 30}mo ago"
+                                else -> "Added ${days / 365}y ago"
+                            }
+                        } catch (_: Exception) { null }
+                    }
                     MediaItemStub(
                         itemId = staleItem.itemId,
                         name = staleItem.name,
                         type = staleItem.type,
                         sizeText = staleItem.sizeText,
                         detail = buildString {
-                            if (staleItem.daysSincePlay > 0) append("${staleItem.daysSincePlay}d ago")
+                            if (staleItem.daysSincePlay > 0) append("${staleItem.daysSincePlay}d since play")
                             else append("Never played")
                             if (staleItem.playCount > 0) {
                                 append(" · ${staleItem.playCount} plays")
@@ -253,8 +275,10 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         episodeNumber = staleItem.episodeNumber,
                         dateText = if (config.useDateAdded) {
                             formattedDate?.let { "Added $it" } ?: "Added unknown"
+                        } else if (neverPlayed) {
+                            addedAgoText ?: "Never played"
                         } else {
-                            formattedDate?.let { "Played $it" } ?: if (staleItem.playCount == 0) "Never played" else null
+                            formattedDate?.let { "Played $it" }
                         },
                     )
                 }
@@ -392,13 +416,9 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         actionType: CleanupActionType,
         config: MediaCleanupConfig,
     ): Result<AuditLogEntry> = runCatching {
-        val currentUser = apiClient.currentUser
-        var adminId = ""
-        var adminName = ""
-        currentUser.collect { user ->
-            adminId = user?.id ?: ""
-            adminName = user?.name ?: ""
-        }
+        val currentUser = apiClient.currentUser.first()
+        val adminId = currentUser?.id ?: ""
+        val adminName = currentUser?.name ?: ""
 
         val deleted = apiClient.deleteItems(itemIds).getOrDefault(0)
 

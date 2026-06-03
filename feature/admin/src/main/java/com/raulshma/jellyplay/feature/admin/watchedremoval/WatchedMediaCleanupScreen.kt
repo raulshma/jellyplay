@@ -24,7 +24,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -32,6 +36,7 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -42,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
@@ -64,6 +71,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
+import com.raulshma.jellyplay.feature.admin.stalemedia.MediaSortOption
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,6 +120,7 @@ fun WatchedMediaCleanupScreen(
                     onDeleteClick = { viewModel.showDeleteConfirmation() },
                     onConfirmDelete = { viewModel.deleteSelected() },
                     onDismissDelete = { viewModel.dismissDeleteConfirmation() },
+                    onSortChange = { viewModel.updateSort(it) },
                     bottomPadding = adaptiveInfo.bottomPadding(),
                 )
                 1 -> WatchedConfigurationTab(
@@ -126,6 +135,50 @@ fun WatchedMediaCleanupScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WatchedSortDropdown(
+    currentSort: MediaSortOption,
+    onSortChange: (MediaSortOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = currentSort.label,
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            textStyle = MaterialTheme.typography.labelMedium,
+            singleLine = true,
+            shape = ShapeCache.smooth12,
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            MediaSortOption.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            option.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (option == currentSort) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    },
+                    onClick = {
+                        onSortChange(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun WatchedScanResultsTab(
     state: WatchedMediaState,
@@ -134,6 +187,7 @@ private fun WatchedScanResultsTab(
     onDeleteClick: () -> Unit,
     onConfirmDelete: () -> Unit,
     onDismissDelete: () -> Unit,
+    onSortChange: (MediaSortOption) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -197,6 +251,25 @@ private fun WatchedScanResultsTab(
                     }
                 }
             }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${state.scanResults.size} items",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                WatchedSortDropdown(
+                    currentSort = state.sortOption,
+                    onSortChange = onSortChange,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
         }
 
         if (state.scanResults.isEmpty() && state.scanProgress.phase != ScanPhase.SCANNING && !state.isLoading) {
@@ -206,11 +279,11 @@ private fun WatchedScanResultsTab(
                     title = if (state.scanProgress.phase == ScanPhase.COMPLETED) "No watched media found" else "Run a scan to find watched media",
                 )
             }
-        } else {
+        } else if (state.scanResults.isNotEmpty()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 items(state.scanResults, key = { it.itemId }) { item ->
                     WatchedItemCard(
@@ -248,52 +321,77 @@ private fun WatchedItemCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(12.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(checked = isSelected, onCheckedChange = { onToggle() })
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
             Box(
-                modifier = Modifier.size(40.dp).clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.size(44.dp).clip(ShapeCache.smooth8).background(MaterialTheme.colorScheme.tertiaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(item.type.take(1), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    item.type.take(1),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Box(
                         modifier = Modifier.clip(ShapeCache.smoothPill).background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text(item.type, style = MaterialTheme.typography.labelSmall)
+                        Text(item.type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (item.seriesName != null) {
-                        Spacer(Modifier.width(6.dp))
-                        val epLabel = buildString {
-                            append(item.seriesName)
-                            if (item.seasonNumber != null || item.episodeNumber != null) {
-                                append(" ")
-                                if (item.seasonNumber != null) append("S${item.seasonNumber}")
-                                if (item.episodeNumber != null) append("E${item.episodeNumber}")
-                            }
-                        }
-                        Text(epLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else if (item.detail.isNotBlank()) {
-                        Spacer(Modifier.width(6.dp))
+                    if (item.detail.isNotBlank()) {
                         Text(item.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (item.dateText != null) {
-                    Text(
-                        text = item.dateText!!,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
+                if (item.seriesName != null || item.dateText != null) {
+                    Spacer(Modifier.height(1.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (item.seriesName != null) {
+                            val epLabel = buildString {
+                                append(item.seriesName)
+                                if (item.seasonNumber != null || item.episodeNumber != null) {
+                                    append(" ")
+                                    if (item.seasonNumber != null) append("S${item.seasonNumber}")
+                                    if (item.episodeNumber != null) append("E${item.episodeNumber}")
+                                }
+                            }
+                            Text(epLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (item.dateText != null) {
+                            Text(item.dateText!!, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
             if (item.sizeText.isNotBlank()) {
-                Text(item.sizeText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth8)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(item.sizeText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
+import com.raulshma.jellyplay.feature.admin.stalemedia.MediaSortOption
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,12 +31,40 @@ data class WatchedMediaState(
     ),
     val scanId: String? = null,
     val scanProgress: ScanProgress = ScanProgress(),
-    val scanResults: List<MediaItemStub> = emptyList(),
+    val rawScanResults: List<MediaItemStub> = emptyList(),
     val selectedItems: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,
     val isDeleting: Boolean = false,
     val auditEntries: List<AuditLogEntry> = emptyList(),
-)
+    val sortOption: MediaSortOption = MediaSortOption.DEFAULT,
+) {
+    val scanResults: List<MediaItemStub>
+        get() = when (sortOption) {
+            MediaSortOption.DEFAULT -> rawScanResults
+            MediaSortOption.NAME_ASC -> rawScanResults.sortedBy { it.name.lowercase() }
+            MediaSortOption.NAME_DESC -> rawScanResults.sortedByDescending { it.name.lowercase() }
+            MediaSortOption.SIZE_DESC -> rawScanResults.sortedByDescending { it.sortSizeBytes }
+            MediaSortOption.SIZE_ASC -> rawScanResults.sortedBy { it.sortSizeBytes }
+            MediaSortOption.TYPE -> rawScanResults.sortedBy { it.type }
+            MediaSortOption.DATE -> rawScanResults.sortedBy { it.dateText }
+        }
+}
+
+private val MediaItemStub.sortSizeBytes: Long
+    get() {
+        val match = Regex("(\\d+\\.?\\d*)\\s*(B|KB|MB|GB|TB)").find(sizeText)
+        if (match != null) {
+            val num = match.groupValues[1].toDoubleOrNull() ?: return 0L
+            return when (match.groupValues[2]) {
+                "TB" -> (num * 1024 * 1024 * 1024 * 1024).toLong()
+                "GB" -> (num * 1024 * 1024 * 1024).toLong()
+                "MB" -> (num * 1024 * 1024).toLong()
+                "KB" -> (num * 1024).toLong()
+                else -> num.toLong()
+            }
+        }
+        return 0L
+    }
 
 @HiltViewModel
 class WatchedMediaCleanupViewModel @Inject constructor(
@@ -62,9 +91,13 @@ class WatchedMediaCleanupViewModel @Inject constructor(
         _state.value = _state.value.copy(config = config)
     }
 
+    fun updateSort(option: MediaSortOption) {
+        _state.value = _state.value.copy(sortOption = option)
+    }
+
     fun startScan() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null, scanResults = emptyList(), selectedItems = emptySet())
+            _state.value = _state.value.copy(isLoading = true, error = null, rawScanResults = emptyList(), selectedItems = emptySet())
             repository.detectWatchedMedia(_state.value.config)
                 .onSuccess { scanId ->
                     _state.value = _state.value.copy(scanId = scanId, isLoading = false)
@@ -81,7 +114,7 @@ class WatchedMediaCleanupViewModel @Inject constructor(
             repository.getScanProgress(scanId).collect { progress ->
                 _state.value = _state.value.copy(scanProgress = progress)
                 if (progress.phase == ScanPhase.COMPLETED) {
-                    _state.value = _state.value.copy(scanResults = loadResults(scanId))
+                    _state.value = _state.value.copy(rawScanResults = loadResults(scanId))
                 }
             }
         }
@@ -135,7 +168,7 @@ class WatchedMediaCleanupViewModel @Inject constructor(
                     isDeleting = false,
                     showDeleteConfirmation = false,
                     selectedItems = emptySet(),
-                    scanResults = _state.value.scanResults.filterNot { selectedItems.contains(it.itemId) },
+                    rawScanResults = _state.value.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
                 )
             }.onFailure {
                 _state.value = _state.value.copy(isDeleting = false, showDeleteConfirmation = false)
