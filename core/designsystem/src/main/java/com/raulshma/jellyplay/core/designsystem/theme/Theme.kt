@@ -16,6 +16,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.ColorStyle
+
+enum class AccentColorSwatch(
+    val displayName: String,
+    val lightColor: Long,
+    val darkColor: Long
+) {
+    DYNAMIC("Dynamic", 0L, 0L),
+    BRAND("Brand (Default)", 0xFF904B3E, 0xFFFFB4A6),
+    SAPPHIRE("Sapphire Blue", 0xFF1976D2, 0xFF90CAF9),
+    EMERALD("Emerald Green", 0xFF388E3C, 0xFFA5D6A7),
+    AMETHYST("Amethyst Purple", 0xFF7B1FA2, 0xFFE040FB),
+    ROSE("Rose Pink", 0xFFC2185B, 0xFFF48FB1),
+    CORAL("Coral Orange", 0xFFF57C00, 0xFFFFCC80),
+    AMBER("Amber Gold", 0xFFFBC02D, 0xFFFFE082),
+    CRIMSON("Crimson Red", 0xFFD32F2F, 0xFFEF9A9A),
+}
 
 private val LightColorScheme = lightColorScheme(
     primary = md_theme_light_primary,
@@ -262,13 +279,15 @@ fun JellyPlayTheme(
     contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     isTv: Boolean = false,
     performanceMode: Boolean = false,
+    accentColorSwatch: String = "dynamic",
+    colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     content: @Composable () -> Unit,
 ) {
     val effectiveDarkTheme = darkTheme || isTv
     val effectiveOledMode = oledMode && effectiveDarkTheme
 
     val colorScheme = when {
-        dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        accentColorSwatch == "dynamic" && dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (effectiveDarkTheme) {
                 val dynamic = dynamicDarkColorScheme(context)
@@ -277,16 +296,31 @@ fun JellyPlayTheme(
                 dynamicLightColorScheme(context)
             }
         }
-        effectiveOledMode -> OledColorScheme
-        effectiveDarkTheme -> when (contrastLevel) {
+        accentColorSwatch == "dynamic" && effectiveOledMode -> OledColorScheme
+        accentColorSwatch == "dynamic" && effectiveDarkTheme -> when (contrastLevel) {
             ContrastLevel.MEDIUM -> MediumContrastDarkColorScheme
             ContrastLevel.HIGH -> HighContrastDarkColorScheme
             ContrastLevel.DEFAULT -> DarkColorScheme
         }
-        else -> when (contrastLevel) {
+        accentColorSwatch == "dynamic" -> when (contrastLevel) {
             ContrastLevel.MEDIUM -> MediumContrastLightColorScheme
             ContrastLevel.HIGH -> HighContrastLightColorScheme
             ContrastLevel.DEFAULT -> LightColorScheme
+        }
+        else -> {
+            val swatch = if (accentColorSwatch == "dynamic") {
+                AccentColorSwatch.BRAND
+            } else {
+                AccentColorSwatch.entries.find { it.name.lowercase() == accentColorSwatch } ?: AccentColorSwatch.BRAND
+            }
+            val seedColor = Color(if (effectiveDarkTheme) swatch.darkColor else swatch.lightColor)
+            ColorGenerator.generateColorScheme(
+                seedColor = seedColor,
+                style = colorStyle,
+                darkTheme = effectiveDarkTheme,
+                oledMode = effectiveOledMode,
+                contrastLevel = contrastLevel
+            )
         }
     }
 

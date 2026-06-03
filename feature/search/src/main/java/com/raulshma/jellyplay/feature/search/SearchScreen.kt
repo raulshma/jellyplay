@@ -49,6 +49,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
@@ -532,13 +533,11 @@ fun SearchScreen(
                                         .padding(vertical = 20.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                                    androidx.compose.material3.LinearWavyProgressIndicator(
+                                    JellyPlayLinearProgressIndicator(
                                         modifier = Modifier
                                             .fillMaxWidth(0.4f)
                                             .clip(ShapeCache.smooth4),
                                         color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     )
                                 }
                             }
@@ -564,13 +563,11 @@ fun SearchScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                                    androidx.compose.material3.LinearWavyProgressIndicator(
+                                    JellyPlayLinearProgressIndicator(
                                             modifier = Modifier
                                                 .fillMaxWidth(0.4f)
                                                 .clip(ShapeCache.smooth4),
                                             color = MaterialTheme.colorScheme.primary,
-                                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                         )
                                     }
                                 }

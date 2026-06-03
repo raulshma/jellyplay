@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -113,6 +114,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
+        val VIDEO_SHOW_PLAYBACK_METADATA = stringPreferencesKey("video_show_playback_metadata")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
         val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
@@ -153,6 +155,8 @@ class UserPreferencesStore @Inject constructor(
         val NEWSLETTER_ENABLED = stringPreferencesKey("newsletter_enabled")
         val NEWSLETTER_DAY_OF_WEEK = stringPreferencesKey("newsletter_day_of_week")
         val NEWSLETTER_LAST_VIEWED_MS = stringPreferencesKey("newsletter_last_viewed_ms")
+        val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
+        val COLOR_STYLE = stringPreferencesKey("color_style")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -299,6 +303,7 @@ class UserPreferencesStore @Inject constructor(
             trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
             segmentBehaviors = readSegmentBehaviors(prefs),
             videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
+            videoShowPlaybackMetadata = prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA]?.toBoolean() ?: true,
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
@@ -390,6 +395,10 @@ class UserPreferencesStore @Inject constructor(
             newsletterEnabled = prefs[Keys.NEWSLETTER_ENABLED]?.toBoolean() ?: true,
             newsletterDayOfWeek = prefs[Keys.NEWSLETTER_DAY_OF_WEEK]?.toIntOrNull() ?: 7,
             newsletterLastViewedMs = prefs[Keys.NEWSLETTER_LAST_VIEWED_MS]?.toLongOrNull() ?: 0L,
+            accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
+            colorStyle = try {
+                ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
+            } catch (_: Exception) { ColorStyle.TONAL_SPOT },
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -645,6 +654,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
     }
 
+    suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled.toString() }
+    }
+
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
         context.dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
     }
@@ -818,5 +831,13 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setNewsletterLastViewed(timestampMs: Long) {
         context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs.toString() }
+    }
+
+    suspend fun setAccentColorSwatch(swatch: String) {
+        context.dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
+    }
+
+    suspend fun setColorStyle(style: ColorStyle) {
+        context.dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
     }
 }

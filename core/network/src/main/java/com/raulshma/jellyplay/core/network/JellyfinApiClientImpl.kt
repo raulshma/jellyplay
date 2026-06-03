@@ -243,6 +243,7 @@ class JellyfinApiClientImpl @Inject constructor(
             serverAddress = serverInfo.address,
             accessToken = accessTokenValue,
             isAdmin = policy?.isAdministrator ?: false,
+            canDeleteContent = policy?.enableContentDeletion ?: false,
             maxParentalAgeRating = policy?.maxParentalRating,
             primaryImageTag = userDto.primaryImageTag,
             enabledFolderIds = if (policy?.enableAllFolders == false) {
@@ -1552,6 +1553,8 @@ class JellyfinApiClientImpl @Inject constructor(
                 ?.values?.firstOrNull(),
         ),
         normalizationGain = normalizationGain,
+        playCount = userData?.playCount ?: 0,
+        lastPlayedDate = userData?.lastPlayedDate?.toString(),
     )
 
     private fun org.jellyfin.sdk.model.api.BaseItemKind.toMediaType(): MediaType = when (this) {
@@ -2359,6 +2362,462 @@ class JellyfinApiClientImpl @Inject constructor(
                 curatedPicks = curatedPicks.await(),
             )
         }
+    }
+
+    override suspend fun getUsers(): Result<List<com.raulshma.jellyplay.core.model.JellyfinUser>> = apiResult {
+        val api = requireApi()
+        val response = api.userApi.getUsers().content ?: emptyList()
+        response.map { dto ->
+            com.raulshma.jellyplay.core.model.JellyfinUser(
+                id = dto.id.toString(),
+                name = dto.name ?: "",
+                primaryImageTag = dto.primaryImageTag,
+                lastLoginDate = dto.lastLoginDate?.toString(),
+                lastActivityDate = dto.lastActivityDate?.toString(),
+                isAdmin = dto.policy?.isAdministrator ?: false,
+                isDisabled = dto.policy?.isDisabled ?: false,
+                isHidden = false,
+                hasPassword = dto.hasPassword,
+            )
+        }
+    }
+
+    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = apiResult {
+        val api = requireApi()
+        val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
+        val response = api.itemsApi.getItems(
+            userId = java.util.UUID.fromString(userId),
+            isPlayed = true,
+            includeItemTypes = types,
+            limit = 0,
+            recursive = true,
+            enableTotalRecordCount = true,
+        ).content
+        response?.totalRecordCount ?: 0
+    }
+
+    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = apiResult {
+        val api = requireApi()
+        val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
+        val response = api.itemsApi.getItems(
+            userId = java.util.UUID.fromString(userId),
+            isPlayed = false,
+            includeItemTypes = types,
+            limit = 0,
+            recursive = true,
+            enableTotalRecordCount = true,
+        ).content
+        response?.totalRecordCount ?: 0
+    }
+
+    override suspend fun getItemsWithUserData(
+        userId: String,
+        includeItemTypes: List<String>?,
+        isPlayed: Boolean?,
+        sortBy: String,
+        sortOrder: String,
+        startIndex: Int,
+        limit: Int,
+    ): Result<Pair<Int, List<MediaItem>>> = apiResult {
+        val api = requireApi()
+        val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
+        val sort = parseItemSortBy(sortBy)
+        val order = if (sortOrder == "Descending") org.jellyfin.sdk.model.api.SortOrder.DESCENDING else org.jellyfin.sdk.model.api.SortOrder.ASCENDING
+        val response = api.itemsApi.getItems(
+            userId = java.util.UUID.fromString(userId),
+            isPlayed = isPlayed,
+            includeItemTypes = types,
+            sortBy = if (sort != null) listOf(sort) else emptyList(),
+            sortOrder = listOf(order),
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            enableTotalRecordCount = true,
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+            ),
+        ).content
+        val total = response?.totalRecordCount ?: 0
+        val items = (response?.items ?: emptyList()).map { it.toMediaItem() }
+        Pair(total, items)
+    }
+
+    override suspend fun getStaleItems(
+        daysThreshold: Int,
+        includeNeverPlayed: Boolean,
+        includeItemTypes: List<String>,
+        parentId: String?,
+        startIndex: Int,
+        limit: Int,
+        useDateAdded: Boolean,
+    ): Result<Pair<Int, List<com.raulshma.jellyplay.core.model.StaleMediaItem>>> = apiResult {
+        val api = requireApi()
+        val types = includeItemTypes.mapNotNull { parseItemKind(it) }
+        val minDate = java.time.LocalDateTime.now().minusDays(daysThreshold.toLong())
+        val allItems = mutableListOf<com.raulshma.jellyplay.core.model.StaleMediaItem>()
+        var totalEstimate = 0
+
+        val playedResponse = api.itemsApi.getItems(
+            isPlayed = true,
+            includeItemTypes = types,
+            parentId = parentId?.let { java.util.UUID.fromString(it) },
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            enableTotalRecordCount = true,
+            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED),
+            sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.DATE_CREATED,
+            ),
+        ).content
+
+        val playedItems = playedResponse?.items ?: emptyList()
+        totalEstimate = playedResponse?.totalRecordCount ?: 0
+
+        val now = java.time.LocalDateTime.now()
+        for (dto in playedItems) {
+            val userData = dto.userData
+            val lastPlayedStr = userData?.lastPlayedDate?.toString()
+            val lastPlayed = userData?.lastPlayedDate
+            val dateCreated = dto.dateCreated
+            val referenceDate = if (useDateAdded) dateCreated else lastPlayed
+            val daysSince = if (referenceDate != null) {
+                java.time.Duration.between(referenceDate, now).toDays().toInt()
+            } else {
+                Int.MAX_VALUE
+            }
+            if (daysSince >= daysThreshold) {
+                allItems.add(
+                    com.raulshma.jellyplay.core.model.StaleMediaItem(
+                        itemId = dto.id?.toString() ?: "",
+                        name = dto.name ?: "",
+                        type = dto.type?.serialName ?: "",
+                        mediaType = dto.mediaType?.serialName,
+                        lastPlayedDate = lastPlayedStr,
+                        daysSincePlay = daysSince,
+                        playCount = userData?.playCount ?: 0,
+                        sizeBytes = 0,
+                        sizeText = "",
+                        parentId = dto.parentId?.toString(),
+                        seriesName = dto.seriesName,
+                        seasonName = dto.seasonName,
+                        seasonNumber = dto.parentIndexNumber,
+                        episodeNumber = dto.indexNumber,
+                        posterBlurHash = dto.imageBlurHashes
+                            ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
+                            ?.values?.firstOrNull(),
+                        premiereDate = dto.premiereDate?.toString(),
+                        overview = dto.overview,
+                        year = dto.productionYear,
+                        dateAdded = dto.dateCreated?.toString(),
+                    )
+                )
+            }
+        }
+
+        if (includeNeverPlayed) {
+            val unplayedResponse = api.itemsApi.getItems(
+                isPlayed = false,
+                includeItemTypes = types,
+                parentId = parentId?.let { java.util.UUID.fromString(it) },
+                startIndex = 0,
+                limit = limit,
+                recursive = true,
+                enableTotalRecordCount = true,
+                sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED),
+                sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
+                fields = listOf(
+                    org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                    org.jellyfin.sdk.model.api.ItemFields.DATE_CREATED,
+                ),
+            ).content
+
+            val unplayedItems = unplayedResponse?.items ?: emptyList()
+            totalEstimate += unplayedResponse?.totalRecordCount ?: 0
+
+            for (dto in unplayedItems) {
+                val userData = dto.userData
+                if ((userData?.playCount ?: 0) == 0) {
+                    val created = dto.dateCreated
+                    val daysSinceCreation = if (created != null) {
+                        java.time.Duration.between(created, now).toDays().toInt()
+                    } else Int.MAX_VALUE
+                    if (daysSinceCreation >= daysThreshold) {
+                        allItems.add(
+                            com.raulshma.jellyplay.core.model.StaleMediaItem(
+                                itemId = dto.id?.toString() ?: "",
+                                name = dto.name ?: "",
+                                type = dto.type?.serialName ?: "",
+                                mediaType = dto.mediaType?.serialName,
+                                lastPlayedDate = null,
+                                daysSincePlay = daysSinceCreation,
+                                playCount = 0,
+                                sizeBytes = 0,
+                                sizeText = "",
+                                parentId = dto.parentId?.toString(),
+                                seriesName = dto.seriesName,
+                                seasonName = dto.seasonName,
+                                seasonNumber = dto.parentIndexNumber,
+                                episodeNumber = dto.indexNumber,
+                                posterBlurHash = dto.imageBlurHashes
+                                    ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
+                                    ?.values?.firstOrNull(),
+                                premiereDate = dto.premiereDate?.toString(),
+                                overview = dto.overview,
+                                year = dto.productionYear,
+                                dateAdded = dto.dateCreated?.toString(),
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        Pair(totalEstimate, allItems)
+    }
+
+    override suspend fun getWatchedItems(
+        userId: String,
+        includeItemTypes: List<String>,
+        minDaysSincePlayed: Int,
+        keepFavorites: Boolean,
+        parentId: String?,
+        startIndex: Int,
+        limit: Int,
+    ): Result<Pair<Int, List<com.raulshma.jellyplay.core.model.WatchedMediaItem>>> = apiResult {
+        val api = requireApi()
+        val types = includeItemTypes.mapNotNull { parseItemKind(it) }
+        val response = api.itemsApi.getItems(
+            userId = java.util.UUID.fromString(userId),
+            isPlayed = true,
+            includeItemTypes = types,
+            parentId = parentId?.let { java.util.UUID.fromString(it) },
+            startIndex = startIndex,
+            limit = limit,
+            recursive = true,
+            enableTotalRecordCount = true,
+            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED),
+            sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
+            fields = listOf(
+                org.jellyfin.sdk.model.api.ItemFields.OVERVIEW,
+                org.jellyfin.sdk.model.api.ItemFields.DATE_CREATED,
+            ),
+        ).content
+
+        val items = (response?.items ?: emptyList())
+        val now = java.time.LocalDateTime.now()
+        val filtered = items.filter { dto ->
+            if (keepFavorites && dto.userData?.isFavorite == true) return@filter false
+            val lastPlayed = dto.userData?.lastPlayedDate
+            if (minDaysSincePlayed > 0 && lastPlayed != null) {
+                val daysSince = java.time.Duration.between(lastPlayed, now).toDays().toInt()
+                daysSince >= minDaysSincePlayed
+            } else true
+        }
+
+        val total = response?.totalRecordCount ?: 0
+        val watchedItems = filtered.map { dto ->
+            val userData = dto.userData
+            val runtime = dto.runTimeTicks ?: 0L
+            val position = userData?.playbackPositionTicks ?: 0L
+            val completionPct = if (runtime > 0) ((runtime - position).toFloat() / runtime).coerceIn(0f, 1f) else if (userData?.played == true) 1f else 0f
+            com.raulshma.jellyplay.core.model.WatchedMediaItem(
+                itemId = dto.id?.toString() ?: "",
+                name = dto.name ?: "",
+                type = dto.type?.serialName ?: "",
+                mediaType = dto.mediaType?.serialName,
+                playCount = userData?.playCount ?: 0,
+                lastPlayedDate = userData?.lastPlayedDate?.toString(),
+                completionPct = completionPct,
+                runtimeTicks = runtime,
+                isFavorite = userData?.isFavorite ?: false,
+                parentId = dto.parentId?.toString(),
+                seriesName = dto.seriesName,
+                seasonName = dto.seasonName,
+                seasonNumber = dto.parentIndexNumber,
+                episodeNumber = dto.indexNumber,
+                posterBlurHash = dto.imageBlurHashes
+                    ?.get(org.jellyfin.sdk.model.api.ImageType.PRIMARY)
+                    ?.values?.firstOrNull(),
+                overview = dto.overview,
+                year = dto.productionYear,
+                sizeBytes = 0,
+            )
+        }
+        Pair(total, watchedItems)
+    }
+
+    override suspend fun deleteItem(itemId: String): Result<Unit> = apiResult {
+        requireApi().libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
+    }
+
+    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = apiResult {
+        requireApi().libraryApi.deleteItems(
+            ids = itemIds.map { java.util.UUID.fromString(it) },
+        )
+        itemIds.size
+    }
+
+    override suspend fun checkPlaybackReportingPlugin(): Result<com.raulshma.jellyplay.core.model.PlaybackReportingStatus> = apiResult {
+        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
+        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
+        val url = "${server}/user_usage_stats/type_filter_list"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        response.close()
+        if (response.isSuccessful) {
+            com.raulshma.jellyplay.core.model.PlaybackReportingStatus.AVAILABLE
+        } else {
+            com.raulshma.jellyplay.core.model.PlaybackReportingStatus.UNAVAILABLE
+        }
+    }
+
+    override suspend fun getPlaybackReportingUserActivity(days: Int): Result<List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>> = apiResult {
+        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
+        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
+        val url = "${server}/user_usage_stats/user_activity?days=$days"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+        val json = Json.decodeFromString<JsonArray>(body)
+        json.mapNotNull { element ->
+            val obj = element.jsonObject
+            com.raulshma.jellyplay.core.model.PlaybackReportingActivity(
+                userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
+                userName = obj["user_name"]?.jsonPrimitive?.content ?: "",
+                totalTime = obj["total_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                latestDate = obj["latest_date"]?.jsonPrimitive?.content ?: "",
+                totalPlayTime = obj["total_play_time"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                hasImage = obj["has_image"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+            )
+        }
+    }
+
+    override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>> = apiResult {
+        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
+        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
+        val filterParam = filter?.let { "&filter=$it" } ?: ""
+        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType$filterParam"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+        val json = Json.decodeFromString<JsonArray>(body)
+        val points = mutableListOf<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>()
+        for (element in json) {
+            val obj = element.jsonObject
+            val usage = obj["user_usage"]?.jsonObject
+            if (usage != null) {
+                for ((date, value) in usage) {
+                    points.add(
+                        com.raulshma.jellyplay.core.model.PlaybackActivityPoint(
+                            date = date,
+                            value = (value as? JsonPrimitive)?.content?.toLongOrNull() ?: 0,
+                        )
+                    )
+                }
+            }
+        }
+        points.sortedBy { it.date }
+    }
+
+    override suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String?): Result<List<com.raulshma.jellyplay.core.model.PlaybackReportingDetail>> = apiResult {
+        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
+        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
+        val filterParam = filter?.let { "&filter=$it" } ?: ""
+        val url = "${server}/user_usage_stats/$userId/$date/GetItems?$filterParam"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+        val json = Json.decodeFromString<JsonArray>(body)
+        json.mapNotNull { element ->
+            val obj = element.jsonObject
+            com.raulshma.jellyplay.core.model.PlaybackReportingDetail(
+                time = obj["Time"]?.jsonPrimitive?.content ?: "",
+                itemId = obj["Id"]?.jsonPrimitive?.content ?: "",
+                name = obj["Name"]?.jsonPrimitive?.content ?: "",
+                type = obj["Type"]?.jsonPrimitive?.content ?: "",
+                client = obj["Client"]?.jsonPrimitive?.content ?: "",
+                method = obj["Method"]?.jsonPrimitive?.content ?: "",
+                device = obj["Device"]?.jsonPrimitive?.content ?: "",
+                duration = obj["Duration"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+            )
+        }
+    }
+
+    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<com.raulshma.jellyplay.core.model.ContentBreakdown>> = apiResult {
+        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
+        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
+        val filterParam = filter?.let { "&filter=$it" } ?: ""
+        val url = "${server}/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+        val json = Json.decodeFromString<JsonArray>(body)
+        json.mapIndexed { index, element ->
+            val obj = element.jsonObject
+            com.raulshma.jellyplay.core.model.ContentBreakdown(
+                label = obj["label"]?.jsonPrimitive?.content
+                    ?: obj["name"]?.jsonPrimitive?.content
+                    ?: "",
+                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: 0,
+                colorIndex = index,
+            )
+        }
+    }
+
+    private fun parseItemKind(type: String): org.jellyfin.sdk.model.api.BaseItemKind? = when (type) {
+        "Movie" -> org.jellyfin.sdk.model.api.BaseItemKind.MOVIE
+        "Series" -> org.jellyfin.sdk.model.api.BaseItemKind.SERIES
+        "Episode" -> org.jellyfin.sdk.model.api.BaseItemKind.EPISODE
+        "Audio" -> org.jellyfin.sdk.model.api.BaseItemKind.AUDIO
+        "MusicVideo" -> org.jellyfin.sdk.model.api.BaseItemKind.MUSIC_VIDEO
+        "Book" -> org.jellyfin.sdk.model.api.BaseItemKind.BOOK
+        "BoxSet" -> org.jellyfin.sdk.model.api.BaseItemKind.BOX_SET
+        else -> null
+    }
+
+    private fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSortBy? = when (sortBy) {
+        "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
+        "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
+        "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
+        "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
+        "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
+        "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
+        "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
+        else -> null
+    }
+
+    private fun formatSize(bytes: Long): String = when {
+        bytes <= 0 -> ""
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
+        else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
     }
 
     private fun org.jellyfin.sdk.model.api.TaskInfo.toTaskModel() = ScheduledTaskInfo(

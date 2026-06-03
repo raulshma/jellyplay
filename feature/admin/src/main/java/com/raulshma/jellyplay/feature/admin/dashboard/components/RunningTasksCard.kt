@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -128,7 +128,7 @@ private fun TaskItem(
                 label = "taskProgress",
             )
             @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-            LinearWavyProgressIndicator(
+            JellyPlayLinearProgressIndicator(
                 progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()

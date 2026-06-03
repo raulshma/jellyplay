@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -235,13 +235,12 @@ fun NextEpisodeOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            LinearWavyProgressIndicator(
+                            JellyPlayLinearProgressIndicator(
                                 progress = { 1f - (countdown.toFloat() / countdownSeconds.toFloat()) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(3.dp),
                                 color = MaterialTheme.colorScheme.primary,
-                                trackColor = Color.White.copy(alpha = 0.1f),
                             )
                             Text(
                                 text = "${countdown}s",

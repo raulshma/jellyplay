@@ -18,7 +18,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -174,13 +174,12 @@ fun TrickplayOverlay(
 
                 if (durationMs > 0) {
                     val progress = (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                    LinearWavyProgressIndicator(
+                    JellyPlayLinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.White.copy(alpha = 0.12f),
                     )
                 }
             }

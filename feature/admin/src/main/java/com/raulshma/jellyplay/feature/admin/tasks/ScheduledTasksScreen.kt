@@ -24,7 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -256,7 +256,7 @@ private fun TaskItem(
                 if (progress != null) {
                     Spacer(Modifier.height(8.dp))
                     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                    LinearWavyProgressIndicator(
+                    JellyPlayLinearProgressIndicator(
                         progress = { (progress / 100).toFloat() },
                         modifier = Modifier
                             .fillMaxWidth()
