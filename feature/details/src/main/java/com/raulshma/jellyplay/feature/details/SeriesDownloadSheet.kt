@@ -377,6 +377,7 @@ fun SeriesDownloadSheet(
                                                 CheckboxDefaults.colors()
                                             },
                                         )
+                                        Spacer(Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = buildString {

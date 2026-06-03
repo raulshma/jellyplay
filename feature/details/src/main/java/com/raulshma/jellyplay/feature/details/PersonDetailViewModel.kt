@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,17 +34,47 @@ class PersonDetailViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
+            name = ""
+            filmography = emptyList()
             coroutineScope {
-                val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
-                val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
-                detailDeferred.await()
-                    .onSuccess { detail -> name = detail.item.name }
-                itemsDeferred.await()
-                    .onSuccess { items -> filmography = items }
-                    .onFailure { error = it.message ?: "Failed to load" }
+                val detailDeferred = async {
+                    retryIO { mediaRepository.getMediaDetail(personId) }
+                }
+                val itemsDeferred = async {
+                    retryIO { mediaRepository.getItemsByPerson(personId) }
+                }
+
+                val detailResult = detailDeferred.await()
+                val itemsResult = itemsDeferred.await()
+
+                if (detailResult.isSuccess && itemsResult.isSuccess) {
+                    name = detailResult.getOrThrow().item.name
+                    filmography = itemsResult.getOrThrow()
+                } else {
+                    val detailError = detailResult.exceptionOrNull()?.message
+                    val itemsError = itemsResult.exceptionOrNull()?.message
+                    error = itemsError ?: detailError ?: "Failed to load"
+                }
             }
             isLoading = false
         }
+    }
+
+    private suspend fun <T> retryIO(
+        times: Int = 3,
+        initialDelay: Long = 1000,
+        maxDelay: Long = 4000,
+        factor: Double = 2.0,
+        block: suspend () -> Result<T>
+    ): Result<T> {
+        var currentDelay = initialDelay
+        repeat(times - 1) {
+            val result = block()
+            if (result.isSuccess) return result
+            kotlinx.coroutines.delay(currentDelay)
+            currentDelay = (currentDelay * factor).toLong().coerceAtMost(maxDelay)
+        }
+        return block()
     }
 
     fun getImageUrl(itemId: String): String =
