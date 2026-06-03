@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -388,90 +389,140 @@ class MpvPlayerEngine(
     }
 
     override fun updateConfig(config: EngineConfig) {
+        if (currentConfig == config) return
+        val oldConfig = currentConfig
         currentConfig = config
         val mpvCfg = (config.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
-        
+
         try {
-            mpvView?.mpv?.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
-            mpvView?.mpv?.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
-            
-            val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (config.decoderMode) {
-                DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
-                DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
-                DecoderMode.SW_ONLY -> "no"
+            val mpv = mpvView?.mpv ?: return
+
+            if (oldConfig.audioDelayMs != config.audioDelayMs) {
+                mpv.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
             }
-            mpvView?.mpv?.setPropertyString("hwdec", hwdecValue)
-            
-            if (config.audioPassthrough) {
-                mpvView?.mpv?.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
-            } else {
-                mpvView?.mpv?.setOptionString("audio-spdif", "")
+            if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
+                mpv.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
             }
 
-            val aoValue = buildString {
-                append(mpvCfg.audioOutput.key)
-                mpvCfg.audioFallback?.let { append(",").append(it.key) }
-            }
-            mpvView?.mpv?.setPropertyString("ao", aoValue)
-
-            mpvView?.mpv?.setPropertyString("scale", mpvCfg.scaler.key)
-            mpvView?.mpv?.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
-            mpvView?.mpv?.setPropertyString("interpolation", if (mpvCfg.interpolation) "yes" else "no")
-            if (mpvCfg.interpolation) {
-                mpvView?.mpv?.setPropertyString("video-sync", "display-resample")
-            }
-            mpvView?.mpv?.setPropertyString("framedrop", mpvCfg.frameDrop.key)
-            mpvView?.mpv?.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
-
-            applySubtitleStyleInternal(config.subtitleStyle)
-
-            when (config.audioEffects.channelMixMode) {
-                ChannelMixMode.STEREO_DOWNMIX -> mpvView?.mpv?.setPropertyString("audio-channels", "stereo")
-                ChannelMixMode.MONO -> mpvView?.mpv?.setPropertyString("audio-channels", "mono")
-                ChannelMixMode.SURROUND_UPMIX -> mpvView?.mpv?.setPropertyString("audio-channels", "5.1")
-                ChannelMixMode.AUTO -> mpvView?.mpv?.setPropertyString("audio-channels", "auto")
-            }
-
-            if (config.audioEffects.audioNormalizationEnabled) {
-                val afFilters = mutableListOf<String>()
-                when (config.audioEffects.audioNormalizationMode) {
-                    AudioNormalizationMode.DYNAMIC -> {
-                        afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
-                    }
-                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
-                        afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
-                    }
-                    AudioNormalizationMode.NONE -> {}
+            if (oldConfig.decoderMode != config.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
+                val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (config.decoderMode) {
+                    DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+                    DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
+                    DecoderMode.SW_ONLY -> "no"
                 }
-                val filterString = afFilters.joinToString(",")
-                if (filterString.isNotEmpty()) {
-                    mpvView?.mpv?.setPropertyString("af", filterString)
+                mpv.setPropertyString("hwdec", hwdecValue)
+            }
+
+            if (oldConfig.audioPassthrough != config.audioPassthrough) {
+                if (config.audioPassthrough) {
+                    mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
                 } else {
-                    mpvView?.mpv?.command("af", "clr", "")
+                    mpv.setOptionString("audio-spdif", "")
                 }
-            } else {
-                mpvView?.mpv?.command("af", "clr", "")
             }
 
-            applyVideoFilters(config.videoEffects)
+            val oldMpvCfg = oldConfig.engineSpecific as? MpvEngineConfig
+            if (oldMpvCfg?.audioOutput != mpvCfg.audioOutput || oldMpvCfg?.audioFallback != mpvCfg.audioFallback) {
+                val aoValue = buildString {
+                    append(mpvCfg.audioOutput.key)
+                    mpvCfg.audioFallback?.let { append(",").append(it.key) }
+                }
+                mpv.setPropertyString("ao", aoValue)
+            }
+
+            if (oldMpvCfg?.scaler != mpvCfg.scaler) {
+                mpv.setPropertyString("scale", mpvCfg.scaler.key)
+            }
+            if (oldMpvCfg?.deband != mpvCfg.deband) {
+                mpv.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
+            }
+            if (oldMpvCfg?.interpolation != mpvCfg.interpolation) {
+                mpv.setPropertyString("interpolation", if (mpvCfg.interpolation) "yes" else "no")
+                if (mpvCfg.interpolation) {
+                    mpv.setPropertyString("video-sync", "display-resample")
+                }
+            }
+            if (oldMpvCfg?.frameDrop != mpvCfg.frameDrop) {
+                mpv.setPropertyString("framedrop", mpvCfg.frameDrop.key)
+            }
+            if (oldMpvCfg?.skipLoopFilter != mpvCfg.skipLoopFilter) {
+                mpv.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
+            }
+
+            if (oldConfig.subtitleStyle != config.subtitleStyle) {
+                applySubtitleStyleInternal(config.subtitleStyle)
+            }
+
+            if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
+                when (config.audioEffects.channelMixMode) {
+                    ChannelMixMode.STEREO_DOWNMIX -> mpv.setPropertyString("audio-channels", "stereo")
+                    ChannelMixMode.MONO -> mpv.setPropertyString("audio-channels", "mono")
+                    ChannelMixMode.SURROUND_UPMIX -> mpv.setPropertyString("audio-channels", "5.1")
+                    ChannelMixMode.AUTO -> mpv.setPropertyString("audio-channels", "auto")
+                }
+            }
+
+            val oldAudioFx = oldConfig.audioEffects
+            val newAudioFx = config.audioEffects
+            if (oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
+                oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode
+            ) {
+                if (newAudioFx.audioNormalizationEnabled) {
+                    val afFilters = mutableListOf<String>()
+                    when (newAudioFx.audioNormalizationMode) {
+                        AudioNormalizationMode.DYNAMIC -> {
+                            afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
+                        }
+                        AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
+                            afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
+                        }
+                        AudioNormalizationMode.NONE -> {}
+                    }
+                    val filterString = afFilters.joinToString(",")
+                    if (filterString.isNotEmpty()) {
+                        mpv.setPropertyString("af", filterString)
+                    } else {
+                        mpv.command("af", "clr", "")
+                    }
+                } else {
+                    mpv.command("af", "clr", "")
+                }
+            }
+
+            if (oldConfig.videoEffects != config.videoEffects) {
+                applyVideoFilters(config.videoEffects)
+            }
 
             val sid = audioSessionId
             if (sid != 0) {
-                dialogueBoost.attach(sid)
-                dialogueBoost.setStrength(config.audioEffects.dialogueBoostStrength)
-                dialogueBoost.setEnabled(config.audioEffects.dialogueBoostEnabled)
-
-                nightMode.attach(sid)
-                nightMode.setStrength(config.audioEffects.nightModeStrength)
-                nightMode.setEnabled(config.audioEffects.nightModeEnabled)
-
-                audioNormalization.attach(sid)
-                audioNormalization.setMode(config.audioEffects.audioNormalizationMode)
-                audioNormalization.setEnabled(config.audioEffects.audioNormalizationEnabled)
-
-                channelMix.attach(sid)
-                channelMix.setMode(config.audioEffects.channelMixMode)
-                channelMix.setEnabled(config.audioEffects.channelMixEnabled)
+                if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
+                    oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
+                ) {
+                    dialogueBoost.attach(sid)
+                    dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
+                    dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)
+                }
+                if (oldAudioFx.nightModeStrength != newAudioFx.nightModeStrength ||
+                    oldAudioFx.nightModeEnabled != newAudioFx.nightModeEnabled
+                ) {
+                    nightMode.attach(sid)
+                    nightMode.setStrength(newAudioFx.nightModeStrength)
+                    nightMode.setEnabled(newAudioFx.nightModeEnabled)
+                }
+                if (oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode ||
+                    oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled
+                ) {
+                    audioNormalization.attach(sid)
+                    audioNormalization.setMode(newAudioFx.audioNormalizationMode)
+                    audioNormalization.setEnabled(newAudioFx.audioNormalizationEnabled)
+                }
+                if (oldAudioFx.channelMixMode != newAudioFx.channelMixMode ||
+                    oldAudioFx.channelMixEnabled != newAudioFx.channelMixEnabled
+                ) {
+                    channelMix.attach(sid)
+                    channelMix.setMode(newAudioFx.channelMixMode)
+                    channelMix.setEnabled(newAudioFx.channelMixEnabled)
+                }
             }
         } catch (_: Exception) {}
     }
@@ -660,6 +711,9 @@ class MpvPlayerEngine(
         var lastPlayingState = _isPlaying.value
         val ticker = engineScope.launch {
             while (isActive) {
+                if (!_isPlaying.value) {
+                    _isPlaying.first { it }
+                }
                 delay(500)
                 trySend(currentPositionMs)
                 val currentlyPlaying = _isPlaying.value

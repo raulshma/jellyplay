@@ -59,6 +59,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Initialize Cast SDK eagerly while the splash screen is still up, so the
+        // first composition frame doesn't pay the JNI init cost.
+        runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f).apply {
@@ -119,7 +122,6 @@ class MainActivity : FragmentActivity() {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         try {
-                            com.google.android.gms.cast.framework.CastContext.getSharedInstance(ctx)
                             androidx.mediarouter.app.MediaRouteButton(ctx).also {
                                 it.visibility = View.INVISIBLE
                                 com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(ctx, it)

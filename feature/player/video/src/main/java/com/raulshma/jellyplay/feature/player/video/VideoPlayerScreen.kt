@@ -48,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -235,14 +237,17 @@ fun VideoPlayerScreen(
     }
 
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-    LaunchedEffect(windowInfo.isWindowFocused) {
-        if (windowInfo.isWindowFocused) {
-            activity?.let { act ->
-                val window = act.window
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
+    val isWindowFocused = rememberUpdatedState(windowInfo.isWindowFocused)
+    LaunchedEffect(activity) {
+        snapshotFlow { isWindowFocused.value }.distinctUntilChanged().collect { focused ->
+            if (focused) {
+                activity?.let { act ->
+                    val window = act.window
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
@@ -456,16 +461,18 @@ fun VideoPlayerScreen(
             else engine?.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition) {
+    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
         {
-            val pos = currentPosition
+            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
             val target = (pos - uiState.seekDurationMs).coerceAtLeast(0)
             doSeekTo(target)
         }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected, currentPosition, duration) {
+    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
         {
-            val target = (currentPosition + uiState.seekDurationMs).coerceAtMost(duration.coerceAtLeast(0))
+            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
+            val dur = viewModel.playerEngineRef?.durationMs ?: 0L
+            val target = (pos + uiState.seekDurationMs).coerceAtMost(dur.coerceAtLeast(0))
             doSeekTo(target)
         }
     }
@@ -475,6 +482,7 @@ fun VideoPlayerScreen(
     val currentDoSeekBack by rememberUpdatedState(doSeekBack)
     val currentDoSeekForward by rememberUpdatedState(doSeekForward)
     val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
+    val currentSeekDurationMs by rememberUpdatedState(uiState.seekDurationMs)
 
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
@@ -545,7 +553,7 @@ fun VideoPlayerScreen(
                     }
                 } else Modifier
             )
-            .pointerInput(uiState.gesturesEnabled, uiState.seekDurationMs, isScreenLocked) {
+            .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
                 if (isScreenLocked) return@pointerInput
                 if (!uiState.gesturesEnabled) return@pointerInput
                 detectTapGestures(
@@ -555,13 +563,13 @@ fun VideoPlayerScreen(
                         when {
                             offset.x < width * 0.35 -> {
                                 seekDirection = -1
-                                seekOffsetMs = uiState.seekDurationMs
+                                seekOffsetMs = currentSeekDurationMs
                                 seekTimestamp++
                                 currentDoSeekBack()
                             }
                             offset.x > width * 0.65 -> {
                                 seekDirection = 1
-                                seekOffsetMs = uiState.seekDurationMs
+                                seekOffsetMs = currentSeekDurationMs
                                 seekTimestamp++
                                 currentDoSeekForward()
                             }
@@ -668,26 +676,30 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onClearOverlays = {
-                if (isGestureSeeking) {
-                    doSeekTo(gestureSeekPositionMs)
+            onClearOverlays = remember(doSeekTo) {
+                {
+                    if (isGestureSeeking) {
+                        doSeekTo(gestureSeekPositionMs)
+                    }
+                    if (brightnessOverlay in 0f..1f) {
+                        viewModel.saveBrightness(brightnessOverlay)
+                    }
+                    seekDirection = 0
+                    seekOffsetMs = 0L
+                    brightnessOverlay = -1f
+                    volumeOverlay = -1f
+                    volumeGestureAccumulator = 0f
+                    isGestureSeeking = false
                 }
-                if (brightnessOverlay in 0f..1f) {
-                    viewModel.saveBrightness(brightnessOverlay)
-                }
-                seekDirection = 0
-                seekOffsetMs = 0L
-                brightnessOverlay = -1f
-                volumeOverlay = -1f
-                volumeGestureAccumulator = 0f
-                isGestureSeeking = false
             },
             showControls = showControls,
-            onEdgeSwipe = {
-                if (!showControls) {
-                    showControls = true
-                } else {
-                    onBack()
+            onEdgeSwipe = remember(onBack) {
+                {
+                    if (!showControls) {
+                        showControls = true
+                    } else {
+                        onBack()
+                    }
                 }
             },
         )

@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -299,13 +298,11 @@ internal fun PlayerControls(
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                 ) {
-                    Crossfade(targetState = isPlaying, label = "PlayPause") { playing ->
-                        Icon(
-                            if (playing) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                            if (playing) "Pause" else "Play",
-                            modifier = Modifier.size(40.dp),
-                        )
-                    }
+                    Icon(
+                        if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                        if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(40.dp),
+                    )
                 }
 
                 FilledTonalIconButton(

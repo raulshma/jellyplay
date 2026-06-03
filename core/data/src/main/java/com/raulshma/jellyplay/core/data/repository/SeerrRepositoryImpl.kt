@@ -4,13 +4,17 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,40 +31,45 @@ class SeerrRepositoryImpl @Inject constructor(
     @Volatile
     private var lastPrefsHash: Int = 0
 
-    private val cachedPrefs = seerrPreferencesStore.preferences
-        .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.Eagerly, null)
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val detailCache = object : LinkedHashMap<String, CacheEntry<Any>>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry<Any>>): Boolean {
-            return size > 50
+    private val cachedPrefs = seerrPreferencesStore.preferences
+        .stateIn(cacheScope, SharingStarted.Eagerly, null)
+
+    private val detailCache = ConcurrentHashMap<String, CacheEntry<Any>>()
+    private val CACHE_TTL_MS = 60_000L
+    private val EVICTION_INTERVAL_MS = 30_000L
+    private val CACHE_MAX_ENTRIES = 50
+
+    init {
+        cacheScope.launch {
+            while (isActive) {
+                delay(EVICTION_INTERVAL_MS)
+                evictExpired()
+                if (detailCache.size > CACHE_MAX_ENTRIES) {
+                    val excess = detailCache.size - CACHE_MAX_ENTRIES
+                    detailCache.keys.take(excess).forEach { detailCache.remove(it) }
+                }
+            }
         }
     }
-    @Volatile
-    private var lastCacheEvictionMs = 0L
-    private val CACHE_TTL_MS = 60_000L
 
-    @Synchronized
     private fun <T> getCached(key: String): T? {
-        evictExpired()
         val entry = detailCache[key] ?: return null
         if (System.currentTimeMillis() - entry.timestampMs > CACHE_TTL_MS) {
-            detailCache.remove(key)
+            detailCache.remove(key, entry)
             return null
         }
         @Suppress("UNCHECKED_CAST")
         return entry.value as T
     }
 
-    @Synchronized
     private fun putCached(key: String, value: Any) {
-        evictExpired()
         detailCache[key] = CacheEntry(value, System.currentTimeMillis())
     }
 
     private fun evictExpired() {
         val now = System.currentTimeMillis()
-        if (now - lastCacheEvictionMs < 30_000L) return
-        lastCacheEvictionMs = now
         val iter = detailCache.entries.iterator()
         while (iter.hasNext()) {
             if (now - iter.next().value.timestampMs > CACHE_TTL_MS) {

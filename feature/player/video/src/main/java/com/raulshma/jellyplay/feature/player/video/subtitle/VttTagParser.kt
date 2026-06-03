@@ -6,12 +6,16 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.collection.LruCache
 
 object VttTagParser {
 
     private val TAG_PATTERN = Regex("""<(/?)(b|i|u|lang[^>]*)>""")
 
+    private val annotatedCache = LruCache<String, AnnotatedString>(MAX_CACHED_CUES)
+
     fun parseAnnotated(text: String): AnnotatedString {
+        annotatedCache.get(text)?.let { return it }
         val segments = mutableListOf<Segment>()
         val stack = mutableListOf<MutableList<SpanStyle>>()
         var currentStyles = mutableListOf<SpanStyle>()
@@ -51,11 +55,13 @@ object VttTagParser {
                     addStyle(style, start, length)
                 }
             }
-        }
+        }.also { annotatedCache.put(text, it) }
     }
 
     fun stripTags(text: String): String =
         TAG_PATTERN.replace(text, "")
+
+    private const val MAX_CACHED_CUES = 64
 
     private data class Segment(val text: String, val styles: List<SpanStyle>)
 }

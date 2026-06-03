@@ -39,6 +39,13 @@ android {
     }
 }
 
+if (project.hasProperty("enableComposeMetrics")) {
+    composeCompiler {
+        metricsDestination = layout.buildDirectory.dir("compose-metrics")
+        reportsDestination = layout.buildDirectory.dir("compose-reports")
+    }
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))

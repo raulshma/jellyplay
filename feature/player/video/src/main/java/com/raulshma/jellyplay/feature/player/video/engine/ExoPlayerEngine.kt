@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -79,6 +80,9 @@ class ExoPlayerEngine(
 
     @Volatile
     private var lastUnmuteVolume: Float = 1f
+
+    @Volatile
+    private var lastAppliedAudioSessionId: Int = -1
 
     private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -177,7 +181,10 @@ class ExoPlayerEngine(
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
-            applyAudioEffects()
+            if (audioSessionId != lastAppliedAudioSessionId) {
+                lastAppliedAudioSessionId = audioSessionId
+                applyAudioEffects()
+            }
         }
 
         override fun onVolumeChanged(volume: Float) {
@@ -408,12 +415,14 @@ class ExoPlayerEngine(
             // The OffsettingSubtitleParserFactory reads currentConfig.subtitleDelayMs
             // dynamically via its lambda, so no media reload is needed.
         }
-        
+
         if (oldConfig.audioEffects != config.audioEffects) {
             applyAudioEffects()
         }
-        
-        playerView?.let { pv -> applySubtitleStyleToView(pv, config.subtitleStyle) }
+
+        if (oldConfig.subtitleStyle != config.subtitleStyle) {
+            playerView?.let { pv -> applySubtitleStyleToView(pv, config.subtitleStyle) }
+        }
     }
 
     override fun selectTrack(type: TrackType, index: Int, trackGroup: Any?) = runOnPlayerThread {
@@ -568,6 +577,11 @@ class ExoPlayerEngine(
         var lastPlayingState = p.isPlaying
         val ticker = engineScope.launch {
             while (isActive) {
+                if (!p.isPlaying) {
+                    // Suspend the ticker entirely while paused. Wakes up the
+                    // instant playback resumes via _isPlaying.
+                    _isPlaying.first { it }
+                }
                 delay(500)
                 runCatching {
                     val currentlyPlaying = p.isPlaying

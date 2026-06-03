@@ -22,7 +22,6 @@ import org.jellyfin.sdk.model.ClientInfo
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
-import kotlinx.coroutines.flow.first
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -69,26 +68,24 @@ abstract class NetworkModule {
         ): OkHttpClient {
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
-            val cacheMb = kotlinx.coroutines.runBlocking {
-                userPreferencesStore.preferences.first().maxCacheSizeMb
-            }
+            val cacheMb = userPreferencesStore.preferences.value.maxCacheSizeMb
             val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
             return OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
                 .cache(Cache(cacheDir, cacheSize))
-                .connectionPool(ConnectionPool(5, 10, TimeUnit.MINUTES))
+                .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
                 .addNetworkInterceptor { chain ->
                     val response = chain.proceed(chain.request())
                     val path = chain.request().url.encodedPath
                     val cacheMaxAge = when {
-                        path.contains("/Images/") -> 604800
-                        path.contains("/Genres") -> 300
-                        path.contains("/System/Info") -> 600
-                        path.contains("/Library/MediaFolders") -> 300
+                        path.startsWith("/Items/") && path.contains("/Images/") -> 604800
+                        path.startsWith("/Genres/") -> 300
+                        path == "/System/Info/Public" -> 600
+                        path.startsWith("/Library/MediaFolders") -> 300
                         else -> null
                     }
                     if (response.isSuccessful && cacheMaxAge != null) {
