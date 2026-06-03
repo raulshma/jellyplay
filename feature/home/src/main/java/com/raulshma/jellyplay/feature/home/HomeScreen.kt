@@ -314,6 +314,7 @@ private fun MainHomeContent(
             dynamicTheming = state.dynamicTheming,
             darkTheme = !isLightTheme,
             oledMode = state.oledMode,
+            colorStyle = state.colorStyle,
         ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
