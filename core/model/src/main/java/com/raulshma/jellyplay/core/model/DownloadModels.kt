@@ -127,6 +127,8 @@ data class UserPreferences(
     val newsletterEnabled: Boolean = true,
     val newsletterDayOfWeek: Int = 7,
     val newsletterLastViewedMs: Long = 0L,
+    val accentColorSwatch: String = "dynamic",
+    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
 )
 
 @Immutable
@@ -149,6 +151,16 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+}
+
+@Immutable
+@Serializable
+enum class ColorStyle(val displayName: String) {
+    TONAL_SPOT("Tonal Spot"),
+    VIBRANT("Vibrant"),
+    EXPRESSIVE("Expressive"),
+    MUTED("Muted"),
+    MONOCHROME("Monochrome"),
 }
 
 @Immutable

@@ -156,6 +156,8 @@ class MainActivity : FragmentActivity() {
                 contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
                 performanceMode = preferences.performanceMode,
+                accentColorSwatch = preferences.accentColorSwatch,
+                colorStyle = preferences.colorStyle,
             ) {
                 if (showLockScreen) {
                     AuthChallengeScreen(

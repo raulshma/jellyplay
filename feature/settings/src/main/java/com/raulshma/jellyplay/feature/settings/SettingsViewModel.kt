@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -194,6 +195,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setDynamicTheming(enabled: Boolean) {
         viewModelScope.launch { preferencesStore.setDynamicTheming(enabled) }
+    }
+
+    fun setAccentColorSwatch(swatch: String) {
+        viewModelScope.launch { preferencesStore.setAccentColorSwatch(swatch) }
+    }
+
+    fun setColorStyle(style: ColorStyle) {
+        viewModelScope.launch { preferencesStore.setColorStyle(style) }
     }
 
     fun setThemeMode(mode: ThemeMode) {
