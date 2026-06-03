@@ -482,6 +482,7 @@ interface JellyfinApiClient {
         parentId: String? = null,
         startIndex: Int = 0,
         limit: Int = 200,
+        useDateAdded: Boolean = false,
     ): Result<Pair<Int, List<com.raulshma.jellyplay.core.model.StaleMediaItem>>>
 
     suspend fun getWatchedItems(
@@ -519,5 +520,6 @@ interface JellyfinApiClient {
     suspend fun getPlaybackReportingBreakdown(
         breakdownType: String,
         days: Int = 30,
+        filter: String? = null,
     ): Result<List<com.raulshma.jellyplay.core.model.ContentBreakdown>>
 }

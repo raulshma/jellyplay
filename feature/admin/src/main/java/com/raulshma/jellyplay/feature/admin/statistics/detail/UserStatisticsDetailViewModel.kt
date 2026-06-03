@@ -47,6 +47,7 @@ class UserStatisticsDetailViewModel @Inject constructor(
                 _state.value = _state.value.copy(isLoadingMore = true)
             }
 
+            repository.refreshPlaybackReportingStatus()
             _state.value = _state.value.copy(pluginStatus = repository.getPlaybackReportingStatus().first())
 
             repository.getUserDetailStatistics(userId, page, pageSize = 50)

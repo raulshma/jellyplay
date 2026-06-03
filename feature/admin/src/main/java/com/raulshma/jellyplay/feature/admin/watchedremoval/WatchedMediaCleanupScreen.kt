@@ -262,17 +262,38 @@ private fun WatchedItemCard(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(item.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier.clip(ShapeCache.smoothPill).background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(item.type, style = MaterialTheme.typography.labelSmall)
                     }
-                    if (item.detail.isNotBlank()) {
+                    if (item.seriesName != null) {
+                        Spacer(Modifier.width(6.dp))
+                        val epLabel = buildString {
+                            append(item.seriesName)
+                            if (item.seasonNumber != null || item.episodeNumber != null) {
+                                append(" ")
+                                if (item.seasonNumber != null) append("S${item.seasonNumber}")
+                                if (item.episodeNumber != null) append("E${item.episodeNumber}")
+                            }
+                        }
+                        Text(epLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else if (item.detail.isNotBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Text(item.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                if (item.dateText != null) {
+                    Text(
+                        text = item.dateText!!,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+            if (item.sizeText.isNotBlank()) {
+                Text(item.sizeText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -315,7 +317,7 @@ private fun StaleItemCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                 )
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(ShapeCache.smoothPill)
@@ -324,7 +326,22 @@ private fun StaleItemCard(
                     ) {
                         Text(item.type, style = MaterialTheme.typography.labelSmall)
                     }
-                    if (item.detail.isNotBlank()) {
+                    if (item.seriesName != null) {
+                        Spacer(Modifier.width(6.dp))
+                        val epLabel = buildString {
+                            append(item.seriesName)
+                            if (item.seasonNumber != null || item.episodeNumber != null) {
+                                append(" ")
+                                if (item.seasonNumber != null) append("S${item.seasonNumber}")
+                                if (item.episodeNumber != null) append("E${item.episodeNumber}")
+                            }
+                        }
+                        Text(
+                            epLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (item.detail.isNotBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Text(
                             item.detail,
@@ -332,6 +349,13 @@ private fun StaleItemCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                if (item.dateText != null) {
+                    Text(
+                        text = item.dateText!!,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                 }
             }
             if (item.sizeText.isNotBlank()) {
@@ -473,6 +497,19 @@ private fun ConfigurationTab(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Text("Use date added to library", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = config.useDateAdded,
+                            onCheckedChange = { onConfigChange(config.copy(useDateAdded = it)) },
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text("Include never-played items", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = config.includeNeverPlayed,
@@ -485,9 +522,11 @@ private fun ConfigurationTab(
                     Text("Media types", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(8.dp))
                     val allTypes = listOf("Movie", "Series", "Episode", "Audio", "MusicVideo", "Book")
-                    Row(
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         allTypes.forEach { type ->
                             FilterChip(

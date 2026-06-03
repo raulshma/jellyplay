@@ -110,7 +110,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 itemId = item.id,
                 name = item.name,
                 type = item.mediaType.name,
-                playCount = 0,
+                playCount = item.playCount,
                 lastPlayedDate = null,
                 posterBlurHash = item.blurHashes.primary,
                 seriesName = item.seriesName,
@@ -119,8 +119,12 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         }
 
         val activityChart = if (pluginAvailable) {
-            apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count").getOrDefault(emptyList())
+            apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId).getOrDefault(emptyList())
         } else emptyList()
+
+        val fallbackChart = if (activityChart.isEmpty()) {
+            buildFallbackActivityChart(playedResult.second)
+        } else activityChart
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -141,15 +145,15 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         ).filter { it.value > 0 }
 
         val genreBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("ItemType", days = 30).getOrDefault(emptyList())
+            apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
         val methodBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30).getOrDefault(emptyList())
+            apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
         val deviceBreakdown = if (pluginAvailable) {
-            apiClient.getPlaybackReportingBreakdown("ClientName", days = 30).getOrDefault(emptyList())
+            apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
         val moviePlayed = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0)
@@ -175,7 +179,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             topItems = topItems,
             topItemsTotalCount = playedResult.first,
             hasMoreItems = playedResult.first > (page + 1) * pageSize,
-            activityChart = activityChart,
+            activityChart = fallbackChart,
             typeBreakdown = typeBreakdown,
             genreBreakdown = genreBreakdown,
             methodBreakdown = methodBreakdown,
@@ -225,9 +229,12 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                     includeItemTypes = config.includeItemTypes.toList(),
                     startIndex = startIndex,
                     limit = pageSize,
+                    useDateAdded = config.useDateAdded,
                 ).getOrDefault(Pair(0, emptyList()))
 
                 val items = result.second.map { staleItem ->
+                    val dateStr = if (config.useDateAdded) staleItem.dateAdded else staleItem.lastPlayedDate
+                    val formattedDate = dateStr?.take(10)
                     MediaItemStub(
                         itemId = staleItem.itemId,
                         name = staleItem.name,
@@ -235,10 +242,19 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         sizeText = staleItem.sizeText,
                         detail = buildString {
                             if (staleItem.daysSincePlay > 0) append("${staleItem.daysSincePlay}d ago")
+                            else append("Never played")
                             if (staleItem.playCount > 0) {
-                                if (isNotEmpty()) append(" · ")
-                                append("${staleItem.playCount} plays")
+                                append(" · ${staleItem.playCount} plays")
                             }
+                        },
+                        seriesName = staleItem.seriesName,
+                        seasonName = staleItem.seasonName,
+                        seasonNumber = staleItem.seasonNumber,
+                        episodeNumber = staleItem.episodeNumber,
+                        dateText = if (config.useDateAdded) {
+                            formattedDate?.let { "Added $it" } ?: "Added unknown"
+                        } else {
+                            formattedDate?.let { "Played $it" } ?: if (staleItem.playCount == 0) "Never played" else null
                         },
                     )
                 }
@@ -300,17 +316,23 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         .filter { if (!config.includePartiallyWatched) it.completionPct >= 0.9f else true }
                         .mapNotNull { watched ->
                             if (allResults.any { it.itemId == watched.itemId }) return@mapNotNull null
+                            val lastPlayedStr = watched.lastPlayedDate?.take(10)
                             MediaItemStub(
                                 itemId = watched.itemId,
                                 name = watched.name,
                                 type = watched.type,
-                                sizeText = "",
+                                sizeText = formatSize(watched.sizeBytes),
                                 detail = buildString {
                                     append("${watched.playCount} plays")
                                     if (watched.completionPct < 1f) {
                                         append(" · ${(watched.completionPct * 100).toInt()}%")
                                     }
                                 },
+                                seriesName = watched.seriesName,
+                                seasonName = watched.seasonName,
+                                seasonNumber = watched.seasonNumber,
+                                episodeNumber = watched.episodeNumber,
+                                dateText = lastPlayedStr?.let { "Played $it" },
                             )
                         }
 
@@ -439,6 +461,35 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         json.decodeFromString<List<AuditItemDetail>>(entity.itemDetailsJson)
                     }.getOrDefault(emptyList()),
                 )
+        }
+    }
+
+    private fun formatSize(bytes: Long): String = when {
+        bytes <= 0 -> ""
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
+        else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
+    }
+
+    private fun buildFallbackActivityChart(items: List<com.raulshma.jellyplay.core.model.MediaItem>): List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint> {
+        val now = java.time.LocalDate.now()
+        val dateCounts = mutableMapOf<String, Long>()
+        for (i in 0 until 30) {
+            val date = now.minusDays(i.toLong())
+            dateCounts[formatDate(date)] = 0
+        }
+        for (item in items) {
+            val datePlayed = item.lastPlayedDate ?: continue
+            val day = datePlayed.take(10)
+            if (day in dateCounts) {
+                dateCounts[day] = dateCounts.getOrDefault(day, 0L) + 1
             }
         }
+        return dateCounts.entries.sortedBy { it.key }.map { (date, count) ->
+            com.raulshma.jellyplay.core.model.PlaybackActivityPoint(date = date, value = count)
+        }
+    }
+
+    private fun formatDate(date: java.time.LocalDate): String = date.toString()
 }
