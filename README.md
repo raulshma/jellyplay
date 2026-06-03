@@ -23,7 +23,7 @@
 
 **JellyPlay** is a high-performance, feature-rich, and open-source **Jellyfin client app for Android** devices. Built entirely from the ground up using **Kotlin** and **Jetpack Compose** (Material 3/Expressive), JellyPlay delivers a premium, smooth, and native media streaming experience. Designed with an adaptive responsive interface, it adapts flawlessly to **Android mobile phones, tablets, foldables, and Android TV**.
 
-Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr**, or download media for **offline playback**, JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**) and real-time **SyncPlay watch parties**.
+Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr**, download media for **offline playback**, catch up with a weekly **Newsletter digest**, or join real-time **SyncPlay watch parties**, JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**), **remote control** from the server, and a guided **Onboarding Wizard** for personalized setup.
 
 [Key Features](#features) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building & Flavors](#building) • [Permissions](#permissions) • [Project Structure](#project-structure)
 
@@ -61,14 +61,21 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 - Token-based and Quick Connect authentication
 - Multi-user support with per-server user switching
 - Material 3 UI with dynamic theming from artwork
-- Expressive animations and transitions across music and media components using spring-based motion specifications
+- Expressive animations and spring-based motion specifications
+- Shared element transitions between screens
+- Performance Mode (disables animations for low-end devices)
 - Predictive back gesture support
 - Edge-to-edge immersive layouts
 - Adaptive layouts for phone, tablet, foldable, and TV
 - Android TV support with D-pad navigation and Leanback launcher
-- PIN lock protection and Kids Mode with content filtering
+- Android TV screensaver (Daydream) with configurable slideshow and Ken Burns effect
+- PIN lock and biometric authentication (fingerprint/face) with auto-lock timer
+- Kids Mode with content filtering
 - Home screen widgets (Now Playing, Continue Watching)
 - Quick settings tile launcher
+- App shortcuts (Continue Watching, Search, Play Music, Downloads, Continue Listening)
+- BlurHash image placeholders for smooth loading
+- Localization in 9 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Korean, Chinese)
 
 ### Search
 
@@ -82,21 +89,27 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 - Video filter controls: Adjust brightness, contrast, saturation, and sharpness in-player (libmpv & LibVLC)
 - Enhanced Video Stats Overlay presenting real-time stream bitrate, frame rate, and dropped frames
 - External player launching (MX Player, VLC, etc.)
-- Direct play, direct stream, and transcoding support
+- Direct play, direct stream, and transcoding support with quality/transcoding picker
 - Resume playback and progress reporting
 - Audio and subtitle track selection
-- Playback speed control
+- Playback speed control (0.25x–4x)
 - Gesture controls for seek, brightness, and volume
 - Chapter and episode navigation
 - HDR badge indicator
 - Picture-in-Picture support
 - Mini player overlay
-- Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets) with offline caching support to view seeking preview sprites during offline playback
+- Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets) with offline caching support
 - Frame rate matching for display refresh rate sync
 - Adaptive bitrate streaming
-- Intro skip and next episode auto-play
+- Intro skip and next episode auto-play with segment auto-skip (intro/outro/recap)
 - Chromecast support via Google Cast SDK
 - Media session integration for lock screen and notifications
+- Sleep timer with configurable duration
+- Aspect ratio selection
+- Hardware/software decoder selection
+- Audio delay adjustment (ms)
+- Player lock screen overlay to prevent accidental touches
+- Tap-to-translate subtitle feature
 
 ### Subtitle System
 
@@ -115,12 +128,16 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 - Shuffle and repeat modes
 - Playback speed control
 - Waveform-style seek bar
+- Real-time FFT audio visualizer
 - Synced and unsynced lyrics via LRCLIB API
-- 10-band equalizer
+- 10-band equalizer with presets
 - Night Mode (loudness enhancement with configurable strength)
 - Dialogue Boost (vocal frequency equalization with configurable strength)
-- Audio normalization and channel mix modes
+- Audio normalization (ReplayGain) and channel mix modes
+- Virtualizer (3D audio) and Reverb effect presets
+- Gapless playback and crossfade between tracks
 - Ambient Mode with animated color blobs derived from album art
+- Sleep timer with configurable duration
 
 ### Music Discovery
 
@@ -142,6 +159,36 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 - Discover trending, popular, and upcoming content
 - Request content via Radarr/Sonarr directly from the app
 - Seerr detail pages for unavailable media
+- Region configuration for streaming and discover content
+
+### Onboarding Wizard
+
+- 10-step first-run setup wizard shown after initial authentication
+- Appearance: Theme, dynamic theming, OLED mode, contrast level, home hero toggle
+- Performance: Performance mode toggle for low-end devices
+- Home Layout: Home mode (Video/Music), navigation bar labels, enabled home sections
+- Video Player: Preferred engine, streaming quality, seek duration, gestures, orientation, autoplay
+- Audio Player: Default speed, gapless playback, crossfade, normalization
+- Subtitles: Subtitle style customization (font, size, color, background)
+- Security: PIN lock, biometric lock, auto-lock timer
+- Seerr: Server URL, API key, feature toggles, regions
+- Re-accessible anytime from Settings
+
+### Newsletter
+
+- Weekly server digest showing library activity from the past 7 days
+- Curated sections: Recently Added, Continue Watching, Next Up, Fresh Picks, Activity Digest, Library Stats
+- Prominent banner on Home screen when new newsletter content is available
+- Full grid view for each section with navigation to details
+- Pull-to-refresh and configurable delivery schedule
+- Accessible from Home screen and Settings
+
+### Remote Control
+
+- WebSocket-based remote control from Jellyfin server
+- Receive Play, Pause, Seek, and general commands remotely
+- Media browser service integration for third-party controller apps
+- Active player management and remote playback reporting
 
 ### Metadata & Media Editor
 
@@ -159,6 +206,9 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 - Scheduled Tasks manager: Monitor, trigger, and cancel scheduled tasks on the Jellyfin server in real-time
 - Server Logs viewer: Browse, view, and download active server logs with severity indicators and recent activity timelines
 - Running tasks card tracking background operations with live progress updates
+- User Statistics: Per-user playback history and statistics with charts
+- Stale Media Scanner: Detect unwatched/stale media with background scan worker
+- Watched Media Cleanup: Bulk cleanup of watched media with audit history log
 
 ### SyncPlay (Watch Parties)
 
@@ -177,20 +227,26 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 ### Downloads & Offline
 
 - Video downloads via WorkManager with progress tracking
+- Series downloads with episode selection
 - Pause, resume, and retry support with HTTP Range resumption
 - Offline playback for completed downloads
+- Offline Library browser organized by series
+- Offline Series view for downloaded episode browsing
 - Foreground notification with speed and ETA
 
 ### Settings
 
 - Player: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer
-- Audio: default speed, night mode, dialogue boost, equalizer, audio normalization, channel mix
-- Subtitles: language, style, trickplay, intro/outro skip (manual and auto)
+- Audio: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, virtualizer, reverb
+- Subtitles: language, style, trickplay, intro/outro skip (manual and auto), tap-to-translate
 - SyncPlay: progress reporting, auto-join, sync correction parameters
 - Downloads: connections preference, max cache size (with unlimited/0 option support)
-- Visual: dynamic theming, streaming quality
-- Security: PIN lock
+- Visual: dynamic theming, streaming quality, performance mode
+- Security: PIN lock, biometric lock, auto-lock timer
 - Kids: mode toggle, max content rating
+- Screensaver: interval, Ken Burns effect, transition style, image categories, title overlay
+- Newsletter: enable/disable, delivery day, notification badge
+- Onboarding: re-run setup wizard anytime
 
 ---
 
@@ -199,20 +255,21 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 | Category         | Technologies                                             |
 | ---------------- | -------------------------------------------------------- |
 | Language         | Kotlin                                                   |
-| UI               | Jetpack Compose, Material 3, Material 3 Adaptive         |
+| UI               | Jetpack Compose, Material 3, Material 3 Expressive       |
 | TV               | Android TV Material, Leanback                            |
 | Navigation       | Navigation 3                                             |
 | DI               | Hilt                                                     |
 | Storage          | Room, DataStore                                          |
 | Background       | WorkManager, Coroutines, StateFlow                       |
 | Video Players    | Media3/ExoPlayer, libmpv, LibVLC                         |
-| Audio Effects    | Android Equalizer, LoudnessEnhancer                      |
+| Audio Effects    | Android Equalizer, LoudnessEnhancer, Virtualizer, Reverb |
 | Media Session    | Media3 Session, Media3 Cast                              |
 | Casting          | Google Play Services Cast Framework                      |
 | Networking       | OkHttp, Jellyfin SDK                                     |
 | Serialization    | kotlinx.serialization                                    |
-| Images           | Coil (with BlurHash support)                             |
+| Images           | Coil 3 (with BlurHash support)                           |
 | Text Recognition | ML Kit                                                   |
+| Biometrics       | AndroidX Biometric                                       |
 | Testing          | JUnit 4, Espresso, Compose UI Test, OkHttp MockWebServer |
 
 ---
@@ -274,6 +331,7 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) automates release bu
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media playback foreground service type        |
 | `FOREGROUND_SERVICE_DATA_SYNC`      | Download worker foreground service type       |
 | `POST_NOTIFICATIONS`                | Playback, download, and widget notifications  |
+| `USE_BIOMETRIC`                     | Biometric authentication (fingerprint/face)   |
 
 ---
 
@@ -289,19 +347,21 @@ core/datastore/          DataStore preferences
 core/data/               Repositories, playback managers, audio effects, SyncPlay, Cast, downloads
 core/ui/                 Shared UI components, adaptive layouts, TV focus, animations, navigation
 feature/auth/            Server selection and authentication
-feature/home/            Home screen, Kids home, and discover sections
+feature/onboarding/      First-run setup wizard (10-step preferences)
+feature/home/            Home screen, Kids home, newsletter banner, and discover sections
 feature/library/         Library browsing and media collections
 feature/search/          Search experience
 feature/details/         Media detail, person detail, collection detail, Seerr detail
 feature/player/video/    Video playback UI, multi-engine support, SyncPlay integration
 feature/player/audio/    Audio playback UI, lyrics, equalizer, ambient mode
-feature/downloads/       Download management and offline playback
+feature/downloads/       Download management, offline library, and offline playback
 feature/settings/        Settings, server/user management, Seerr configuration
 feature/music/           Music browsing, smart/mood playlists, artist/album details
 feature/livetv/          Live TV channels, EPG guide, and DVR
 feature/syncplay/        SyncPlay group management and watch party UI
 feature/editor/          Metadata, artwork, and subtitle editor for media items
-feature/admin/           Admin dashboard for server status, active devices, logs, and tasks
+feature/admin/           Admin dashboard for server status, active devices, logs, tasks, user stats
+feature/newsletter/      Weekly server digest with library activity, curated picks, and stats
 ```
 
 ---
