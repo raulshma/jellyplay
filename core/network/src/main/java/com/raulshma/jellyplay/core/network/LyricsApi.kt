@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -13,7 +14,7 @@ import okhttp3.Request
 
 internal object LyricsApi {
 
-    private val json = JellyfinApiClientImpl.sharedJson
+    private val json = JellyfinApiEngine.sharedJson
     private val lyricsRegex = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""")
 
     private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
