@@ -204,6 +204,10 @@ class MainActivity : FragmentActivity() {
         val isShortcutAction = action.startsWith("com.raulshma.jellyplay.action.")
         if (isShortcutAction) {
             viewModel.handleShortcutIntent(intent)
+            return
+        }
+        if (action == Intent.ACTION_VIEW && intent.data != null) {
+            viewModel.handleDeepLink(intent)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -29,7 +30,9 @@ data class UserEntity(
     val primaryImageTag: String? = null,
     val maxParentalAgeRating: Int? = null,
     val enabledFolderIds: String? = null,
+    @ColumnInfo(defaultValue = "0")
     val isAdmin: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
     val lastConnected: Long = System.currentTimeMillis(),
 )
 
@@ -53,6 +56,7 @@ data class DownloadEntity(
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
     val status: String,
+    @ColumnInfo(defaultValue = "0")
     val speedBytesPerSec: Long = 0L,
     val mediaSourceId: String? = null,
     val imageUrl: String? = null,
@@ -63,6 +67,7 @@ data class DownloadEntity(
     val seasonName: String? = null,
     val episodeNumber: Int? = null,
     val seasonNumber: Int? = null,
+    @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
 )
 
@@ -81,5 +86,6 @@ data class LyricsCacheEntity(
     val plainLyrics: String? = null,
     val duration: Double? = null,
     val lrcLibId: Long? = null,
+    @ColumnInfo(defaultValue = "0")
     val fetchedAt: Long = System.currentTimeMillis(),
 )

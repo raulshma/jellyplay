@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.feature.player.video.VideoMiniPlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -39,6 +40,7 @@ class MainViewModel @Inject constructor(
     val appShortcutManager: AppShortcutManager,
     val remoteControlReceiver: RemoteControlReceiver,
     val remoteNavigationBridge: RemoteNavigationBridge,
+    private val deepLinkHandler: DeepLinkHandler,
 ) : ViewModel() {
 
     private val _isRestoring = MutableStateFlow(true)
@@ -128,6 +130,11 @@ class MainViewModel @Inject constructor(
         if (route != null) {
             _navigationRequest.tryEmit(route)
         }
+    }
+
+    fun handleDeepLink(intent: Intent) {
+        val route = deepLinkHandler.parse(intent) ?: return
+        _navigationRequest.tryEmit(route)
     }
 
     fun logout() {

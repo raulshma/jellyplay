@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -34,9 +35,13 @@ data class ScanStateEntity(
     val type: String,
     val configJson: String,
     val status: String,
+    @ColumnInfo(defaultValue = "0")
     val progress: Int = 0,
+    @ColumnInfo(defaultValue = "0")
     val total: Int = 0,
+    @ColumnInfo(defaultValue = "0")
     val itemsFound: Int = 0,
     val resultJson: String? = null,
+    @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
 )
