@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -172,11 +172,10 @@ private fun ActiveTimerSection(
         }
         if (!isEndOfEpisodeMode) {
             Spacer(Modifier.height(8.dp))
-            LinearWavyProgressIndicator(
+            JellyPlayLinearProgressIndicator(
                 progress = { 1f },
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
             )
         }
     }

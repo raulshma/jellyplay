@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -149,7 +150,7 @@ private fun InitiatingContent() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        androidx.compose.material3.ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
+        JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             "Starting Quick Connect\u2026",
@@ -214,7 +215,7 @@ private fun WaitingForApprovalContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Polling indicator
-        androidx.compose.material3.ContainedLoadingIndicator(
+        JellyPlayLoadingIndicator(
             modifier = Modifier.size(20.dp),
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -240,7 +241,7 @@ private fun AuthenticatingContent() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        androidx.compose.material3.ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
+        JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             "Signing in\u2026",

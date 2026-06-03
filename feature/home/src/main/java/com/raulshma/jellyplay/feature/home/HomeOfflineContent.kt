@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
@@ -224,8 +225,7 @@ fun OfflineHomeContent(
                             val progress = if (offlineItem.totalSizeBytes > 0) {
                                 offlineItem.downloadedBytes.toFloat() / offlineItem.totalSizeBytes
                             } else 0f
-                            @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-                            androidx.compose.material3.LinearWavyProgressIndicator(
+                            JellyPlayLinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier
                                     .fillMaxWidth()

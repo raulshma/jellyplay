@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -551,9 +550,8 @@ fun LoadingScreen(modifier: Modifier = Modifier) {
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            ContainedLoadingIndicator(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                indicatorColor = MaterialTheme.colorScheme.primary,
+            JellyPlayLoadingIndicator(
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

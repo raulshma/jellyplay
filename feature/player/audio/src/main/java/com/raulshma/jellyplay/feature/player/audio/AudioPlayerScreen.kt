@@ -45,7 +45,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -882,8 +882,7 @@ private fun LyricsSearchSheet(
                     enabled = searchQuery.isNotBlank() && !isSearching,
                 ) {
                     if (isSearching) {
-                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                        ContainedLoadingIndicator(modifier = Modifier.size(16.dp))
+                        JellyPlayLoadingIndicator(modifier = Modifier.size(16.dp))
                     } else {
                         Text("Search")
                     }
@@ -990,7 +989,7 @@ private fun LyricsOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(16.dp),
             ) {
-                ContainedLoadingIndicator(
+                JellyPlayLoadingIndicator(
                     modifier = Modifier.size(28.dp),
                 )
                 Spacer(Modifier.height(8.dp))

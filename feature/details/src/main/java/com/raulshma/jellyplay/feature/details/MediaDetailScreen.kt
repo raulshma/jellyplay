@@ -55,10 +55,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ContainedLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearWavyProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -1636,7 +1636,7 @@ private fun DetailActionButtons(
                     ) {
                         if (isDownloading || isDownloadActive) {
                             if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                                LinearWavyProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp))
+                                JellyPlayLinearProgressIndicator(progress = { downloadProgress }, modifier = Modifier.size(22.dp))
                             } else {
                                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                                 LoadingIndicator(modifier = Modifier.size(22.dp))
@@ -1805,7 +1805,7 @@ private fun DetailActionButtons(
                 ) {
                     if (isDownloading || dlActive) {
                         if (dlProgress > 0f && dlStatus == DownloadStatus.DOWNLOADING) {
-                            LinearWavyProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp))
+                            JellyPlayLinearProgressIndicator(progress = { dlProgress }, modifier = Modifier.size(24.dp))
                         } else {
                             @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                             LoadingIndicator(modifier = Modifier.size(24.dp))
@@ -2497,7 +2497,7 @@ private fun SeasonsSection(
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        androidx.compose.material3.ContainedLoadingIndicator()
+                        JellyPlayLoadingIndicator()
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
@@ -2537,7 +2537,7 @@ private fun SeasonsSection(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EpisodeCardSkeleton() {
-    androidx.compose.material3.ContainedLoadingIndicator()
+    JellyPlayLoadingIndicator()
 }
 
 @Composable
