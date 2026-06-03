@@ -154,6 +154,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import android.content.Intent
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -456,6 +457,7 @@ private fun DetailContent(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
+    val context = LocalContext.current
 
     val density = LocalDensity.current
     val backdropHeight = when {
@@ -921,6 +923,21 @@ private fun DetailContent(
                                     },
                                     leadingIcon = {
                                         Icon(Tabler.Outline.Pencil, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                                    },
+                                    leadingIcon = {
+                                        Icon(Tabler.Outline.Share, contentDescription = null)
                                     }
                                 )
                                 if (!isAudio && item != null && detail != null && detail.mediaSources.isNotEmpty()) {

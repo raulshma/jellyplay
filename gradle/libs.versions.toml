@@ -45,6 +45,7 @@ smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
+sentry = "8.14.0"
 
 [libraries]
 # AndroidX Core
@@ -165,6 +166,9 @@ tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMa
 
 # Biometric
 biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+
+# Sentry
+sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

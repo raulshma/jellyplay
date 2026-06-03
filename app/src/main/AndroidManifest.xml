@@ -43,6 +43,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="jellyplay" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="jellyplay.app" />
+            </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -51,6 +65,16 @@
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.raulshma.jellyplay.cast.JellyPlayCastOptionsProvider" />
+
+        <meta-data
+            android:name="io.sentry.dsn"
+            android:value="${sentryDsn}" />
+        <meta-data
+            android:name="io.sentry.traces.sample-rate"
+            android:value="0.2" />
+        <meta-data
+            android:name="io.sentry.release"
+            android:value="${versionName}" />
 
         <service
             android:name="com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService"
