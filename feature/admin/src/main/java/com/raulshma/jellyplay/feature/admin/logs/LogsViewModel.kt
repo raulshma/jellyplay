@@ -56,6 +56,7 @@ class LogsViewModel @Inject constructor(
 
     private var webSocket: WebSocket? = null
     private var pollingJob: Job? = null
+    private var liveCollectJob: Job? = null
 
     init {
         loadInitialData()
@@ -102,6 +103,16 @@ class LogsViewModel @Inject constructor(
         val token = apiClient.getAccessToken() ?: return
         state = state.copy(isLiveStreamActive = true, liveEntries = emptyList())
 
+        liveCollectJob?.cancel()
+        liveCollectJob = viewModelScope.launch {
+            liveEvents.collect { entry ->
+                state = state.copy(
+                    liveEntries = (listOf(entry) + state.liveEntries).take(200),
+                    activityEntries = (listOf(entry) + state.activityEntries).take(200),
+                )
+            }
+        }
+
         val wsUrl = serverUrl.replace("http", "ws") +
                 "/socket?api_key=$token&deviceId=JellyPlayAdmin"
 
@@ -124,15 +135,6 @@ class LogsViewModel @Inject constructor(
                 startPollingFallback()
             }
         })
-
-        viewModelScope.launch {
-            liveEvents.collect { entry ->
-                state = state.copy(
-                    liveEntries = (listOf(entry) + state.liveEntries).take(200),
-                    activityEntries = (listOf(entry) + state.activityEntries).take(200),
-                )
-            }
-        }
     }
 
     fun stopLiveStream() {
@@ -140,18 +142,25 @@ class LogsViewModel @Inject constructor(
         webSocket = null
         pollingJob?.cancel()
         pollingJob = null
+        liveCollectJob?.cancel()
+        liveCollectJob = null
         state = state.copy(isLiveStreamActive = false)
     }
 
     private fun startPollingFallback() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
+            val knownIds = state.activityEntries.map { it.id }.toMutableSet()
             while (true) {
                 delay(3000)
                 val result = apiClient.getActivityLogEntries(limit = 10)
                 result.onSuccess { entries ->
-                    if (entries.isNotEmpty() && entries.first().id != state.activityEntries.firstOrNull()?.id) {
-                        entries.forEach { _liveEvents.tryEmit(it) }
+                    val newEntries = entries.filter { it.id !in knownIds }
+                    if (newEntries.isNotEmpty()) {
+                        newEntries.forEach { entry ->
+                            knownIds.add(entry.id)
+                            _liveEvents.tryEmit(entry)
+                        }
                     }
                 }
             }
@@ -174,5 +183,6 @@ class LogsViewModel @Inject constructor(
         super.onCleared()
         webSocket?.close(1000, "ViewModel cleared")
         pollingJob?.cancel()
+        liveCollectJob?.cancel()
     }
 }
