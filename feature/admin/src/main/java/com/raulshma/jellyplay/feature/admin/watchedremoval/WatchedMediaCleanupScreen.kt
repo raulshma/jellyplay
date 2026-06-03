@@ -62,6 +62,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.Search
+import com.composables.icons.tabler.outline.Shield
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItemStub
@@ -191,6 +192,22 @@ private fun WatchedScanResultsTab(
     bottomPadding: androidx.compose.ui.unit.Dp,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (state.error != null) {
+            Card(
+                shape = ShapeCache.smooth12,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    state.error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
         if (state.scanProgress.phase == ScanPhase.SCANNING) {
             Card(
                 shape = ShapeCache.smooth16,
@@ -214,6 +231,33 @@ private fun WatchedScanResultsTab(
         }
 
         if (state.scanResults.isNotEmpty()) {
+            if (!state.canDeleteContent) {
+                Card(
+                    shape = ShapeCache.smooth12,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Tabler.Outline.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Your account does not have permission to delete content. Contact your server administrator.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -239,6 +283,7 @@ private fun WatchedScanResultsTab(
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(
                         onClick = onDeleteClick,
+                        enabled = state.canDeleteContent,
                         shape = ShapeCache.smooth16,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,

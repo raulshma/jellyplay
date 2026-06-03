@@ -243,6 +243,7 @@ class JellyfinApiClientImpl @Inject constructor(
             serverAddress = serverInfo.address,
             accessToken = accessTokenValue,
             isAdmin = policy?.isAdministrator ?: false,
+            canDeleteContent = policy?.enableContentDeletion ?: false,
             maxParentalAgeRating = policy?.maxParentalRating,
             primaryImageTag = userDto.primaryImageTag,
             enabledFolderIds = if (policy?.enableAllFolders == false) {
@@ -2650,31 +2651,14 @@ class JellyfinApiClientImpl @Inject constructor(
     }
 
     override suspend fun deleteItem(itemId: String): Result<Unit> = apiResult {
-        val server = getServerUrl() ?: throw IllegalStateException("Not connected")
-        val token = getAccessToken() ?: throw IllegalStateException("Not authenticated")
-        val url = "${server}/Items/$itemId"
-        val request = Request.Builder()
-            .url(url)
-            .delete()
-            .header("X-Emby-Token", token)
-            .build()
-        val response = okHttpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to delete item: ${response.code}")
-        }
-        response.close()
+        requireApi().libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
     }
 
     override suspend fun deleteItems(itemIds: List<String>): Result<Int> = apiResult {
-        var deleted = 0
-        for (id in itemIds) {
-            try {
-                deleteItem(id).getOrThrow()
-                deleted++
-            } catch (_: Exception) { }
-            kotlinx.coroutines.delay(100)
-        }
-        deleted
+        requireApi().libraryApi.deleteItems(
+            ids = itemIds.map { java.util.UUID.fromString(it) },
+        )
+        itemIds.size
     }
 
     override suspend fun checkPlaybackReportingPlugin(): Result<com.raulshma.jellyplay.core.model.PlaybackReportingStatus> = apiResult {

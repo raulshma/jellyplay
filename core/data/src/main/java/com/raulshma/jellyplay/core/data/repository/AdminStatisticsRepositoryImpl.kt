@@ -118,11 +118,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             )
         }
 
-        val activityChart = if (pluginAvailable) {
+        val pluginChart = if (pluginAvailable) {
             apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId).getOrDefault(emptyList())
         } else emptyList()
 
-        val fallbackChart = if (activityChart.isEmpty()) {
+        val fallbackChart = if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
             val recentlyPlayed = apiClient.getItemsWithUserData(
                 userId = userId,
                 isPlayed = true,
@@ -132,7 +132,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 limit = 200,
             ).getOrDefault(Pair(0, emptyList()))
             buildFallbackActivityChart(recentlyPlayed.second)
-        } else activityChart
+        } else pluginChart
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -420,7 +420,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         val adminId = currentUser?.id ?: ""
         val adminName = currentUser?.name ?: ""
 
-        val deleted = apiClient.deleteItems(itemIds).getOrDefault(0)
+        val deleted = apiClient.deleteItems(itemIds).getOrThrow()
 
         val itemDetails = itemIds.map { id ->
             AuditItemDetail(

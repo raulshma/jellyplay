@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
@@ -35,6 +36,7 @@ data class WatchedMediaState(
     val selectedItems: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,
     val isDeleting: Boolean = false,
+    val canDeleteContent: Boolean = true,
     val auditEntries: List<AuditLogEntry> = emptyList(),
     val sortOption: MediaSortOption = MediaSortOption.DEFAULT,
 ) {
@@ -69,6 +71,7 @@ private val MediaItemStub.sortSizeBytes: Long
 @HiltViewModel
 class WatchedMediaCleanupViewModel @Inject constructor(
     private val repository: AdminStatisticsRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -77,6 +80,15 @@ class WatchedMediaCleanupViewModel @Inject constructor(
 
     init {
         observeAuditHistory()
+        observePermissions()
+    }
+
+    private fun observePermissions() {
+        viewModelScope.launch {
+            authRepository.currentUser.collect { user ->
+                _state.value = _state.value.copy(canDeleteContent = user?.canDeleteContent ?: false)
+            }
+        }
     }
 
     private fun observeAuditHistory() {
@@ -170,8 +182,12 @@ class WatchedMediaCleanupViewModel @Inject constructor(
                     selectedItems = emptySet(),
                     rawScanResults = _state.value.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
                 )
-            }.onFailure {
-                _state.value = _state.value.copy(isDeleting = false, showDeleteConfirmation = false)
+            }.onFailure { e ->
+                _state.value = _state.value.copy(
+                    isDeleting = false,
+                    showDeleteConfirmation = false,
+                    error = e.message,
+                )
             }
         }
     }
