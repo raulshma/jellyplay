@@ -3,20 +3,32 @@ package com.raulshma.jellyplay.core.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -24,14 +36,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.ContrastLevel
-import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
-import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
-import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +48,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
@@ -58,7 +64,7 @@ class UserPreferencesStore @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val sharedPrefs: StateFlow<Preferences> = context.dataStore.data
-        .stateIn(scope, SharingStarted.Eagerly, androidx.datastore.preferences.core.emptyPreferences())
+        .stateIn(scope, SharingStarted.Eagerly, emptyPreferences())
 
     private object Keys {
         val ACTIVE_SERVER_ID = stringPreferencesKey("active_server_id")
@@ -67,100 +73,200 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
-        val DYNAMIC_THEMING = stringPreferencesKey("dynamic_theming")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
-        val OLED_MODE = stringPreferencesKey("oled_mode")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
-        val MAX_CACHE_SIZE_MB = stringPreferencesKey("max_cache_size_mb")
-        val AUTO_DELETE_CACHE = stringPreferencesKey("auto_delete_cache")
-        val PIN_LOCK_ENABLED = stringPreferencesKey("pin_lock_enabled")
         val PIN_HASH = stringPreferencesKey("pin_hash")
-        val BIOMETRIC_LOCK_ENABLED = stringPreferencesKey("biometric_lock_enabled")
-        val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
-        val AUTO_LOCK_TIMER_MS = stringPreferencesKey("auto_lock_timer_ms")
-        val DIALOGUE_BOOST_ENABLED = stringPreferencesKey("dialogue_boost_enabled")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
-        val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
-        val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
-        val AUDIO_DELAY_MS = stringPreferencesKey("audio_delay_ms")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
-        val AUDIO_PASSTHROUGH = stringPreferencesKey("audio_passthrough")
-        val FRAME_RATE_MATCHING = stringPreferencesKey("frame_rate_matching")
-        val NIGHT_MODE_ENABLED = stringPreferencesKey("night_mode_enabled")
         val NIGHT_MODE_STRENGTH = stringPreferencesKey("night_mode_strength")
         val HOME_MODE = stringPreferencesKey("home_mode")
-        val VIDEO_SEEK_DURATION_MS = stringPreferencesKey("video_seek_duration_ms")
         val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
-        val VIDEO_CONTROLS_TIMEOUT_MS = stringPreferencesKey("video_controls_timeout_ms")
-        val VIDEO_GESTURES_ENABLED = stringPreferencesKey("video_gestures_enabled")
-        val VIDEO_DEFAULT_SPEED = stringPreferencesKey("video_default_speed")
         val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
-        val VIDEO_AUTOPLAY_NEXT = stringPreferencesKey("video_autoplay_next")
-        val VIDEO_SWIPE_SEEK_MAX_MS = stringPreferencesKey("video_swipe_seek_max_ms")
-        val VIDEO_REMEMBER_BRIGHTNESS = stringPreferencesKey("video_remember_brightness")
-        val VIDEO_BRIGHTNESS_LEVEL = stringPreferencesKey("video_brightness_level")
-        val AUDIO_DEFAULT_SPEED = stringPreferencesKey("audio_default_speed")
-        val AUDIO_NIGHT_MODE_VOLUME = stringPreferencesKey("audio_night_mode_volume")
-        val AUDIO_NIGHT_MODE_GAIN = stringPreferencesKey("audio_night_mode_gain")
-        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS = stringPreferencesKey("audio_skip_previous_threshold_ms")
-        val AUDIO_AUTOPLAY_NEXT = stringPreferencesKey("audio_autoplay_next")
-        val TRICKPLAY_ENABLED = stringPreferencesKey("trickplay_enabled")
-        val TRICKPLAY_ON_SEEK_GESTURE = stringPreferencesKey("trickplay_on_seek_gesture")
+        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
+        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
+        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
+        val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
+        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
+        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
+        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
+        val BASS_BOOST_STRENGTH = stringPreferencesKey("bass_boost_strength")
+        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
+        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
+        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
+        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
+        val MPV_CONFIG = stringPreferencesKey("mpv_config")
+        val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
+        val EXO_CONFIG = stringPreferencesKey("exo_config")
+        val DEVICE_ID = stringPreferencesKey("device_id")
+        val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")
+        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
         val SKIP_INTRO_ENABLED = stringPreferencesKey("skip_intro_enabled")
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
-        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
-        val VIDEO_EPISODE_BROWSER_ENABLED = stringPreferencesKey("video_episode_browser_enabled")
-        val VIDEO_SHOW_PLAYBACK_METADATA = stringPreferencesKey("video_show_playback_metadata")
-        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
-        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
-        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
-        val AUDIO_NORMALIZATION_ENABLED = stringPreferencesKey("audio_normalization_enabled")
-        val REPLAYGAIN_PRE_AMP_DB = stringPreferencesKey("replaygain_pre_amp_db")
-        val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
-        val CHANNEL_MIX_ENABLED = stringPreferencesKey("channel_mix_enabled")
-        val AUDIO_GAPLESS_ENABLED = stringPreferencesKey("audio_gapless_enabled")
-        val AUDIO_CROSSFADE_DURATION_MS = stringPreferencesKey("audio_crossfade_duration_ms")
-        val SLEEP_TIMER_DURATION_MS = stringPreferencesKey("sleep_timer_duration_ms")
-        val SLEEP_TIMER_END_OF_EPISODE = stringPreferencesKey("sleep_timer_end_of_episode")
-        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
-        val DREAM_SLIDESHOW_INTERVAL_MS = stringPreferencesKey("dream_slideshow_interval_ms")
-        val DREAM_KEN_BURNS_ENABLED = stringPreferencesKey("dream_ken_burns_enabled")
-        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
-        val DREAM_SHOW_TITLE = stringPreferencesKey("dream_show_title")
-        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
-        val BASS_BOOST_ENABLED = stringPreferencesKey("bass_boost_enabled")
-        val BASS_BOOST_STRENGTH = stringPreferencesKey("bass_boost_strength")
-        val VIRTUALIZER_ENABLED = stringPreferencesKey("virtualizer_enabled")
-        val VIRTUALIZER_STRENGTH = stringPreferencesKey("virtualizer_strength")
-        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
-        val LR_BALANCE = stringPreferencesKey("lr_balance")
-        val AUTO_EQ_BY_GENRE = stringPreferencesKey("auto_eq_by_genre")
-        val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
-        val DOWNLOAD_CONNECTIONS = stringPreferencesKey("download_connections")
-        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
-        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
-        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
-        val HOME_HERO_ENABLED = stringPreferencesKey("home_hero_enabled")
-        val NAV_BAR_SHOW_LABELS = stringPreferencesKey("nav_bar_show_labels")
-        val ONBOARDING_COMPLETED = stringPreferencesKey("onboarding_completed")
-        val MPV_CONFIG = stringPreferencesKey("mpv_config")
-        val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
-        val EXO_CONFIG = stringPreferencesKey("exo_config")
-        val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
-        val DEVICE_ID = stringPreferencesKey("device_id")
-        val NEWSLETTER_ENABLED = stringPreferencesKey("newsletter_enabled")
-        val NEWSLETTER_DAY_OF_WEEK = stringPreferencesKey("newsletter_day_of_week")
-        val NEWSLETTER_LAST_VIEWED_MS = stringPreferencesKey("newsletter_last_viewed_ms")
         val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
         val COLOR_STYLE = stringPreferencesKey("color_style")
+        val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
+
+        val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
+        val OLED_MODE = booleanPreferencesKey("oled_mode")
+        val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
+        val PIN_LOCK_ENABLED = booleanPreferencesKey("pin_lock_enabled")
+        val BIOMETRIC_LOCK_ENABLED = booleanPreferencesKey("biometric_lock_enabled")
+        val DIALOGUE_BOOST_ENABLED = booleanPreferencesKey("dialogue_boost_enabled")
+        val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
+        val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
+        val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
+        val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
+        val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
+        val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
+        val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
+        val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
+        val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
+        val TRICKPLAY_ON_SEEK_GESTURE = booleanPreferencesKey("trickplay_on_seek_gesture")
+        val VIDEO_EPISODE_BROWSER_ENABLED = booleanPreferencesKey("video_episode_browser_enabled")
+        val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
+        val AUDIO_NORMALIZATION_ENABLED = booleanPreferencesKey("audio_normalization_enabled")
+        val CHANNEL_MIX_ENABLED = booleanPreferencesKey("channel_mix_enabled")
+        val AUDIO_GAPLESS_ENABLED = booleanPreferencesKey("audio_gapless_enabled")
+        val SLEEP_TIMER_END_OF_EPISODE = booleanPreferencesKey("sleep_timer_end_of_episode")
+        val DREAM_KEN_BURNS_ENABLED = booleanPreferencesKey("dream_ken_burns_enabled")
+        val DREAM_SHOW_TITLE = booleanPreferencesKey("dream_show_title")
+        val BASS_BOOST_ENABLED = booleanPreferencesKey("bass_boost_enabled")
+        val VIRTUALIZER_ENABLED = booleanPreferencesKey("virtualizer_enabled")
+        val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
+        val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
+        val NAV_BAR_SHOW_LABELS = booleanPreferencesKey("nav_bar_show_labels")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
+        val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
+
+        val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
+        val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
+        val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
+        val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
+        val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
+
+        val VIDEO_DEFAULT_SPEED = floatPreferencesKey("video_default_speed")
+        val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey("video_brightness_level")
+        val AUDIO_DEFAULT_SPEED = floatPreferencesKey("audio_default_speed")
+        val AUDIO_NIGHT_MODE_VOLUME = floatPreferencesKey("audio_night_mode_volume")
+        val REPLAYGAIN_PRE_AMP_DB = floatPreferencesKey("replaygain_pre_amp_db")
+        val LR_BALANCE = floatPreferencesKey("lr_balance")
+        val PITCH_SEMITONES = floatPreferencesKey("pitch_semitones")
+
+        val AUDIO_DELAY_MS = longPreferencesKey("audio_delay_ms")
+        val AUTO_LOCK_TIMER_MS = longPreferencesKey("auto_lock_timer_ms")
+        val VIDEO_SEEK_DURATION_MS = longPreferencesKey("video_seek_duration_ms")
+        val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey("video_controls_timeout_ms")
+        val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey("video_swipe_seek_max_ms")
+        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS = longPreferencesKey("audio_skip_previous_threshold_ms")
+        val AUDIO_CROSSFADE_DURATION_MS = longPreferencesKey("audio_crossfade_duration_ms")
+        val SLEEP_TIMER_DURATION_MS = longPreferencesKey("sleep_timer_duration_ms")
+        val DREAM_SLIDESHOW_INTERVAL_MS = longPreferencesKey("dream_slideshow_interval_ms")
+        val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
+
+        val TYPED_MIGRATION_DONE = booleanPreferencesKey("_typed_migration_done")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
     private val sha256Digest by lazy { MessageDigest.getInstance("SHA-256") }
+
+    init {
+        scope.launch { migrateToTypedKeys() }
+    }
+
+    private suspend fun migrateToTypedKeys() {
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.TYPED_MIGRATION_DONE] == true) return@edit
+
+            migrateBooleans(prefs,
+                "dynamic_theming", "oled_mode", "auto_delete_cache",
+                "pin_lock_enabled", "biometric_lock_enabled", "dialogue_boost_enabled",
+                "equalizer_enabled", "audio_passthrough", "frame_rate_matching",
+                "night_mode_enabled", "video_gestures_enabled", "video_autoplay_next",
+                "video_remember_brightness", "audio_autoplay_next", "trickplay_enabled",
+                "trickplay_on_seek_gesture", "video_episode_browser_enabled",
+                "video_show_playback_metadata", "audio_normalization_enabled",
+                "channel_mix_enabled", "audio_gapless_enabled", "sleep_timer_end_of_episode",
+                "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
+                "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
+                "nav_bar_show_labels", "onboarding_completed", "performance_mode",
+                "newsletter_enabled",
+            )
+
+            migrateInts(prefs,
+                "max_cache_size_mb", "audio_night_mode_gain", "download_connections",
+                "virtualizer_strength", "newsletter_day_of_week",
+            )
+
+            migrateFloats(prefs,
+                "video_default_speed", "video_brightness_level", "audio_default_speed",
+                "audio_night_mode_volume", "replaygain_pre_amp_db", "lr_balance",
+                "pitch_semitones",
+            )
+
+            migrateLongs(prefs,
+                "audio_delay_ms", "auto_lock_timer_ms", "video_seek_duration_ms",
+                "video_controls_timeout_ms", "video_swipe_seek_max_ms",
+                "audio_skip_previous_threshold_ms", "audio_crossfade_duration_ms",
+                "sleep_timer_duration_ms", "dream_slideshow_interval_ms",
+                "newsletter_last_viewed_ms",
+            )
+
+            prefs[Keys.TYPED_MIGRATION_DONE] = true
+        }
+    }
+
+    private fun migrateBooleans(prefs: MutablePreferences, vararg names: String) {
+        for (name in names) {
+            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            prefs[booleanPreferencesKey(name)] = legacy.toBoolean()
+        }
+    }
+
+    private fun migrateInts(prefs: MutablePreferences, vararg names: String) {
+        for (name in names) {
+            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            legacy.toIntOrNull()?.let { prefs[intPreferencesKey(name)] = it }
+        }
+    }
+
+    private fun migrateFloats(prefs: MutablePreferences, vararg names: String) {
+        for (name in names) {
+            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            legacy.toFloatOrNull()?.let { prefs[floatPreferencesKey(name)] = it }
+        }
+    }
+
+    private fun migrateLongs(prefs: MutablePreferences, vararg names: String) {
+        for (name in names) {
+            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            legacy.toLongOrNull()?.let { prefs[longPreferencesKey(name)] = it }
+        }
+    }
+
+    private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
+        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
+        return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
+    }
+
+    private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int {
+        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
+        return typed ?: prefs[stringPreferencesKey(name)]?.toIntOrNull() ?: default
+    }
+
+    private fun readFloat(prefs: Preferences, key: Preferences.Key<Float>, name: String, default: Float): Float {
+        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
+        return typed ?: prefs[stringPreferencesKey(name)]?.toFloatOrNull() ?: default
+    }
+
+    private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long {
+        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
+        return typed ?: prefs[stringPreferencesKey(name)]?.toLongOrNull() ?: default
+    }
 
     private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
         val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
@@ -247,63 +353,63 @@ class UserPreferencesStore @Inject constructor(
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = readMediaStreamSelections(prefs),
-            dynamicTheming = prefs[Keys.DYNAMIC_THEMING]?.toBoolean() ?: true,
+            dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
             } catch (_: Exception) { ThemeMode.SYSTEM },
             contrastLevel = try {
                 ContrastLevel.valueOf(prefs[Keys.CONTRAST_LEVEL] ?: ContrastLevel.DEFAULT.name)
             } catch (_: Exception) { ContrastLevel.DEFAULT },
-            oledMode = prefs[Keys.OLED_MODE]?.toBoolean() ?: false,
+            oledMode = readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             streamingQuality = streamingQuality,
-            maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB]?.toIntOrNull() ?: 0,
-            autoDeleteCache = prefs[Keys.AUTO_DELETE_CACHE]?.toBoolean() ?: true,
-            pinLockEnabled = prefs[Keys.PIN_LOCK_ENABLED]?.toBoolean() ?: false,
+            maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
+            autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
+            pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
             pinHash = prefs[Keys.PIN_HASH],
-            biometricLockEnabled = prefs[Keys.BIOMETRIC_LOCK_ENABLED]?.toBoolean() ?: false,
-            autoLockTimerMs = prefs[Keys.AUTO_LOCK_TIMER_MS]?.toLongOrNull() ?: 30_000L,
-            dialogueBoostEnabled = prefs[Keys.DIALOGUE_BOOST_ENABLED]?.toBoolean() ?: false,
+            biometricLockEnabled = readBool(prefs, Keys.BIOMETRIC_LOCK_ENABLED, "biometric_lock_enabled", false),
+            autoLockTimerMs = readLong(prefs, Keys.AUTO_LOCK_TIMER_MS, "auto_lock_timer_ms", 30_000L),
+            dialogueBoostEnabled = readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
             dialogueBoostStrength = try {
                 EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
             } catch (_: Exception) { EffectStrength.MODERATE },
-            equalizerEnabled = prefs[Keys.EQUALIZER_ENABLED]?.toBoolean() ?: false,
+            equalizerEnabled = readBool(prefs, Keys.EQUALIZER_ENABLED, "equalizer_enabled", false),
             equalizerSettings = equalizerSettings ?: EqualizerSettings(),
-            audioDelayMs = prefs[Keys.AUDIO_DELAY_MS]?.toLongOrNull() ?: 0L,
+            audioDelayMs = readLong(prefs, Keys.AUDIO_DELAY_MS, "audio_delay_ms", 0L),
             decoderMode = try {
                 DecoderMode.valueOf(prefs[Keys.DECODER_MODE] ?: DecoderMode.HW_PREFERRED.name)
             } catch (_: Exception) { DecoderMode.HW_PREFERRED },
-            audioPassthrough = prefs[Keys.AUDIO_PASSTHROUGH]?.toBoolean() ?: false,
-            frameRateMatching = prefs[Keys.FRAME_RATE_MATCHING]?.toBoolean() ?: false,
-            nightModeEnabled = prefs[Keys.NIGHT_MODE_ENABLED]?.toBoolean() ?: false,
+            audioPassthrough = readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
+            frameRateMatching = readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
+            nightModeEnabled = readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
             nightModeStrength = try {
                 EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
             } catch (_: Exception) { EffectStrength.MODERATE },
             homeMode = try {
                 HomeMode.valueOf(prefs[Keys.HOME_MODE] ?: HomeMode.VIDEO.name)
             } catch (_: Exception) { HomeMode.VIDEO },
-            videoSeekDurationMs = prefs[Keys.VIDEO_SEEK_DURATION_MS]?.toLongOrNull() ?: 10_000L,
+            videoSeekDurationMs = readLong(prefs, Keys.VIDEO_SEEK_DURATION_MS, "video_seek_duration_ms", 10_000L),
             videoDefaultOrientation = try {
                 OrientationMode.valueOf(prefs[Keys.VIDEO_DEFAULT_ORIENTATION] ?: OrientationMode.SENSOR_LANDSCAPE.name)
             } catch (_: Exception) { OrientationMode.SENSOR_LANDSCAPE },
-            videoControlsTimeoutMs = prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS]?.toLongOrNull() ?: 5_000L,
-            videoGesturesEnabled = prefs[Keys.VIDEO_GESTURES_ENABLED]?.toBoolean() ?: true,
-            videoDefaultSpeed = prefs[Keys.VIDEO_DEFAULT_SPEED]?.toFloatOrNull() ?: 1.0f,
+            videoControlsTimeoutMs = readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
+            videoGesturesEnabled = readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true),
+            videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
             videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
-            videoAutoplayNext = prefs[Keys.VIDEO_AUTOPLAY_NEXT]?.toBoolean() ?: false,
-            videoSwipeSeekMaxMs = prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS]?.toLongOrNull() ?: 120_000L,
-            videoRememberBrightness = prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS]?.toBoolean() ?: false,
-            videoBrightnessLevel = prefs[Keys.VIDEO_BRIGHTNESS_LEVEL]?.toFloatOrNull() ?: 0.5f,
-            audioDefaultSpeed = prefs[Keys.AUDIO_DEFAULT_SPEED]?.toFloatOrNull() ?: 1.0f,
-            audioNightModeVolume = prefs[Keys.AUDIO_NIGHT_MODE_VOLUME]?.toFloatOrNull() ?: 0.4f,
-            audioNightModeGain = prefs[Keys.AUDIO_NIGHT_MODE_GAIN]?.toIntOrNull() ?: 1200,
-            audioSkipPreviousThresholdMs = prefs[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS]?.toLongOrNull() ?: 3_000L,
-            audioAutoplayNext = prefs[Keys.AUDIO_AUTOPLAY_NEXT]?.toBoolean() ?: true,
-            trickplayEnabled = prefs[Keys.TRICKPLAY_ENABLED]?.toBoolean() ?: true,
-            trickplayOnSeekGesture = prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE]?.toBoolean() ?: true,
+            videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", false),
+            videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
+            videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", false),
+            videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
+            audioDefaultSpeed = readFloat(prefs, Keys.AUDIO_DEFAULT_SPEED, "audio_default_speed", 1.0f),
+            audioNightModeVolume = readFloat(prefs, Keys.AUDIO_NIGHT_MODE_VOLUME, "audio_night_mode_volume", 0.4f),
+            audioNightModeGain = readInt(prefs, Keys.AUDIO_NIGHT_MODE_GAIN, "audio_night_mode_gain", 1200),
+            audioSkipPreviousThresholdMs = readLong(prefs, Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, "audio_skip_previous_threshold_ms", 3_000L),
+            audioAutoplayNext = readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
+            trickplayEnabled = readBool(prefs, Keys.TRICKPLAY_ENABLED, "trickplay_enabled", true),
+            trickplayOnSeekGesture = readBool(prefs, Keys.TRICKPLAY_ON_SEEK_GESTURE, "trickplay_on_seek_gesture", true),
             segmentBehaviors = readSegmentBehaviors(prefs),
-            videoEpisodeBrowserEnabled = prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED]?.toBoolean() ?: true,
-            videoShowPlaybackMetadata = prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA]?.toBoolean() ?: true,
+            videoEpisodeBrowserEnabled = readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
+            videoShowPlaybackMetadata = readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
             videoPreloadBufferSize = try {
                 PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
             } catch (_: Exception) { PreloadBufferSize.MEDIUM },
@@ -316,43 +422,43 @@ class UserPreferencesStore @Inject constructor(
                     else -> AudioNormalizationMode.valueOf(stored)
                 }
             } catch (_: Exception) { AudioNormalizationMode.NONE },
-            audioNormalizationEnabled = prefs[Keys.AUDIO_NORMALIZATION_ENABLED]?.toBoolean() ?: false,
-            replayGainPreAmpDb = prefs[Keys.REPLAYGAIN_PRE_AMP_DB]?.toFloatOrNull() ?: 0f,
+            audioNormalizationEnabled = readBool(prefs, Keys.AUDIO_NORMALIZATION_ENABLED, "audio_normalization_enabled", false),
+            replayGainPreAmpDb = readFloat(prefs, Keys.REPLAYGAIN_PRE_AMP_DB, "replaygain_pre_amp_db", 0f),
             channelMixMode = try {
                 ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
             } catch (_: Exception) { ChannelMixMode.AUTO },
-            channelMixEnabled = prefs[Keys.CHANNEL_MIX_ENABLED]?.toBoolean() ?: false,
-            audioGaplessEnabled = prefs[Keys.AUDIO_GAPLESS_ENABLED]?.toBoolean() ?: true,
-            audioCrossfadeDurationMs = prefs[Keys.AUDIO_CROSSFADE_DURATION_MS]?.toLongOrNull() ?: 0L,
-            sleepTimerDurationMs = prefs[Keys.SLEEP_TIMER_DURATION_MS]?.toLongOrNull() ?: 0L,
-            sleepTimerEndOfEpisode = prefs[Keys.SLEEP_TIMER_END_OF_EPISODE]?.toBoolean() ?: false,
+            channelMixEnabled = readBool(prefs, Keys.CHANNEL_MIX_ENABLED, "channel_mix_enabled", false),
+            audioGaplessEnabled = readBool(prefs, Keys.AUDIO_GAPLESS_ENABLED, "audio_gapless_enabled", true),
+            audioCrossfadeDurationMs = readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
+            sleepTimerDurationMs = readLong(prefs, Keys.SLEEP_TIMER_DURATION_MS, "sleep_timer_duration_ms", 0L),
+            sleepTimerEndOfEpisode = readBool(prefs, Keys.SLEEP_TIMER_END_OF_EPISODE, "sleep_timer_end_of_episode", false),
             dreamImageCategories = try {
                 prefs[Keys.DREAM_IMAGE_CATEGORIES]?.let {
                     json.decodeFromString<Set<DreamImageCategory>>(it)
                 } ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
             } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) },
-            dreamSlideshowIntervalMs = prefs[Keys.DREAM_SLIDESHOW_INTERVAL_MS]?.toLongOrNull() ?: 15_000L,
-            dreamKenBurnsEnabled = prefs[Keys.DREAM_KEN_BURNS_ENABLED]?.toBoolean() ?: true,
+            dreamSlideshowIntervalMs = readLong(prefs, Keys.DREAM_SLIDESHOW_INTERVAL_MS, "dream_slideshow_interval_ms", 15_000L),
+            dreamKenBurnsEnabled = readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
             dreamTransitionStyle = try {
                 DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
             } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
-            dreamShowTitle = prefs[Keys.DREAM_SHOW_TITLE]?.toBoolean() ?: true,
+            dreamShowTitle = readBool(prefs, Keys.DREAM_SHOW_TITLE, "dream_show_title", true),
             equalizerPreset = try {
                 EqualizerPreset.valueOf(prefs[Keys.EQUALIZER_PRESET] ?: EqualizerPreset.FLAT.name)
             } catch (_: Exception) { EqualizerPreset.FLAT },
-            bassBoostEnabled = prefs[Keys.BASS_BOOST_ENABLED]?.toBoolean() ?: false,
+            bassBoostEnabled = readBool(prefs, Keys.BASS_BOOST_ENABLED, "bass_boost_enabled", false),
             bassBoostStrength = try {
                 EffectStrength.valueOf(prefs[Keys.BASS_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
             } catch (_: Exception) { EffectStrength.MODERATE },
-            virtualizerEnabled = prefs[Keys.VIRTUALIZER_ENABLED]?.toBoolean() ?: false,
-            virtualizerStrength = prefs[Keys.VIRTUALIZER_STRENGTH]?.toIntOrNull() ?: 500,
+            virtualizerEnabled = readBool(prefs, Keys.VIRTUALIZER_ENABLED, "virtualizer_enabled", false),
+            virtualizerStrength = readInt(prefs, Keys.VIRTUALIZER_STRENGTH, "virtualizer_strength", 500),
             reverbPreset = try {
                 ReverbPreset.valueOf(prefs[Keys.REVERB_PRESET] ?: ReverbPreset.NONE.name)
             } catch (_: Exception) { ReverbPreset.NONE },
-            lrBalance = prefs[Keys.LR_BALANCE]?.toFloatOrNull() ?: 0f,
-            autoEqByGenre = prefs[Keys.AUTO_EQ_BY_GENRE]?.toBoolean() ?: false,
-            pitchSemitones = prefs[Keys.PITCH_SEMITONES]?.toFloatOrNull() ?: 0f,
-            downloadConnections = prefs[Keys.DOWNLOAD_CONNECTIONS]?.toIntOrNull() ?: 4,
+            lrBalance = readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
+            autoEqByGenre = readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
+            pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
+            downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
             enabledHomeSectionTypes = try {
                 prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
                     json.decodeFromString<Set<String>>(it)
@@ -379,9 +485,9 @@ class UserPreferencesStore @Inject constructor(
                     json.decodeFromString<Set<String>>(it)
                 } ?: emptySet()
             } catch (_: Exception) { emptySet() },
-            navBarShowLabels = prefs[Keys.NAV_BAR_SHOW_LABELS]?.toBoolean() ?: true,
-            homeHeroEnabled = prefs[Keys.HOME_HERO_ENABLED]?.toBoolean() ?: true,
-            onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]?.toBoolean() ?: false,
+            navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
+            homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
+            onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
             mpvConfig = try {
                 prefs[Keys.MPV_CONFIG]?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
             } catch (_: Exception) { MpvEngineConfig() },
@@ -391,10 +497,10 @@ class UserPreferencesStore @Inject constructor(
             exoPlayerConfig = try {
                 prefs[Keys.EXO_CONFIG]?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
             } catch (_: Exception) { ExoPlayerEngineConfig() },
-            performanceMode = prefs[Keys.PERFORMANCE_MODE]?.toBoolean() ?: false,
-            newsletterEnabled = prefs[Keys.NEWSLETTER_ENABLED]?.toBoolean() ?: true,
-            newsletterDayOfWeek = prefs[Keys.NEWSLETTER_DAY_OF_WEEK]?.toIntOrNull() ?: 7,
-            newsletterLastViewedMs = prefs[Keys.NEWSLETTER_LAST_VIEWED_MS]?.toLongOrNull() ?: 0L,
+            performanceMode = readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
+            newsletterEnabled = readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
+            newsletterDayOfWeek = readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
+            newsletterLastViewedMs = readLong(prefs, Keys.NEWSLETTER_LAST_VIEWED_MS, "newsletter_last_viewed_ms", 0L),
             accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
             colorStyle = try {
                 ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
@@ -406,11 +512,6 @@ class UserPreferencesStore @Inject constructor(
     val activeUserId: Flow<String?> = sharedPrefs.map { it[Keys.ACTIVE_USER_ID] }.distinctUntilChanged()
     val deviceId: Flow<String?> = sharedPrefs.map { it[Keys.DEVICE_ID] }.distinctUntilChanged()
 
-    /**
-     * Resolve the persistent device ID, generating a stable UUID on first
-     * access. Used as the `deviceId` URL parameter for the Jellyfin WebSocket
-     * and as a `ClientCapabilities` identifier.
-     */
     suspend fun ensureDeviceId(): String {
         var id: String? = null
         context.dataStore.edit { prefs ->
@@ -458,7 +559,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled.toString() }
+        context.dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
@@ -470,7 +571,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setOledMode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.OLED_MODE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.OLED_MODE] = enabled }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
@@ -482,15 +583,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setMaxCacheSize(sizeMb: Int) {
-        context.dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb.toString() }
+        context.dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
     }
 
     suspend fun setAutoDeleteCache(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
     }
 
     suspend fun setPinLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled }
     }
 
     suspend fun setPinHash(hash: String?) {
@@ -501,7 +602,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
     }
 
     suspend fun clearAll() {
@@ -525,11 +626,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setAutoLockTimerMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms }
     }
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled }
     }
 
     suspend fun setDialogueBoostStrength(strength: EffectStrength) {
@@ -537,7 +638,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setEqualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled }
     }
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) {
@@ -545,7 +646,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setAudioDelay(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms }
     }
 
     suspend fun setDecoderMode(mode: DecoderMode) {
@@ -553,15 +654,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setAudioPassthrough(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled.toString() }
+        context.dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled }
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled }
     }
 
     suspend fun setNightModeStrength(strength: EffectStrength) {
@@ -573,7 +674,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoSeekDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms }
     }
 
     suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
@@ -581,15 +682,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoControlsTimeoutMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms }
     }
 
     suspend fun setVideoGesturesEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
     }
 
     suspend fun setVideoDefaultSpeed(speed: Float) {
-        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
     }
 
     suspend fun setVideoDefaultAspectRatio(ratio: String) {
@@ -597,47 +698,47 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
-        context.dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
     }
 
     suspend fun setVideoRememberBrightness(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled }
     }
 
     suspend fun setVideoBrightnessLevel(level: Float) {
-        context.dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
     }
 
     suspend fun setAudioDefaultSpeed(speed: Float) {
-        context.dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
     }
 
     suspend fun setAudioNightModeVolume(volume: Float) {
-        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume }
     }
 
     suspend fun setAudioNightModeGain(gain: Int) {
-        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain }
     }
 
     suspend fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms }
     }
 
     suspend fun setAudioAutoplayNext(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled }
     }
 
     suspend fun setTrickplayEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled }
     }
 
     suspend fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled }
     }
 
     suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
@@ -651,11 +752,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled }
     }
 
     suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled }
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
@@ -671,11 +772,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled }
     }
 
     suspend fun setReplayGainPreAmpDb(db: Float) {
-        context.dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db.toString() }
+        context.dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db }
     }
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) {
@@ -683,23 +784,23 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setChannelMixEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled }
     }
 
     suspend fun setGaplessEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled }
     }
 
     suspend fun setCrossfadeDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms }
     }
 
     suspend fun setSleepTimerDurationMs(ms: Long) {
-        context.dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms }
     }
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
     }
 
     suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
@@ -707,11 +808,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDreamSlideshowIntervalMs(ms: Long) {
-        context.dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms.toString() }
+        context.dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms }
     }
 
     suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled }
     }
 
     suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
@@ -719,7 +820,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDreamShowTitle(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
     }
 
     suspend fun setEqualizerPreset(preset: EqualizerPreset) {
@@ -727,7 +828,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setBassBoostEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled }
     }
 
     suspend fun setBassBoostStrength(strength: EffectStrength) {
@@ -735,11 +836,11 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVirtualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled }
     }
 
     suspend fun setVirtualizerStrength(strength: Int) {
-        context.dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength.toString() }
+        context.dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength }
     }
 
     suspend fun setReverbPreset(preset: ReverbPreset) {
@@ -747,19 +848,19 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setLrBalance(balance: Float) {
-        context.dataStore.edit { it[Keys.LR_BALANCE] = balance.toString() }
+        context.dataStore.edit { it[Keys.LR_BALANCE] = balance }
     }
 
     suspend fun setAutoEqByGenre(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled }
     }
 
     suspend fun setPitchSemitones(semitones: Float) {
-        context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones.toString() }
+        context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
     }
 
     suspend fun setDownloadConnections(count: Int) {
-        context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count.toString() }
+        context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
     }
 
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
@@ -785,15 +886,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setNavBarShowLabels(show: Boolean) {
-        context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show.toString() }
+        context.dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show }
     }
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed.toString() }
+        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
 
     suspend fun setMpvConfig(config: MpvEngineConfig) {
@@ -809,7 +910,7 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setPerformanceMode(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled.toString() }
+        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
     }
 
     val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -822,15 +923,15 @@ class UserPreferencesStore @Inject constructor(
         }
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled.toString() }
+        context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
     }
 
     suspend fun setNewsletterDayOfWeek(day: Int) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day.toString() }
+        context.dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day }
     }
 
     suspend fun setNewsletterLastViewed(timestampMs: Long) {
-        context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs.toString() }
+        context.dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs }
     }
 
     suspend fun setAccentColorSwatch(swatch: String) {

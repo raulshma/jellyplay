@@ -10,6 +10,7 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -53,6 +54,7 @@ class SearchViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val seerrRepository: SeerrRepository,
+    private val seerrRequestDelegate: SeerrRequestDelegate,
 ) : ViewModel() {
 
     var query by mutableStateOf("")
@@ -193,7 +195,7 @@ class SearchViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _requestResult.value = RequestResult(isLoading = true)
-            seerrRepository.requestMedia(
+            seerrRequestDelegate.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
                 seasons = seasons,
@@ -213,69 +215,31 @@ class SearchViewModel @Inject constructor(
         _requestResult.value = null
     }
 
-    /**
-     * Pre-fetches Seerr detail data (details + ratings + recommendations) so the
-     * detail screen loads instantly.  Callers should show a loading animation on
-     * the card while this runs, then navigate when the returned job completes.
-     */
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            try {
-                coroutineScope {
-                    if (mediaType == "movie") {
-                        seerrRepository.getMovieDetails(tmdbId)
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId)
-                    }
-                    val type = if (mediaType == "movie") MediaType.MOVIE else MediaType.SERIES
-                    launch { seerrRepository.getRatings(tmdbId, mediaType) }
-                    launch { seerrRepository.getRecommendations(tmdbId, type) }
-                    launch { seerrRepository.getSimilar(tmdbId, type) }
-                }
-            } catch (_: Exception) {
-            }
+            seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }
     }
 
-    /**
-     * Fetches service details (Radarr/Sonarr) for the request dialog.
-     * Uses /service/ endpoints matching the Seerr web UI flow.
-     */
     fun loadSeerrServiceDetails(mediaType: String) {
         viewModelScope.launch {
             _isLoadingSeerrServices.value = true
             try {
-                if (mediaType == "movie") {
-                    seerrRepository.getServiceRadarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceRadarrDetail(server.id).getOrNull()
-                        }
-                        _radarrServers.value = details
-                    }
-                } else {
-                    seerrRepository.getServiceSonarrServers().onSuccess { servers ->
-                        val details = servers.mapNotNull { server ->
-                            seerrRepository.getServiceSonarrDetail(server.id).getOrNull()
-                        }
-                        _sonarrServers.value = details
-                    }
-                }
+                val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
+                _radarrServers.value = result.radarrServers
+                _sonarrServers.value = result.sonarrServers
             } finally {
                 _isLoadingSeerrServices.value = false
             }
         }
     }
 
-    /**
-     * Fetches TV details on-demand to get season data for the request dialog.
-     */
     fun loadTvSeasons(tmdbId: Int) {
         viewModelScope.launch {
             _tvSeasons.value = emptyList()
-            seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
-                _tvSeasons.value = details.seasons.filter { it.seasonNumber > 0 }
-            }
+            val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
+            _tvSeasons.value = seasons
         }
     }
 }

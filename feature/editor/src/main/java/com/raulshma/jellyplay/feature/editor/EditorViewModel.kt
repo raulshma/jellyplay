@@ -150,7 +150,7 @@ class EditorViewModel @Inject constructor(
                         preferredMetadataCountryCode = detail.preferredMetadataCountryCode ?: "",
                     )
                 }
-                originalHash = computeDirtyHash()
+                originalHash = computeDirtyHash(_uiState.value)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
@@ -165,7 +165,7 @@ class EditorViewModel @Inject constructor(
     fun updateField(update: (EditorUiState) -> EditorUiState) {
         _uiState.update { state ->
             val newState = update(state)
-            newState.copy(isDirty = computeDirtyHash() != originalHash)
+            newState.copy(isDirty = computeDirtyHash(newState) != originalHash)
         }
     }
 
@@ -211,7 +211,7 @@ class EditorViewModel @Inject constructor(
                     dateCreated = state.mediaDetail?.dateCreated,
                 ).getOrThrow()
 
-                originalHash = computeDirtyHash()
+                originalHash = computeDirtyHash(_uiState.value)
                 _uiState.update { it.copy(isSaving = false, isDirty = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, error = e.message) }
@@ -329,8 +329,8 @@ class EditorViewModel @Inject constructor(
             .onSuccess { infos -> _uiState.update { it.copy(imageInfos = infos) } }
     }
 
-    private fun computeDirtyHash(): Int {
-        val s = _uiState.value
+    private fun computeDirtyHash(state: EditorUiState = _uiState.value): Int {
+        val s = state
         return listOf(
             s.name, s.originalTitle, s.sortName, s.overview, s.tagline,
             s.communityRating, s.criticRating, s.officialRating, s.customRating,

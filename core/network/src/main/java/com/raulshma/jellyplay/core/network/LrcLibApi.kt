@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,7 @@ import javax.inject.Singleton
 class LrcLibApi @Inject constructor(
     private val client: OkHttpClient,
 ) {
-    private val json = JellyfinApiClientImpl.sharedJson
+    private val json = JellyfinApiEngine.sharedJson
 
     private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
         withContext(Dispatchers.IO) {

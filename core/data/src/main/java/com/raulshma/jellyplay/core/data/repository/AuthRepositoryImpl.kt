@@ -130,44 +130,7 @@ class AuthRepositoryImpl @Inject constructor(
         }.onSuccess { user ->
             val server = apiClient.currentServer.first()
             if (server != null) {
-                val existingServer = serverDao.getServerById(server.id)
-                if (existingServer == null) {
-                    serverDao.insertServer(
-                        ServerEntity(
-                            id = server.id,
-                            name = server.name,
-                            address = server.address,
-                        )
-                    )
-                }
-                val userEntity = UserEntity(
-                    userId = user.id,
-                    serverId = server.id,
-                    name = user.name.ifBlank { username },
-                    accessToken = user.accessToken,
-                    primaryImageTag = user.primaryImageTag,
-                    maxParentalAgeRating = user.maxParentalAgeRating,
-                    isAdmin = user.isAdmin,
-                    enabledFolderIds = json.encodeToString(
-                        user.enabledFolderIds
-                    ),
-                    lastConnected = System.currentTimeMillis(),
-                )
-                database.withTransaction {
-                    userDao.insertUser(userEntity)
-                    serverDao.updateServer(
-                        ServerEntity(
-                            id = server.id,
-                            name = server.name,
-                            address = server.address,
-                            userId = user.id,
-                            accessToken = user.accessToken,
-                            lastConnected = System.currentTimeMillis(),
-                        )
-                    )
-                }
-                preferencesStore.setActiveServer(server.id)
-                preferencesStore.setActiveUser(user.id)
+                persistSession(server, user, username)
             }
         }
     }
@@ -203,44 +166,7 @@ class AuthRepositoryImpl @Inject constructor(
         return apiClient.authenticateWithQuickConnect(serverInfo, secret).onSuccess { user ->
             val server = apiClient.currentServer.first()
             if (server != null) {
-                val existingServer = serverDao.getServerById(server.id)
-                if (existingServer == null) {
-                    serverDao.insertServer(
-                        ServerEntity(
-                            id = server.id,
-                            name = server.name,
-                            address = server.address,
-                        )
-                    )
-                }
-                val userEntity = UserEntity(
-                    userId = user.id,
-                    serverId = server.id,
-                    name = user.name,
-                    accessToken = user.accessToken,
-                    primaryImageTag = user.primaryImageTag,
-                    maxParentalAgeRating = user.maxParentalAgeRating,
-                    isAdmin = user.isAdmin,
-                    enabledFolderIds = json.encodeToString(
-                        user.enabledFolderIds
-                    ),
-                    lastConnected = System.currentTimeMillis(),
-                )
-                database.withTransaction {
-                    userDao.insertUser(userEntity)
-                    serverDao.updateServer(
-                        ServerEntity(
-                            id = server.id,
-                            name = server.name,
-                            address = server.address,
-                            userId = user.id,
-                            accessToken = user.accessToken,
-                            lastConnected = System.currentTimeMillis(),
-                        )
-                    )
-                }
-                preferencesStore.setActiveServer(server.id)
-                preferencesStore.setActiveUser(user.id)
+                persistSession(server, user)
             }
         }
     }
@@ -328,6 +254,45 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun getUsersForServer(serverId: String): List<UserInfo> {
         return userDao.getUsersForServer(serverId).first().map { it.toUserInfo() }
+    }
+
+    private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
+        val existingServer = serverDao.getServerById(server.id)
+        if (existingServer == null) {
+            serverDao.insertServer(
+                ServerEntity(
+                    id = server.id,
+                    name = server.name,
+                    address = server.address,
+                )
+            )
+        }
+        val userEntity = UserEntity(
+            userId = user.id,
+            serverId = server.id,
+            name = user.name.ifBlank { fallbackUsername },
+            accessToken = user.accessToken,
+            primaryImageTag = user.primaryImageTag,
+            maxParentalAgeRating = user.maxParentalAgeRating,
+            isAdmin = user.isAdmin,
+            enabledFolderIds = json.encodeToString(user.enabledFolderIds),
+            lastConnected = System.currentTimeMillis(),
+        )
+        database.withTransaction {
+            userDao.insertUser(userEntity)
+            serverDao.updateServer(
+                ServerEntity(
+                    id = server.id,
+                    name = server.name,
+                    address = server.address,
+                    userId = user.id,
+                    accessToken = user.accessToken,
+                    lastConnected = System.currentTimeMillis(),
+                )
+            )
+        }
+        preferencesStore.setActiveServer(server.id)
+        preferencesStore.setActiveUser(user.id)
     }
 
     private fun ServerEntity.toServerInfo() = ServerInfo(

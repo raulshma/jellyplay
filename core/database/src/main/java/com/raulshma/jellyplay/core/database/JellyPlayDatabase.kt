@@ -28,7 +28,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         ScanStateEntity::class,
     ],
     version = 13,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
