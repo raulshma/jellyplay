@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -765,15 +766,24 @@ private fun DetailContent(
                     Column(
                         modifier = Modifier.padding(top = 0.dp)
                     ) {
+                        val posterWidth = when {
+                            isTv -> 160.dp
+                            isExpanded -> 140.dp
+                            else -> 120.dp
+                        }
+                        val posterHeight = posterWidth * 1.2f
+                        val overlap = 40.dp
+                        val boxHeight = posterHeight - overlap
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(80.dp)
+                                .height(boxHeight)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-                                    .offset(y = (-40).dp),
+                                    .offset(y = -overlap),
                                 verticalAlignment = Alignment.Bottom
                             ) {
                                 AnimatedVisibility(
@@ -781,19 +791,17 @@ private fun DetailContent(
                                     enter = EnterTransition.None,
                                     exit = ExitTransition.None,
                                 ) {
-                                    val posterWidth = when {
-                                        isTv -> 160.dp
-                                        isExpanded -> 140.dp
-                                        else -> 120.dp
-                                    }
-                                    FadingItem {
+                                    FadingItem(
+                                        modifier = Modifier
+                                            .width(posterWidth)
+                                            .requiredHeight(posterHeight)
+                                    ) {
                                         MediaImage(
                                             url = getImageUrl(itemId),
                                             contentDescription = null,
                                             blurHash = item?.blurHashes?.primary,
                                             modifier = Modifier
-                                                .width(posterWidth)
-                                                .aspectRatio(2f / 3f)
+                                                .fillMaxSize()
                                                 .clip(ShapeCache.smooth8)
                                                 .graphicsLayer { alpha = contentAlpha },
                                             contentScale = ContentScale.Crop,
