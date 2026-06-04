@@ -185,12 +185,14 @@ private fun AlbumDetailContent(
                     )
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        item.albumArtist?.let {
+                        item.albumArtist?.let { artistName ->
+                            val artistId = item.artistItems.firstOrNull()?.id
                             Text(
-                                text = it,
+                                text = artistName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.tvFocusable().clickable {
+                                    if (artistId != null) onArtistClick(artistId)
                                 },
                             )
                         }

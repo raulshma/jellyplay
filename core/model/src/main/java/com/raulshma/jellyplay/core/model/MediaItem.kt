@@ -20,6 +20,12 @@ enum class MediaType {
     UNKNOWN,
 }
 
+val MediaType.isAudioType: Boolean
+    get() = this == MediaType.AUDIO || this == MediaType.MUSIC || this == MediaType.ALBUM || this == MediaType.ARTIST
+
+val MediaType.isMusicTrack: Boolean
+    get() = this == MediaType.AUDIO || this == MediaType.MUSIC
+
 @Immutable
 @Serializable
 data class ImageBlurHashes(

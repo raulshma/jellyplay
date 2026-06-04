@@ -67,6 +67,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -99,6 +102,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -122,6 +126,14 @@ fun AudioPlayerScreen(
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleepTimer by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel.playbackError) {
+        viewModel.playbackError?.let { error ->
+            snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
+        }
+    }
 
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
@@ -539,6 +551,13 @@ fun AudioPlayerScreen(
                     }
                 }
             }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 120.dp),
+            )
         } // Close Box (root container)
     } // Close ArtworkThemeWrapper
 
@@ -825,7 +844,7 @@ private fun EqualizerSheet(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        "${bandLevels.getOrElse(index) { 0 } / 100}dB",
+                        "${(bandLevels.getOrElse(index) { 0 } / 100.0)}dB",
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.width(48.dp),
                     )
@@ -1920,7 +1939,7 @@ private fun PixelSecondaryControls(
             tint = if (isFavorite) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(
-                    if (isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                    if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                     "Favorite",
                     modifier = Modifier.size(22.dp),
                 )

@@ -2,8 +2,9 @@ package com.raulshma.jellyplay.feature.player.audio.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -40,7 +42,7 @@ fun WaveformSeekBar(
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var isDragging by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
     var phaseShift by remember { mutableFloatStateOf(0f) }
     val isAnimating = isPlaying || isDragging
     LaunchedEffect(isAnimating) {
@@ -75,21 +77,20 @@ fun WaveformSeekBar(
         modifier = modifier
             .fillMaxWidth()
             .height(40.dp)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                    onSeek(fraction)
-                }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { isDragging = true },
-                    onDragEnd = { isDragging = false },
-                    onDragCancel = { isDragging = false }
-                ) { change, _ ->
-                    change.consume()
-                    val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                    onSeek(fraction)
+            .pointerInput(onSeek) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
+                    isDragging = true
+                    val initialFraction = (down.position.x / size.width).coerceIn(0f, 1f)
+                    onSeek(initialFraction)
+
+                    drag(down.id) { change ->
+                        change.consume()
+                        val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                        onSeek(fraction)
+                    }
+                    isDragging = false
                 }
             }
             .drawWithCache {

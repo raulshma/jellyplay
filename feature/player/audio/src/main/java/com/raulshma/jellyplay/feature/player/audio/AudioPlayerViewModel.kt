@@ -138,6 +138,9 @@ class AudioPlayerViewModel @Inject constructor(
     var isFavorite by mutableStateOf(false)
         private set
 
+    var playbackError by mutableStateOf<String?>(null)
+        private set
+
     var lyrics by mutableStateOf<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
         private set
 
@@ -188,6 +191,9 @@ class AudioPlayerViewModel @Inject constructor(
 
         viewModelScope.launch {
             audioPlaybackManager.title.collect { title = it }
+        }
+        viewModelScope.launch {
+            audioPlaybackManager.playbackError.collect { playbackError = it }
         }
         viewModelScope.launch {
             audioPlaybackManager.artist.collect { artist = it }

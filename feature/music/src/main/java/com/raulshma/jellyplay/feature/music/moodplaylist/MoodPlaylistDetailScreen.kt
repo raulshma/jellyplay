@@ -103,7 +103,7 @@ fun MoodPlaylistDetailScreen(
                                     String.format("%d:%02d", minutes, seconds)
                                 },
                                 imageUrl = viewModel.getImageUrl(track.id),
-                                onClick = { onTrackClick(track.id) },
+                                onClick = { viewModel.playAll(index) },
                                 blurHash = track.blurHashes.primary,
                             )
                         }
@@ -114,7 +114,7 @@ fun MoodPlaylistDetailScreen(
             val firstTrack = viewModel.generatedItems.firstOrNull()
             if (firstTrack != null && !viewModel.isLoading) {
                 ExtendedFloatingActionButton(
-                    onClick = { onTrackClick(firstTrack.id) },
+                    onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
                     text = { Text("Play All") },
                     modifier = Modifier

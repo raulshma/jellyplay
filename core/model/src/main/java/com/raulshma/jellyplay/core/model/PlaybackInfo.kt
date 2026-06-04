@@ -43,4 +43,5 @@ data class PlaybackStartInfo(
     val sessionId: String,
     val mediaSourceId: String? = null,
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    val startPositionTicks: Long? = null,
 )

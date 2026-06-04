@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -54,7 +55,6 @@ fun MusicHomeScreen(
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
     val error = viewModel.error
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -85,16 +85,21 @@ fun MusicHomeScreen(
                     val recentlyPlayedSection = sections.find { it.title == "Recently Played" }
                     val artistsSection = sections.find { it.title == "Favorite Artists" }
                     val latestAlbumsSection = sections.find { it.title == "Latest Albums" }
+                    val topRatedAlbumsSection = sections.find { it.title == "Top Rated Albums" }
+                    val favoriteTracksSection = sections.find { it.title == "Favorite Tracks" }
 
                     LazyColumn(
                         state = rememberLazyListState(),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv)
+                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv) + 80.dp
                         ),
                     ) {
                         item {
-                            Spacer(modifier = Modifier.height(96.dp))
+                            MusicHeader(
+                                onSwitchToVideo = { onModeChange(HomeMode.VIDEO) },
+                                onSettingsClick = onSettingsClick,
+                            )
                         }
 
                         item {
@@ -108,23 +113,6 @@ fun MusicHomeScreen(
                                 onGenresClick = onGenresClick,
                                 onPlaylistsClick = onPlaylistsClick,
                             )
-                        }
-
-                        if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                RecentlyPlayedSection(
-                                    tracks = recentlyPlayedSection.items,
-                                    onTrackClick = onItemClick,
-                                    onPlayAllClick = {
-                                        viewModel.playAll(recentlyPlayedSection.items)
-                                    },
-                                    onShuffleClick = {
-                                        viewModel.shufflePlay(recentlyPlayedSection.items)
-                                    },
-                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                )
-                            }
                         }
 
                         if (artistsSection != null && artistsSection.items.isNotEmpty()) {
@@ -163,7 +151,73 @@ fun MusicHomeScreen(
                                 )
                             }
                         }
+
+                        if (topRatedAlbumsSection != null && topRatedAlbumsSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                NewReleasesSection(
+                                    albums = topRatedAlbumsSection.items,
+                                    onAlbumClick = onAlbumClick,
+                                    onAlbumPlayClick = { albumId ->
+                                        onAlbumClick(albumId)
+                                    },
+                                    onPlayAllClick = {
+                                        viewModel.playAll(topRatedAlbumsSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shufflePlay(topRatedAlbumsSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    title = "Top Rated Albums",
+                                    subtitle = "Highest rated by the community",
+                                )
+                            }
+                        }
+
+                        if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                RecentlyPlayedSection(
+                                    tracks = recentlyPlayedSection.items,
+                                    onTrackClick = onItemClick,
+                                    onPlayAllClick = {
+                                        viewModel.playAll(recentlyPlayedSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shufflePlay(recentlyPlayedSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                )
+                            }
+                        }
+
+                        if (favoriteTracksSection != null && favoriteTracksSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                RecentlyPlayedSection(
+                                    tracks = favoriteTracksSection.items,
+                                    onTrackClick = onItemClick,
+                                    onPlayAllClick = {
+                                        viewModel.playAll(favoriteTracksSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shufflePlay(favoriteTracksSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    title = "Favorite Tracks",
+                                    subtitle = "Songs you love the most",
+                                )
+                            }
+                        }
                     }
+
+                    BottomMusicNavigation(
+                        currentTab = currentTab,
+                        onTabClick = { tab -> currentTab = tab },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.navigationBars),
+                    )
                 }
             }
         }
