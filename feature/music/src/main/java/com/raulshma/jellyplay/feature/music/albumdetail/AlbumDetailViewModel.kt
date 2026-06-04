@@ -1,25 +1,20 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,28 +23,31 @@ class AlbumDetailViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val downloadRepository: DownloadRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var detail by mutableStateOf<MediaDetail?>(null)
-        private set
-    var tracks by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _detail = composeState<MediaDetail?>(null)
+    val detail: MediaDetail? get() = _detail.value
+
+    private val _tracks = composeState<List<MediaItem>>(emptyList())
+    val tracks: List<MediaItem> get() = _tracks.value
+
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
+
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     fun loadAlbum(albumId: String) {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
             mediaRepository.getMediaDetail(albumId)
-                .onSuccess { detail = it }
-                .onFailure { error = it.message ?: "Failed to load album" }
+                .onSuccess { _detail.value = it }
+                .onFailure { _error.value = it.message ?: "Failed to load album" }
             mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { tracks = it }
-                .onFailure { error = it.message ?: "Failed to load tracks" }
-            isLoading = false
+                .onSuccess { _tracks.value = it }
+                .onFailure { _error.value = it.message ?: "Failed to load tracks" }
+            _isLoading.value = false
         }
     }
 
@@ -92,19 +90,19 @@ class AlbumDetailViewModel @Inject constructor(
 
     val trackDownloads: StateFlow<Map<String, DownloadItem>> = downloadRepository.getAllDownloads()
         .map { downloads -> downloads.associateBy { it.mediaItemId } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun downloadTrack(track: MediaItem) {
         val currentDownloads = trackDownloads.value
         val existing = currentDownloads[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
-            viewModelScope.launch {
+            launch {
                 downloadRepository.deleteDownload(existing.id)
             }
             return
         }
 
-        viewModelScope.launch {
+        launch {
             try {
                 val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
                 val source = detail.mediaSources.firstOrNull() ?: return@launch
@@ -138,7 +136,7 @@ class AlbumDetailViewModel @Inject constructor(
         val albumTracks = tracks
         if (albumTracks.isEmpty()) return
         val currentDownloads = trackDownloads.value
-        viewModelScope.launch {
+        launch {
             albumTracks.forEach { track ->
                 val existing = currentDownloads[track.id]
                 if (existing == null || existing.status == DownloadStatus.FAILED || existing.status == DownloadStatus.CANCELLED) {
@@ -179,7 +177,7 @@ class AlbumDetailViewModel @Inject constructor(
         val albumTracks = tracks
         if (albumTracks.isEmpty()) return
         val currentDownloads = trackDownloads.value
-        viewModelScope.launch {
+        launch {
             albumTracks.forEach { track ->
                 val existing = currentDownloads[track.id]
                 if (existing != null) {

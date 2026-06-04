@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.stalemedia
 
 import androidx.compose.runtime.Immutable
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.AuditLogEntry
@@ -11,10 +9,8 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
@@ -81,11 +77,11 @@ private val MediaItemStub.sortSizeBytes: Long
 class StaleMediaViewModel @Inject constructor(
     private val repository: AdminStatisticsRepository,
     private val authRepository: AuthRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val _state = MutableStateFlow(StaleMediaState())
-    val state = _state.asStateFlow()
+    private val _state = stateFlow(StaleMediaState())
+    val state = _state.flow
 
     init {
         observeAuditHistory()
@@ -93,53 +89,61 @@ class StaleMediaViewModel @Inject constructor(
     }
 
     private fun observePermissions() {
-        viewModelScope.launch {
+        launch {
             authRepository.currentUser.collect { user ->
-                _state.value = _state.value.copy(canDeleteContent = user?.canDeleteContent ?: false)
+                _state.update { it.copy(canDeleteContent = user?.canDeleteContent ?: false) }
             }
         }
     }
 
     private fun observeAuditHistory() {
-        viewModelScope.launch {
+        launch {
             repository.getAuditHistory(CleanupActionType.STALE_REMOVAL).collect { entries ->
-                _state.value = _state.value.copy(auditEntries = entries)
+                _state.update { it.copy(auditEntries = entries) }
             }
         }
     }
 
     fun updateConfig(config: MediaCleanupConfig) {
-        _state.value = _state.value.copy(config = config)
+        _state.update { it.copy(config = config) }
     }
 
     fun selectTab(index: Int) {
-        _state.value = _state.value.copy(selectedTabIndex = index)
+        _state.update { it.copy(selectedTabIndex = index) }
     }
 
     fun updateSort(option: MediaSortOption) {
-        _state.value = _state.value.copy(sortOption = option)
+        _state.update { it.copy(sortOption = option) }
     }
 
     fun startScan() {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null, rawScanResults = emptyList(), selectedItems = emptySet())
+        launch {
+            _state.update {
+                it.copy(
+                    isLoading = true,
+                    error = null,
+                    rawScanResults = emptyList(),
+                    selectedItems = emptySet(),
+                )
+            }
             repository.detectStaleMedia(_state.value.config)
                 .onSuccess { scanId ->
-                    _state.value = _state.value.copy(scanId = scanId, isLoading = false)
+                    _state.update { it.copy(scanId = scanId, isLoading = false) }
                     observeScanProgress(scanId)
                 }
                 .onFailure { e ->
-                    _state.value = _state.value.copy(isLoading = false, error = e.message)
+                    _state.update { it.copy(isLoading = false, error = e.message) }
                 }
         }
     }
 
     private fun observeScanProgress(scanId: String) {
-        viewModelScope.launch {
+        launch {
             repository.getScanProgress(scanId).collect { progress ->
-                _state.value = _state.value.copy(scanProgress = progress)
+                _state.update { it.copy(scanProgress = progress) }
                 if (progress.phase == ScanPhase.COMPLETED) {
-                    _state.value = _state.value.copy(rawScanResults = loadResults(scanId))
+                    val results = loadResults(scanId)
+                    _state.update { it.copy(rawScanResults = results) }
                 }
             }
         }
@@ -157,29 +161,33 @@ class StaleMediaViewModel @Inject constructor(
 
     fun toggleItemSelection(itemId: String) {
         val current = _state.value.selectedItems
-        _state.value = _state.value.copy(
-            selectedItems = if (current.contains(itemId)) current - itemId else current + itemId,
-        )
+        _state.update {
+            it.copy(
+                selectedItems = if (current.contains(itemId)) current - itemId else current + itemId,
+            )
+        }
     }
 
     fun selectAll() {
         val allIds = _state.value.scanResults.map { it.itemId }.toSet()
-        _state.value = _state.value.copy(
-            selectedItems = if (_state.value.selectedItems == allIds) emptySet() else allIds,
-        )
+        _state.update {
+            it.copy(
+                selectedItems = if (it.selectedItems == allIds) emptySet() else allIds,
+            )
+        }
     }
 
     fun showDeleteConfirmation() {
-        _state.value = _state.value.copy(showDeleteConfirmation = true)
+        _state.update { it.copy(showDeleteConfirmation = true) }
     }
 
     fun dismissDeleteConfirmation() {
-        _state.value = _state.value.copy(showDeleteConfirmation = false)
+        _state.update { it.copy(showDeleteConfirmation = false) }
     }
 
     fun deleteSelected() {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isDeleting = true)
+        launch {
+            _state.update { it.copy(isDeleting = true) }
             val selectedItems = _state.value.selectedItems.toList()
             val nameMap = _state.value.scanResults.associate { it.itemId to it.name }
 
@@ -189,18 +197,22 @@ class StaleMediaViewModel @Inject constructor(
                 actionType = CleanupActionType.STALE_REMOVAL,
                 config = _state.value.config,
             ).onSuccess {
-                _state.value = _state.value.copy(
-                    isDeleting = false,
-                    showDeleteConfirmation = false,
-                    selectedItems = emptySet(),
-                    rawScanResults = _state.value.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
-                )
+                _state.update {
+                    it.copy(
+                        isDeleting = false,
+                        showDeleteConfirmation = false,
+                        selectedItems = emptySet(),
+                        rawScanResults = it.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
+                    )
+                }
             }.onFailure { e ->
-                _state.value = _state.value.copy(
-                    isDeleting = false,
-                    showDeleteConfirmation = false,
-                    error = e.message,
-                )
+                _state.update {
+                    it.copy(
+                        isDeleting = false,
+                        showDeleteConfirmation = false,
+                        error = e.message,
+                    )
+                }
             }
         }
     }

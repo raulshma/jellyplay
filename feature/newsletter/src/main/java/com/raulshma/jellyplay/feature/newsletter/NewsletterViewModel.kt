@@ -1,16 +1,10 @@
 package com.raulshma.jellyplay.feature.newsletter
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -20,10 +14,10 @@ class NewsletterViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: UserPreferencesStore,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    private val _uiState = MutableStateFlow(NewsletterUiState())
-    val uiState: StateFlow<NewsletterUiState> = _uiState.asStateFlow()
+    private val _uiState = stateFlow(NewsletterUiState())
+    val uiState = _uiState.flow
 
     init {
         loadData()
@@ -44,7 +38,7 @@ class NewsletterViewModel @Inject constructor(
         playbackRepository.getBackdropUrl(itemId)
 
     private fun loadData(isPullToRefresh: Boolean = false) {
-        viewModelScope.launch {
+        launch {
             _uiState.update {
                 it.copy(
                     isLoading = !isPullToRefresh,
@@ -89,7 +83,7 @@ class NewsletterViewModel @Inject constructor(
     }
 
     private fun markViewed() {
-        viewModelScope.launch {
+        launch {
             preferencesStore.setNewsletterLastViewed(System.currentTimeMillis())
         }
     }

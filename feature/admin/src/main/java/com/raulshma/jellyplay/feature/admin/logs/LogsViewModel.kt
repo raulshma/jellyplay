@@ -1,26 +1,18 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -56,10 +48,10 @@ data class LogsState(
 class LogsViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val okHttpClient: OkHttpClient,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var state by mutableStateOf(LogsState())
-        private set
+    private val _state = composeState(LogsState())
+    val state: LogsState get() = _state.value
 
     private val _liveEvents = MutableSharedFlow<ActivityLogEntry>(extraBufferCapacity = 64)
     val liveEvents: SharedFlow<ActivityLogEntry> = _liveEvents
@@ -74,59 +66,57 @@ class LogsViewModel @Inject constructor(
     }
 
     fun loadInitialData() {
-        viewModelScope.launch {
-            state = state.copy(isLoading = true, error = null)
+        launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 val logFilesResult = apiClient.getLogFiles()
                 val activityResult = apiClient.getActivityLogEntries(limit = 50)
-                state = state.copy(
+                _state.value = _state.value.copy(
                     logFiles = logFilesResult.getOrNull() ?: emptyList(),
                     activityEntries = activityResult.getOrNull() ?: emptyList(),
                     isLoading = false,
                 )
             } catch (e: Exception) {
-                state = state.copy(error = e.message, isLoading = false)
+                _state.value = _state.value.copy(error = e.message, isLoading = false)
             }
         }
     }
 
     fun loadLogFile(fileName: String) {
         logFilePollingJob?.cancel()
-        state = state.copy(
+        _state.value = _state.value.copy(
             isLoadingLogContent = true,
             selectedLogFileName = fileName,
             selectedLogFileContent = null,
             selectedLogFileLines = emptyList(),
             isLogPollingActive = true
         )
-        logFilePollingJob = viewModelScope.launch {
-            // First load
+        logFilePollingJob = launch {
             val initialResult = apiClient.getLogFileContent(fileName)
             initialResult.onSuccess { content ->
                 val lines = content.lines().mapIndexed { index, text ->
                     LogLine(index = index, text = text, isNew = false, addedTime = 0L)
                 }
-                state = state.copy(
+                _state.value = _state.value.copy(
                     selectedLogFileContent = content,
                     selectedLogFileLines = lines,
                     isLoadingLogContent = false
                 )
             }.onFailure { e ->
-                state = state.copy(
+                _state.value = _state.value.copy(
                     error = e.message,
                     isLoadingLogContent = false
                 )
             }
 
-            // Polling loop
-            while (state.selectedLogFileName == fileName) {
+            while (_state.value.selectedLogFileName == fileName) {
                 delay(3000)
-                if (state.isLogPollingActive) {
+                if (_state.value.isLogPollingActive) {
                     val result = apiClient.getLogFileContent(fileName)
                     result.onSuccess { content ->
-                        val oldLines = state.selectedLogFileLines
+                        val oldLines = _state.value.selectedLogFileLines
                         val newLinesText = content.lines()
-                        
+
                         if (newLinesText != oldLines.map { it.text }) {
                             val updatedLines = newLinesText.mapIndexed { index, text ->
                                 if (index < oldLines.size && oldLines[index].text == text) {
@@ -140,7 +130,7 @@ class LogsViewModel @Inject constructor(
                                     )
                                 }
                             }
-                            state = state.copy(
+                            _state.value = _state.value.copy(
                                 selectedLogFileContent = content,
                                 selectedLogFileLines = updatedLines
                             )
@@ -152,13 +142,13 @@ class LogsViewModel @Inject constructor(
     }
 
     fun toggleLogPolling() {
-        state = state.copy(isLogPollingActive = !state.isLogPollingActive)
+        _state.value = _state.value.copy(isLogPollingActive = !_state.value.isLogPollingActive)
     }
 
     fun clearSelectedLogFile() {
         logFilePollingJob?.cancel()
         logFilePollingJob = null
-        state = state.copy(
+        _state.value = _state.value.copy(
             selectedLogFileContent = null,
             selectedLogFileName = null,
             selectedLogFileLines = emptyList(),
@@ -167,21 +157,22 @@ class LogsViewModel @Inject constructor(
     }
 
     fun selectTab(index: Int) {
-        state = state.copy(selectedTabIndex = index)
+        _state.value = _state.value.copy(selectedTabIndex = index)
     }
 
     fun startLiveStream() {
         val serverUrl = apiClient.getServerUrl() ?: return
         val token = apiClient.getAccessToken() ?: return
-        state = state.copy(isLiveStreamActive = true, liveEntries = emptyList())
+        _state.value = _state.value.copy(isLiveStreamActive = true, liveEntries = emptyList())
 
         liveCollectJob?.cancel()
-        liveCollectJob = viewModelScope.launch {
+        liveCollectJob = launch {
             liveEvents.collect { entry ->
-                state = state.copy(
-                    liveEntries = (listOf(entry) + state.liveEntries).take(200),
-                    liveEntryIds = state.liveEntryIds + entry.id,
-                    activityEntries = (listOf(entry) + state.activityEntries).take(200),
+                val current = _state.value
+                _state.value = current.copy(
+                    liveEntries = (listOf(entry) + current.liveEntries).take(200),
+                    liveEntryIds = current.liveEntryIds + entry.id,
+                    activityEntries = (listOf(entry) + current.activityEntries).take(200),
                 )
             }
         }
@@ -217,13 +208,13 @@ class LogsViewModel @Inject constructor(
         pollingJob = null
         liveCollectJob?.cancel()
         liveCollectJob = null
-        state = state.copy(isLiveStreamActive = false)
+        _state.value = _state.value.copy(isLiveStreamActive = false)
     }
 
     private fun startPollingFallback() {
         pollingJob?.cancel()
-        pollingJob = viewModelScope.launch {
-            val knownIds = state.activityEntries.map { it.id }.toMutableSet()
+        pollingJob = launch {
+            val knownIds = _state.value.activityEntries.map { it.id }.toMutableSet()
             while (true) {
                 delay(3000)
                 val result = apiClient.getActivityLogEntries(limit = 10)
@@ -241,12 +232,12 @@ class LogsViewModel @Inject constructor(
     }
 
     fun loadMoreActivity() {
-        viewModelScope.launch {
-            val currentSize = state.activityEntries.size
+        launch {
+            val currentSize = _state.value.activityEntries.size
             val result = apiClient.getActivityLogEntries(startIndex = currentSize, limit = 50)
             result.onSuccess { more ->
-                state = state.copy(
-                    activityEntries = state.activityEntries + more,
+                _state.value = _state.value.copy(
+                    activityEntries = _state.value.activityEntries + more,
                 )
             }
         }

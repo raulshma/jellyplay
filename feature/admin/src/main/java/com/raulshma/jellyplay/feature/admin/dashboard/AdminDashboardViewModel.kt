@@ -1,10 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
@@ -12,11 +7,11 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class AdminDashboardState(
@@ -35,26 +30,26 @@ data class AdminDashboardState(
 class AdminDashboardViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val authRepository: AuthRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var state by mutableStateOf(AdminDashboardState())
-        private set
+    private val _state = composeState(AdminDashboardState())
+    val state: AdminDashboardState get() = _state.value
 
-    var isAdmin by mutableStateOf(false)
-        private set
+    private val _isAdmin = composeState(false)
+    val isAdmin: Boolean get() = _isAdmin.value
 
     init {
-        viewModelScope.launch {
+        launch {
             authRepository.currentUser.collect { user ->
-                isAdmin = user?.isAdmin == true
+                _isAdmin.value = user?.isAdmin == true
             }
         }
         loadDashboard()
     }
 
     fun loadDashboard() {
-        viewModelScope.launch {
-            state = state.copy(isLoading = true, error = null)
+        launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 coroutineScope {
                     val sysInfoDeferred = async { apiClient.getSystemInfo().getOrNull() }
@@ -68,7 +63,7 @@ class AdminDashboardViewModel @Inject constructor(
                     val sessions = sessionsDeferred.await() ?: emptyList()
                     val allTasks = tasksDeferred.await() ?: emptyList()
 
-                    state = state.copy(
+                    _state.value = _state.value.copy(
                         isLoading = false,
                         systemInfo = sysInfo,
                         itemCounts = counts,
@@ -78,7 +73,7 @@ class AdminDashboardViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                state = state.copy(isLoading = false, error = e.message)
+                _state.value = _state.value.copy(isLoading = false, error = e.message)
             }
         }
         startAutoRefresh()
@@ -88,7 +83,7 @@ class AdminDashboardViewModel @Inject constructor(
 
     private fun startAutoRefresh() {
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
+        refreshJob = launch {
             while (true) {
                 delay(5000)
                 refreshRunningTasks()
@@ -99,26 +94,26 @@ class AdminDashboardViewModel @Inject constructor(
     private suspend fun refreshRunningTasks() {
         val result = apiClient.getScheduledTasks()
         val tasks = result.getOrNull() ?: return
-        state = state.copy(
+        _state.value = _state.value.copy(
             runningTasks = tasks.filter { it.state == TaskState.RUNNING },
         )
     }
 
     fun restartServer() {
-        viewModelScope.launch {
-            state = state.copy(isRestarting = true)
+        launch {
+            _state.value = _state.value.copy(isRestarting = true)
             apiClient.restartServer()
             delay(3000)
-            state = state.copy(isRestarting = false)
+            _state.value = _state.value.copy(isRestarting = false)
             loadDashboard()
         }
     }
 
     fun shutdownServer() {
-        viewModelScope.launch {
-            state = state.copy(isShuttingDown = true)
+        launch {
+            _state.value = _state.value.copy(isShuttingDown = true)
             apiClient.shutdownServer()
-            state = state.copy(isShuttingDown = false)
+            _state.value = _state.value.copy(isShuttingDown = false)
         }
     }
 

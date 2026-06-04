@@ -1,44 +1,39 @@
 package com.raulshma.jellyplay.feature.livetv.channels
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ChannelsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var channels by mutableStateOf<List<LiveTvChannel>>(emptyList())
-        private set
+    private val _channels = composeState<List<LiveTvChannel>>(emptyList())
+    val channels: List<LiveTvChannel> get() = _channels.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _isLoading = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     init {
         loadChannels()
     }
 
     fun loadChannels() {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
             mediaRepository.getLiveTvChannels(limit = 100)
-                .onSuccess { channels = it }
-                .onFailure { error = it.message }
-            isLoading = false
+                .onSuccess { _channels.value = it }
+                .onFailure { _error.value = it.message }
+            _isLoading.value = false
         }
     }
 

@@ -1,41 +1,36 @@
 package com.raulshma.jellyplay.feature.music.genres
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class GenresViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    private val _genres = MutableStateFlow<List<Genre>>(emptyList())
-    val genres: StateFlow<List<Genre>> = _genres.asStateFlow()
+    private val _genres = stateFlow<List<Genre>>(emptyList())
+    val genres = _genres.flow
 
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _isLoading = stateFlow(true)
+    val isLoading = _isLoading.flow
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = stateFlow<String?>(null)
+    val error = _error.flow
 
     init {
         loadGenres()
     }
 
     private fun loadGenres() {
-        viewModelScope.launch {
-            _isLoading.value = true
+        launch {
+            _isLoading.set(true)
             mediaRepository.getGenres()
-                .onSuccess { _genres.value = it }
-                .onFailure { _error.value = it.message ?: "Failed to load genres" }
-            _isLoading.value = false
+                .onSuccess { _genres.set(it) }
+                .onFailure { _error.set(it.message ?: "Failed to load genres") }
+            _isLoading.set(false)
         }
     }
 

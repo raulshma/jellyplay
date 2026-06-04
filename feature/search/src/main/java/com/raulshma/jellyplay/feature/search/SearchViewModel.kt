@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -18,19 +15,15 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -38,8 +31,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SearchFilters(
@@ -55,65 +46,65 @@ class SearchViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var query by mutableStateOf("")
-        private set
+    private val _query = composeState("")
+    var query: String
+        get() = _query.value
+        private set(value) { _query.value = value }
 
-    private val _filters = MutableStateFlow(SearchFilters())
-    val filters: StateFlow<SearchFilters> = _filters.asStateFlow()
+    private val _filters = stateFlow(SearchFilters())
+    val filters: StateFlow<SearchFilters> = _filters.flow
 
-    private val _genres = MutableStateFlow<List<Genre>>(emptyList())
-    val genres: StateFlow<List<Genre>> = _genres.asStateFlow()
+    private val _genres = stateFlow<List<Genre>>(emptyList())
+    val genres: StateFlow<List<Genre>> = _genres.flow
 
-    private val _showFilters = MutableStateFlow(false)
-    val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
+    private val _showFilters = stateFlow(false)
+    val showFilters: StateFlow<Boolean> = _showFilters.flow
 
-    // Seerr integration state
-    private val _seerrResults = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrResults: StateFlow<List<SeerrSearchItem>> = _seerrResults.asStateFlow()
+    private val _seerrResults = stateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrResults: StateFlow<List<SeerrSearchItem>> = _seerrResults.flow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     val isSeerrSearchEnabled: StateFlow<Boolean> = seerrRepository.isSearchEnabled()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val queryFlow = MutableStateFlow("")
+    private val queryFlow = stateFlow("")
 
-    // Track the current seerr search job so we can cancel it when the query changes
     private var seerrSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        queryFlow.debounce(400).distinctUntilChanged(),
-        _filters,
+        queryFlow.flow.debounce(400).distinctUntilChanged(),
+        _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
             seerrSearchJob?.cancel()
             if (currentQuery.isBlank()) {
-                _seerrResults.value = emptyList()
+                _seerrResults.set(emptyList())
                 flowOf(PagingData.empty())
             } else {
-                seerrSearchJob = viewModelScope.launch { searchSeerr(currentQuery) }
+                seerrSearchJob = launch { searchSeerr(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     mediaTypes = filters.mediaTypes.ifEmpty { null },
                 )
             }
         }
-        .cachedIn(viewModelScope)
+        .cachedIn(scope)
 
     init {
         loadGenres()
     }
 
     fun search(newQuery: String) {
-        query = newQuery
-        queryFlow.value = newQuery
+        _query.value = newQuery
+        queryFlow.set(newQuery)
     }
 
     fun updateFilters(newFilters: SearchFilters) {
-        _filters.update { newFilters }
+        _filters.set(newFilters)
     }
 
     fun toggleMediaType(mediaType: MediaType) {
@@ -126,17 +117,17 @@ class SearchViewModel @Inject constructor(
     }
 
     fun toggleShowFilters() {
-        _showFilters.value = !_showFilters.value
+        _showFilters.set(!_showFilters.value)
     }
 
     fun clearFilters() {
-        _filters.update { SearchFilters() }
+        _filters.set(SearchFilters())
     }
 
     private fun loadGenres() {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getGenres()
-                .onSuccess { _genres.value = it }
+                .onSuccess { _genres.set(it) }
         }
     }
 
@@ -151,39 +142,37 @@ class SearchViewModel @Inject constructor(
             val connected = seerrRepository.isConnected().first()
             val enabled = seerrRepository.isSearchEnabled().first()
             if (!connected || !enabled) {
-                _seerrResults.value = emptyList()
+                _seerrResults.set(emptyList())
                 return
             }
             seerrRepository.search(query)
                 .onSuccess { response ->
-                    _seerrResults.value = response.results.take(10)
+                    _seerrResults.set(response.results.take(10))
                 }
                 .onFailure {
-                    _seerrResults.value = emptyList()
+                    _seerrResults.set(emptyList())
                 }
-        } catch (e: CancellationException) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
-            _seerrResults.value = emptyList()
+            _seerrResults.set(emptyList())
         }
     }
 
-    private val _requestResult = MutableStateFlow<RequestResult?>(null)
-    val requestResult: StateFlow<RequestResult?> = _requestResult.asStateFlow()
+    private val _requestResult = stateFlow<RequestResult?>(null)
+    val requestResult: StateFlow<RequestResult?> = _requestResult.flow
 
-    // Service details for request dialog
-    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.flow
 
-    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.flow
 
-    private val _isLoadingSeerrServices = MutableStateFlow(false)
-    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+    private val _isLoadingSeerrServices = stateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.flow
 
-    // TV details for season data (fetched on-demand)
-    private val _tvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
-    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.asStateFlow()
+    private val _tvSeasons = stateFlow<List<SeerrSeason>>(emptyList())
+    val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.flow
 
     fun requestSeerrMedia(
         item: SeerrSearchItem,
@@ -193,8 +182,8 @@ class SearchViewModel @Inject constructor(
         rootFolder: String? = null,
         tags: List<Int>? = null,
     ) {
-        viewModelScope.launch {
-            _requestResult.value = RequestResult(isLoading = true)
+        launch {
+            _requestResult.set(RequestResult(isLoading = true))
             seerrRequestDelegate.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
@@ -204,42 +193,42 @@ class SearchViewModel @Inject constructor(
                 rootFolder = rootFolder,
                 tags = tags,
             ).onSuccess {
-                _requestResult.value = RequestResult(success = true)
+                _requestResult.set(RequestResult(success = true))
             }.onFailure {
-                _requestResult.value = RequestResult(error = it.message ?: "Request failed")
+                _requestResult.set(RequestResult(error = it.message ?: "Request failed"))
             }
         }
     }
 
     fun clearRequestResult() {
-        _requestResult.value = null
+        _requestResult.set(null)
     }
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        viewModelScope.launch {
+        launch {
             seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }
     }
 
     fun loadSeerrServiceDetails(mediaType: String) {
-        viewModelScope.launch {
-            _isLoadingSeerrServices.value = true
+        launch {
+            _isLoadingSeerrServices.set(true)
             try {
                 val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
-                _radarrServers.value = result.radarrServers
-                _sonarrServers.value = result.sonarrServers
+                _radarrServers.set(result.radarrServers)
+                _sonarrServers.set(result.sonarrServers)
             } finally {
-                _isLoadingSeerrServices.value = false
+                _isLoadingSeerrServices.set(false)
             }
         }
     }
 
     fun loadTvSeasons(tmdbId: Int) {
-        viewModelScope.launch {
-            _tvSeasons.value = emptyList()
+        launch {
+            _tvSeasons.set(emptyList())
             val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
-            _tvSeasons.value = seasons
+            _tvSeasons.set(seasons)
         }
     }
 }

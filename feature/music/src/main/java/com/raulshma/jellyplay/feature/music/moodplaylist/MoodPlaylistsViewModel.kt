@@ -1,10 +1,5 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -15,9 +10,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistSort
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
@@ -27,31 +22,31 @@ class MoodPlaylistsViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val moodPlaylistRepository: MoodPlaylistRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var playlists by mutableStateOf<List<MoodPlaylist>>(MoodPlaylistsPreset.all)
-        private set
+    private val _playlists = composeState<List<MoodPlaylist>>(MoodPlaylistsPreset.all)
+    val playlists: List<MoodPlaylist> get() = _playlists.value
 
-    var favoritePlaylistIds by mutableStateOf<Set<String>>(emptySet())
-        private set
+    private val _favoritePlaylistIds = composeState<Set<String>>(emptySet())
+    val favoritePlaylistIds: Set<String> get() = _favoritePlaylistIds.value
 
-    var selectedPlaylist by mutableStateOf<MoodPlaylist?>(null)
-        private set
+    private val _selectedPlaylist = composeState<MoodPlaylist?>(null)
+    val selectedPlaylist: MoodPlaylist? get() = _selectedPlaylist.value
 
-    var generatedItems by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
+    private val _generatedItems = composeState<List<MediaItem>>(emptyList())
+    val generatedItems: List<MediaItem> get() = _generatedItems.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _isLoading = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     init {
-        viewModelScope.launch {
+        launch {
             combinePlaylists().collectLatest { combined ->
-                playlists = MoodPlaylistsPreset.all + combined.custom
-                favoritePlaylistIds = combined.favorites
+                _playlists.value = MoodPlaylistsPreset.all + combined.custom
+                _favoritePlaylistIds.value = combined.favorites
             }
         }
     }
@@ -84,8 +79,8 @@ class MoodPlaylistsViewModel @Inject constructor(
         themeColorHex: String? = null,
     ) {
         if (name.isBlank() || genreKeywords.isEmpty()) return
-        viewModelScope.launch {
-            error = null
+        launch {
+            _error.value = null
             val playlist = MoodPlaylist(
                 id = "custom-${UUID.randomUUID()}",
                 name = name.trim(),
@@ -104,13 +99,13 @@ class MoodPlaylistsViewModel @Inject constructor(
 
     fun deleteCustomPlaylist(playlist: MoodPlaylist) {
         if (!playlist.id.startsWith("custom-")) return
-        viewModelScope.launch {
+        launch {
             moodPlaylistRepository.delete(playlist.id)
         }
     }
 
     fun toggleFavorite(playlist: MoodPlaylist) {
-        viewModelScope.launch {
+        launch {
             val isFavorite = playlist.id in favoritePlaylistIds
             moodPlaylistRepository.setPreference(
                 playlistId = playlist.id,
@@ -120,10 +115,10 @@ class MoodPlaylistsViewModel @Inject constructor(
     }
 
     fun generatePlaylist(playlist: MoodPlaylist) {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
-            selectedPlaylist = playlist
+        launch {
+            _isLoading.value = true
+            _error.value = null
+            _selectedPlaylist.value = playlist
             mediaRepository.getMediaItems(
                 mediaTypes = listOf(MediaType.AUDIO),
                 limit = 300,
@@ -132,17 +127,17 @@ class MoodPlaylistsViewModel @Inject constructor(
                 var items = result.items
                 items = applyMoodFilter(items, playlist)
                 items = applySort(items, playlist.sortBy)
-                generatedItems = items.take(playlist.maxItems)
+                _generatedItems.value = items.take(playlist.maxItems)
             }.onFailure {
-                error = it.message ?: "Failed to generate playlist"
+                _error.value = it.message ?: "Failed to generate playlist"
             }
-            isLoading = false
+            _isLoading.value = false
         }
     }
 
     fun clearGenerated() {
-        generatedItems = emptyList()
-        selectedPlaylist = null
+        _generatedItems.value = emptyList()
+        _selectedPlaylist.value = null
     }
 
     fun getImageUrl(itemId: String): String =

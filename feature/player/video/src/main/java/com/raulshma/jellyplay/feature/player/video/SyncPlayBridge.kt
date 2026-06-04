@@ -6,22 +6,21 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 internal class SyncPlayBridge(
     private val syncPlayManager: SyncPlayManager,
-    private val uiState: MutableStateFlow<VideoPlayerUiState>,
+    private val uiState: StateFlowHandle<VideoPlayerUiState>,
     private val getMediaEngine: () -> MediaEngine?,
     private val getCurrentItemId: () -> String?,
     private val onLoadItem: (String, Long) -> Unit,
