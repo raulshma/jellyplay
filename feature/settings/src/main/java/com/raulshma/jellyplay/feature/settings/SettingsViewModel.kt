@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -37,7 +38,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 
 @HiltViewModel
@@ -560,5 +563,50 @@ class SettingsViewModel @Inject constructor(
 
     fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
         launch { preferencesStore.setExoPlayerConfig(config) }
+    }
+
+    var backupRestoreStatus by composeState<String?>(null)
+        private set
+
+    fun exportSettings(uri: Uri) {
+        launch {
+            backupRestoreStatus = null
+            runCatching {
+                val prefs = preferences
+                val json = Json { prettyPrint = true; encodeDefaults = true }
+                val jsonString = json.encodeToString(UserPreferences.serializer(), prefs)
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.writer().use { it.write(jsonString) }
+                    } ?: throw IOException("Cannot open output stream")
+                }
+                backupRestoreStatus = "Settings exported successfully"
+            }.onFailure {
+                backupRestoreStatus = "Export failed: ${it.message}"
+            }
+        }
+    }
+
+    fun importSettings(uri: Uri) {
+        launch {
+            backupRestoreStatus = null
+            runCatching {
+                val jsonString = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        stream.reader().use { it.readText() }
+                    } ?: throw IOException("Cannot open input stream")
+                }
+                val json = Json { ignoreUnknownKeys = true }
+                val imported = json.decodeFromString(UserPreferences.serializer(), jsonString)
+                preferencesStore.restorePreferences(imported)
+                backupRestoreStatus = "Settings imported successfully"
+            }.onFailure {
+                backupRestoreStatus = "Import failed: ${it.message}"
+            }
+        }
+    }
+
+    fun clearBackupRestoreStatus() {
+        backupRestoreStatus = null
     }
 }

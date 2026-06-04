@@ -531,11 +531,13 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getFavorites(
         mediaTypes: List<MediaType>?,
         limit: Int,
+        startIndex: Int,
     ): Result<SearchResult> = engine.apiResult {
         val response = engine.requireApi().itemsApi.getItems(
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             filters = listOf(ItemFilter.IS_FAVORITE),
             limit = limit,
+            startIndex = startIndex,
             recursive = true,
             fields = listOf(
                 ItemFields.OVERVIEW,
@@ -545,7 +547,7 @@ class LibraryApiClientImpl @Inject constructor(
         SearchResult(
             items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
             totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
+            startIndex = startIndex,
         )
     }
 

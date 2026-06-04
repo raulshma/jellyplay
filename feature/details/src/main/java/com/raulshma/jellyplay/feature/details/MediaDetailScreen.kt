@@ -566,15 +566,15 @@ private fun DetailContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
                     fadeIn(
-                        animationSpec = slowEffectsSpec,
+                        animationSpec = tween(400),
                     ) + scaleIn(
                         initialScale = 1.035f,
-                        animationSpec = slowEffectsSpec,
+                        animationSpec = tween(400),
                     ) togetherWith fadeOut(
-                        animationSpec = fastEffectsSpec,
+                        animationSpec = tween(300),
                     ) + scaleOut(
                         targetScale = 0.99f,
-                        animationSpec = fastEffectsSpec,
+                        animationSpec = tween(300),
                     )
                 },
                 label = "detailBackdrop",
@@ -1087,6 +1087,7 @@ private fun MediaInfoSection(
     selectedSubtitleIndex: Int?,
     onAudioSelect: (Int?) -> Unit,
     onSubtitleSelect: (Int?) -> Unit,
+    onMediaInfoClick: () -> Unit = {},
     horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -1188,6 +1189,20 @@ private fun MediaInfoSection(
                     onClick = { picker = StreamPickerType.SUBTITLE },
                     containerColor = chipBackgroundColor,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            FadingItem {
+                QuickInfoPill(
+                    icon = Tabler.Outline.InfoCircle,
+                    text = "Technical Info",
+                    onClick = onMediaInfoClick,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 )
             }
         }
@@ -2025,6 +2040,7 @@ private fun DetailContentBody(
                     selectedSubtitleIndex = selectedSubtitleIndex,
                     onAudioSelect = onAudioSelect,
                     onSubtitleSelect = onSubtitleSelect,
+                    onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(detail.item.id)) },
                 )
             }
         }
@@ -2415,9 +2431,9 @@ private fun SeasonsSection(
             transitionSpec = {
                 val direction = if (targetState.first >= initialState.first) 1 else -1
                 fadeIn(
-                    animationSpec = defaultEffectsSpec,
+                    animationSpec = tween(400),
                 ) togetherWith fadeOut(
-                    animationSpec = fastEffectsSpec,
+                    animationSpec = tween(300),
                 )
             },
             label = "seasonEpisodes",
