@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
     version = 13,
     exportSchema = true,
 )
+@TypeConverters(Converters::class)
 abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun userDao(): UserDao

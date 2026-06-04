@@ -1,13 +1,5 @@
 package com.raulshma.jellyplay.feature.music.browse
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,31 +92,12 @@ fun MusicBrowseScreen(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
-                AnimatedContent(
-                    targetState = page,
-                    transitionSpec = {
-                        slideInVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ) { height -> height } + fadeIn() togetherWith
-                        slideOutVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ) { height -> -height } + fadeOut()
-                    },
-                    label = "pageTransition"
-                ) { targetPage ->
-                    when (targetPage) {
-                        0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick, contentPad = contentPad)
-                        3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                    }
+                when (page) {
+                    0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick, contentPad = contentPad)
+                    3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
                 }
             }
         }

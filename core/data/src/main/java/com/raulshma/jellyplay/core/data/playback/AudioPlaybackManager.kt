@@ -32,6 +32,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,7 +84,7 @@ class AudioPlaybackManager @Inject constructor(
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
-    private var isLoadingItem = false
+    private var _isLoadingItemFlag = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var queueLoadingJob: Job? = null
@@ -110,6 +112,9 @@ class AudioPlaybackManager @Inject constructor(
 
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+
+    private val _isLoadingItem = MutableStateFlow(false)
+    val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
 
     private var crossfadeJob: Job? = null
 
@@ -418,7 +423,7 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         if (currentItemId == itemId) {
-            if (isLoadingItem) return
+            if (_isLoadingItemFlag) return
             val state = exoPlayer?.playbackState
             if (state != null && state != Player.STATE_ENDED && state != Player.STATE_IDLE) {
                 return
@@ -428,7 +433,8 @@ class AudioPlaybackManager @Inject constructor(
         cancelCrossfade()
         reportCurrentItemStopped()
         currentItemId = itemId
-        isLoadingItem = true
+        _isLoadingItemFlag = true
+        _isLoadingItem.value = true
 
         val player = getOrCreatePlayer()
 
@@ -482,41 +488,42 @@ class AudioPlaybackManager @Inject constructor(
                     }
 
                     queueLoadingJob?.cancel()
-                    queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        val mediaItemsBefore = mutableListOf<MediaItem>()
-                        val mediaItemsAfter = mutableListOf<MediaItem>()
-
-                        for (i in (playIndex + 1) until queueItems.size) {
-                            val qi = queueItems[i]
-                            val cached = mediaItemCache.get(qi.id)
-                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                            if (mediaItem != null) {
-                                mediaItemsAfter.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        }
-
-                        for (i in 0 until playIndex) {
-                            val qi = queueItems[i]
-                            val cached = mediaItemCache.get(qi.id)
-                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                            if (mediaItem != null) {
-                                mediaItemsBefore.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        }
-
-                        launch(kotlinx.coroutines.Dispatchers.Main) {
-                            if (exoPlayer == player) {
-                                if (mediaItemsAfter.isNotEmpty()) {
-                                    player.addMediaItems(mediaItemsAfter)
-                                }
-                                if (mediaItemsBefore.isNotEmpty()) {
-                                    player.addMediaItems(0, mediaItemsBefore)
-                                    _currentIndex.value = playIndex
+                    queueLoadingJob = scope.launch(Dispatchers.IO) {
+                        coroutineScope {
+                            val afterJobs = (playIndex + 1 until queueItems.size).map { i ->
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                if (cached != null) {
+                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
+                                } else {
+                                    async { buildMediaItemForQueueItem(qi) }
                                 }
                             }
-                            queueLoadingJob = null
+                            val beforeJobs = (0 until playIndex).map { i ->
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                if (cached != null) {
+                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
+                                } else {
+                                    async { buildMediaItemForQueueItem(qi) }
+                                }
+                            }
+
+                            val mediaItemsAfter = afterJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
+                            val mediaItemsBefore = beforeJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
+
+                            launch(Dispatchers.Main) {
+                                if (exoPlayer == player) {
+                                    if (mediaItemsAfter.isNotEmpty()) {
+                                        player.addMediaItems(mediaItemsAfter)
+                                    }
+                                    if (mediaItemsBefore.isNotEmpty()) {
+                                        player.addMediaItems(0, mediaItemsBefore)
+                                        _currentIndex.value = playIndex
+                                    }
+                                }
+                                queueLoadingJob = null
+                            }
                         }
                     }
                 }
@@ -587,7 +594,8 @@ class AudioPlaybackManager @Inject constructor(
                     }
                 }
             }
-            isLoadingItem = false
+            _isLoadingItemFlag = false
+            _isLoadingItem.value = false
         }
     }
 

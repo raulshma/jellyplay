@@ -17,9 +17,11 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,12 +39,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.composables.icons.tabler.filled.*
 
 @Composable
 fun TrackRow(
@@ -55,6 +59,11 @@ fun TrackRow(
     onAddToQueue: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     blurHash: String? = null,
+    isNowPlaying: Boolean = false,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
+    onGoToAlbum: (() -> Unit)? = null,
+    onGoToArtist: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -155,6 +164,8 @@ fun TrackRow(
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                color = if (isNowPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isNowPlaying) FontWeight.SemiBold else FontWeight.Normal,
             )
             if (artist != null || album != null) {
                 Text(
@@ -163,6 +174,30 @@ fun TrackRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (isNowPlaying) {
+            Icon(
+                Tabler.Outline.PlayerPlay,
+                contentDescription = "Now playing",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.size(4.dp))
+        }
+
+        if (onToggleFavorite != null) {
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
+                    contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                    modifier = Modifier.size(18.dp),
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -194,6 +229,36 @@ fun TrackRow(
                         )
                     },
                 )
+                if (onGoToAlbum != null) {
+                    DropdownMenuItem(
+                        text = { Text("Go to Album") },
+                        onClick = {
+                            onGoToAlbum()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Tabler.Outline.Disc,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
+                if (onGoToArtist != null) {
+                    DropdownMenuItem(
+                        text = { Text("Go to Artist") },
+                        onClick = {
+                            onGoToArtist()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Tabler.Outline.User,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
             }
         }
         

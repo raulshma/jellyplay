@@ -63,6 +63,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -126,6 +127,7 @@ fun AudioPlayerScreen(
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleepTimer by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -133,6 +135,12 @@ fun AudioPlayerScreen(
         viewModel.playbackError?.let { error ->
             snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
         }
+    }
+
+    var showErrorOverlay by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel.playbackError) {
+        showErrorOverlay = viewModel.playbackError != null
     }
 
     val artworkScale = remember { Animatable(0.8f) }
@@ -424,7 +432,13 @@ fun AudioPlayerScreen(
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                                 onToggleFavorite = { viewModel.toggleFavorite() },
-                                onDownloadClick = { viewModel.downloadCurrentTrack() },
+                                onDownloadClick = {
+                                    if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                        showDeleteConfirm = true
+                                    } else {
+                                        viewModel.downloadCurrentTrack()
+                                    }
+                                },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -486,12 +500,17 @@ fun AudioPlayerScreen(
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                             onToggleFavorite = { viewModel.toggleFavorite() },
-                            onDownloadClick = { viewModel.downloadCurrentTrack() },
+                            onDownloadClick = {
+                                if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                    showDeleteConfirm = true
+                                } else {
+                                    viewModel.downloadCurrentTrack()
+                                }
+                            },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
-                        // Prevent overlap with transparent app bottom NavigationBar on phone
                         Spacer(Modifier.height(80.dp))
                     }
                 }
@@ -558,6 +577,44 @@ fun AudioPlayerScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 120.dp),
             )
+
+            AnimatedVisibility(
+                visible = showErrorOverlay && viewModel.playbackError != null,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                Surface(
+                    shape = ShapeCache.smooth16,
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .padding(bottom = 140.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            viewModel.playbackError ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = {
+                            showErrorOverlay = false
+                            viewModel.play(itemId)
+                        }) {
+                            Text("Retry", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
         } // Close Box (root container)
     } // Close ArtworkThemeWrapper
 
@@ -626,6 +683,29 @@ fun AudioPlayerScreen(
             viewModel = viewModel,
             onDismiss = { showEffectsSheet = false },
             onOpenEqualizer = { showEffectsSheet = false; showEqualizer = true },
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Download") },
+            text = { Text("Remove the downloaded file for this track?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        viewModel.downloadCurrentTrack()
+                    },
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }
@@ -1759,6 +1839,17 @@ private fun AlbumArtwork(
                 lyricsSource = lyricsSource,
                 onSearchClick = onSearchClick,
             )
+        }
+
+        if (title.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
+            }
         }
     }
 }
