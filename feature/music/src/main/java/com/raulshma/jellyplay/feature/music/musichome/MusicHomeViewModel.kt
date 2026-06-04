@@ -21,6 +21,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+
 data class MusicHomeSection(
     val title: String,
     val items: List<MediaItem>,
@@ -33,6 +38,8 @@ class MusicHomeViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val offlineRepository: OfflineRepository,
+    private val offlineModeManager: OfflineModeManager,
 ) : ViewModel() {
 
     var sections by mutableStateOf<List<MusicHomeSection>>(emptyList())
@@ -42,6 +49,10 @@ class MusicHomeViewModel @Inject constructor(
     var error by mutableStateOf<String?>(null)
         private set
     var homeMode by mutableStateOf(HomeMode.VIDEO)
+        private set
+    var offlineMode by mutableStateOf(OfflineMode.ONLINE)
+        private set
+    var offlineLibrary by mutableStateOf<List<OfflineMediaItem>>(emptyList())
         private set
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
@@ -53,11 +64,34 @@ class MusicHomeViewModel @Inject constructor(
                 homeMode = prefs.homeMode
             }
         }
+        viewModelScope.launch {
+            offlineModeManager.offlineMode.collect { mode ->
+                offlineMode = mode
+                if (mode != OfflineMode.ONLINE) {
+                    sections = emptyList()
+                } else {
+                    loadSections()
+                }
+            }
+        }
+        viewModelScope.launch {
+            offlineRepository.getOfflineLibrary().collect { items ->
+                offlineLibrary = items
+            }
+        }
         loadSections()
+    }
+
+    fun toggleOfflineMode() {
+        offlineModeManager.toggleManualOffline()
     }
 
     fun loadSections() {
         viewModelScope.launch {
+            if (offlineMode != OfflineMode.ONLINE) {
+                isLoading = false
+                return@launch
+            }
             isLoading = true
             error = null
             try {

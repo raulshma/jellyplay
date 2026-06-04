@@ -94,10 +94,7 @@ fun MusicHomeScreen(
                         ),
                     ) {
                         item {
-                            MusicHeader(
-                                onSwitchToVideo = { onModeChange(HomeMode.VIDEO) },
-                                onSettingsClick = onSettingsClick,
-                            )
+                            Spacer(modifier = Modifier.height(96.dp))
                         }
 
                         item {

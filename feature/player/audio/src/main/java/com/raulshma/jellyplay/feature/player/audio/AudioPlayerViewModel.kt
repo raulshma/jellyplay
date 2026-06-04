@@ -35,6 +35,8 @@ class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val preferencesStore: UserPreferencesStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
+    private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
     private val sleepTimerManager: SleepTimerManager,
 ) : ViewModel() {
 
@@ -163,7 +165,27 @@ class AudioPlayerViewModel @Inject constructor(
     var sleepTimerLastUsedDurationMs by mutableLongStateOf(0L)
         private set
 
+    private val _currentDownloadItem = MutableStateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
+    val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.asStateFlow()
+
+    private var downloadJob: kotlinx.coroutines.Job? = null
+
     init {
+        viewModelScope.launch {
+            audioPlaybackManager.currentPlayingItemId.collect { itemId ->
+                downloadJob?.cancel()
+                if (itemId != null) {
+                    downloadJob = viewModelScope.launch {
+                        downloadRepository.getDownloadByMediaItemIdFlow(itemId).collect { download ->
+                            _currentDownloadItem.value = download
+                        }
+                    }
+                } else {
+                    _currentDownloadItem.value = null
+                }
+            }
+        }
+
         viewModelScope.launch {
             audioPlaybackManager.title.collect { title = it }
         }
@@ -610,6 +632,46 @@ class AudioPlayerViewModel @Inject constructor(
         get() = audioPlaybackManager.currentPlayingItemId.value
 
     private fun keySentinel(id: String) = "§null§$id"
+
+    fun downloadCurrentTrack() {
+        val itemId = currentPlayingItemId ?: return
+        val existing = _currentDownloadItem.value
+        if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+            viewModelScope.launch {
+                downloadRepository.deleteDownload(existing.id)
+            }
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return@launch
+                val item = detail.item
+                val source = detail.mediaSources.firstOrNull() ?: return@launch
+                val streamUrl = playbackRepository.getStreamUrl(itemId, source.id)
+                if (streamUrl.isBlank()) return@launch
+                val imageUrl = playbackRepository.getImageUrl(itemId, maxWidth = 300)
+                val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
+
+                downloadRepository.startDownload(
+                    mediaItemId = itemId,
+                    name = item.name,
+                    mediaType = mediaType,
+                    mediaSourceId = source.id,
+                    downloadUrl = streamUrl,
+                    imageUrl = imageUrl,
+                    imageBlurHash = item.blurHashes.primary,
+                ).onSuccess { downloadItem ->
+                    if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                        downloadRepository.enqueueDownload(downloadItem.id)
+                        try {
+                            val backdropUrl = playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+                            downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
+                        } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

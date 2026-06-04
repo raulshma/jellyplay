@@ -9,9 +9,16 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -20,6 +27,7 @@ class AlbumDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
+    private val downloadRepository: DownloadRepository,
 ) : ViewModel() {
 
     var detail by mutableStateOf<MediaDetail?>(null)
@@ -81,4 +89,105 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun getBackdropUrl(itemId: String): String =
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+
+    val trackDownloads: StateFlow<Map<String, DownloadItem>> = downloadRepository.getAllDownloads()
+        .map { downloads -> downloads.associateBy { it.mediaItemId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    fun downloadTrack(track: MediaItem) {
+        val currentDownloads = trackDownloads.value
+        val existing = currentDownloads[track.id]
+        if (existing != null && existing.status == DownloadStatus.COMPLETED) {
+            viewModelScope.launch {
+                downloadRepository.deleteDownload(existing.id)
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
+                val source = detail.mediaSources.firstOrNull() ?: return@launch
+                val streamUrl = playbackRepository.getStreamUrl(track.id, source.id)
+                if (streamUrl.isBlank()) return@launch
+                val imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 300)
+                val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
+
+                downloadRepository.startDownload(
+                    mediaItemId = track.id,
+                    name = track.name,
+                    mediaType = mediaType,
+                    mediaSourceId = source.id,
+                    downloadUrl = streamUrl,
+                    imageUrl = imageUrl,
+                    imageBlurHash = track.blurHashes.primary,
+                ).onSuccess { downloadItem ->
+                    if (downloadItem.status == DownloadStatus.PENDING) {
+                        downloadRepository.enqueueDownload(downloadItem.id)
+                        try {
+                            val backdropUrl = playbackRepository.getBackdropUrl(track.id, maxWidth = 1280)
+                            downloadRepository.saveOfflineMediaItem(track, imageUrl, backdropUrl)
+                        } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun downloadAlbum() {
+        val albumTracks = tracks
+        if (albumTracks.isEmpty()) return
+        val currentDownloads = trackDownloads.value
+        viewModelScope.launch {
+            albumTracks.forEach { track ->
+                val existing = currentDownloads[track.id]
+                if (existing == null || existing.status == DownloadStatus.FAILED || existing.status == DownloadStatus.CANCELLED) {
+                    launch {
+                        try {
+                            val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
+                            val source = detail.mediaSources.firstOrNull() ?: return@launch
+                            val streamUrl = playbackRepository.getStreamUrl(track.id, source.id)
+                            if (streamUrl.isBlank()) return@launch
+                            val imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 300)
+                            val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
+
+                            downloadRepository.startDownload(
+                                mediaItemId = track.id,
+                                name = track.name,
+                                mediaType = mediaType,
+                                mediaSourceId = source.id,
+                                downloadUrl = streamUrl,
+                                imageUrl = imageUrl,
+                                imageBlurHash = track.blurHashes.primary,
+                            ).onSuccess { downloadItem ->
+                                if (downloadItem.status == DownloadStatus.PENDING) {
+                                    downloadRepository.enqueueDownload(downloadItem.id)
+                                    try {
+                                        val backdropUrl = playbackRepository.getBackdropUrl(track.id, maxWidth = 1280)
+                                        downloadRepository.saveOfflineMediaItem(track, imageUrl, backdropUrl)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+
+    fun deleteAlbumDownloads() {
+        val albumTracks = tracks
+        if (albumTracks.isEmpty()) return
+        val currentDownloads = trackDownloads.value
+        viewModelScope.launch {
+            albumTracks.forEach { track ->
+                val existing = currentDownloads[track.id]
+                if (existing != null) {
+                    launch {
+                        downloadRepository.deleteDownload(existing.id)
+                    }
+                }
+            }
+        }
+    }
 }

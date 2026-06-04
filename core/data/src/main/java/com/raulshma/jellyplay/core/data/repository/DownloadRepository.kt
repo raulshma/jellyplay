@@ -57,4 +57,6 @@ interface DownloadRepository {
         trickplayInfo: TrickplayInfo,
         downloadPath: String,
     )
+
+    fun enqueueDownload(downloadId: String)
 }

@@ -150,21 +150,21 @@ fun AudioPlayerScreen(
     }
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
 
     val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
 
-    val artworkColors = rememberArtworkColors(viewModel.albumArtUrl.ifBlank { null })
-    val tintedBg = remember(artworkColors) { artworkColors?.tintedBackground ?: Color(0xFF2D1F2D) }
-    val tintedBgLight = remember(artworkColors) { artworkColors?.tintedBackgroundLight ?: Color(0xFF3D2F3D) }
-    val accentColor = remember(artworkColors) { artworkColors?.accentColor ?: Color(0xFFE8B4C8) }
-    val pillSurface = remember(artworkColors) { artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f) }
-    val pillSurfaceDark = remember(artworkColors) { artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f) }
+    val systemBgColor = MaterialTheme.colorScheme.background
+    val systemBgColorLight = MaterialTheme.colorScheme.surfaceContainerHigh
+    val accentColor = MaterialTheme.colorScheme.primary
+    val pillSurface = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val pillSurfaceDark = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f)
 
     val navBarColor = com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor.current
-    androidx.compose.runtime.DisposableEffect(tintedBg) {
+    androidx.compose.runtime.DisposableEffect(systemBgColor) {
         val oldColor = navBarColor.value
-        navBarColor.value = tintedBg
+        navBarColor.value = systemBgColor
         onDispose {
             navBarColor.value = oldColor
         }
@@ -217,7 +217,7 @@ fun AudioPlayerScreen(
                 .then(sharedContainerModifier)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(tintedBgLight, tintedBg, tintedBg),
+                        colors = listOf(systemBgColorLight, systemBgColor, systemBgColor),
                     )
                 )
                 .pointerInput(Unit) {
@@ -408,9 +408,11 @@ fun AudioPlayerScreen(
                                 shuffleMode = viewModel.shuffleMode,
                                 repeatMode = viewModel.repeatMode,
                                 isFavorite = viewModel.isFavorite,
+                                downloadItem = currentDownloadItem,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                                 onToggleFavorite = { viewModel.toggleFavorite() },
+                                onDownloadClick = { viewModel.downloadCurrentTrack() },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -468,9 +470,11 @@ fun AudioPlayerScreen(
                             shuffleMode = viewModel.shuffleMode,
                             repeatMode = viewModel.repeatMode,
                             isFavorite = viewModel.isFavorite,
+                            downloadItem = currentDownloadItem,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                             onToggleFavorite = { viewModel.toggleFavorite() },
+                            onDownloadClick = { viewModel.downloadCurrentTrack() },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
@@ -1570,14 +1574,14 @@ private fun PixelPlayerTopBar(
         IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
             Icon(
                 Tabler.Outline.ChevronDown, "Minimize",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.size(28.dp),
             )
         }
         Text(
             "Now Playing",
             style = MaterialTheme.typography.titleSmall,
-            color = Color.White.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             letterSpacing = 1.sp,
         )
         Row {
@@ -1586,17 +1590,17 @@ private fun PixelPlayerTopBar(
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
-                        tint = if (lyricsVisible) Color(0xFFE8B4C8) else Color.White,
+                        tint = if (lyricsVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(22.dp),
                     )
                 }
             }
             IconButton(onClick = onQueueClick, modifier = Modifier.tvFocusable()) {
-                Icon(Tabler.Outline.Playlist, "Queue", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
                 IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
-                    Icon(Tabler.Outline.DotsVertical, "More", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
                     textColor = MaterialTheme.colorScheme.onSurface,
@@ -1749,7 +1753,7 @@ private fun TrackInfoSection(
         title,
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
@@ -1759,7 +1763,7 @@ private fun TrackInfoSection(
     Text(
         artist,
         style = MaterialTheme.typography.bodyLarge,
-        color = Color.White.copy(alpha = 0.7f),
+        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
@@ -1780,7 +1784,7 @@ private fun PixelProgressSection(
         progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
         isPlaying = isPlaying,
         activeColor = accentColor,
-        inactiveColor = Color.White.copy(alpha = 0.25f),
+        inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
         onSeek = onSeek,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -1799,7 +1803,7 @@ private fun PixelProgressSection(
         Text(
             if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
         )
     }
 }
@@ -1842,7 +1846,7 @@ private fun PixelTransportControls(
                 Icon(
                     Tabler.Outline.PlayerSkipBack, "Previous",
                     modifier = Modifier.size(28.dp),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             },
             size = 48.dp,
@@ -1859,7 +1863,7 @@ private fun PixelTransportControls(
                 Icon(
                     Tabler.Outline.PlayerSkipForward, "Next",
                     modifier = Modifier.size(28.dp),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             },
             size = 48.dp,
@@ -1874,15 +1878,17 @@ private fun PixelSecondaryControls(
     shuffleMode: Boolean,
     repeatMode: Int,
     isFavorite: Boolean,
+    downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onDownloadClick: () -> Unit,
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth(0.7f)
+            .fillMaxWidth(0.8f)
             .clip(ShapeCache.smoothPill)
             .background(pillSurfaceDark)
             .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1891,14 +1897,14 @@ private fun PixelSecondaryControls(
     ) {
         IconButtonWithPressAnimation(
             onClick = onToggleShuffle,
-            tint = if (shuffleMode) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (shuffleMode) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(Tabler.Outline.ArrowsShuffle, "Shuffle", modifier = Modifier.size(22.dp))
             },
         )
         IconButtonWithPressAnimation(
             onClick = onCycleRepeatMode,
-            tint = if (repeatMode > 0) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (repeatMode > 0) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(
                     if (repeatMode == 2) Tabler.Outline.RepeatOnce else Tabler.Outline.Repeat,
@@ -1911,13 +1917,32 @@ private fun PixelSecondaryControls(
         )
         IconButtonWithPressAnimation(
             onClick = onToggleFavorite,
-            tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (isFavorite) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(
                     if (isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
                     "Favorite",
                     modifier = Modifier.size(22.dp),
                 )
+            },
+        )
+        IconButtonWithPressAnimation(
+            onClick = onDownloadClick,
+            tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = accentColor
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
+                        contentDescription = "Download",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             },
         )
     }
@@ -1951,15 +1976,8 @@ private fun PixelPlayPauseButton(
         }
     } else Modifier
 
-    // Light tinted background (Pixel Player uses a cream/light pink)
-    val buttonBg = accentColor.copy(alpha = 0.25f).let { c ->
-        Color(
-            red = (c.red + 0.6f).coerceAtMost(1f),
-            green = (c.green + 0.55f).coerceAtMost(1f),
-            blue = (c.blue + 0.6f).coerceAtMost(1f),
-            alpha = 0.9f,
-        )
-    }
+    val buttonBg = MaterialTheme.colorScheme.primaryContainer
+    val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
         modifier = Modifier
@@ -1980,7 +1998,7 @@ private fun PixelPlayPauseButton(
             if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
             if (isPlaying) "Pause" else "Play",
             modifier = Modifier.size(36.dp),
-            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tint = iconColor,
         )
     }
 }
@@ -1989,7 +2007,7 @@ private fun PixelPlayPauseButton(
 @Composable
 private fun IconButtonWithPressAnimation(
     onClick: () -> Unit,
-    tint: Color = Color.White,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
     icon: @Composable () -> Unit,
     size: androidx.compose.ui.unit.Dp = 40.dp,
     modifier: Modifier = Modifier,
@@ -2134,7 +2152,7 @@ private fun SwipeTrackCard(
     Card(
         shape = ShapeCache.smooth16,
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = Color.Black.copy(alpha = 0.85f),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
         ),
         modifier = modifier
             .width(260.dp)
@@ -2151,7 +2169,7 @@ private fun SwipeTrackCard(
                 Icon(
                     Tabler.Outline.PlayerSkipForward,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -2159,7 +2177,7 @@ private fun SwipeTrackCard(
                 Icon(
                     Tabler.Outline.PlayerSkipBack,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -2168,7 +2186,7 @@ private fun SwipeTrackCard(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth8)
-                    .background(Color.White.copy(alpha = 0.1f)),
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (artworkUrl.isNotBlank()) {
@@ -2182,7 +2200,7 @@ private fun SwipeTrackCard(
                     Icon(
                         Tabler.Outline.Music,
                         contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.5f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     )
                 }
             }
@@ -2192,14 +2210,14 @@ private fun SwipeTrackCard(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = artist,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

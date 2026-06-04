@@ -940,7 +940,9 @@ private fun DetailContent(
                                         Icon(Tabler.Outline.Share, contentDescription = null)
                                     }
                                 )
-                                if (!isAudio && item != null && detail != null && detail.mediaSources.isNotEmpty()) {
+                                val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
+                                        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
+                                if (canDownload) {
                                     val downloadStatus = activeDownload?.status
                                     val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
                                             downloadStatus == DownloadStatus.DOWNLOADING ||
@@ -1007,7 +1009,7 @@ private fun DetailContent(
         val context = LocalContext.current
         val availableBytes by produceState(initialValue = 0L) {
             value = withContext(Dispatchers.IO) {
-                val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                val downloadDir = context.getExternalFilesDir(if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES)
                     ?: context.filesDir
                 val stat = StatFs(downloadDir.absolutePath)
                 stat.availableBlocksLong * stat.blockSizeLong

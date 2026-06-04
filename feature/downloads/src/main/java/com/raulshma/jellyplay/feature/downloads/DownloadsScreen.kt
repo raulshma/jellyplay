@@ -60,7 +60,7 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
-    onPlayOffline: (itemId: String) -> Unit,
+    onPlayOffline: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit,
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -133,7 +133,7 @@ fun DownloadsScreen(
                             formatEta = { d, t, s -> viewModel.formatEta(d, t, s) },
                             onClick = {
                                 if (download.status == DownloadStatus.COMPLETED) {
-                                    onPlayOffline(download.mediaItemId)
+                                    onPlayOffline(download.mediaItemId, download.mediaType)
                                 }
                             },
                             onCancel = { viewModel.cancelDownload(download) },
