@@ -162,6 +162,20 @@ class AudioPlayerViewModel @Inject constructor(
     var isSearchingLyrics by mutableStateOf(false)
         private set
 
+    var karaokeMode by mutableStateOf(false)
+        private set
+
+    fun setKaraokeModeEnabled(enabled: Boolean) {
+        karaokeMode = enabled
+    }
+
+    fun toggleKaraokeMode() {
+        karaokeMode = !karaokeMode
+    }
+
+    val hasKaraokeLyrics: Boolean
+        get() = lyrics.any { it.words.isNotEmpty() }
+
     var sleepTimerActive by mutableStateOf(false)
         private set
     var sleepTimerEndOfEpisode by mutableStateOf(false)

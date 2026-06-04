@@ -27,6 +27,21 @@ interface PlaybackApiClient {
     ): Result<Unit>
 
     fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
+
+    /**
+     * Build a stream URL with an optional max bitrate cap (in bits per
+     * second). When [maxBitrate] is null, the server picks the appropriate
+     * bitrate. The URL uses the audio-friendly `/Audio/{id}/universal` form
+     * when [useAudioEndpoint] is true so the server returns an audio
+     * transcoded stream that is friendly to mobile/cellular connections.
+     */
+    fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long = 0,
+        maxBitrate: Int? = null,
+        useAudioEndpoint: Boolean = false,
+    ): String
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
     fun buildSubtitleDeliveryUrl(

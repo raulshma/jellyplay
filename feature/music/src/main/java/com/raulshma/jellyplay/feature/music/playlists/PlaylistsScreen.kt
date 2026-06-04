@@ -9,16 +9,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +35,8 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,6 +74,10 @@ fun PlaylistsScreen(
 
     var isRefreshing by remember { mutableStateOf(false) }
 
+    LaunchedEffect(viewModel.error) {
+        // Errors are surfaced via the dialogs/state; we keep state-based clearing
+    }
+
     JellyPlayScreenScaffold(
         title = "Playlists",
         onBack = onBack,
@@ -73,16 +88,16 @@ fun PlaylistsScreen(
             )
         },
     ) { _ ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                isRefreshing = true
-                viewModel.load()
-                isRefreshing = false
-            },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    isRefreshing = true
+                    viewModel.load()
+                    isRefreshing = false
+                },
+                modifier = Modifier.fillMaxSize(),
+            ) {
                 when {
                     viewModel.error != null && viewModel.playlists.isEmpty() -> {
                         ErrorScreen(
@@ -99,30 +114,159 @@ fun PlaylistsScreen(
                                 bottom = adaptiveInfo.bottomPadding(isTv),
                             ),
                         ) {
-                            items(viewModel.playlists.size, key = { viewModel.playlists[it].id }, contentType = { "playlist" }) { index ->
-                                val playlist = viewModel.playlists[index]
+                            items(
+                                items = viewModel.playlists,
+                                key = { it.id },
+                                contentType = { "playlist" },
+                            ) { playlist ->
                                 PlaylistItemRow(
                                     playlist = playlist,
                                     onClick = { onPlaylistClick(playlist.id, playlist.name) },
+                                    onEdit = { viewModel.openEditDialog(playlist) },
+                                    onDelete = { viewModel.openDeleteDialog(playlist) },
                                 )
                             }
                         }
                     }
                 }
             }
+
+            ExtendedFloatingActionButton(
+                onClick = { viewModel.openCreateDialog() },
+                icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
+                text = { Text("New Playlist") },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 16.dp),
+            )
         }
     }
+
+    PlaylistDialogHost(viewModel = viewModel)
+}
+
+@Composable
+private fun PlaylistDialogHost(viewModel: PlaylistsViewModel) {
+    when (val state = viewModel.dialogState) {
+        PlaylistDialogState.None -> Unit
+        is PlaylistDialogState.Create -> {
+            PlaylistNameDialog(
+                title = "New Playlist",
+                initialName = state.name,
+                initialOverview = state.overview,
+                confirmLabel = "Create",
+                isLoading = viewModel.isMutating,
+                onConfirm = { name, overview -> viewModel.createPlaylist(name, overview) },
+                onDismiss = { viewModel.dismissDialog() },
+            )
+        }
+        is PlaylistDialogState.Edit -> {
+            PlaylistNameDialog(
+                title = "Edit Playlist",
+                initialName = state.name,
+                initialOverview = state.overview,
+                confirmLabel = "Save",
+                isLoading = viewModel.isMutating,
+                onConfirm = { name, overview ->
+                    viewModel.updatePlaylist(state.playlist.id, name, overview)
+                },
+                onDismiss = { viewModel.dismissDialog() },
+            )
+        }
+        is PlaylistDialogState.Delete -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissDialog() },
+                title = { Text("Delete Playlist") },
+                text = {
+                    Text("Delete \"${state.playlist.name}\"? This action cannot be undone.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.deletePlaylist(state.playlist) },
+                        enabled = !viewModel.isMutating,
+                    ) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissDialog() }) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistNameDialog(
+    title: String,
+    initialName: String,
+    initialOverview: String,
+    confirmLabel: String,
+    isLoading: Boolean,
+    onConfirm: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var overview by remember { mutableStateOf(initialOverview) }
+    val nameFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(nameFocusRequester),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = overview,
+                    onValueChange = { overview = it },
+                    label = { Text("Description (optional)") },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name, overview) },
+                enabled = !isLoading && name.isNotBlank(),
+            ) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
 private fun PlaylistItemRow(
     playlist: Playlist,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable().clickable(onClick = onClick)
+            .tvFocusable()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -141,7 +285,7 @@ private fun PlaylistItemRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            playlist.overview?.let { overview ->
+            playlist.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Text(
                     text = overview,
                     style = MaterialTheme.typography.bodySmall,
@@ -155,6 +299,44 @@ private fun PlaylistItemRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
             )
+        }
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    imageVector = Tabler.Outline.DotsVertical,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = { Icon(Tabler.Outline.Edit, contentDescription = null) },
+                    enabled = playlist.canEdit,
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            Tabler.Outline.Trash,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    enabled = playlist.canDelete,
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    },
+                )
+            }
         }
         IconButton(onClick = onClick) {
             Icon(

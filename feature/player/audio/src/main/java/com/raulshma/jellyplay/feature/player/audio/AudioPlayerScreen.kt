@@ -366,6 +366,9 @@ fun AudioPlayerScreen(
                     sleepTimerActive = viewModel.sleepTimerActive,
                     sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(viewModel.sleepTimerRemainingMs),
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
+                    karaokeMode = viewModel.karaokeMode,
+                    onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
+                    hasKaraokeLyrics = viewModel.hasKaraokeLyrics,
                 )
 
                 if (useSideBySide) {
@@ -393,6 +396,8 @@ fun AudioPlayerScreen(
                                 isFetchingLyrics = viewModel.isFetchingLyrics,
                                 lyricsSource = viewModel.lyricsSource,
                                 onSearchClick = { showLyricsSearch = true },
+                                karaokeMode = viewModel.karaokeMode,
+                                currentPositionMs = viewModel.currentPosition,
                             )
                         }
                         Spacer(Modifier.width(32.dp))
@@ -460,6 +465,8 @@ fun AudioPlayerScreen(
                         isFetchingLyrics = viewModel.isFetchingLyrics,
                         lyricsSource = viewModel.lyricsSource,
                         onSearchClick = { showLyricsSearch = true },
+                        karaokeMode = viewModel.karaokeMode,
+                        currentPositionMs = viewModel.currentPosition,
                     )
 
                     Spacer(Modifier.weight(0.4f))
@@ -1059,6 +1066,8 @@ private fun LyricsOverlay(
     isFetching: Boolean,
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource,
     onSearchClick: () -> Unit,
+    karaokeMode: Boolean = false,
+    onKaraokeToggle: (Boolean) -> Unit = {},
 ) {
     val overlayAlpha by animateFloatAsState(
         targetValue = 1f,
@@ -1247,6 +1256,26 @@ private fun LyricsOverlay(
                             }
                             Spacer(Modifier.width(4.dp))
                         }
+                    }
+                    if (lyrics.any { it.words.isNotEmpty() }) {
+                        IconButton(
+                            onClick = { onKaraokeToggle(!karaokeMode) },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(
+                                    if (karaokeMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    else Color.Black.copy(alpha = 0.4f),
+                                    ShapeCache.smooth8,
+                                ),
+                        ) {
+                            Icon(
+                                if (karaokeMode) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
+                                if (karaokeMode) "Karaoke on" else "Karaoke off",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
                     }
                     IconButton(
                         onClick = onSearchClick,
@@ -1662,6 +1691,9 @@ private fun PixelPlayerTopBar(
     sleepTimerActive: Boolean = false,
     sleepTimerDisplayText: String = "",
     onSleepTimerClick: () -> Unit = {},
+    karaokeMode: Boolean = false,
+    onKaraokeToggle: (Boolean) -> Unit = {},
+    hasKaraokeLyrics: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -1748,6 +1780,14 @@ private fun PixelPlayerTopBar(
                         leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
                         colors = itemColors,
                     )
+                    if (hasKaraokeLyrics) {
+                        DropdownMenuItem(
+                            text = { Text(if (karaokeMode) "Karaoke Mode · On" else "Karaoke Mode") },
+                            onClick = { onKaraokeToggle(!karaokeMode); onMenuToggle(false) },
+                            leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
+                            colors = itemColors,
+                        )
+                    }
                 }
             }
         }
@@ -1767,6 +1807,8 @@ private fun AlbumArtwork(
     isFetchingLyrics: Boolean = false,
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
+    karaokeMode: Boolean = false,
+    currentPositionMs: Long = 0L,
 ) {
     val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
@@ -1832,13 +1874,21 @@ private fun AlbumArtwork(
             enter = fadeIn(tween(400)),
             exit = fadeOut(tween(300)),
         ) {
-            LyricsOverlay(
-                lyrics = lyrics,
-                currentIndex = currentLyricIndex,
-                isFetching = isFetchingLyrics,
-                lyricsSource = lyricsSource,
-                onSearchClick = onSearchClick,
-            )
+            if (karaokeMode && lyrics.any { it.words.isNotEmpty() }) {
+                com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(
+                    lyrics = lyrics,
+                    currentIndex = currentLyricIndex,
+                    currentPositionMs = currentPositionMs,
+                )
+            } else {
+                LyricsOverlay(
+                    lyrics = lyrics,
+                    currentIndex = currentLyricIndex,
+                    isFetching = isFetchingLyrics,
+                    lyricsSource = lyricsSource,
+                    onSearchClick = onSearchClick,
+                )
+            }
         }
 
         if (title.isEmpty()) {

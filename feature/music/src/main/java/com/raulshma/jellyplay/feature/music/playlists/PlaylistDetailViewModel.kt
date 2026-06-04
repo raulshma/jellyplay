@@ -27,20 +27,29 @@ class PlaylistDetailViewModel @Inject constructor(
     var playlistName by mutableStateOf("")
         private set
 
+    var playlistId by mutableStateOf("")
+        private set
+
     var isLoading by mutableStateOf(false)
         private set
 
     var error by mutableStateOf<String?>(null)
         private set
 
+    var isMutating by mutableStateOf(false)
+        private set
+
     fun load(playlistId: String, playlistName: String? = null) {
+        this.playlistId = playlistId
         viewModelScope.launch {
             isLoading = true
             error = null
             mediaRepository.getPlaylistItems(playlistId, limit = 200)
                 .onSuccess {
                     items = it
-                    this@PlaylistDetailViewModel.playlistName = playlistName ?: ""
+                    if (playlistName != null) {
+                        this@PlaylistDetailViewModel.playlistName = playlistName
+                    }
                 }
                 .onFailure { error = it.message }
             if (playlistName == null) {
@@ -77,5 +86,22 @@ class PlaylistDetailViewModel @Inject constructor(
             )
         }
         audioPlaybackManager.playQueue(queueItems, startIndex)
+    }
+
+    fun removeFromPlaylist(item: PlaylistItem) {
+        val entryId = item.playlistItemId ?: return
+        if (playlistId.isEmpty()) return
+        viewModelScope.launch {
+            isMutating = true
+            error = null
+            mediaRepository.removeItemsFromPlaylist(playlistId, listOf(entryId))
+                .onSuccess { load(playlistId, playlistName) }
+                .onFailure { error = it.message ?: "Failed to remove from playlist" }
+            isMutating = false
+        }
+    }
+
+    fun clearError() {
+        error = null
     }
 }

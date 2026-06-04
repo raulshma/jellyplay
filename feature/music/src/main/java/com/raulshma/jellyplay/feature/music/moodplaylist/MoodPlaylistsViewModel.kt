@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -15,7 +16,9 @@ import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistSort
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -23,9 +26,14 @@ class MoodPlaylistsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
+    private val moodPlaylistRepository: MoodPlaylistRepository,
 ) : ViewModel() {
 
-    val playlists = MoodPlaylistsPreset.all
+    var playlists by mutableStateOf<List<MoodPlaylist>>(MoodPlaylistsPreset.all)
+        private set
+
+    var favoritePlaylistIds by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     var selectedPlaylist by mutableStateOf<MoodPlaylist?>(null)
         private set
@@ -38,6 +46,78 @@ class MoodPlaylistsViewModel @Inject constructor(
 
     var error by mutableStateOf<String?>(null)
         private set
+
+    init {
+        viewModelScope.launch {
+            combinePlaylists().collectLatest { combined ->
+                playlists = MoodPlaylistsPreset.all + combined.custom
+                favoritePlaylistIds = combined.favorites
+            }
+        }
+    }
+
+    private data class CombinedPlaylists(
+        val custom: List<MoodPlaylist>,
+        val favorites: Set<String>,
+    )
+
+    private fun combinePlaylists(): kotlinx.coroutines.flow.Flow<CombinedPlaylists> =
+        kotlinx.coroutines.flow.combine(
+            moodPlaylistRepository.observeMoodPlaylists(),
+            moodPlaylistRepository.observePreferences(),
+        ) { custom, prefs ->
+            CombinedPlaylists(
+                custom = custom,
+                favorites = prefs.filter { it.isFavorite }.map { it.playlistId }.toSet(),
+            )
+        }
+
+    fun createCustomPlaylist(
+        name: String,
+        emoji: String,
+        description: String,
+        genreKeywords: List<String>,
+        excludedGenres: List<String> = emptyList(),
+        minRating: Float? = null,
+        maxItems: Int = 50,
+        sortBy: MoodPlaylistSort = MoodPlaylistSort.RANDOM,
+        themeColorHex: String? = null,
+    ) {
+        if (name.isBlank() || genreKeywords.isEmpty()) return
+        viewModelScope.launch {
+            error = null
+            val playlist = MoodPlaylist(
+                id = "custom-${UUID.randomUUID()}",
+                name = name.trim(),
+                emoji = emoji.ifBlank { "🎵" },
+                description = description.trim(),
+                genreKeywords = genreKeywords,
+                excludedGenres = excludedGenres,
+                minRating = minRating,
+                sortBy = sortBy,
+                maxItems = maxItems,
+                themeColorHex = themeColorHex,
+            )
+            moodPlaylistRepository.upsert(playlist)
+        }
+    }
+
+    fun deleteCustomPlaylist(playlist: MoodPlaylist) {
+        if (!playlist.id.startsWith("custom-")) return
+        viewModelScope.launch {
+            moodPlaylistRepository.delete(playlist.id)
+        }
+    }
+
+    fun toggleFavorite(playlist: MoodPlaylist) {
+        viewModelScope.launch {
+            val isFavorite = playlist.id in favoritePlaylistIds
+            moodPlaylistRepository.setPreference(
+                playlistId = playlist.id,
+                isFavorite = !isFavorite,
+            )
+        }
+    }
 
     fun generatePlaylist(playlist: MoodPlaylist) {
         viewModelScope.launch {

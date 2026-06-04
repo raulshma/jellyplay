@@ -220,6 +220,94 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS smart_playlists (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                criteriaJson TEXT NOT NULL,
+                maxItems INTEGER NOT NULL DEFAULT 50,
+                sortBy TEXT NOT NULL DEFAULT 'RANDOM',
+                createdAt INTEGER NOT NULL DEFAULT 0,
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_smart_playlists_createdAt ON smart_playlists(createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_smart_playlists_name ON smart_playlists(name)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS mood_playlists (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                description TEXT NOT NULL,
+                genreKeywordsJson TEXT NOT NULL,
+                excludedGenresJson TEXT,
+                minRating REAL,
+                sortBy TEXT NOT NULL DEFAULT 'RANDOM',
+                maxItems INTEGER NOT NULL DEFAULT 50,
+                themeColorHex TEXT,
+                createdAt INTEGER NOT NULL DEFAULT 0,
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_mood_playlists_createdAt ON mood_playlists(createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_mood_playlists_name ON mood_playlists(name)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS mood_playlist_preferences (
+                playlistId TEXT PRIMARY KEY NOT NULL,
+                isEnabled INTEGER NOT NULL DEFAULT 1,
+                isFavorite INTEGER NOT NULL DEFAULT 0,
+                lastPlayedAt INTEGER NOT NULL DEFAULT 0,
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS audio_queue (
+                id TEXT PRIMARY KEY NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0,
+                name TEXT NOT NULL,
+                artist TEXT,
+                album TEXT,
+                imageUrl TEXT,
+                mediaSourceId TEXT,
+                durationMs INTEGER NOT NULL DEFAULT 0,
+                normalizationGain REAL,
+                createdAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_audio_queue_position ON audio_queue(position)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_audio_queue_createdAt ON audio_queue(createdAt)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS audio_queue_state (
+                id INTEGER PRIMARY KEY NOT NULL,
+                currentIndex INTEGER NOT NULL DEFAULT -1,
+                currentPositionMs INTEGER NOT NULL DEFAULT 0,
+                isPlaying INTEGER NOT NULL DEFAULT 0,
+                repeatMode INTEGER NOT NULL DEFAULT 0,
+                shuffleEnabled INTEGER NOT NULL DEFAULT 0,
+                playbackSpeed REAL NOT NULL DEFAULT 1.0,
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -234,4 +322,6 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_11_12,
     MIGRATION_12_13,
     MIGRATION_13_14,
+    MIGRATION_14_15,
+    MIGRATION_15_16,
 )
