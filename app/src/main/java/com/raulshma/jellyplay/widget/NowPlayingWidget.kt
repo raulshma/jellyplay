@@ -6,10 +6,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 
 class NowPlayingWidget : AppWidgetProvider() {
 
@@ -27,11 +27,9 @@ class NowPlayingWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
         when (intent.action) {
             ACTION_PLAY_PAUSE, ACTION_NEXT, ACTION_PREV -> {
-                // Broadcast to playback service to handle action
                 context.sendBroadcast(
                     Intent(intent.action).setPackage(context.packageName)
                 )
-                // Refresh widget
                 val appWidgetManager = AppWidgetManager.getInstance(context)
                 val componentName = ComponentName(context, NowPlayingWidget::class.java)
                 val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
@@ -44,6 +42,12 @@ class NowPlayingWidget : AppWidgetProvider() {
         const val ACTION_PLAY_PAUSE = "com.raulshma.jellyplay.widget.ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "com.raulshma.jellyplay.widget.ACTION_NEXT"
         const val ACTION_PREV = "com.raulshma.jellyplay.widget.ACTION_PREV"
+        const val ACTION_UPDATE = "com.raulshma.jellyplay.widget.ACTION_UPDATE"
+
+        const val EXTRA_TITLE = "extra_title"
+        const val EXTRA_SUBTITLE = "extra_subtitle"
+        const val EXTRA_IS_PLAYING = "extra_is_playing"
+        const val EXTRA_ALBUM_ART = "extra_album_art"
 
         fun updateAppWidget(
             context: Context,
@@ -52,7 +56,6 @@ class NowPlayingWidget : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
 
-            // Launch app on container click
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -62,7 +65,6 @@ class NowPlayingWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_container, launchPendingIntent)
 
-            // Play/Pause button
             val playPauseIntent = Intent(context, NowPlayingWidget::class.java).apply {
                 action = ACTION_PLAY_PAUSE
             }
@@ -72,7 +74,6 @@ class NowPlayingWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_play_pause, playPausePendingIntent)
 
-            // Next button
             val nextIntent = Intent(context, NowPlayingWidget::class.java).apply {
                 action = ACTION_NEXT
             }
@@ -82,7 +83,6 @@ class NowPlayingWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_next, nextPendingIntent)
 
-            // Previous button
             val prevIntent = Intent(context, NowPlayingWidget::class.java).apply {
                 action = ACTION_PREV
             }
@@ -95,7 +95,13 @@ class NowPlayingWidget : AppWidgetProvider() {
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
-        fun updateAllWidgets(context: Context, title: String?, subtitle: String?, isPlaying: Boolean) {
+        fun updateAllWidgets(
+            context: Context,
+            title: String?,
+            subtitle: String?,
+            isPlaying: Boolean,
+            albumArt: Bitmap? = null,
+        ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, NowPlayingWidget::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
@@ -108,8 +114,34 @@ class NowPlayingWidget : AppWidgetProvider() {
                     R.id.widget_play_pause,
                     if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
                 )
+                if (albumArt != null) {
+                    views.setImageViewBitmap(R.id.widget_album_art, albumArt)
+                } else {
+                    views.setImageViewResource(
+                        R.id.widget_album_art,
+                        android.R.drawable.ic_menu_gallery
+                    )
+                }
                 appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views)
             }
+        }
+
+        fun sendUpdateBroadcast(
+            context: Context,
+            title: String?,
+            subtitle: String?,
+            isPlaying: Boolean,
+            albumArt: Bitmap? = null,
+        ) {
+            val intent = Intent(context, NowPlayingWidget::class.java).apply {
+                action = ACTION_UPDATE
+                putExtra(EXTRA_TITLE, title)
+                putExtra(EXTRA_SUBTITLE, subtitle)
+                putExtra(EXTRA_IS_PLAYING, isPlaying)
+                putExtra(EXTRA_ALBUM_ART, albumArt)
+            }
+            intent.setPackage(context.packageName)
+            context.sendBroadcast(intent)
         }
     }
 }

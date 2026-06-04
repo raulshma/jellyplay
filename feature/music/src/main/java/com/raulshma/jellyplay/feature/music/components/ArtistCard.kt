@@ -97,7 +97,7 @@ fun ArtistCard(
     val ringTransition = rememberInfiniteTransition(label = "artist_ring")
     val ringRotation by ringTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = if (isPressed) 360f else 0f,
         animationSpec = infiniteRepeatable(
             animation = tween(6000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart

@@ -44,16 +44,18 @@ class JellyPlayNotificationProvider(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val imageLoader by lazy { coil3.SingletonImageLoader.get(appContext) }
-
-    private var cachedBitmap: Bitmap? = null
+    private val bitmapLock = Any()
+    @Volatile private var cachedBitmap: Bitmap? = null
     private var cachedArtworkUri: String? = null
-    private var cachedAccentColor: Int = FALLBACK_COLOR
+    @Volatile private var cachedAccentColor: Int = FALLBACK_COLOR
 
     fun release() {
         scope.cancel()
-        cachedBitmap?.recycle()
-        cachedBitmap = null
-        cachedArtworkUri = null
+        synchronized(bitmapLock) {
+            cachedBitmap?.recycle()
+            cachedBitmap = null
+            cachedArtworkUri = null
+        }
     }
 
     init {
@@ -76,9 +78,12 @@ class JellyPlayNotificationProvider(
         val artworkUri = metadata.artworkUri?.toString()
 
         // Load artwork asynchronously if URI changed
-        if (artworkUri != null && artworkUri != cachedArtworkUri) {
-            cachedArtworkUri = artworkUri
-            loadArtworkAsync(artworkUri, mediaSession, actionFactory, onNotificationChangedCallback)
+        val artworkUriStr = metadata.artworkUri?.toString()
+        synchronized(bitmapLock) {
+            if (artworkUriStr != null && artworkUriStr != cachedArtworkUri) {
+                cachedArtworkUri = artworkUriStr
+                loadArtworkAsync(artworkUriStr, mediaSession, actionFactory, onNotificationChangedCallback)
+            }
         }
 
         val isPlaying = player.isPlaying
@@ -122,7 +127,6 @@ class JellyPlayNotificationProvider(
             .setContentTitle(title)
             .setContentText(artist)
             .setStyle(mediaStyle)
-            .setColor(cachedAccentColor)
             .setColorized(true)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -130,8 +134,10 @@ class JellyPlayNotificationProvider(
             .setContentIntent(buildContentIntent())
             .setOngoing(isPlaying)
 
-        // Large artwork
-        cachedBitmap?.let { builder.setLargeIcon(it) }
+        synchronized(bitmapLock) {
+            builder.setColor(cachedAccentColor)
+            cachedBitmap?.let { builder.setLargeIcon(it) }
+        }
 
         // Actions: rewind, play/pause, fast forward, stop
         builder.addAction(rewindAction)
@@ -173,10 +179,13 @@ class JellyPlayNotificationProvider(
                 val bitmap = result.image?.toBitmap()
 
                 if (bitmap != null) {
-                    val old = cachedBitmap
-                    cachedBitmap = bitmap
-                    old?.recycle()
-                    cachedAccentColor = extractAccentColor(bitmap)
+                    val accentColor = extractAccentColor(bitmap)
+                    synchronized(bitmapLock) {
+                        val old = cachedBitmap
+                        cachedBitmap = bitmap
+                        old?.recycle()
+                        cachedAccentColor = accentColor
+                    }
                     withContext(Dispatchers.Main) {
                         callback.onNotificationChanged(
                             createNotification(session, ImmutableList.of(), actionFactory, callback)
@@ -184,7 +193,6 @@ class JellyPlayNotificationProvider(
                     }
                 }
             } catch (_: Exception) {
-                // Artwork load failed — notification shows without large icon
             }
         }
     }
