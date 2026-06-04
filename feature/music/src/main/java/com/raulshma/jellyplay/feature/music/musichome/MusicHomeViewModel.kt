@@ -202,4 +202,68 @@ class MusicHomeViewModel @Inject constructor(
         val shuffled = tracks.shuffled()
         playAll(shuffled, startIndex = 0)
     }
+
+    fun playAlbum(albumId: String) {
+        viewModelScope.launch {
+            mediaRepository.getAlbumTracks(albumId)
+                .onSuccess { tracks ->
+                    if (tracks.isEmpty()) return@launch
+                    val queueItems = tracks.map { track ->
+                        AudioQueueItem(
+                            id = track.id,
+                            name = track.name,
+                            artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                            album = track.album,
+                            imageUrl = getImageUrl(track.id),
+                            mediaSourceId = null,
+                            durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                            normalizationGain = track.normalizationGain,
+                        )
+                    }
+                    audioPlaybackManager.playQueue(queueItems, 0)
+                }
+        }
+    }
+
+    fun playAlbums(albums: List<MediaItem>) {
+        viewModelScope.launch {
+            val allTracks = fetchAlbumTracksParallel(albums)
+            if (allTracks.isNotEmpty()) {
+                audioPlaybackManager.playQueue(allTracks, 0)
+            }
+        }
+    }
+
+    fun shuffleAlbums(albums: List<MediaItem>) {
+        viewModelScope.launch {
+            val allTracks = fetchAlbumTracksParallel(albums).shuffled()
+            if (allTracks.isNotEmpty()) {
+                audioPlaybackManager.playQueue(allTracks, 0)
+            }
+        }
+    }
+
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<AudioQueueItem> {
+        return coroutineScope {
+            albums.map { album ->
+                async {
+                    mediaRepository.getAlbumTracks(album.id)
+                        .getOrNull()
+                        .orEmpty()
+                        .map { track ->
+                            AudioQueueItem(
+                                id = track.id,
+                                name = track.name,
+                                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                                album = track.album ?: album.name,
+                                imageUrl = getImageUrl(track.id),
+                                mediaSourceId = null,
+                                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                                normalizationGain = track.normalizationGain,
+                            )
+                        }
+                }
+            }.awaitAll().flatten()
+        }
+    }
 }

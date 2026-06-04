@@ -128,13 +128,13 @@ fun MusicHomeScreen(
                                     albums = latestAlbumsSection.items,
                                     onAlbumClick = onAlbumClick,
                                     onAlbumPlayClick = { albumId ->
-                                        onAlbumClick(albumId)
+                                        viewModel.playAlbum(albumId)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAll(latestAlbumsSection.items)
+                                        viewModel.playAlbums(latestAlbumsSection.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shufflePlay(latestAlbumsSection.items)
+                                        viewModel.shuffleAlbums(latestAlbumsSection.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
                                 )
@@ -148,13 +148,13 @@ fun MusicHomeScreen(
                                     albums = topRatedAlbumsSection.items,
                                     onAlbumClick = onAlbumClick,
                                     onAlbumPlayClick = { albumId ->
-                                        onAlbumClick(albumId)
+                                        viewModel.playAlbum(albumId)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAll(topRatedAlbumsSection.items)
+                                        viewModel.playAlbums(topRatedAlbumsSection.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shufflePlay(topRatedAlbumsSection.items)
+                                        viewModel.shuffleAlbums(topRatedAlbumsSection.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
                                     title = "Top Rated Albums",
