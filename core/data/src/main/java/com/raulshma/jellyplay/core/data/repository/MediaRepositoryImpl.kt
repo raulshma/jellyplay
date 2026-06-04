@@ -5,6 +5,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
+import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
@@ -183,7 +184,24 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getFavorites(
         mediaTypes: List<MediaType>?,
         limit: Int,
-    ): Result<SearchResult> = apiClient.getFavorites(mediaTypes, limit)
+        startIndex: Int,
+    ): Result<SearchResult> = apiClient.getFavorites(mediaTypes, limit, startIndex)
+
+    override fun getFavoritesPaged(
+        mediaTypes: List<MediaType>?,
+    ): Flow<PagingData<MediaItem>> = Pager(
+        config = PagingConfig(
+            pageSize = PAGE_SIZE,
+            enablePlaceholders = false,
+            prefetchDistance = PREFETCH_DISTANCE,
+        ),
+        pagingSourceFactory = {
+            FavoritesPagingSource(
+                mediaRepository = this,
+                mediaTypes = mediaTypes,
+            )
+        },
+    ).flow
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiClient.getLyrics(itemId)
 

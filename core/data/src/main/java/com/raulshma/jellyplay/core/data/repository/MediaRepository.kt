@@ -97,7 +97,12 @@ interface MediaRepository {
     suspend fun getFavorites(
         mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
+        startIndex: Int = 0,
     ): Result<SearchResult>
+
+    fun getFavoritesPaged(
+        mediaTypes: List<MediaType>? = null,
+    ): Flow<PagingData<MediaItem>>
 
     suspend fun getLyrics(itemId: String): Result<LyricsResult>
 
