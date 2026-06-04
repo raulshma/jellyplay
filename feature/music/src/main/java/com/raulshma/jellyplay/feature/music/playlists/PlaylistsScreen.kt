@@ -12,12 +12,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistsScreen(
     onPlaylistClick: (id: String, name: String) -> Unit,
@@ -55,6 +61,8 @@ fun PlaylistsScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
+    var isRefreshing by remember { mutableStateOf(false) }
+
     JellyPlayScreenScaffold(
         title = "Playlists",
         onBack = onBack,
@@ -65,29 +73,39 @@ fun PlaylistsScreen(
             )
         },
     ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                viewModel.error != null && viewModel.playlists.isEmpty() -> {
-                    ErrorScreen(
-                        message = viewModel.error!!,
-                        onRetry = { viewModel.load() },
-                    )
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = contentPad,
-                            end = contentPad,
-                            bottom = adaptiveInfo.bottomPadding(isTv),
-                        ),
-                    ) {
-                        items(viewModel.playlists.size, key = { viewModel.playlists[it].id }, contentType = { "playlist" }) { index ->
-                            val playlist = viewModel.playlists[index]
-                            PlaylistItemRow(
-                                playlist = playlist,
-                                onClick = { onPlaylistClick(playlist.id, playlist.name) },
-                            )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.load()
+                isRefreshing = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    viewModel.error != null && viewModel.playlists.isEmpty() -> {
+                        ErrorScreen(
+                            message = viewModel.error!!,
+                            onRetry = { viewModel.load() },
+                        )
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = contentPad,
+                                end = contentPad,
+                                bottom = adaptiveInfo.bottomPadding(isTv),
+                            ),
+                        ) {
+                            items(viewModel.playlists.size, key = { viewModel.playlists[it].id }, contentType = { "playlist" }) { index ->
+                                val playlist = viewModel.playlists[index]
+                                PlaylistItemRow(
+                                    playlist = playlist,
+                                    onClick = { onPlaylistClick(playlist.id, playlist.name) },
+                                )
+                            }
                         }
                     }
                 }

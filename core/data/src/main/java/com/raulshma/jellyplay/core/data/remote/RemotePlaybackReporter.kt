@@ -50,7 +50,6 @@ class RemotePlaybackReporter @Inject constructor(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mediaSourceId: String? = null,
     ) {
-        // Stop any prior reporting.
         stopSessionInternal(sendStop = false)
 
         val firstId = itemIds.firstOrNull() ?: return
@@ -58,6 +57,8 @@ class RemotePlaybackReporter @Inject constructor(
             Log.w(TAG, "Cannot start remote session: not authenticated")
             return
         }
+
+        audioPlaybackManager.remoteSessionActive = true
 
         val newSessionId = java.util.UUID.randomUUID().toString()
         sessionId = newSessionId
@@ -122,6 +123,7 @@ class RemotePlaybackReporter @Inject constructor(
         sessionId = null
         currentItemId = null
         currentMediaSourceId = null
+        audioPlaybackManager.remoteSessionActive = false
     }
 
     private fun currentPositionTicksAndPaused(): Pair<Long, Boolean>? {

@@ -4,29 +4,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.feature.music.components.BottomMusicNavigation
-import com.raulshma.jellyplay.feature.music.components.MusicNavItem
-import com.raulshma.jellyplay.feature.music.components.MusicHeader
 import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
 import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
@@ -34,15 +28,11 @@ import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MusicHomeScreen(
-    homeMode: HomeMode,
-    onModeChange: (HomeMode) -> Unit,
     onItemClick: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onSettingsClick: () -> Unit,
-    onSyncPlayClick: () -> Unit,
-    onDownloadsClick: () -> Unit = {},
     onArtistsClick: () -> Unit,
     onAlbumsClick: () -> Unit,
     onTracksClick: () -> Unit,
@@ -60,13 +50,19 @@ fun MusicHomeScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    var currentTab by remember { mutableStateOf(MusicNavItem.HOME) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            viewModel.loadSections()
+            isRefreshing = false
+        },
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .statusBarsPadding()
+            .statusBarsPadding(),
     ) {
         when {
             error != null && sections.isEmpty() -> {
@@ -92,16 +88,9 @@ fun MusicHomeScreen(
                         state = rememberLazyListState(),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv) + 80.dp
+                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv)
                         ),
                     ) {
-                        item {
-                            MusicHeader(
-                                onSwitchToVideo = { onModeChange(HomeMode.VIDEO) },
-                                onSettingsClick = onSettingsClick,
-                            )
-                        }
-
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             AudioPlayerScreensSection(
@@ -210,14 +199,6 @@ fun MusicHomeScreen(
                             }
                         }
                     }
-
-                    BottomMusicNavigation(
-                        currentTab = currentTab,
-                        onTabClick = { tab -> currentTab = tab },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .windowInsetsPadding(WindowInsets.navigationBars),
-                    )
                 }
             }
         }

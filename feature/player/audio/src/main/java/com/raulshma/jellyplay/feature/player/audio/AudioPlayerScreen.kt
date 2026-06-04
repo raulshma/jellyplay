@@ -174,6 +174,7 @@ fun AudioPlayerScreen(
 
     val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
+    val useSideBySide = isExpanded || adaptiveInfo.isLandscape
 
     val systemBgColor = MaterialTheme.colorScheme.background
     val systemBgColorLight = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -367,8 +368,7 @@ fun AudioPlayerScreen(
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
                 )
 
-                if (isExpanded) {
-                    // Tablet: side-by-side layout
+                if (useSideBySide) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1897,6 +1897,7 @@ private fun PixelProgressSection(
         inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
         onSeek = onSeek,
         modifier = Modifier.fillMaxWidth(),
+        durationMs = duration,
     )
 
     Row(

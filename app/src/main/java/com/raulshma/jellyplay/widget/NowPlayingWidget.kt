@@ -48,6 +48,8 @@ class NowPlayingWidget : AppWidgetProvider() {
         const val EXTRA_SUBTITLE = "extra_subtitle"
         const val EXTRA_IS_PLAYING = "extra_is_playing"
         const val EXTRA_ALBUM_ART = "extra_album_art"
+        const val EXTRA_POSITION_MS = "extra_position_ms"
+        const val EXTRA_DURATION_MS = "extra_duration_ms"
 
         fun updateAppWidget(
             context: Context,
@@ -101,6 +103,8 @@ class NowPlayingWidget : AppWidgetProvider() {
             subtitle: String?,
             isPlaying: Boolean,
             albumArt: Bitmap? = null,
+            positionMs: Long = 0L,
+            durationMs: Long = 0L,
         ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, NowPlayingWidget::class.java)
@@ -112,15 +116,21 @@ class NowPlayingWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_subtitle, subtitle ?: "Not playing")
                 views.setImageViewResource(
                     R.id.widget_play_pause,
-                    if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+                    if (isPlaying) R.drawable.widget_ic_pause else R.drawable.widget_ic_play
                 )
                 if (albumArt != null) {
                     views.setImageViewBitmap(R.id.widget_album_art, albumArt)
                 } else {
                     views.setImageViewResource(
                         R.id.widget_album_art,
-                        android.R.drawable.ic_menu_gallery
+                        R.drawable.widget_ic_music
                     )
+                }
+                if (durationMs > 0) {
+                    val progress = ((positionMs.toFloat() / durationMs) * 1000).toInt().coerceIn(0, 1000)
+                    views.setProgressBar(R.id.widget_progress, 1000, progress, false)
+                } else {
+                    views.setProgressBar(R.id.widget_progress, 1000, 0, false)
                 }
                 appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views)
             }
@@ -132,6 +142,8 @@ class NowPlayingWidget : AppWidgetProvider() {
             subtitle: String?,
             isPlaying: Boolean,
             albumArt: Bitmap? = null,
+            positionMs: Long = 0L,
+            durationMs: Long = 0L,
         ) {
             val intent = Intent(context, NowPlayingWidget::class.java).apply {
                 action = ACTION_UPDATE
@@ -139,6 +151,8 @@ class NowPlayingWidget : AppWidgetProvider() {
                 putExtra(EXTRA_SUBTITLE, subtitle)
                 putExtra(EXTRA_IS_PLAYING, isPlaying)
                 putExtra(EXTRA_ALBUM_ART, albumArt)
+                putExtra(EXTRA_POSITION_MS, positionMs)
+                putExtra(EXTRA_DURATION_MS, durationMs)
             }
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)

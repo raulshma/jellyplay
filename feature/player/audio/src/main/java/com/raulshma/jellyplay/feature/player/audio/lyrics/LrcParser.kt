@@ -43,8 +43,15 @@ object LrcParser {
             }
         }
 
+        val sortedLines = lines.sortedBy { it.timeMs }
+        val resultLines = sortedLines.mapIndexed { index, line ->
+            val nextTimeMs = sortedLines.getOrNull(index + 1)?.timeMs
+            val duration = if (nextTimeMs != null) nextTimeMs - line.timeMs else 0L
+            line.copy(durationMs = duration)
+        }
+
         return LyricsResult(
-            lines = lines.sortedBy { it.timeMs },
+            lines = resultLines,
             source = LyricsSource.LRC_FILE,
         )
     }

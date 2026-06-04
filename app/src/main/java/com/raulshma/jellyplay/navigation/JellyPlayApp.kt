@@ -874,8 +874,12 @@ private fun MainNavDisplay(
                     val isTabSwitch = targetLast is Route && initialLast is Route &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(targetLast as Route) &&
                             ALL_TOP_LEVEL_ROUTE_KEYS.contains(initialLast as Route)
+                    val isAmbient = targetLast == Route.Ambient || initialLast == Route.Ambient
 
                     when {
+                        isAmbient -> {
+                            fadeIn(defaultEffects) togetherWith fadeOut(fastEffects)
+                        }
                         isModalRoute -> {
                             fadeIn(
                                 defaultEffects
@@ -983,13 +987,8 @@ private fun MainNavDisplay(
                 onModeChange = onModeChange,
                 musicContent = {
                     MusicHomeScreen(
-                        homeMode = homeMode,
-                        onModeChange = onModeChange,
                         onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
                         onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                        onSettingsClick = { navigator.navigate(Route.Settings) },
-                        onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-                        onDownloadsClick = { navigator.navigate(Route.Downloads) },
                         onArtistsClick = { navigator.navigate(Route.Artists) },
                         onAlbumsClick = { navigator.navigate(Route.Albums) },
                         onTracksClick = { navigator.navigate(Route.Tracks) },

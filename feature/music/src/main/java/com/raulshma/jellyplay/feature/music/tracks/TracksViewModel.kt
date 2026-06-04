@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.music.tracks
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -11,10 +14,21 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class TrackSortOption(val label: String, val sortBy: String) {
+    NAME("Name", "SortName"),
+    DATE_ADDED("Date Added", "DateCreated"),
+    DATE_PLAYED("Date Played", "DatePlayed"),
+    RANDOM("Random", "Random"),
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TracksViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -22,10 +36,22 @@ class TracksViewModel @Inject constructor(
     val audioPlaybackManager: AudioPlaybackManager,
 ) : ViewModel() {
 
-    val tracks: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
-        mediaTypes = listOf(MediaType.AUDIO),
-        sortBy = "SortName",
-    ).cachedIn(viewModelScope)
+    var selectedSort by mutableStateOf(TrackSortOption.NAME)
+        private set
+
+    private val sortFlow = MutableStateFlow(selectedSort)
+
+    val tracks: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
+        mediaRepository.getMediaItemsPaged(
+            mediaTypes = listOf(MediaType.AUDIO),
+            sortBy = sort.sortBy,
+        )
+    }.cachedIn(viewModelScope)
+
+    fun setSort(sort: TrackSortOption) {
+        selectedSort = sort
+        sortFlow.value = sort
+    }
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 300)
