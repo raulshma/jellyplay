@@ -83,7 +83,11 @@ fun HomeTopDock(
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val appBarIconColor = lerp(Color.White, MaterialTheme.colorScheme.onSurface, scrollFraction)
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+    val baseIconColor = if (isLightTheme) MaterialTheme.colorScheme.onSurface else Color.White
+    val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
     val dockScale = 1f - (0.04f * scrollFraction)
     val dockCornerRadius = 24f + (4f * scrollFraction)
@@ -106,16 +110,24 @@ fun HomeTopDock(
                 .graphicsLayer {
                     scaleX = dockScale
                     scaleY = dockScale
-                    shadowElevation = if (scrollFraction > 0f) 8f * scrollFraction else 2f
+                    shadowElevation = if (isSearchFocused) {
+                        4f
+                    } else {
+                        if (scrollFraction > 0f) 8f * scrollFraction else 0f
+                    }
                     shape = RoundedCornerShape(dockCornerRadius.dp)
                     clip = true
                 }
                 .background(
-                    lerp(
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f),
-                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                        scrollFraction
-                    )
+                    if (isSearchFocused) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    } else {
+                        lerp(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            scrollFraction
+                        )
+                    }
                 )
         ) {
             Row(
