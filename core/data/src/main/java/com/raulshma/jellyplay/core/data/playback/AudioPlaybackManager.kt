@@ -32,6 +32,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +67,10 @@ class AudioPlaybackManager @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val audioSettingsStore: com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore,
+    private val queuePersistenceHelper: QueuePersistenceHelper,
+    private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
+    private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -78,11 +84,17 @@ class AudioPlaybackManager @Inject constructor(
                 currentPreferences = prefs
             }
         }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            scope.launch(Dispatchers.IO) {
+                restorePersistedQueue()
+                observeQueuePersistence()
+            }
+        }
     }
     private var mediaSession: MediaSession? = null
     private var playSessionId: String = UUID.randomUUID().toString()
     private var currentItemId: String? = null
-    private var isLoadingItem = false
+    private var _isLoadingItemFlag = false
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var queueLoadingJob: Job? = null
@@ -108,7 +120,21 @@ class AudioPlaybackManager @Inject constructor(
     private val _isCrossfading = MutableStateFlow(false)
     val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
 
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+
+    val estimatedBandwidthKbps: StateFlow<Double> = bandwidthMonitor.estimatedBandwidthKbps
+
+    private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
+    val currentAudioBitrateTier: StateFlow<com.raulshma.jellyplay.core.model.AudioBitrateTier> = _currentAudioBitrateTier.asStateFlow()
+    private val _isLoadingItem = MutableStateFlow(false)
+    val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
+
     private var crossfadeJob: Job? = null
+
+    @Volatile
+    var remoteSessionActive: Boolean = false
+        internal set
 
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
@@ -363,6 +389,36 @@ class AudioPlaybackManager @Inject constructor(
             .build()
     }
 
+    private fun restorePersistedQueue() {
+        scope.launch {
+            val items = queuePersistenceHelper.loadQueue()
+            if (items.isNotEmpty()) {
+                _queue.value = items
+            }
+            val savedState = queuePersistenceHelper.loadState()
+            savedState?.let { state ->
+                _currentIndex.value = state.currentIndex
+                _currentPosition.value = state.currentPositionMs
+                _repeatMode.value = state.repeatMode.coerceIn(0, 2)
+                _shuffleMode.value = state.shuffleEnabled
+                _speed.value = state.playbackSpeed
+            }
+        }
+    }
+
+    private fun observeQueuePersistence() {
+        queuePersistenceHelper.observeQueue(
+            scope = scope,
+            queue = _queue,
+            currentIndex = _currentIndex,
+            currentPositionMs = _currentPosition,
+            isPlaying = _isPlaying,
+            repeatMode = _repeatMode,
+            shuffleEnabled = _shuffleMode,
+            playbackSpeed = _speed,
+        )
+    }
+
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
         val detail = mediaRepository.getMediaDetail(queueItem.id).getOrNull()
         val localDownload = downloadRepository.getDownloadByMediaItemId(queueItem.id)
@@ -397,7 +453,16 @@ class AudioPlaybackManager @Inject constructor(
 
         if (detail == null) return null
         val source = detail.mediaSources.firstOrNull()
-        val url = playbackRepository.getStreamUrl(queueItem.id, source?.id ?: "", if (startPositionMs > 0) startPositionMs * 10_000 else 0L)
+        val tier = adaptiveBitrateSelector.resolveBitrate(currentPreferences.streamingQuality)
+        _currentAudioBitrateTier.value = tier
+        val maxBitrate = tier.targetKbps * 1000
+        val url = playbackRepository.getStreamUrl(
+            itemId = queueItem.id,
+            mediaSourceId = source?.id ?: "",
+            startTimeTicks = if (startPositionMs > 0) startPositionMs * 10_000 else 0L,
+            maxBitrate = maxBitrate,
+            useAudioEndpoint = false,
+        )
         val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
         return MediaItem.Builder()
             .setMediaId(queueItem.id)
@@ -415,7 +480,7 @@ class AudioPlaybackManager @Inject constructor(
 
     fun play(itemId: String) {
         if (currentItemId == itemId) {
-            if (isLoadingItem) return
+            if (_isLoadingItemFlag) return
             val state = exoPlayer?.playbackState
             if (state != null && state != Player.STATE_ENDED && state != Player.STATE_IDLE) {
                 return
@@ -425,7 +490,8 @@ class AudioPlaybackManager @Inject constructor(
         cancelCrossfade()
         reportCurrentItemStopped()
         currentItemId = itemId
-        isLoadingItem = true
+        _isLoadingItemFlag = true
+        _isLoadingItem.value = true
 
         val player = getOrCreatePlayer()
 
@@ -434,6 +500,7 @@ class AudioPlaybackManager @Inject constructor(
             val detail = detailResult.getOrNull()
 
             if (detail != null) {
+                _playbackError.value = null
                 _currentPlayingItemId.value = itemId
                 _title.value = detail.item.name
                 _artist.value = detail.item.albumArtist
@@ -478,41 +545,42 @@ class AudioPlaybackManager @Inject constructor(
                     }
 
                     queueLoadingJob?.cancel()
-                    queueLoadingJob = scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        val mediaItemsBefore = mutableListOf<MediaItem>()
-                        val mediaItemsAfter = mutableListOf<MediaItem>()
-
-                        for (i in (playIndex + 1) until queueItems.size) {
-                            val qi = queueItems[i]
-                            val cached = mediaItemCache.get(qi.id)
-                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                            if (mediaItem != null) {
-                                mediaItemsAfter.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        }
-
-                        for (i in 0 until playIndex) {
-                            val qi = queueItems[i]
-                            val cached = mediaItemCache.get(qi.id)
-                            val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                            if (mediaItem != null) {
-                                mediaItemsBefore.add(mediaItem)
-                                mediaItemCache.put(qi.id, mediaItem)
-                            }
-                        }
-
-                        launch(kotlinx.coroutines.Dispatchers.Main) {
-                            if (exoPlayer == player) {
-                                if (mediaItemsAfter.isNotEmpty()) {
-                                    player.addMediaItems(mediaItemsAfter)
-                                }
-                                if (mediaItemsBefore.isNotEmpty()) {
-                                    player.addMediaItems(0, mediaItemsBefore)
-                                    _currentIndex.value = playIndex
+                    queueLoadingJob = scope.launch(Dispatchers.IO) {
+                        coroutineScope {
+                            val afterJobs = (playIndex + 1 until queueItems.size).map { i ->
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                if (cached != null) {
+                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
+                                } else {
+                                    async { buildMediaItemForQueueItem(qi) }
                                 }
                             }
-                            queueLoadingJob = null
+                            val beforeJobs = (0 until playIndex).map { i ->
+                                val qi = queueItems[i]
+                                val cached = mediaItemCache.get(qi.id)
+                                if (cached != null) {
+                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
+                                } else {
+                                    async { buildMediaItemForQueueItem(qi) }
+                                }
+                            }
+
+                            val mediaItemsAfter = afterJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
+                            val mediaItemsBefore = beforeJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
+
+                            launch(Dispatchers.Main) {
+                                if (exoPlayer == player) {
+                                    if (mediaItemsAfter.isNotEmpty()) {
+                                        player.addMediaItems(mediaItemsAfter)
+                                    }
+                                    if (mediaItemsBefore.isNotEmpty()) {
+                                        player.addMediaItems(0, mediaItemsBefore)
+                                        _currentIndex.value = playIndex
+                                    }
+                                }
+                                queueLoadingJob = null
+                            }
                         }
                     }
                 }
@@ -522,6 +590,7 @@ class AudioPlaybackManager @Inject constructor(
                         itemId = itemId,
                         sessionId = playSessionId,
                         mediaSourceId = source?.id,
+                        startPositionTicks = if (startPositionMs > 0) startPositionMs * 10_000 else null,
                     )
                 )
 
@@ -536,6 +605,7 @@ class AudioPlaybackManager @Inject constructor(
                 startPositionTracking()
                 startProgressReporting()
             } else {
+                _playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
                 val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
                 if (localDownload != null && localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                     val file = java.io.File(localDownload.downloadPath)
@@ -581,7 +651,8 @@ class AudioPlaybackManager @Inject constructor(
                     }
                 }
             }
-            isLoadingItem = false
+            _isLoadingItemFlag = false
+            _isLoadingItem.value = false
         }
     }
 
@@ -618,6 +689,32 @@ class AudioPlaybackManager @Inject constructor(
             _currentIndex.value -= 1
         }
         exoPlayer?.removeMediaItem(index)
+    }
+
+    fun clearQueue() {
+        _queue.value = emptyList()
+        _currentIndex.value = -1
+        exoPlayer?.clearMediaItems()
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val q = _queue.value
+        if (fromIndex < 0 || fromIndex >= q.size) return
+        if (toIndex < 0 || toIndex >= q.size) return
+        if (fromIndex == toIndex) return
+        val mutable = q.toMutableList()
+        val item = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, item)
+        _queue.value = mutable
+        val current = _currentIndex.value
+        val newIndex = when {
+            current == fromIndex -> toIndex
+            fromIndex < current && toIndex >= current -> current - 1
+            fromIndex > current && toIndex <= current -> current + 1
+            else -> current
+        }
+        _currentIndex.value = newIndex
+        exoPlayer?.moveMediaItem(fromIndex, toIndex)
     }
 
     fun skipToNext() {
@@ -1132,6 +1229,8 @@ class AudioPlaybackManager @Inject constructor(
             applyReplayGain(nextItem.normalizationGain)
 
             scope.launch {
+                reportCurrentItemStopped()
+
                 val detail = mediaRepository.getMediaDetail(nextItem.id)
                 detail.onSuccess { d ->
                     fetchLyrics(
@@ -1248,19 +1347,21 @@ class AudioPlaybackManager @Inject constructor(
         val primary = exoPlayer ?: return
         val secondary = crossfadePlayer ?: return
 
+        val targetVolume = if (_nightModeEnabled.value) nightModeVolumeForStrength else 1.0f
+
         val steps = 30
         val stepDelay = crossfadeMs / steps
-        val volumeStep = 1.0f / steps
 
         for (i in 1..steps) {
             if (!scope.isActive || !_isCrossfading.value) {
-                primary.volume = 1.0f
+                primary.volume = targetVolume
                 secondary.volume = 0.0f
                 return
             }
 
-            primary.volume = 1.0f - (volumeStep * i)
-            secondary.volume = volumeStep * i
+            val progress = i.toFloat() / steps
+            primary.volume = targetVolume * (1.0f - progress)
+            secondary.volume = targetVolume * progress
 
             delay(stepDelay)
         }
@@ -1394,6 +1495,8 @@ class AudioPlaybackManager @Inject constructor(
         positionJob = scope.launch {
             var lastPosition = 0L
             var lastDuration = 0L
+            var bandwidthSampleTick = 0
+            var lastBufferedPosition = 0L
             while (true) {
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition
@@ -1416,6 +1519,21 @@ class AudioPlaybackManager @Inject constructor(
                 if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
                     startCrossfadeIfNeeded()
                 }
+
+                bandwidthSampleTick++
+                if (bandwidthSampleTick >= 20) {
+                    bandwidthSampleTick = 0
+                    val buffered = player.bufferedPosition
+                    val deltaMs = (buffered - lastBufferedPosition).coerceAtLeast(0L)
+                    lastBufferedPosition = buffered
+                    if (deltaMs > 0) {
+                        val assumedKbps = currentAudioBitrateTier.value.targetKbps
+                        val estimatedBytes = (assumedKbps.toLong() * deltaMs) / 8L / 1000L
+                        if (estimatedBytes > 0) {
+                            bandwidthMonitor.addSample(estimatedBytes, deltaMs)
+                        }
+                    }
+                }
             }
             delay(100)
             }
@@ -1424,6 +1542,7 @@ class AudioPlaybackManager @Inject constructor(
 
     private fun startProgressReporting() {
         progressJob?.cancel()
+        if (remoteSessionActive) return
         progressJob = scope.launch {
             while (true) {
                 delay(10_000)

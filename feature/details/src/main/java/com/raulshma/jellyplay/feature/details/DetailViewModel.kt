@@ -3,10 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -27,24 +24,20 @@ import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -59,101 +52,96 @@ class DetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    val preferences = preferencesStore.preferences
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
-    private val _detail = mutableStateOf<MediaDetail?>(null)
-    val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail
+    private val _detail = composeState<MediaDetail?>(null)
+    val detail: androidx.compose.runtime.State<MediaDetail?> get() = _detail.asState()
 
-    // ── Seerr Integration State ──
-    private val _seerrRecommendations = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _seerrRecommendations.asStateFlow()
+    private val _seerrRecommendations = stateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _seerrRecommendations.flow
 
-    private val _seerrSimilar = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar.asStateFlow()
+    private val _seerrSimilar = stateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar.flow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     val isSeerrRecommendationsEnabled: StateFlow<Boolean> = seerrRepository.isRecommendationsEnabled()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _seerrRequestResult = MutableStateFlow<SeerrRequestResult?>(null)
-    val seerrRequestResult: StateFlow<SeerrRequestResult?> = _seerrRequestResult.asStateFlow()
+    private val _seerrRequestResult = stateFlow<SeerrRequestResult?>(null)
+    val seerrRequestResult: StateFlow<SeerrRequestResult?> = _seerrRequestResult.flow
 
-    // Service details for request dialog
-    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.asStateFlow()
+    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers.flow
 
-    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.asStateFlow()
+    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers.flow
 
-    private val _isLoadingSeerrServices = MutableStateFlow(false)
-    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.asStateFlow()
+    private val _isLoadingSeerrServices = stateFlow(false)
+    val isLoadingSeerrServices: StateFlow<Boolean> = _isLoadingSeerrServices.flow
 
-    // Seerr TV seasons for the request dialog (fetched on-demand per item)
-    private val _seerrTvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
-    val seerrTvSeasons: StateFlow<List<SeerrSeason>> = _seerrTvSeasons.asStateFlow()
+    private val _seerrTvSeasons = stateFlow<List<SeerrSeason>>(emptyList())
+    val seerrTvSeasons: StateFlow<List<SeerrSeason>> = _seerrTvSeasons.flow
 
-    private val _isLoading = mutableStateOf(false)
-    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading
-    private val _error = mutableStateOf<String?>(null)
-    val error: androidx.compose.runtime.State<String?> get() = _error
+    private val _isLoading = composeState(false)
+    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading.asState()
+    private val _error = composeState<String?>(null)
+    val error: androidx.compose.runtime.State<String?> get() = _error.asState()
 
-    var seasons by mutableStateOf<List<MediaItem>>(emptyList())
+    var seasons by composeState<List<MediaItem>>(emptyList())
         private set
-    var episodes by mutableStateOf<Map<String, List<MediaItem>>>(emptyMap())
+    var episodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
         private set
     private val episodesMap = mutableMapOf<String, List<MediaItem>>()
-    var albumTracks by mutableStateOf<List<MediaItem>>(emptyList())
+    var albumTracks by composeState<List<MediaItem>>(emptyList())
         private set
-    var collectionItems by mutableStateOf<List<MediaItem>>(emptyList())
+    var collectionItems by composeState<List<MediaItem>>(emptyList())
         private set
-    // Tracks season IDs where a fetch was attempted (success or failure)
-    // so the UI knows when to stop showing the loading skeleton.
-    var fetchedSeasonIds by mutableStateOf<Set<String>>(emptySet())
+    var fetchedSeasonIds by composeState<Set<String>>(emptySet())
         private set
-    var isDownloading by mutableStateOf(false)
+    var isDownloading by composeState(false)
         private set
-    var downloadError by mutableStateOf<String?>(null)
+    var downloadError by composeState<String?>(null)
         private set
 
     fun clearDownloadError() {
         downloadError = null
     }
-    var isDownloadingSeries by mutableStateOf(false)
+    var isDownloadingSeries by composeState(false)
         private set
 
-    var seriesDownloadResult by mutableStateOf<SeriesDownloadResult?>(null)
+    var seriesDownloadResult by composeState<SeriesDownloadResult?>(null)
         private set
 
-    var downloadSheetEpisodes by mutableStateOf<Map<String, List<MediaItem>>>(emptyMap())
+    var downloadSheetEpisodes by composeState<Map<String, List<MediaItem>>>(emptyMap())
         private set
     private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
-    var downloadSheetLoadingSeasons by mutableStateOf<Set<String>>(emptySet())
+    var downloadSheetLoadingSeasons by composeState<Set<String>>(emptySet())
         private set
-    private var downloadSheetFetchedSeasonIds by mutableStateOf<Set<String>>(emptySet())
-    var downloadedEpisodeIds by mutableStateOf<Set<String>>(emptySet())
+    private var downloadSheetFetchedSeasonIds by composeState<Set<String>>(emptySet())
+    var downloadedEpisodeIds by composeState<Set<String>>(emptySet())
         private set
 
     fun clearSeriesDownloadResult() {
         seriesDownloadResult = null
     }
 
-    var smartPlayTarget by mutableStateOf<SmartPlayTarget?>(null)
+    var smartPlayTarget by composeState<SmartPlayTarget?>(null)
         private set
 
-    var selectedSubtitleIndex by mutableStateOf<Int?>(null)
+    var selectedSubtitleIndex by composeState<Int?>(null)
         private set
-    var selectedAudioIndex by mutableStateOf<Int?>(null)
+    var selectedAudioIndex by composeState<Int?>(null)
         private set
 
     fun selectSubtitle(index: Int?) {
         selectedSubtitleIndex = index
         val itemId = _detail.value?.item?.id ?: return
-        viewModelScope.launch {
+        launch {
             preferencesStore.setMediaStreamSelection(
                 itemId = itemId,
                 subtitleStreamIndex = index,
@@ -165,7 +153,7 @@ class DetailViewModel @Inject constructor(
     fun selectAudio(index: Int?) {
         selectedAudioIndex = index
         val itemId = _detail.value?.item?.id ?: return
-        viewModelScope.launch {
+        launch {
             preferencesStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = index,
@@ -185,10 +173,9 @@ class DetailViewModel @Inject constructor(
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
-        viewModelScope.launch {
+        launch {
             _isLoading.value = true
             _error.value = null
-            // Reset season/episode state on fresh load
             seasons = emptyList()
             episodes = emptyMap()
             episodesMap.clear()
@@ -198,9 +185,8 @@ class DetailViewModel @Inject constructor(
             selectedSubtitleIndex = null
             selectedAudioIndex = null
             seerrDataLoaded = false
-            _seerrRecommendations.value = emptyList()
-            _seerrSimilar.value = emptyList()
-            // Reset download state to prevent stale flags from blocking new downloads
+            _seerrRecommendations.set(emptyList())
+            _seerrSimilar.set(emptyList())
             isDownloading = false
             isDownloadingSeries = false
             downloadError = null
@@ -232,7 +218,7 @@ class DetailViewModel @Inject constructor(
                             }
                     }
 
-                    viewModelScope.launch {
+                    launch {
                         preferencesStore.setMediaStreamSelection(
                             itemId = itemId,
                             audioStreamIndex = selectedAudioIndex,
@@ -250,9 +236,6 @@ class DetailViewModel @Inject constructor(
                     } else {
                         smartPlayTarget = null
                     }
-
-                    // Seerr data will be loaded on-demand when user scrolls to that section
-                    // loadSeerrData(detail)
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load details" }
             _isLoading.value = false
@@ -263,7 +246,7 @@ class DetailViewModel @Inject constructor(
 
     private fun loadSeasons(seriesId: String) {
         currentSeriesId = seriesId
-        viewModelScope.launch {
+        launch {
             mediaRepository.getSeasons(seriesId)
                 .onSuccess { seasonList ->
                     seasons = seasonList
@@ -280,12 +263,12 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun loadEpisodes(seriesId: String, seasonId: String) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     episodesMap[seasonId] = episodeList
                     episodes = episodesMap.toMap()
-                    
+
                     if (episodeList.isEmpty()) {
                         val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
                         if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
@@ -303,7 +286,7 @@ class DetailViewModel @Inject constructor(
                         episodesMap[seasonId] = emptyList()
                         episodes = episodesMap.toMap()
                     }
-                    
+
                     val seasonIndex = seasons.indexOfFirst { it.id == seasonId }
                     if (seasonIndex >= 0 && seasonIndex < seasons.size - 1) {
                         val nextSeasonId = seasons[seasonIndex + 1].id
@@ -321,14 +304,14 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun loadAlbumTracks(albumId: String) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getAlbumTracks(albumId)
                 .onSuccess { albumTracks = it }
         }
     }
 
     private fun loadCollectionItems(collectionId: String) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getCollectionItems(collectionId, limit = 100)
                 .onSuccess { result -> collectionItems = result.items }
         }
@@ -361,7 +344,7 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun computeSeriesSmartPlayTarget() {
-        viewModelScope.launch(Dispatchers.Default) {
+        launch(Dispatchers.Default) {
             val allEpisodes = episodes.values.flatten()
             if (allEpisodes.isEmpty()) {
                 if (hasMoreSeasonsToLoad()) {
@@ -440,7 +423,7 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
-        viewModelScope.launch(Dispatchers.Default) {
+        launch(Dispatchers.Default) {
             val allEpisodes = episodes.values.flatten().sortedByPlaybackOrder()
             if (allEpisodes.isEmpty()) {
                 withContext(Dispatchers.Main) { smartPlayTarget = null }
@@ -479,7 +462,7 @@ class DetailViewModel @Inject constructor(
     fun toggleFavorite() {
         val itemId = _detail.value?.item?.id ?: return
         val currentIsFavorite = _detail.value?.item?.isFavorite ?: return
-        viewModelScope.launch {
+        launch {
             mediaRepository.toggleFavorite(itemId)
                 .onSuccess {
                     _detail.value = _detail.value?.copy(
@@ -491,7 +474,7 @@ class DetailViewModel @Inject constructor(
 
     fun markPlayed() {
         val itemId = _detail.value?.item?.id ?: return
-        viewModelScope.launch {
+        launch {
             mediaRepository.markPlayed(itemId)
             _detail.value = _detail.value?.copy(
                 item = _detail.value!!.item.copy(isPlayed = true)
@@ -501,7 +484,7 @@ class DetailViewModel @Inject constructor(
 
     fun markUnplayed() {
         val itemId = _detail.value?.item?.id ?: return
-        viewModelScope.launch {
+        launch {
             mediaRepository.markUnplayed(itemId)
             _detail.value = _detail.value?.copy(
                 item = _detail.value!!.item.copy(isPlayed = false)
@@ -520,7 +503,7 @@ class DetailViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        launch {
             isDownloading = true
             downloadError = null
             try {
@@ -545,8 +528,6 @@ class DetailViewModel @Inject constructor(
                     imageUrl = imageUrl,
                     imageBlurHash = item.blurHashes.primary,
                 ).onSuccess { downloadItem ->
-                    // Only enqueue the worker for new (PENDING) downloads,
-                    // not for already-completed or in-progress ones.
                     if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
                         enqueueDownloadWorker(downloadItem.id)
                         try {
@@ -584,7 +565,7 @@ class DetailViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        launch {
             isDownloadingSeries = true
             seriesDownloadResult = null
             downloadRepository.downloadSeries(item.id, episodeIds)
@@ -606,7 +587,7 @@ class DetailViewModel @Inject constructor(
         if (seasonId in downloadSheetFetchedSeasonIds) return
         val seriesId = currentSeriesId ?: return
         downloadSheetLoadingSeasons = downloadSheetLoadingSeasons + seasonId
-        viewModelScope.launch {
+        launch {
             mediaRepository.getEpisodes(seriesId, seasonId)
                 .onSuccess { episodeList ->
                     downloadSheetEpisodesMap[seasonId] = episodeList
@@ -623,7 +604,7 @@ class DetailViewModel @Inject constructor(
 
     fun loadDownloadedEpisodeIds() {
         val seriesId = currentSeriesId ?: return
-        viewModelScope.launch {
+        launch {
             downloadedEpisodeIds = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
         }
     }
@@ -658,13 +639,10 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    // ── Seerr Integration ──
-
     private fun loadSeerrData(detail: MediaDetail) {
-        viewModelScope.launch {
-            // Reset
-            _seerrRecommendations.value = emptyList()
-            _seerrSimilar.value = emptyList()
+        launch {
+            _seerrRecommendations.set(emptyList())
+            _seerrSimilar.set(emptyList())
 
             val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
             val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
@@ -673,11 +651,9 @@ class DetailViewModel @Inject constructor(
             val mediaType = detail.item.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
 
-            // Resolve TMDB ID from external URLs
             val tmdbId = resolveTmdbId(detail)
             if (tmdbId == null) return@launch
 
-            // Fetch recommendations and similar in parallel
             coroutineScope {
                 val recsDeferred = async {
                     seerrRepository.getRecommendations(tmdbId, mediaType)
@@ -687,8 +663,8 @@ class DetailViewModel @Inject constructor(
                     seerrRepository.getSimilar(tmdbId, mediaType)
                         .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                 }
-                _seerrRecommendations.value = recsDeferred.await().results.take(20)
-                _seerrSimilar.value = similarDeferred.await().results.take(20)
+                _seerrRecommendations.set(recsDeferred.await().results.take(20))
+                _seerrSimilar.set(similarDeferred.await().results.take(20))
             }
         }
     }
@@ -702,15 +678,13 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun resolveTmdbId(detail: MediaDetail): Int? {
-        // Try provider IDs first (most reliable)
         val providerIds = detail.providerIds
         providerIds["tmdb"]?.toIntOrNull()?.let { return it }
         providerIds["tmdbid"]?.toIntOrNull()?.let { return it }
 
-        // Fallback: try to find TMDB ID from external URLs
         for (url in detail.externalUrls) {
             if (url.url.contains("themoviedb.org") || url.url.contains("themoviedb")) {
-                val regex = Regex("""/(\\d+)(?:$|/|\?)""")
+                val regex = Regex("""/(\d+)(?:$|/|\?)""")
                 val match = regex.find(url.url)
                 if (match != null) {
                     return match.groupValues[1].toIntOrNull()
@@ -731,8 +705,8 @@ class DetailViewModel @Inject constructor(
         rootFolder: String? = null,
         tags: List<Int>? = null,
     ) {
-        viewModelScope.launch {
-            _seerrRequestResult.value = SeerrRequestResult(isLoading = true)
+        launch {
+            _seerrRequestResult.set(SeerrRequestResult(isLoading = true))
             seerrRequestDelegate.requestMedia(
                 mediaType = item.mediaType,
                 tmdbId = item.id,
@@ -742,40 +716,40 @@ class DetailViewModel @Inject constructor(
                 rootFolder = rootFolder,
                 tags = tags,
             ).onSuccess {
-                _seerrRequestResult.value = SeerrRequestResult(success = true)
+                _seerrRequestResult.set(SeerrRequestResult(success = true))
             }.onFailure {
-                _seerrRequestResult.value = SeerrRequestResult(error = it.message ?: "Request failed")
+                _seerrRequestResult.set(SeerrRequestResult(error = it.message ?: "Request failed"))
             }
         }
     }
 
     fun loadSeerrServiceDetails(mediaType: String) {
-        viewModelScope.launch {
-            _isLoadingSeerrServices.value = true
+        launch {
+            _isLoadingSeerrServices.set(true)
             try {
                 val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
-                _radarrServers.value = result.radarrServers
-                _sonarrServers.value = result.sonarrServers
+                _radarrServers.set(result.radarrServers)
+                _sonarrServers.set(result.sonarrServers)
             } finally {
-                _isLoadingSeerrServices.value = false
+                _isLoadingSeerrServices.set(false)
             }
         }
     }
 
     fun loadSeerrTvSeasons(tmdbId: Int) {
-        viewModelScope.launch {
-            _seerrTvSeasons.value = emptyList()
+        launch {
+            _seerrTvSeasons.set(emptyList())
             val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
-            _seerrTvSeasons.value = seasons
+            _seerrTvSeasons.set(seasons)
         }
     }
 
     fun clearSeerrRequestResult() {
-        _seerrRequestResult.value = null
+        _seerrRequestResult.set(null)
     }
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        viewModelScope.launch {
+        launch {
             seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }

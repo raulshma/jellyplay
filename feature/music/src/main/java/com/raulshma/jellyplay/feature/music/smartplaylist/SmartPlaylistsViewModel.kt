@@ -3,42 +3,84 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.model.CriterionOperator
 import com.raulshma.jellyplay.core.model.CriterionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistCriterion
 import com.raulshma.jellyplay.core.model.SmartPlaylist
 import com.raulshma.jellyplay.core.model.SmartPlaylistSort
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.MutableComposeState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
 class SmartPlaylistsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
+    private val audioPlaybackManager: AudioPlaybackManager,
+    private val smartPlaylistRepository: SmartPlaylistRepository,
+) : JellyPlayViewModel() {
 
-    var playlists by mutableStateOf(defaultPlaylists)
-        private set
+    private val _playlists: MutableComposeState<List<SmartPlaylist>> = composeState(emptyList())
+    val playlists: List<SmartPlaylist> get() = _playlists.value
 
-    var generatedItems by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
+    private val _generatedItems: MutableComposeState<List<MediaItem>> = composeState(emptyList())
+    val generatedItems: List<MediaItem> get() = _generatedItems.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _isLoading: MutableComposeState<Boolean> = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _error: MutableComposeState<String?> = composeState<String?>(null)
+    val error: String? get() = _error.value
+
+    init {
+        launch {
+            smartPlaylistRepository.observeSmartPlaylists().collectLatest { custom ->
+                _playlists.value = defaultPlaylists + custom
+            }
+        }
+    }
+
+    fun createCustomPlaylist(
+        name: String,
+        criteria: List<PlaylistCriterion>,
+        maxItems: Int = 50,
+        sortBy: SmartPlaylistSort = SmartPlaylistSort.RANDOM,
+    ) {
+        if (name.isBlank()) return
+        launch {
+            _error.value = null
+            val playlist = SmartPlaylist(
+                id = "custom-${UUID.randomUUID()}",
+                name = name.trim(),
+                criteria = criteria,
+                maxItems = maxItems,
+                sortBy = sortBy,
+            )
+            smartPlaylistRepository.upsert(playlist)
+        }
+    }
+
+    fun deleteCustomPlaylist(playlist: SmartPlaylist) {
+        if (!playlist.id.startsWith("custom-")) return
+        launch {
+            smartPlaylistRepository.delete(playlist.id)
+        }
+    }
 
     fun generatePlaylist(playlist: SmartPlaylist) {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
 
             val hasPlayCountFilter = playlist.criteria.any { it.type == CriterionType.PLAY_COUNT }
             val hasDateAddedSort = playlist.sortBy == SmartPlaylistSort.DATE_ADDED
@@ -94,20 +136,36 @@ class SmartPlaylistsViewModel @Inject constructor(
                 if (!hasDateAddedSort && !hasPlayCountSort) {
                     items = applySort(items, playlist.sortBy)
                 }
-                generatedItems = items.take(playlist.maxItems)
+                _generatedItems.value = items.take(playlist.maxItems)
             }.onFailure {
-                error = it.message ?: "Failed to generate playlist"
+                _error.value = it.message ?: "Failed to generate playlist"
             }
-            isLoading = false
+            _isLoading.value = false
         }
     }
 
     fun clearGenerated() {
-        generatedItems = emptyList()
+        _generatedItems.value = emptyList()
     }
 
     fun getImageUrl(itemId: String): String =
         playbackRepository.getImageUrl(itemId, maxWidth = 400)
+
+    fun playAll(startIndex: Int = 0) {
+        val queueItems = generatedItems.map { track ->
+            AudioQueueItem(
+                id = track.id,
+                name = track.name,
+                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                album = track.album,
+                imageUrl = getImageUrl(track.id),
+                mediaSourceId = null,
+                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                normalizationGain = track.normalizationGain,
+            )
+        }
+        audioPlaybackManager.playQueue(queueItems, startIndex)
+    }
 
     private fun applyCriteria(
         items: List<MediaItem>,

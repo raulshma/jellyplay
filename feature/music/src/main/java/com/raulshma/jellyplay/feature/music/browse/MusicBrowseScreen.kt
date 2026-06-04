@@ -1,13 +1,5 @@
 package com.raulshma.jellyplay.feature.music.browse
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.feature.music.components.PagedGrid
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
@@ -100,31 +93,12 @@ fun MusicBrowseScreen(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
-                AnimatedContent(
-                    targetState = page,
-                    transitionSpec = {
-                        slideInVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ) { height -> height } + fadeIn() togetherWith
-                        slideOutVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ) { height -> -height } + fadeOut()
-                    },
-                    label = "pageTransition"
-                ) { targetPage ->
-                    when (targetPage) {
-                        0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick, contentPad = contentPad)
-                        3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                        4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
-                    }
+                when (page) {
+                    0 -> ArtistsPage(viewModel = viewModel, onItemClick = onArtistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    1 -> AlbumsPage(viewModel = viewModel, onItemClick = onAlbumClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    2 -> TracksPage(viewModel = viewModel, onItemClick = onTrackClick, contentPad = contentPad)
+                    3 -> GenresPage(viewModel = viewModel, onItemClick = onGenreClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
+                    4 -> PlaylistsPage(viewModel = viewModel, onItemClick = onPlaylistClick, contentPad = contentPad, gridMin = gridMin, spacing = spacing)
                 }
             }
         }
@@ -296,54 +270,6 @@ private fun PlaylistsPage(
                     imageUrl = viewModel.getImageUrl(playlist.id),
                     onClick = { onItemClick(playlist.id) },
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T : Any> PagedGrid(
-    items: androidx.paging.compose.LazyPagingItems<T>,
-    itemKey: (T) -> Any,
-    modifier: Modifier = Modifier,
-    contentPad: Dp = 16.dp,
-    gridMin: Dp = 150.dp,
-    spacing: Dp = 12.dp,
-    itemContent: @Composable (T) -> Unit,
-) {
-    Box(modifier = modifier.fillMaxSize()) {
-        when (val refreshState = items.loadState.refresh) {
-            is LoadState.Loading -> ScreenLoadingState()
-            is LoadState.Error -> ErrorScreen(
-                message = refreshState.error.localizedMessage ?: "Failed to load",
-                onRetry = { items.refresh() },
-            )
-            is LoadState.NotLoading -> {
-                if (items.itemCount == 0) {
-                    ScreenEmptyState(
-                        icon = Tabler.Outline.Search,
-                        title = "Nothing found",
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(gridMin),
-                        contentPadding = PaddingValues(contentPad),
-                        horizontalArrangement = Arrangement.spacedBy(spacing),
-                        verticalArrangement = Arrangement.spacedBy(spacing),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(
-                            count = items.itemCount,
-                            key = items.itemKey(itemKey),
-                            contentType = { "pagedItem" },
-                        ) { index ->
-                            val item = items[index]
-                            if (item != null) {
-                                itemContent(item)
-                            }
-                        }
-                    }
-                }
             }
         }
     }

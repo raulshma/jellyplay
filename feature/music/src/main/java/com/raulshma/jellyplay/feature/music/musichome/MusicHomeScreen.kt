@@ -4,7 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,19 +14,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.feature.music.components.BottomMusicNavigation
-import com.raulshma.jellyplay.feature.music.components.MusicNavItem
-import com.raulshma.jellyplay.feature.music.components.MusicHeader
 import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
 import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
@@ -33,15 +28,11 @@ import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MusicHomeScreen(
-    homeMode: HomeMode,
-    onModeChange: (HomeMode) -> Unit,
     onItemClick: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onSettingsClick: () -> Unit,
-    onSyncPlayClick: () -> Unit,
-    onDownloadsClick: () -> Unit = {},
     onArtistsClick: () -> Unit,
     onAlbumsClick: () -> Unit,
     onTracksClick: () -> Unit,
@@ -54,19 +45,24 @@ fun MusicHomeScreen(
     val sections = viewModel.sections
     val isLoading = viewModel.isLoading
     val error = viewModel.error
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    var currentTab by remember { mutableStateOf(MusicNavItem.HOME) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            viewModel.loadSections()
+            isRefreshing = false
+        },
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .statusBarsPadding()
+            .statusBarsPadding(),
     ) {
         when {
             error != null && sections.isEmpty() -> {
@@ -85,6 +81,8 @@ fun MusicHomeScreen(
                     val recentlyPlayedSection = sections.find { it.title == "Recently Played" }
                     val artistsSection = sections.find { it.title == "Favorite Artists" }
                     val latestAlbumsSection = sections.find { it.title == "Latest Albums" }
+                    val topRatedAlbumsSection = sections.find { it.title == "Top Rated Albums" }
+                    val favoriteTracksSection = sections.find { it.title == "Favorite Tracks" }
 
                     LazyColumn(
                         state = rememberLazyListState(),
@@ -93,13 +91,6 @@ fun MusicHomeScreen(
                             bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv)
                         ),
                     ) {
-                        item {
-                            MusicHeader(
-                                onSwitchToVideo = { onModeChange(HomeMode.VIDEO) },
-                                onSettingsClick = onSettingsClick,
-                            )
-                        }
-
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             AudioPlayerScreensSection(
@@ -111,23 +102,6 @@ fun MusicHomeScreen(
                                 onGenresClick = onGenresClick,
                                 onPlaylistsClick = onPlaylistsClick,
                             )
-                        }
-
-                        if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                RecentlyPlayedSection(
-                                    tracks = recentlyPlayedSection.items,
-                                    onTrackClick = onItemClick,
-                                    onPlayAllClick = {
-                                        viewModel.playAll(recentlyPlayedSection.items)
-                                    },
-                                    onShuffleClick = {
-                                        viewModel.shufflePlay(recentlyPlayedSection.items)
-                                    },
-                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                )
-                            }
                         }
 
                         if (artistsSection != null && artistsSection.items.isNotEmpty()) {
@@ -154,15 +128,73 @@ fun MusicHomeScreen(
                                     albums = latestAlbumsSection.items,
                                     onAlbumClick = onAlbumClick,
                                     onAlbumPlayClick = { albumId ->
-                                        onAlbumClick(albumId)
+                                        viewModel.playAlbum(albumId)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playAll(latestAlbumsSection.items)
+                                        viewModel.playAlbums(latestAlbumsSection.items)
                                     },
                                     onShuffleClick = {
-                                        viewModel.shufflePlay(latestAlbumsSection.items)
+                                        viewModel.shuffleAlbums(latestAlbumsSection.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                )
+                            }
+                        }
+
+                        if (topRatedAlbumsSection != null && topRatedAlbumsSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                NewReleasesSection(
+                                    albums = topRatedAlbumsSection.items,
+                                    onAlbumClick = onAlbumClick,
+                                    onAlbumPlayClick = { albumId ->
+                                        viewModel.playAlbum(albumId)
+                                    },
+                                    onPlayAllClick = {
+                                        viewModel.playAlbums(topRatedAlbumsSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shuffleAlbums(topRatedAlbumsSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    title = "Top Rated Albums",
+                                    subtitle = "Highest rated by the community",
+                                )
+                            }
+                        }
+
+                        if (recentlyPlayedSection != null && recentlyPlayedSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                RecentlyPlayedSection(
+                                    tracks = recentlyPlayedSection.items,
+                                    onTrackClick = onItemClick,
+                                    onPlayAllClick = {
+                                        viewModel.playAll(recentlyPlayedSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shufflePlay(recentlyPlayedSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                )
+                            }
+                        }
+
+                        if (favoriteTracksSection != null && favoriteTracksSection.items.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                RecentlyPlayedSection(
+                                    tracks = favoriteTracksSection.items,
+                                    onTrackClick = onItemClick,
+                                    onPlayAllClick = {
+                                        viewModel.playAll(favoriteTracksSection.items)
+                                    },
+                                    onShuffleClick = {
+                                        viewModel.shufflePlay(favoriteTracksSection.items)
+                                    },
+                                    imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    title = "Favorite Tracks",
+                                    subtitle = "Songs you love the most",
                                 )
                             }
                         }

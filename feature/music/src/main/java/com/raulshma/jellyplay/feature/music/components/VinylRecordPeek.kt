@@ -34,7 +34,7 @@ fun VinylRecordPeek(
     val infiniteTransition = rememberInfiniteTransition(label = "vinylRotationTransition")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = if (isHoveredOrFocused) 360f else 0f,
         animationSpec = infiniteRepeatable(
             animation = tween(4000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart

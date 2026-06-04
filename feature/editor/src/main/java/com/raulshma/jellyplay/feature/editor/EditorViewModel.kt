@@ -2,26 +2,20 @@ package com.raulshma.jellyplay.feature.editor
 
 import android.util.Base64
 import androidx.compose.runtime.Immutable
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
-import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @Immutable
@@ -74,18 +68,18 @@ data class EditorUiState(
 class EditorViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     authRepository: AuthRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    private val _uiState = MutableStateFlow(EditorUiState())
-    val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
+    private val _uiState = stateFlow(EditorUiState())
+    val uiState: StateFlow<EditorUiState> = _uiState.flow
 
-    private val isAdminFlow = authRepository.currentUser
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    private val isAdminFlow: StateFlow<com.raulshma.jellyplay.core.model.UserInfo?> = authRepository.currentUser
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     private var originalHash: Int = 0
 
     fun loadEditorData(itemId: String) {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val detailResult = apiClient.getMediaDetail(itemId)
@@ -155,7 +149,7 @@ class EditorViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
-        viewModelScope.launch {
+        launch {
             isAdminFlow.collect { user ->
                 _uiState.update { it.copy(isAdmin = user?.isAdmin == true) }
             }
@@ -170,7 +164,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun saveMetadata() {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
                 val state = _uiState.value
@@ -220,7 +214,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun uploadImage(imageBytes: ByteArray, imageType: String) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.setItemImage(itemId, imageType, imageBytes)
                 .onSuccess { reloadImageInfos(itemId) }
@@ -229,7 +223,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun uploadImageFromUrl(url: String, imageType: String) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.downloadRemoteImage(itemId, imageType, url)
                 .onSuccess { reloadImageInfos(itemId) }
@@ -238,7 +232,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun deleteImage(imageType: String, imageIndex: Int? = null) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.deleteItemImage(itemId, imageType, imageIndex)
                 .onSuccess { reloadImageInfos(itemId) }
@@ -247,7 +241,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun loadRemoteImages(imageType: String? = null, provider: String? = null, startIndex: Int? = null) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.getRemoteImages(itemId, imageType, provider, startIndex, 50)
                 .onSuccess { result -> _uiState.update { it.copy(remoteImages = result) } }
@@ -256,7 +250,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun uploadSubtitle(fileBytes: ByteArray, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             val base64Data = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
             apiClient.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
@@ -266,7 +260,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun deleteSubtitle(index: Int) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.deleteSubtitle(itemId, index)
                 .onSuccess { loadEditorData(itemId) }
@@ -275,7 +269,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun searchRemoteSubtitles(language: String) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.searchRemoteSubtitles(itemId, language)
                 .onSuccess { results -> _uiState.update { it.copy(remoteSubtitleResults = results) } }
@@ -284,7 +278,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun downloadRemoteSubtitle(subtitleId: String) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.downloadRemoteSubtitle(itemId, subtitleId)
                 .onSuccess { loadEditorData(itemId) }
@@ -297,7 +291,7 @@ class EditorViewModel @Inject constructor(
         replaceAllMetadata: Boolean = false,
         replaceAllImages: Boolean = false,
     ) {
-        viewModelScope.launch {
+        launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             apiClient.refreshItemMetadata(itemId, mode, mode, replaceAllMetadata, replaceAllImages)
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }

@@ -1,0 +1,71 @@
+package com.raulshma.jellyplay.feature.music.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.itemKey
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Search
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+
+@Composable
+fun <T : Any> PagedGrid(
+    items: LazyPagingItems<T>,
+    itemKey: (T) -> Any,
+    modifier: Modifier = Modifier,
+    contentPad: Dp = 16.dp,
+    gridMin: Dp = 150.dp,
+    spacing: Dp = 12.dp,
+    emptyIcon: ImageVector = Tabler.Outline.Search,
+    emptyTitle: String = "Nothing found",
+    itemContent: @Composable (T) -> Unit,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        when (val refreshState = items.loadState.refresh) {
+            is LoadState.Loading -> ScreenLoadingState()
+            is LoadState.Error -> ErrorScreen(
+                message = refreshState.error.localizedMessage ?: "Failed to load",
+                onRetry = { items.refresh() },
+            )
+            is LoadState.NotLoading -> {
+                if (items.itemCount == 0) {
+                    ScreenEmptyState(
+                        icon = emptyIcon,
+                        title = emptyTitle,
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(gridMin),
+                        contentPadding = PaddingValues(contentPad),
+                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(
+                            count = items.itemCount,
+                            key = items.itemKey(itemKey),
+                            contentType = { "pagedItem" },
+                        ) { index ->
+                            val item = items[index]
+                            if (item != null) {
+                                itemContent(item)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,24 +1,25 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class MusicHomeSection(
@@ -31,35 +32,69 @@ class MusicHomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
-) : ViewModel() {
+    private val downloadRepository: DownloadRepository,
+    private val preferencesStore: UserPreferencesStore,
+    private val offlineRepository: OfflineRepository,
+    private val offlineModeManager: OfflineModeManager,
+) : JellyPlayViewModel() {
 
-    var sections by mutableStateOf<List<MusicHomeSection>>(emptyList())
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-    var homeMode by mutableStateOf(HomeMode.VIDEO)
-        private set
+    private val _sections = composeState<List<MusicHomeSection>>(emptyList())
+    val sections: List<MusicHomeSection> get() = _sections.value
+
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
+
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
+
+    private val _homeMode = composeState(HomeMode.VIDEO)
+    val homeMode: HomeMode get() = _homeMode.value
+
+    private val _offlineMode = composeState(OfflineMode.ONLINE)
+    val offlineMode: OfflineMode get() = _offlineMode.value
+
+    private val _offlineLibrary = composeState<List<OfflineMediaItem>>(emptyList())
+    val offlineLibrary: List<OfflineMediaItem> get() = _offlineLibrary.value
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
-        viewModelScope.launch {
+        launch {
             preferencesStore.preferences.collect { prefs ->
-                homeMode = prefs.homeMode
+                _homeMode.value = prefs.homeMode
+            }
+        }
+        launch {
+            offlineModeManager.offlineMode.collect { mode ->
+                _offlineMode.value = mode
+                if (mode != OfflineMode.ONLINE) {
+                    _sections.value = emptyList()
+                } else {
+                    loadSections()
+                }
+            }
+        }
+        launch {
+            offlineRepository.getOfflineLibrary().collect { items ->
+                _offlineLibrary.value = items
             }
         }
         loadSections()
     }
 
+    fun toggleOfflineMode() {
+        offlineModeManager.toggleManualOffline()
+    }
+
     fun loadSections() {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            if (offlineMode != OfflineMode.ONLINE) {
+                _isLoading.value = false
+                return@launch
+            }
+            _isLoading.value = true
+            _error.value = null
             try {
                 val sectionsList = mutableListOf<MusicHomeSection>()
 
@@ -120,11 +155,11 @@ class MusicHomeViewModel @Inject constructor(
                     }
                 }
 
-                sections = sectionsList
+                _sections.value = sectionsList
             } catch (e: Exception) {
-                error = e.message ?: "Failed to load music"
+                _error.value = e.message ?: "Failed to load music"
             }
-            isLoading = false
+            _isLoading.value = false
         }
     }
 
@@ -135,7 +170,7 @@ class MusicHomeViewModel @Inject constructor(
         playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
 
     fun surpriseMe(callback: (String) -> Unit) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getMediaItems(
                 mediaTypes = listOf(MediaType.AUDIO),
                 sortBy = "Random",
@@ -147,7 +182,7 @@ class MusicHomeViewModel @Inject constructor(
     }
 
     fun playAll(tracks: List<MediaItem>, startIndex: Int = 0) {
-        viewModelScope.launch {
+        launch {
             val queueItems = tracks.map { track ->
                 AudioQueueItem(
                     id = track.id,
@@ -167,5 +202,69 @@ class MusicHomeViewModel @Inject constructor(
     fun shufflePlay(tracks: List<MediaItem>) {
         val shuffled = tracks.shuffled()
         playAll(shuffled, startIndex = 0)
+    }
+
+    fun playAlbum(albumId: String) {
+        launch {
+            mediaRepository.getAlbumTracks(albumId)
+                .onSuccess { tracks ->
+                    if (tracks.isEmpty()) return@launch
+                    val queueItems = tracks.map { track ->
+                        AudioQueueItem(
+                            id = track.id,
+                            name = track.name,
+                            artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                            album = track.album,
+                            imageUrl = getImageUrl(track.id),
+                            mediaSourceId = null,
+                            durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                            normalizationGain = track.normalizationGain,
+                        )
+                    }
+                    audioPlaybackManager.playQueue(queueItems, 0)
+                }
+        }
+    }
+
+    fun playAlbums(albums: List<MediaItem>) {
+        launch {
+            val allTracks = fetchAlbumTracksParallel(albums)
+            if (allTracks.isNotEmpty()) {
+                audioPlaybackManager.playQueue(allTracks, 0)
+            }
+        }
+    }
+
+    fun shuffleAlbums(albums: List<MediaItem>) {
+        launch {
+            val allTracks = fetchAlbumTracksParallel(albums).shuffled()
+            if (allTracks.isNotEmpty()) {
+                audioPlaybackManager.playQueue(allTracks, 0)
+            }
+        }
+    }
+
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<AudioQueueItem> {
+        return coroutineScope {
+            albums.map { album ->
+                async {
+                    mediaRepository.getAlbumTracks(album.id)
+                        .getOrNull()
+                        .orEmpty()
+                        .map { track ->
+                            AudioQueueItem(
+                                id = track.id,
+                                name = track.name,
+                                artist = track.albumArtist ?: track.artistItems.firstOrNull()?.name ?: "",
+                                album = track.album ?: album.name,
+                                imageUrl = getImageUrl(track.id),
+                                mediaSourceId = null,
+                                durationMs = track.runTimeTicks?.let { it / 10_000 } ?: 0L,
+                                normalizationGain = track.normalizationGain,
+                            )
+                        }
+                }
+            }.awaitAll().flatten()
+        }
     }
 }

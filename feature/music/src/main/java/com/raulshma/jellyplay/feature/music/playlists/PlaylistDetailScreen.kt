@@ -14,9 +14,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailScreen(
     playlistId: String,
@@ -73,6 +82,9 @@ fun PlaylistDetailScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
+    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+    var isRefreshing by remember { mutableStateOf(false) }
+
     JellyPlayScreenScaffold(
         title = resolvedPlaylistName,
         onBack = onBack,
@@ -83,6 +95,15 @@ fun PlaylistDetailScreen(
             )
         },
     ) { _ ->
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.load(playlistId)
+                isRefreshing = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 viewModel.isLoading && viewModel.items.isEmpty() -> {
@@ -107,22 +128,40 @@ fun PlaylistDetailScreen(
                             val item = viewModel.items[index]
                             PlaylistTrackRow(
                                 item = item,
-                                onClick = { onPlayItem(item.id) },
+                                onClick = { viewModel.playAll(index) },
                                 onAddToQueue = { viewModel.addToQueue(item) },
+                                onRemoveFromPlaylist = { viewModel.removeFromPlaylist(item) },
                             )
                         }
                     }
                 }
             }
+
+            if (viewModel.items.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = { viewModel.playAll() },
+                    icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
+                    text = { Text("Play All") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 88.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .offset {
+                            val maxOffset = 88.dp.toPx()
+                            val yOffset = (-navOffsetPx).coerceAtMost(maxOffset)
+                            IntOffset(x = 0, y = yOffset.toInt())
+                        },
+                )
+            }
         }
-    }
-}
+        }
+    }}
 
 @Composable
 private fun PlaylistTrackRow(
     item: com.raulshma.jellyplay.core.model.PlaylistItem,
     onClick: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -196,6 +235,22 @@ private fun PlaylistTrackRow(
                         )
                     },
                 )
+                if (onRemoveFromPlaylist != null) {
+                    DropdownMenuItem(
+                        text = { Text("Remove from Playlist", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            onRemoveFromPlaylist()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Tabler.Outline.Trash,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                    )
+                }
             }
         }
         IconButton(onClick = onClick) {

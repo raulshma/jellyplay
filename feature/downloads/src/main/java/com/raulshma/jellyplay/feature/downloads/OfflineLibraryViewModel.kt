@@ -1,71 +1,59 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class OfflineLibraryViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     savedStateHandle: SavedStateHandle,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    val offlineLibrary: StateFlow<List<OfflineMediaItem>> = offlineRepository.getOfflineLibrary()
-        .let { flow ->
-            val stateFlow = MutableStateFlow<List<OfflineMediaItem>>(emptyList())
-            viewModelScope.launch { flow.collect { stateFlow.value = it } }
-            stateFlow
-        }
+    private val _offlineLibrary = stateFlow<List<OfflineMediaItem>>(emptyList())
+    val offlineLibrary: StateFlow<List<OfflineMediaItem>> = _offlineLibrary.flow
 
-    var isLoading by mutableStateOf(true)
-        private set
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
 
-    private val _seriesItem = MutableStateFlow<OfflineMediaItem?>(null)
-    val seriesItem: StateFlow<OfflineMediaItem?> = _seriesItem.asStateFlow()
+    private val _seriesItem = stateFlow<OfflineMediaItem?>(null)
+    val seriesItem = _seriesItem.flow
 
-    private val _seasons = MutableStateFlow<List<OfflineMediaItem>>(emptyList())
-    val seasons: StateFlow<List<OfflineMediaItem>> = _seasons.asStateFlow()
+    private val _seasons = stateFlow<List<OfflineMediaItem>>(emptyList())
+    val seasons = _seasons.flow
 
-    private val _episodes = MutableStateFlow<Map<String, List<OfflineMediaItem>>>(emptyMap())
-    val episodes: StateFlow<Map<String, List<OfflineMediaItem>>> = _episodes.asStateFlow()
+    private val _episodes = stateFlow<Map<String, List<OfflineMediaItem>>>(emptyMap())
+    val episodes = _episodes.flow
 
     init {
-        viewModelScope.launch {
-            offlineRepository.getOfflineLibrary().collect {
-                isLoading = false
+        launch {
+            offlineRepository.getOfflineLibrary().collect { items ->
+                _offlineLibrary.set(items)
+                _isLoading.value = false
             }
         }
     }
 
     fun loadSeries(seriesId: String) {
-        viewModelScope.launch {
+        launch {
             val item = offlineRepository.getOfflineItem(seriesId)
-            _seriesItem.value = item
+            _seriesItem.set(item)
 
             offlineRepository.getSeasonsForSeries(seriesId).collect { seasonList ->
-                _seasons.value = seasonList
+                _seasons.set(seasonList)
 
-                // Launch a separate coroutine for each season's episodes to avoid
-                // the terminal inner collect blocking the outer loop
                 val episodesMap = mutableMapOf<String, List<OfflineMediaItem>>()
                 for (season in seasonList) {
                     launch {
                         offlineRepository.getEpisodesForSeason(season.id).collect { episodeList ->
                             episodesMap[season.id] = episodeList
-                            _episodes.value = episodesMap.toMap()
+                            _episodes.set(episodesMap.toMap())
                         }
                     }
                 }
@@ -74,19 +62,19 @@ class OfflineLibraryViewModel @Inject constructor(
     }
 
     fun deleteEpisode(episodeId: String) {
-        viewModelScope.launch {
+        launch {
             offlineRepository.deleteOfflineItem(episodeId)
         }
     }
 
     fun deleteSeason(seasonId: String) {
-        viewModelScope.launch {
+        launch {
             offlineRepository.deleteOfflineSeason(seasonId)
         }
     }
 
     fun deleteSeries(seriesId: String) {
-        viewModelScope.launch {
+        launch {
             offlineRepository.deleteOfflineSeries(seriesId)
         }
     }

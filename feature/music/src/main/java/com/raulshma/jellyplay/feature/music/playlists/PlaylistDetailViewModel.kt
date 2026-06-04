@@ -1,17 +1,12 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,35 +14,44 @@ class PlaylistDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     val audioPlaybackManager: AudioPlaybackManager,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var items by mutableStateOf<List<PlaylistItem>>(emptyList())
-        private set
+    private val _items = composeState<List<PlaylistItem>>(emptyList())
+    val items: List<PlaylistItem> get() = _items.value
 
-    var playlistName by mutableStateOf("")
-        private set
+    private val _playlistName = composeState("")
+    val playlistName: String get() = _playlistName.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _playlistId = composeState("")
+    val playlistId: String get() = _playlistId.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _isLoading = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
+
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
+
+    private val _isMutating = composeState(false)
+    val isMutating: Boolean get() = _isMutating.value
 
     fun load(playlistId: String, playlistName: String? = null) {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        _playlistId.value = playlistId
+        launch {
+            _isLoading.value = true
+            _error.value = null
             mediaRepository.getPlaylistItems(playlistId, limit = 200)
                 .onSuccess {
-                    items = it
-                    this@PlaylistDetailViewModel.playlistName = playlistName ?: ""
+                    _items.value = it
+                    if (playlistName != null) {
+                        _playlistName.value = playlistName
+                    }
                 }
-                .onFailure { error = it.message }
+                .onFailure { _error.value = it.message }
             if (playlistName == null) {
                 mediaRepository.getMediaDetail(playlistId)
-                    .onSuccess { this@PlaylistDetailViewModel.playlistName = it.item.name }
+                    .onSuccess { _playlistName.value = it.item.name }
             }
-            isLoading = false
+            _isLoading.value = false
         }
     }
 
@@ -62,5 +66,38 @@ class PlaylistDetailViewModel @Inject constructor(
             durationMs = item.runTimeTicks?.let { it / 10_000 } ?: 0L,
         )
         audioPlaybackManager.addToQueue(queueItem)
+    }
+
+    fun playAll(startIndex: Int = 0) {
+        val queueItems = items.map { item ->
+            AudioQueueItem(
+                id = item.id,
+                name = item.name,
+                artist = item.artist ?: "",
+                album = item.album,
+                imageUrl = null,
+                mediaSourceId = null,
+                durationMs = item.runTimeTicks?.let { it / 10_000 } ?: 0L,
+            )
+        }
+        audioPlaybackManager.playQueue(queueItems, startIndex)
+    }
+
+    fun removeFromPlaylist(item: PlaylistItem) {
+        val entryId = item.playlistItemId ?: return
+        val currentId = playlistId
+        if (currentId.isEmpty()) return
+        launch {
+            _isMutating.value = true
+            _error.value = null
+            mediaRepository.removeItemsFromPlaylist(currentId, listOf(entryId))
+                .onSuccess { load(currentId, playlistName) }
+                .onFailure { _error.value = it.message ?: "Failed to remove from playlist" }
+            _isMutating.value = false
+        }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }

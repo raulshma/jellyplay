@@ -1,10 +1,7 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -12,15 +9,16 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class PlayItemRequest(
@@ -32,31 +30,31 @@ data class PlayItemRequest(
 class SyncPlayViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var groups by mutableStateOf<List<SyncPlayGroup>>(emptyList())
+    var groups by composeState<List<SyncPlayGroup>>(emptyList())
         private set
 
-    var currentGroup by mutableStateOf<SyncPlayGroupInfo?>(null)
+    var currentGroup by composeState<SyncPlayGroupInfo?>(null)
         private set
 
-    var isLoading by mutableStateOf(false)
+    var isLoading by composeState(false)
         private set
 
-    var error by mutableStateOf<String?>(null)
+    var error by composeState<String?>(null)
         private set
 
-    var isInGroup by mutableStateOf(false)
+    var isInGroup by composeState(false)
         private set
 
-    var showCreateDialog by mutableStateOf(false)
+    var showCreateDialog by composeState(false)
         private set
 
     private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val notifications: SharedFlow<String> = _notifications.asSharedFlow()
 
     private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
-    val navigateToPlayer = _navigateToPlayer.asStateFlow()
+    val navigateToPlayer: StateFlow<PlayItemRequest?> = _navigateToPlayer.asStateFlow()
 
     private var commandJob: Job? = null
     private var lastHandledPlayingItemId: String? = null
@@ -67,7 +65,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun loadGroups() {
-        viewModelScope.launch {
+        launch {
             isLoading = true
             error = null
             mediaRepository.getSyncPlayGroups()
@@ -92,7 +90,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun joinGroup(groupId: String) {
-        viewModelScope.launch {
+        launch {
             isLoading = true
             error = null
             syncPlayManager.joinGroup(groupId)
@@ -118,7 +116,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun leaveGroup() {
-        viewModelScope.launch {
+        launch {
             syncPlayManager.leaveGroup()
                 .onSuccess {
                     isInGroup = false
@@ -134,7 +132,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun createGroup(name: String) {
-        viewModelScope.launch {
+        launch {
             isLoading = true
             error = null
             mediaRepository.createSyncPlayGroup(name)
@@ -164,7 +162,7 @@ class SyncPlayViewModel @Inject constructor(
 
     private fun startEventListener() {
         commandJob?.cancel()
-        commandJob = viewModelScope.launch {
+        commandJob = launch {
             syncPlayManager.events.collect { event ->
                 when (event) {
                     is SyncPlayEvent.PlayQueueUpdate -> {
@@ -207,7 +205,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun togglePlayback() {
-        viewModelScope.launch {
+        launch {
             val group = currentGroup ?: return@launch
             if (group.isPlaying) {
                 mediaRepository.syncPlayPause()
@@ -218,31 +216,31 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun seekTo(positionTicks: Long) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.syncPlaySeek(positionTicks)
         }
     }
 
     fun stop() {
-        viewModelScope.launch {
+        launch {
             mediaRepository.syncPlayStop()
         }
     }
 
     fun setRepeatMode(mode: SyncPlayRepeatMode) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.syncPlaySetRepeatMode(mode)
         }
     }
 
     fun setShuffleMode(mode: SyncPlayShuffleMode) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.syncPlaySetShuffleMode(mode)
         }
     }
 
     fun setIgnoreWait(ignore: Boolean) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.syncPlaySetIgnoreWait(ignore)
         }
     }
@@ -252,7 +250,7 @@ class SyncPlayViewModel @Inject constructor(
     }
 
     fun refreshGroups() {
-        viewModelScope.launch {
+        launch {
             mediaRepository.getSyncPlayGroups()
                 .onSuccess { groups = it }
                 .onFailure { }
