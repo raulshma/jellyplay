@@ -130,6 +130,7 @@ fun PlaylistDetailScreen(
                                 item = item,
                                 onClick = { viewModel.playAll(index) },
                                 onAddToQueue = { viewModel.addToQueue(item) },
+                                onRemoveFromPlaylist = { viewModel.removeFromPlaylist(item) },
                             )
                         }
                     }
@@ -160,6 +161,7 @@ private fun PlaylistTrackRow(
     item: com.raulshma.jellyplay.core.model.PlaylistItem,
     onClick: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -233,6 +235,22 @@ private fun PlaylistTrackRow(
                         )
                     },
                 )
+                if (onRemoveFromPlaylist != null) {
+                    DropdownMenuItem(
+                        text = { Text("Remove from Playlist", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            onRemoveFromPlaylist()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Tabler.Outline.Trash,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                    )
+                }
             }
         }
         IconButton(onClick = onClick) {

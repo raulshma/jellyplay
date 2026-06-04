@@ -91,9 +91,42 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String {
+        return getStreamUrl(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startTimeTicks = startTimeTicks,
+            maxBitrate = null,
+            useAudioEndpoint = false,
+        )
+    }
+
+    override fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        maxBitrate: Int?,
+        useAudioEndpoint: Boolean,
+    ): String {
         val server = engine._currentServer.value ?: return ""
         val user = engine._currentUser.value ?: return ""
-        return "${server.address}/Videos/$itemId/stream?static=true&mediaSourceId=$mediaSourceId&startTimeTicks=$startTimeTicks&api_key=${user.accessToken}"
+        val path = if (useAudioEndpoint) {
+            "/Audio/$itemId/universal"
+        } else {
+            "/Videos/$itemId/stream"
+        }
+        val baseParams = buildString {
+            append("mediaSourceId=$mediaSourceId")
+            append("&startTimeTicks=$startTimeTicks")
+            if (maxBitrate != null && maxBitrate > 0) {
+                append("&maxBitrate=$maxBitrate")
+            }
+            if (useAudioEndpoint) {
+                append("&deviceId=${user.serverId}")
+                append("&userId=${user.id}")
+            }
+        }
+        val paramPrefix = if (useAudioEndpoint) "?" else "?static=true&"
+        return "${server.address}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
     }
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {

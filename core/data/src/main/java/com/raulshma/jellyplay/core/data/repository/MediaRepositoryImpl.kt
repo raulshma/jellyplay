@@ -334,6 +334,30 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
         apiClient.getPlaylistItems(playlistId, startIndex, limit)
 
+    override suspend fun createPlaylist(
+        name: String,
+        overview: String?,
+        itemIds: List<String>,
+    ): Result<String> = apiClient.createPlaylist(name, overview, itemIds)
+
+    override suspend fun updatePlaylist(
+        playlistId: String,
+        name: String?,
+        overview: String?,
+        isPublic: Boolean?,
+    ): Result<Unit> = apiClient.updatePlaylist(playlistId, name, overview, isPublic)
+
+    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = apiClient.deletePlaylist(playlistId)
+
+    override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> =
+        apiClient.addItemsToPlaylist(playlistId, itemIds)
+
+    override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> =
+        apiClient.removeItemsFromPlaylist(playlistId, entryIds)
+
+    override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> =
+        apiClient.movePlaylistItem(playlistId, entryId, newIndex)
+
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         apiClient.getSyncPlayGroups()
 
@@ -481,13 +505,44 @@ class MediaRepositoryImpl @Inject constructor(
                 if (times.isEmpty()) return@forEach
                 val textStart = line.lastIndexOf(']') + 1
                 val text = line.substring(textStart).trim()
+                val words = parseInlineWordTimings(text)
                 if (text.isEmpty()) {
                     times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = "")) }
                 } else {
-                    times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = text)) }
+                    times.forEach { timeMs ->
+                        val adjustedWords = if (words.isNotEmpty()) {
+                            words.map { it.copy(timeMs = it.timeMs) }
+                        } else emptyList()
+                        lines.add(
+                            LyricsLine(
+                                timeMs = timeMs,
+                                text = text,
+                                words = adjustedWords,
+                            )
+                        )
+                    }
                 }
             }
             return lines.sortedBy { it.timeMs }
+        }
+
+        /**
+         * Parses Enhanced LRC inline word timings:
+         * "[00:12.34]Hello [00:12.89]world [00:13.45]test"
+         */
+        private fun parseInlineWordTimings(text: String): List<com.raulshma.jellyplay.core.model.LyricsWord> {
+            if (text.isBlank()) return emptyList()
+            val matches = TIME_REGEX.findAll(text).toList()
+            if (matches.isEmpty()) return emptyList()
+            return matches.mapIndexed { index, match ->
+                val minutes = match.groupValues[1].toLong()
+                val seconds = match.groupValues[2].toDouble()
+                val timeMs = minutes * 60_000 + (seconds * 1000).toLong()
+                val wordStart = match.range.last + 1
+                val wordEnd = matches.getOrNull(index + 1)?.range?.first ?: text.length
+                val rawWord = text.substring(wordStart, wordEnd).trim()
+                com.raulshma.jellyplay.core.model.LyricsWord(timeMs = timeMs, text = rawWord)
+            }.filter { it.text.isNotEmpty() }
         }
     }
 }

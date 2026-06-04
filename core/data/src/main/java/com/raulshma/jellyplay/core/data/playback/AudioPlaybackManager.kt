@@ -67,6 +67,10 @@ class AudioPlaybackManager @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val audioSettingsStore: com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore,
+    private val queuePersistenceHelper: QueuePersistenceHelper,
+    private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
+    private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -78,6 +82,12 @@ class AudioPlaybackManager @Inject constructor(
         scope.launch {
             preferencesStore.preferences.collect { prefs ->
                 currentPreferences = prefs
+            }
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            scope.launch(Dispatchers.IO) {
+                restorePersistedQueue()
+                observeQueuePersistence()
             }
         }
     }
@@ -113,6 +123,10 @@ class AudioPlaybackManager @Inject constructor(
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
+    val estimatedBandwidthKbps: StateFlow<Double> = bandwidthMonitor.estimatedBandwidthKbps
+
+    private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
+    val currentAudioBitrateTier: StateFlow<com.raulshma.jellyplay.core.model.AudioBitrateTier> = _currentAudioBitrateTier.asStateFlow()
     private val _isLoadingItem = MutableStateFlow(false)
     val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
 
@@ -375,6 +389,36 @@ class AudioPlaybackManager @Inject constructor(
             .build()
     }
 
+    private fun restorePersistedQueue() {
+        scope.launch {
+            val items = queuePersistenceHelper.loadQueue()
+            if (items.isNotEmpty()) {
+                _queue.value = items
+            }
+            val savedState = queuePersistenceHelper.loadState()
+            savedState?.let { state ->
+                _currentIndex.value = state.currentIndex
+                _currentPosition.value = state.currentPositionMs
+                _repeatMode.value = state.repeatMode.coerceIn(0, 2)
+                _shuffleMode.value = state.shuffleEnabled
+                _speed.value = state.playbackSpeed
+            }
+        }
+    }
+
+    private fun observeQueuePersistence() {
+        queuePersistenceHelper.observeQueue(
+            scope = scope,
+            queue = _queue,
+            currentIndex = _currentIndex,
+            currentPositionMs = _currentPosition,
+            isPlaying = _isPlaying,
+            repeatMode = _repeatMode,
+            shuffleEnabled = _shuffleMode,
+            playbackSpeed = _speed,
+        )
+    }
+
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
         val detail = mediaRepository.getMediaDetail(queueItem.id).getOrNull()
         val localDownload = downloadRepository.getDownloadByMediaItemId(queueItem.id)
@@ -409,7 +453,16 @@ class AudioPlaybackManager @Inject constructor(
 
         if (detail == null) return null
         val source = detail.mediaSources.firstOrNull()
-        val url = playbackRepository.getStreamUrl(queueItem.id, source?.id ?: "", if (startPositionMs > 0) startPositionMs * 10_000 else 0L)
+        val tier = adaptiveBitrateSelector.resolveBitrate(currentPreferences.streamingQuality)
+        _currentAudioBitrateTier.value = tier
+        val maxBitrate = tier.targetKbps * 1000
+        val url = playbackRepository.getStreamUrl(
+            itemId = queueItem.id,
+            mediaSourceId = source?.id ?: "",
+            startTimeTicks = if (startPositionMs > 0) startPositionMs * 10_000 else 0L,
+            maxBitrate = maxBitrate,
+            useAudioEndpoint = false,
+        )
         val artUri = Uri.parse(playbackRepository.getImageUrl(queueItem.id, maxWidth = 600))
         return MediaItem.Builder()
             .setMediaId(queueItem.id)
@@ -636,6 +689,32 @@ class AudioPlaybackManager @Inject constructor(
             _currentIndex.value -= 1
         }
         exoPlayer?.removeMediaItem(index)
+    }
+
+    fun clearQueue() {
+        _queue.value = emptyList()
+        _currentIndex.value = -1
+        exoPlayer?.clearMediaItems()
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val q = _queue.value
+        if (fromIndex < 0 || fromIndex >= q.size) return
+        if (toIndex < 0 || toIndex >= q.size) return
+        if (fromIndex == toIndex) return
+        val mutable = q.toMutableList()
+        val item = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, item)
+        _queue.value = mutable
+        val current = _currentIndex.value
+        val newIndex = when {
+            current == fromIndex -> toIndex
+            fromIndex < current && toIndex >= current -> current - 1
+            fromIndex > current && toIndex <= current -> current + 1
+            else -> current
+        }
+        _currentIndex.value = newIndex
+        exoPlayer?.moveMediaItem(fromIndex, toIndex)
     }
 
     fun skipToNext() {
@@ -1416,6 +1495,8 @@ class AudioPlaybackManager @Inject constructor(
         positionJob = scope.launch {
             var lastPosition = 0L
             var lastDuration = 0L
+            var bandwidthSampleTick = 0
+            var lastBufferedPosition = 0L
             while (true) {
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition
@@ -1437,6 +1518,21 @@ class AudioPlaybackManager @Inject constructor(
 
                 if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
                     startCrossfadeIfNeeded()
+                }
+
+                bandwidthSampleTick++
+                if (bandwidthSampleTick >= 20) {
+                    bandwidthSampleTick = 0
+                    val buffered = player.bufferedPosition
+                    val deltaMs = (buffered - lastBufferedPosition).coerceAtLeast(0L)
+                    lastBufferedPosition = buffered
+                    if (deltaMs > 0) {
+                        val assumedKbps = currentAudioBitrateTier.value.targetKbps
+                        val estimatedBytes = (assumedKbps.toLong() * deltaMs) / 8L / 1000L
+                        if (estimatedBytes > 0) {
+                            bandwidthMonitor.addSample(estimatedBytes, deltaMs)
+                        }
+                    }
                 }
             }
             delay(100)
