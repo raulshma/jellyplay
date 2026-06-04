@@ -28,7 +28,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         MediaAuditLogEntity::class,
         ScanStateEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

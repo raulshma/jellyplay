@@ -8,8 +8,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,6 +33,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenresScreen(
     onItemClick: (id: String, name: String) -> Unit,
@@ -44,6 +50,8 @@ fun GenresScreen(
         networkStatus = networkStatus,
     )
 
+    var isRefreshing by remember { mutableStateOf(false) }
+
     JellyPlayScreenScaffold(
         title = "Genres",
         onBack = onBack,
@@ -54,43 +62,53 @@ fun GenresScreen(
             )
         },
     ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                isLoading -> {
-                    ScreenLoadingState()
-                }
-                error != null -> {
-                    ErrorScreen(
-                        message = error!!,
-                        onRetry = { viewModel.refresh() },
-                    )
-                }
-                genres.isEmpty() -> {
-                    ScreenEmptyState(
-                        icon = Tabler.Outline.Music,
-                        title = "No genres found",
-                    )
-                }
-                else -> {
-                    val adaptiveInfo = LocalAdaptiveInfo.current
-                    val isTv = LocalTvMode.current
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(adaptiveInfo.gridMinSize(isTv)),
-                        contentPadding = PaddingValues(
-                            start = adaptiveInfo.contentPadding(isTv),
-                            end = adaptiveInfo.contentPadding(isTv),
-                            top = 8.dp,
-                            bottom = adaptiveInfo.bottomPadding(isTv),
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                        verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
-                            GenreChip(
-                                name = genre.name,
-                                onClick = { onItemClick(genre.id, genre.name) },
-                            )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.refresh()
+                isRefreshing = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    isLoading -> {
+                        ScreenLoadingState()
+                    }
+                    error != null -> {
+                        ErrorScreen(
+                            message = error!!,
+                            onRetry = { viewModel.refresh() },
+                        )
+                    }
+                    genres.isEmpty() -> {
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Music,
+                            title = "No genres found",
+                        )
+                    }
+                    else -> {
+                        val adaptiveInfo = LocalAdaptiveInfo.current
+                        val isTv = LocalTvMode.current
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(adaptiveInfo.gridMinSize(isTv)),
+                            contentPadding = PaddingValues(
+                                start = adaptiveInfo.contentPadding(isTv),
+                                end = adaptiveInfo.contentPadding(isTv),
+                                top = 8.dp,
+                                bottom = adaptiveInfo.bottomPadding(isTv),
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
+                                GenreChip(
+                                    name = genre.name,
+                                    onClick = { onItemClick(genre.id, genre.name) },
+                                )
+                            }
                         }
                     }
                 }

@@ -8,6 +8,16 @@ import kotlinx.serialization.Serializable
 data class LyricsLine(
     val timeMs: Long,
     val text: String,
+    val durationMs: Long = 0L,
+    val words: List<LyricsWord> = emptyList(),
+)
+
+@Immutable
+@Serializable
+data class LyricsWord(
+    val timeMs: Long,
+    val text: String,
+    val durationMs: Long = 0L,
 )
 
 @Immutable

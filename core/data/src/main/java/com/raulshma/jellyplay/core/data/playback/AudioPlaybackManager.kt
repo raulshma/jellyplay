@@ -118,6 +118,10 @@ class AudioPlaybackManager @Inject constructor(
 
     private var crossfadeJob: Job? = null
 
+    @Volatile
+    var remoteSessionActive: Boolean = false
+        internal set
+
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
 
@@ -1442,6 +1446,7 @@ class AudioPlaybackManager @Inject constructor(
 
     private fun startProgressReporting() {
         progressJob?.cancel()
+        if (remoteSessionActive) return
         progressJob = scope.launch {
             while (true) {
                 delay(10_000)

@@ -25,10 +25,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +59,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistDetailScreen(
     artistId: String,
@@ -67,6 +72,16 @@ fun ArtistDetailScreen(
         viewModel.loadArtist(artistId)
     }
 
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            viewModel.loadArtist(artistId)
+            isRefreshing = false
+        },
+    ) {
     when {
         viewModel.isLoading -> {
             ScreenLoadingState()
@@ -91,6 +106,7 @@ fun ArtistDetailScreen(
                 )
             }
         }
+    }
     }
 }
 

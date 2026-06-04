@@ -22,10 +22,20 @@ class ReverbHelper {
             setEnabled(false)
             return
         }
-        if (isEnabled || preset != ReverbPreset.NONE) {
-            detach()
-            if (currentAudioSessionId != C.AUDIO_SESSION_ID_UNSET) {
-                attach(currentAudioSessionId)
+        if (currentAudioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+            val oldReverb = reverb
+            reverb = try {
+                val targetPreset = this@ReverbHelper.preset
+                PresetReverb(0, currentAudioSessionId).apply {
+                    setPreset(targetPreset.androidPreset)
+                    enabled = this@ReverbHelper.isEnabled
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create PresetReverb", e)
+                null
+            }
+            oldReverb?.release()
+            if (reverb != null) {
                 setEnabled(true)
             }
         }
@@ -40,9 +50,10 @@ class ReverbHelper {
         currentAudioSessionId = audioSessionId
 
         reverb = try {
+            val targetPreset = this@ReverbHelper.preset
             PresetReverb(0, audioSessionId).apply {
-                preset = this@ReverbHelper.preset.androidPreset
-                enabled = isEnabled
+                setPreset(targetPreset.androidPreset)
+                enabled = this@ReverbHelper.isEnabled
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to create PresetReverb", e)

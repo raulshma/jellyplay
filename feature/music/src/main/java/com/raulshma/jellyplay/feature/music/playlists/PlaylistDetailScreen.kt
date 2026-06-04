@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailScreen(
     playlistId: String,
@@ -80,6 +83,7 @@ fun PlaylistDetailScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+    var isRefreshing by remember { mutableStateOf(false) }
 
     JellyPlayScreenScaffold(
         title = resolvedPlaylistName,
@@ -91,6 +95,15 @@ fun PlaylistDetailScreen(
             )
         },
     ) { _ ->
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.load(playlistId)
+                isRefreshing = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 viewModel.isLoading && viewModel.items.isEmpty() -> {
@@ -139,8 +152,8 @@ fun PlaylistDetailScreen(
                 )
             }
         }
-    }
-}
+        }
+    }}
 
 @Composable
 private fun PlaylistTrackRow(
