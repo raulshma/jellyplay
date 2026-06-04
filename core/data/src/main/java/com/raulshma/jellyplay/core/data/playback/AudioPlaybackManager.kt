@@ -108,6 +108,9 @@ class AudioPlaybackManager @Inject constructor(
     private val _isCrossfading = MutableStateFlow(false)
     val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
 
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+
     private var crossfadeJob: Job? = null
 
     private val _title = MutableStateFlow("")
@@ -434,6 +437,7 @@ class AudioPlaybackManager @Inject constructor(
             val detail = detailResult.getOrNull()
 
             if (detail != null) {
+                _playbackError.value = null
                 _currentPlayingItemId.value = itemId
                 _title.value = detail.item.name
                 _artist.value = detail.item.albumArtist
@@ -522,6 +526,7 @@ class AudioPlaybackManager @Inject constructor(
                         itemId = itemId,
                         sessionId = playSessionId,
                         mediaSourceId = source?.id,
+                        startPositionTicks = if (startPositionMs > 0) startPositionMs * 10_000 else null,
                     )
                 )
 
@@ -536,6 +541,7 @@ class AudioPlaybackManager @Inject constructor(
                 startPositionTracking()
                 startProgressReporting()
             } else {
+                _playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
                 val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
                 if (localDownload != null && localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                     val file = java.io.File(localDownload.downloadPath)
@@ -1132,6 +1138,8 @@ class AudioPlaybackManager @Inject constructor(
             applyReplayGain(nextItem.normalizationGain)
 
             scope.launch {
+                reportCurrentItemStopped()
+
                 val detail = mediaRepository.getMediaDetail(nextItem.id)
                 detail.onSuccess { d ->
                     fetchLyrics(
@@ -1248,19 +1256,21 @@ class AudioPlaybackManager @Inject constructor(
         val primary = exoPlayer ?: return
         val secondary = crossfadePlayer ?: return
 
+        val targetVolume = if (_nightModeEnabled.value) nightModeVolumeForStrength else 1.0f
+
         val steps = 30
         val stepDelay = crossfadeMs / steps
-        val volumeStep = 1.0f / steps
 
         for (i in 1..steps) {
             if (!scope.isActive || !_isCrossfading.value) {
-                primary.volume = 1.0f
+                primary.volume = targetVolume
                 secondary.volume = 0.0f
                 return
             }
 
-            primary.volume = 1.0f - (volumeStep * i)
-            secondary.volume = volumeStep * i
+            val progress = i.toFloat() / steps
+            primary.volume = targetVolume * (1.0f - progress)
+            secondary.volume = targetVolume * progress
 
             delay(stepDelay)
         }

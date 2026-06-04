@@ -55,6 +55,8 @@ fun RecentlyPlayedSection(
     onShuffleClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
     modifier: Modifier = Modifier,
+    title: String = "Recently Played",
+    subtitle: String = "Continue your musical journey",
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -66,7 +68,7 @@ fun RecentlyPlayedSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Recently Played",
+                    text = title,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -75,7 +77,7 @@ fun RecentlyPlayedSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Continue your musical journey",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

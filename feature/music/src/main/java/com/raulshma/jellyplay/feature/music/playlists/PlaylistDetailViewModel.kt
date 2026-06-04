@@ -63,4 +63,19 @@ class PlaylistDetailViewModel @Inject constructor(
         )
         audioPlaybackManager.addToQueue(queueItem)
     }
+
+    fun playAll(startIndex: Int = 0) {
+        val queueItems = items.map { item ->
+            AudioQueueItem(
+                id = item.id,
+                name = item.name,
+                artist = item.artist ?: "",
+                album = item.album,
+                imageUrl = null,
+                mediaSourceId = null,
+                durationMs = item.runTimeTicks?.let { it / 10_000 } ?: 0L,
+            )
+        }
+        audioPlaybackManager.playQueue(queueItems, startIndex)
+    }
 }

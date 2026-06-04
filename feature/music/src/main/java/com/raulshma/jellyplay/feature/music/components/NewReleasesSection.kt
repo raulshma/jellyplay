@@ -47,6 +47,8 @@ fun NewReleasesSection(
     onShuffleClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
     modifier: Modifier = Modifier,
+    title: String = "New Releases",
+    subtitle: String = "Fresh music just for you",
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -58,7 +60,7 @@ fun NewReleasesSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "New Releases",
+                    text = title,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -67,7 +69,7 @@ fun NewReleasesSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Fresh music just for you",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

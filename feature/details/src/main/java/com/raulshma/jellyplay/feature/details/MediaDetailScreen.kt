@@ -153,6 +153,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
 import android.content.Intent
 
@@ -1634,7 +1635,7 @@ private fun DetailActionButtons(
                             .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                     ) {
                         Icon(
-                            if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                            if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                             contentDescription = "Favorite",
                             tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         )
@@ -1739,7 +1740,7 @@ private fun DetailActionButtons(
                         .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
-                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                        if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                         contentDescription = "Favorite",
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
