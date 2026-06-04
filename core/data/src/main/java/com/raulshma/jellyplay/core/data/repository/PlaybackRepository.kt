@@ -21,6 +21,14 @@ interface PlaybackRepository {
 
     fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long = 0): String
 
+    fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long = 0,
+        maxBitrate: Int? = null,
+        useAudioEndpoint: Boolean = false,
+    ): String
+
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
     fun getServerUrl(): String?

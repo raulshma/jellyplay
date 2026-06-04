@@ -188,9 +188,17 @@ fun ModeSwitch(
         label = "mode_switch_progress"
     )
 
+    val isLightTheme = MaterialTheme.colorScheme.background.let { bg ->
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+
     // Sleek HSL-aligned theme colors
     val primaryColor = MaterialTheme.colorScheme.primary
-    val trackBgColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+    val trackBgColor = if (isLightTheme) {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+    }
     
     // Dynamic background glow/shadow tint
     val glowColor = if (isMusic) primaryColor else Color(0xFFFFB74D)
@@ -223,7 +231,7 @@ fun ModeSwitch(
             Icon(
                 imageVector = Tabler.Outline.Music,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLightTheme) 0.45f else 0.25f),
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 10.dp)
@@ -232,7 +240,7 @@ fun ModeSwitch(
             Icon(
                 imageVector = Tabler.Outline.Movie,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isLightTheme) 0.45f else 0.25f),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 10.dp)

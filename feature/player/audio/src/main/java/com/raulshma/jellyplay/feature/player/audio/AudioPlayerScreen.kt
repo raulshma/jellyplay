@@ -63,10 +63,14 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -99,6 +103,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
 
 private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -122,6 +127,21 @@ fun AudioPlayerScreen(
     var showLyricsSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleepTimer by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel.playbackError) {
+        viewModel.playbackError?.let { error ->
+            snackbarHostState.showSnackbar(error, duration = SnackbarDuration.Short)
+        }
+    }
+
+    var showErrorOverlay by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel.playbackError) {
+        showErrorOverlay = viewModel.playbackError != null
+    }
 
     val artworkScale = remember { Animatable(0.8f) }
     val contentAlpha = remember { Animatable(0f) }
@@ -150,21 +170,22 @@ fun AudioPlayerScreen(
     }
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
 
     val adaptiveInfo = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded
+    val useSideBySide = isExpanded || adaptiveInfo.isLandscape
 
-    val artworkColors = rememberArtworkColors(viewModel.albumArtUrl.ifBlank { null })
-    val tintedBg = remember(artworkColors) { artworkColors?.tintedBackground ?: Color(0xFF2D1F2D) }
-    val tintedBgLight = remember(artworkColors) { artworkColors?.tintedBackgroundLight ?: Color(0xFF3D2F3D) }
-    val accentColor = remember(artworkColors) { artworkColors?.accentColor ?: Color(0xFFE8B4C8) }
-    val pillSurface = remember(artworkColors) { artworkColors?.pillSurface ?: Color(0xFF3A2A3A).copy(alpha = 0.55f) }
-    val pillSurfaceDark = remember(artworkColors) { artworkColors?.pillSurfaceDark ?: Color(0xFF2A1A2A).copy(alpha = 0.7f) }
+    val systemBgColor = MaterialTheme.colorScheme.background
+    val systemBgColorLight = MaterialTheme.colorScheme.surfaceContainerHigh
+    val accentColor = MaterialTheme.colorScheme.primary
+    val pillSurface = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val pillSurfaceDark = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f)
 
     val navBarColor = com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor.current
-    androidx.compose.runtime.DisposableEffect(tintedBg) {
+    androidx.compose.runtime.DisposableEffect(systemBgColor) {
         val oldColor = navBarColor.value
-        navBarColor.value = tintedBg
+        navBarColor.value = systemBgColor
         onDispose {
             navBarColor.value = oldColor
         }
@@ -217,7 +238,7 @@ fun AudioPlayerScreen(
                 .then(sharedContainerModifier)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(tintedBgLight, tintedBg, tintedBg),
+                        colors = listOf(systemBgColorLight, systemBgColor, systemBgColor),
                     )
                 )
                 .pointerInput(Unit) {
@@ -345,10 +366,12 @@ fun AudioPlayerScreen(
                     sleepTimerActive = viewModel.sleepTimerActive,
                     sleepTimerDisplayText = if (viewModel.sleepTimerEndOfEpisode) "End of episode" else com.raulshma.jellyplay.core.ui.components.formatDurationMs(viewModel.sleepTimerRemainingMs),
                     onSleepTimerClick = { showMenu = false; showSleepTimer = true },
+                    karaokeMode = viewModel.karaokeMode,
+                    onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
+                    hasKaraokeLyrics = viewModel.hasKaraokeLyrics,
                 )
 
-                if (isExpanded) {
-                    // Tablet: side-by-side layout
+                if (useSideBySide) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -373,6 +396,8 @@ fun AudioPlayerScreen(
                                 isFetchingLyrics = viewModel.isFetchingLyrics,
                                 lyricsSource = viewModel.lyricsSource,
                                 onSearchClick = { showLyricsSearch = true },
+                                karaokeMode = viewModel.karaokeMode,
+                                currentPositionMs = viewModel.currentPosition,
                             )
                         }
                         Spacer(Modifier.width(32.dp))
@@ -408,9 +433,17 @@ fun AudioPlayerScreen(
                                 shuffleMode = viewModel.shuffleMode,
                                 repeatMode = viewModel.repeatMode,
                                 isFavorite = viewModel.isFavorite,
+                                downloadItem = currentDownloadItem,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                                 onToggleFavorite = { viewModel.toggleFavorite() },
+                                onDownloadClick = {
+                                    if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                        showDeleteConfirm = true
+                                    } else {
+                                        viewModel.downloadCurrentTrack()
+                                    }
+                                },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -432,6 +465,8 @@ fun AudioPlayerScreen(
                         isFetchingLyrics = viewModel.isFetchingLyrics,
                         lyricsSource = viewModel.lyricsSource,
                         onSearchClick = { showLyricsSearch = true },
+                        karaokeMode = viewModel.karaokeMode,
+                        currentPositionMs = viewModel.currentPosition,
                     )
 
                     Spacer(Modifier.weight(0.4f))
@@ -468,14 +503,21 @@ fun AudioPlayerScreen(
                             shuffleMode = viewModel.shuffleMode,
                             repeatMode = viewModel.repeatMode,
                             isFavorite = viewModel.isFavorite,
+                            downloadItem = currentDownloadItem,
                             onToggleShuffle = { viewModel.toggleShuffle() },
                             onCycleRepeatMode = { viewModel.cycleRepeatMode() },
                             onToggleFavorite = { viewModel.toggleFavorite() },
+                            onDownloadClick = {
+                                if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+                                    showDeleteConfirm = true
+                                } else {
+                                    viewModel.downloadCurrentTrack()
+                                }
+                            },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
-                        // Prevent overlap with transparent app bottom NavigationBar on phone
                         Spacer(Modifier.height(80.dp))
                     }
                 }
@@ -532,6 +574,51 @@ fun AudioPlayerScreen(
                                 }
                                 .padding(start = 16.dp)
                         )
+                    }
+                }
+            }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 120.dp),
+            )
+
+            AnimatedVisibility(
+                visible = showErrorOverlay && viewModel.playbackError != null,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                Surface(
+                    shape = ShapeCache.smooth16,
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .padding(bottom = 140.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            viewModel.playbackError ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = {
+                            showErrorOverlay = false
+                            viewModel.play(itemId)
+                        }) {
+                            Text("Retry", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }
@@ -603,6 +690,29 @@ fun AudioPlayerScreen(
             viewModel = viewModel,
             onDismiss = { showEffectsSheet = false },
             onOpenEqualizer = { showEffectsSheet = false; showEqualizer = true },
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Download") },
+            text = { Text("Remove the downloaded file for this track?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        viewModel.downloadCurrentTrack()
+                    },
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }
@@ -821,7 +931,7 @@ private fun EqualizerSheet(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        "${bandLevels.getOrElse(index) { 0 } / 100}dB",
+                        "${(bandLevels.getOrElse(index) { 0 } / 100.0)}dB",
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.width(48.dp),
                     )
@@ -956,6 +1066,8 @@ private fun LyricsOverlay(
     isFetching: Boolean,
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource,
     onSearchClick: () -> Unit,
+    karaokeMode: Boolean = false,
+    onKaraokeToggle: (Boolean) -> Unit = {},
 ) {
     val overlayAlpha by animateFloatAsState(
         targetValue = 1f,
@@ -1144,6 +1256,26 @@ private fun LyricsOverlay(
                             }
                             Spacer(Modifier.width(4.dp))
                         }
+                    }
+                    if (lyrics.any { it.words.isNotEmpty() }) {
+                        IconButton(
+                            onClick = { onKaraokeToggle(!karaokeMode) },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(
+                                    if (karaokeMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    else Color.Black.copy(alpha = 0.4f),
+                                    ShapeCache.smooth8,
+                                ),
+                        ) {
+                            Icon(
+                                if (karaokeMode) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
+                                if (karaokeMode) "Karaoke on" else "Karaoke off",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
                     }
                     IconButton(
                         onClick = onSearchClick,
@@ -1559,6 +1691,9 @@ private fun PixelPlayerTopBar(
     sleepTimerActive: Boolean = false,
     sleepTimerDisplayText: String = "",
     onSleepTimerClick: () -> Unit = {},
+    karaokeMode: Boolean = false,
+    onKaraokeToggle: (Boolean) -> Unit = {},
+    hasKaraokeLyrics: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -1570,14 +1705,14 @@ private fun PixelPlayerTopBar(
         IconButton(onClick = onBack, modifier = Modifier.tvFocusable()) {
             Icon(
                 Tabler.Outline.ChevronDown, "Minimize",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.size(28.dp),
             )
         }
         Text(
             "Now Playing",
             style = MaterialTheme.typography.titleSmall,
-            color = Color.White.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             letterSpacing = 1.sp,
         )
         Row {
@@ -1586,17 +1721,17 @@ private fun PixelPlayerTopBar(
                     Icon(
                         if (lyricsVisible) Tabler.Outline.Microphone2 else Tabler.Outline.Microphone,
                         "Lyrics",
-                        tint = if (lyricsVisible) Color(0xFFE8B4C8) else Color.White,
+                        tint = if (lyricsVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(22.dp),
                     )
                 }
             }
             IconButton(onClick = onQueueClick, modifier = Modifier.tvFocusable()) {
-                Icon(Tabler.Outline.Playlist, "Queue", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(Tabler.Outline.Playlist, "Queue", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
             Box {
                 IconButton(onClick = { onMenuToggle(true) }, modifier = Modifier.tvFocusable()) {
-                    Icon(Tabler.Outline.DotsVertical, "More", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Tabler.Outline.DotsVertical, "More", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
                 }
                 val itemColors = androidx.compose.material3.MenuDefaults.itemColors(
                     textColor = MaterialTheme.colorScheme.onSurface,
@@ -1645,6 +1780,14 @@ private fun PixelPlayerTopBar(
                         leadingIcon = { Icon(Tabler.Outline.Stopwatch, null) },
                         colors = itemColors,
                     )
+                    if (hasKaraokeLyrics) {
+                        DropdownMenuItem(
+                            text = { Text(if (karaokeMode) "Karaoke Mode · On" else "Karaoke Mode") },
+                            onClick = { onKaraokeToggle(!karaokeMode); onMenuToggle(false) },
+                            leadingIcon = { Icon(Tabler.Outline.Microphone2, null) },
+                            colors = itemColors,
+                        )
+                    }
                 }
             }
         }
@@ -1664,6 +1807,8 @@ private fun AlbumArtwork(
     isFetchingLyrics: Boolean = false,
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
+    karaokeMode: Boolean = false,
+    currentPositionMs: Long = 0L,
 ) {
     val sharedTransitionScope = com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
@@ -1729,13 +1874,32 @@ private fun AlbumArtwork(
             enter = fadeIn(tween(400)),
             exit = fadeOut(tween(300)),
         ) {
-            LyricsOverlay(
-                lyrics = lyrics,
-                currentIndex = currentLyricIndex,
-                isFetching = isFetchingLyrics,
-                lyricsSource = lyricsSource,
-                onSearchClick = onSearchClick,
-            )
+            if (karaokeMode && lyrics.any { it.words.isNotEmpty() }) {
+                com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(
+                    lyrics = lyrics,
+                    currentIndex = currentLyricIndex,
+                    currentPositionMs = currentPositionMs,
+                )
+            } else {
+                LyricsOverlay(
+                    lyrics = lyrics,
+                    currentIndex = currentLyricIndex,
+                    isFetching = isFetchingLyrics,
+                    lyricsSource = lyricsSource,
+                    onSearchClick = onSearchClick,
+                )
+            }
+        }
+
+        if (title.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
+            }
         }
     }
 }
@@ -1749,7 +1913,7 @@ private fun TrackInfoSection(
         title,
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
@@ -1759,7 +1923,7 @@ private fun TrackInfoSection(
     Text(
         artist,
         style = MaterialTheme.typography.bodyLarge,
-        color = Color.White.copy(alpha = 0.7f),
+        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth(),
@@ -1780,9 +1944,10 @@ private fun PixelProgressSection(
         progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
         isPlaying = isPlaying,
         activeColor = accentColor,
-        inactiveColor = Color.White.copy(alpha = 0.25f),
+        inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
         onSeek = onSeek,
         modifier = Modifier.fillMaxWidth(),
+        durationMs = duration,
     )
 
     Row(
@@ -1799,7 +1964,7 @@ private fun PixelProgressSection(
         Text(
             if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
         )
     }
 }
@@ -1842,7 +2007,7 @@ private fun PixelTransportControls(
                 Icon(
                     Tabler.Outline.PlayerSkipBack, "Previous",
                     modifier = Modifier.size(28.dp),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             },
             size = 48.dp,
@@ -1859,7 +2024,7 @@ private fun PixelTransportControls(
                 Icon(
                     Tabler.Outline.PlayerSkipForward, "Next",
                     modifier = Modifier.size(28.dp),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             },
             size = 48.dp,
@@ -1874,15 +2039,17 @@ private fun PixelSecondaryControls(
     shuffleMode: Boolean,
     repeatMode: Int,
     isFavorite: Boolean,
+    downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onDownloadClick: () -> Unit,
     pillSurfaceDark: Color,
     accentColor: Color,
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth(0.7f)
+            .fillMaxWidth(0.8f)
             .clip(ShapeCache.smoothPill)
             .background(pillSurfaceDark)
             .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1891,14 +2058,14 @@ private fun PixelSecondaryControls(
     ) {
         IconButtonWithPressAnimation(
             onClick = onToggleShuffle,
-            tint = if (shuffleMode) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (shuffleMode) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(Tabler.Outline.ArrowsShuffle, "Shuffle", modifier = Modifier.size(22.dp))
             },
         )
         IconButtonWithPressAnimation(
             onClick = onCycleRepeatMode,
-            tint = if (repeatMode > 0) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (repeatMode > 0) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(
                     if (repeatMode == 2) Tabler.Outline.RepeatOnce else Tabler.Outline.Repeat,
@@ -1911,13 +2078,32 @@ private fun PixelSecondaryControls(
         )
         IconButtonWithPressAnimation(
             onClick = onToggleFavorite,
-            tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.6f),
+            tint = if (isFavorite) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             icon = {
                 Icon(
-                    if (isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                    if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                     "Favorite",
                     modifier = Modifier.size(22.dp),
                 )
+            },
+        )
+        IconButtonWithPressAnimation(
+            onClick = onDownloadClick,
+            tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = {
+                if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = accentColor
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
+                        contentDescription = "Download",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             },
         )
     }
@@ -1951,15 +2137,8 @@ private fun PixelPlayPauseButton(
         }
     } else Modifier
 
-    // Light tinted background (Pixel Player uses a cream/light pink)
-    val buttonBg = accentColor.copy(alpha = 0.25f).let { c ->
-        Color(
-            red = (c.red + 0.6f).coerceAtMost(1f),
-            green = (c.green + 0.55f).coerceAtMost(1f),
-            blue = (c.blue + 0.6f).coerceAtMost(1f),
-            alpha = 0.9f,
-        )
-    }
+    val buttonBg = MaterialTheme.colorScheme.primaryContainer
+    val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
         modifier = Modifier
@@ -1980,7 +2159,7 @@ private fun PixelPlayPauseButton(
             if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
             if (isPlaying) "Pause" else "Play",
             modifier = Modifier.size(36.dp),
-            tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tint = iconColor,
         )
     }
 }
@@ -1989,7 +2168,7 @@ private fun PixelPlayPauseButton(
 @Composable
 private fun IconButtonWithPressAnimation(
     onClick: () -> Unit,
-    tint: Color = Color.White,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
     icon: @Composable () -> Unit,
     size: androidx.compose.ui.unit.Dp = 40.dp,
     modifier: Modifier = Modifier,
@@ -2134,7 +2313,7 @@ private fun SwipeTrackCard(
     Card(
         shape = ShapeCache.smooth16,
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = Color.Black.copy(alpha = 0.85f),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
         ),
         modifier = modifier
             .width(260.dp)
@@ -2151,7 +2330,7 @@ private fun SwipeTrackCard(
                 Icon(
                     Tabler.Outline.PlayerSkipForward,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -2159,7 +2338,7 @@ private fun SwipeTrackCard(
                 Icon(
                     Tabler.Outline.PlayerSkipBack,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -2168,7 +2347,7 @@ private fun SwipeTrackCard(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(ShapeCache.smooth8)
-                    .background(Color.White.copy(alpha = 0.1f)),
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (artworkUrl.isNotBlank()) {
@@ -2182,7 +2361,7 @@ private fun SwipeTrackCard(
                     Icon(
                         Tabler.Outline.Music,
                         contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.5f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     )
                 }
             }
@@ -2192,14 +2371,14 @@ private fun SwipeTrackCard(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = artist,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -1,53 +1,48 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class CollectionDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    private var _collectionDetail by mutableStateOf<MediaDetail?>(null)
-    val collectionDetail get() = _collectionDetail
+    private val _collectionDetail = composeState<MediaDetail?>(null)
+    val collectionDetail: MediaDetail? get() = _collectionDetail.value
 
-    private var _items by mutableStateOf<List<MediaItem>>(emptyList())
-    val items get() = _items
+    private val _items = composeState<List<MediaItem>>(emptyList())
+    val items: List<MediaItem> get() = _items.value
 
-    private var _isLoading by mutableStateOf(true)
-    val isLoading get() = _isLoading
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
 
-    private var _error by mutableStateOf<String?>(null)
-    val error get() = _error
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     fun loadCollection(collectionId: String) {
-        viewModelScope.launch {
-            _isLoading = true
-            _error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
             coroutineScope {
                 val detailDeferred = async { mediaRepository.getMediaDetail(collectionId) }
                 val itemsDeferred = async { mediaRepository.getCollectionItems(collectionId, limit = 100) }
                 detailDeferred.await()
-                    .onSuccess { detail -> _collectionDetail = detail }
-                    .onFailure { e -> _error = e.message ?: "Failed to load collection" }
+                    .onSuccess { detail -> _collectionDetail.value = detail }
+                    .onFailure { e -> _error.value = e.message ?: "Failed to load collection" }
                 itemsDeferred.await()
-                    .onSuccess { result -> _items = result.items }
-                    .onFailure { e -> _error = e.message ?: "Failed to load collection items" }
+                    .onSuccess { result -> _items.value = result.items }
+                    .onFailure { e -> _error.value = e.message ?: "Failed to load collection items" }
             }
-            _isLoading = false
+            _isLoading.value = false
         }
     }
 

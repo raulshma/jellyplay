@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
-import com.raulshma.jellyplay.feature.player.video.engine.TrackType
+import com.raulshma.jellyplay.core.model.TrackType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

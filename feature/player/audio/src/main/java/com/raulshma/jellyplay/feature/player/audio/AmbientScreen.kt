@@ -9,26 +9,43 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 
 @Composable
 fun AmbientScreen(
@@ -36,6 +53,34 @@ fun AmbientScreen(
     title: String,
     artist: String,
     onTap: () -> Unit,
+    viewModel: AudioPlayerViewModel = hiltViewModel(),
+) {
+    AmbientScreenContent(
+        imageUrl = imageUrl,
+        title = title,
+        artist = artist,
+        isPlaying = viewModel.isPlaying,
+        currentPosition = viewModel.currentPosition,
+        duration = viewModel.duration,
+        onTap = onTap,
+        onPlayPause = { viewModel.togglePlayPause() },
+        onSkipNext = { viewModel.skipToNext() },
+        onSkipPrevious = { viewModel.skipToPrevious() },
+    )
+}
+
+@Composable
+private fun AmbientScreenContent(
+    imageUrl: String?,
+    title: String,
+    artist: String,
+    isPlaying: Boolean,
+    currentPosition: Long,
+    duration: Long,
+    onTap: () -> Unit,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
 ) {
     val artworkColors = rememberArtworkColors(imageUrl)
     val colors = extractAmbientColors(artworkColors)
@@ -70,11 +115,67 @@ fun AmbientScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),
             )
+
+            if (duration > 0) {
+                Spacer(Modifier.height(16.dp))
+                LinearProgressIndicator(
+                    progress = { (currentPosition.toFloat() / duration).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(2.dp),
+                    color = Color.White.copy(alpha = 0.7f),
+                    trackColor = Color.White.copy(alpha = 0.2f),
+                    strokeCap = StrokeCap.Round,
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = onSkipPrevious,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerSkipBack,
+                        contentDescription = "Previous",
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                IconButton(
+                    onClick = onPlayPause,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(
+                        if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                IconButton(
+                    onClick = onSkipNext,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerSkipForward,
+                        contentDescription = "Next",
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+
             Text(
-                text = "Tap to exit",
+                text = "Tap anywhere to exit",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(top = 16.dp),
+                color = Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
     }

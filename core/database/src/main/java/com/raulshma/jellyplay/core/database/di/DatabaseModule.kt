@@ -49,4 +49,13 @@ object DatabaseModule {
 
     @Provides
     fun provideScanStateDao(database: JellyPlayDatabase) = database.scanStateDao()
+
+    @Provides
+    fun provideSmartPlaylistDao(database: JellyPlayDatabase) = database.smartPlaylistDao()
+
+    @Provides
+    fun provideMoodPlaylistDao(database: JellyPlayDatabase) = database.moodPlaylistDao()
+
+    @Provides
+    fun provideAudioQueueDao(database: JellyPlayDatabase) = database.audioQueueDao()
 }

@@ -1,53 +1,51 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var artistName by mutableStateOf("")
-        private set
-    var albums by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
-    var tracks by mutableStateOf<List<MediaItem>>(emptyList())
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _artistName = composeState("")
+    val artistName: String get() = _artistName.value
+
+    private val _albums = composeState<List<MediaItem>>(emptyList())
+    val albums: List<MediaItem> get() = _albums.value
+
+    private val _tracks = composeState<List<MediaItem>>(emptyList())
+    val tracks: List<MediaItem> get() = _tracks.value
+
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
+
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     fun loadArtist(artistId: String) {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
             coroutineScope {
                 val detailDeferred = async { mediaRepository.getMediaDetail(artistId) }
                 val albumsDeferred = async { mediaRepository.getArtistAlbums(artistId) }
                 detailDeferred.await()
-                    .onSuccess { detail -> artistName = detail.item.name }
+                    .onSuccess { detail -> _artistName.value = detail.item.name }
                     .onFailure {
-                        error = it.message ?: "Failed to load artist"
+                        _error.value = it.message ?: "Failed to load artist"
                     }
                 albumsDeferred.await()
-                    .onSuccess { albumList -> albums = albumList }
+                    .onSuccess { albumList -> _albums.value = albumList }
             }
-            isLoading = false
+            _isLoading.value = false
         }
     }
 

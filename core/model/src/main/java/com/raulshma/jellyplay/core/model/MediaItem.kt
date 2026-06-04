@@ -20,6 +20,12 @@ enum class MediaType {
     UNKNOWN,
 }
 
+val MediaType.isAudioType: Boolean
+    get() = this == MediaType.AUDIO || this == MediaType.MUSIC || this == MediaType.ALBUM || this == MediaType.ARTIST
+
+val MediaType.isMusicTrack: Boolean
+    get() = this == MediaType.AUDIO || this == MediaType.MUSIC
+
 @Immutable
 @Serializable
 data class ImageBlurHashes(
@@ -65,6 +71,7 @@ data class MediaItem(
     val videoType: String? = null,
     val blurHashes: ImageBlurHashes = ImageBlurHashes(),
     val normalizationGain: Float? = null,
+    val normalizationPeak: Float? = null,
     val playCount: Int = 0,
     val lastPlayedDate: String? = null,
 )

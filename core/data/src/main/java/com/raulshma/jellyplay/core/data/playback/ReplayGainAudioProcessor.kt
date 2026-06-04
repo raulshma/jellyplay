@@ -7,7 +7,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.ShortBuffer
 import java.nio.FloatBuffer
+import java.util.Random
 import kotlin.math.pow
+import kotlin.math.tanh
 
 @UnstableApi
 class ReplayGainAudioProcessor : AudioProcessor {
@@ -23,6 +25,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
 
     private var cachedShortBuffer: ShortBuffer? = null
     private var cachedFloatBuffer: FloatBuffer? = null
+    private val ditherRandom = Random()
+    private var previousDitherSample: Float = 0f
 
     @Synchronized
     fun setGainDb(gainDb: Float) {
@@ -75,9 +79,11 @@ class ReplayGainAudioProcessor : AudioProcessor {
             inputShorts.position(position / 2)
             inputShorts.limit(limit / 2)
             while (inputShorts.hasRemaining()) {
-                val sample = inputShorts.get()
-                val amplified = (sample * mult).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                shortBuffer.put(amplified.toShort())
+                val sample = inputShorts.get() / 32768f
+                val amplified = sample * mult
+                val clipped = softClip(amplified)
+                val dithered = applyTriangularDither(clipped) * 32767f
+                shortBuffer.put(dithered.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort())
             }
             buffer.position(0)
             buffer.limit(shortBuffer.position() * 2)
@@ -89,8 +95,8 @@ class ReplayGainAudioProcessor : AudioProcessor {
             inputFloats.limit(limit / 4)
             while (inputFloats.hasRemaining()) {
                 val sample = inputFloats.get()
-                val amplified = (sample * mult).coerceIn(-1.0f, 1.0f)
-                floatBuffer.put(amplified)
+                val amplified = sample * mult
+                floatBuffer.put(softClip(amplified))
             }
             buffer.position(0)
             buffer.limit(floatBuffer.position() * 4)
@@ -112,9 +118,24 @@ class ReplayGainAudioProcessor : AudioProcessor {
 
     override fun isEnded(): Boolean = isInputEnded && outputBuffer === EMPTY_BUFFER
 
+    private fun softClip(sample: Float): Float {
+        if (sample >= -1f && sample <= 1f) return sample
+        return tanh(sample.toDouble()).toFloat()
+    }
+
+    private fun applyTriangularDither(sample: Float): Float {
+        val r1 = ditherRandom.nextFloat() - 0.5f
+        val r2 = ditherRandom.nextFloat() - 0.5f
+        val dither = r1 - r2
+        val dithered = sample + dither * (1f / 32768f)
+        previousDitherSample = dithered - sample
+        return dithered
+    }
+
     override fun flush() {
         isInputEnded = false
         outputBuffer = EMPTY_BUFFER
+        previousDitherSample = 0f
     }
 
     override fun reset() {

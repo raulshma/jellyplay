@@ -1,146 +1,144 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SeerrSettingsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrPreferencesStore: SeerrPreferencesStore,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
     val preferences = seerrPreferencesStore.preferences
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SeerrPreferences())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrPreferences())
 
-    var serverUrl by mutableStateOf("")
-        private set
-    var apiKey by mutableStateOf("")
-        private set
-    var connectionStatus by mutableStateOf<ConnectionStatus>(ConnectionStatus.Idle)
-        private set
-    var isTesting by mutableStateOf(false)
-        private set
-    var isChecked by mutableStateOf(false)
-        private set
+    private val _serverUrl = composeState("")
+    val serverUrl: String get() = _serverUrl.value
+
+    private val _apiKey = composeState("")
+    val apiKey: String get() = _apiKey.value
+
+    private val _connectionStatus = composeState<ConnectionStatus>(ConnectionStatus.Idle)
+    val connectionStatus: ConnectionStatus get() = _connectionStatus.value
+
+    private val _isTesting = composeState(false)
+    val isTesting: Boolean get() = _isTesting.value
+
+    private val _isChecked = composeState(false)
+    val isChecked: Boolean get() = _isChecked.value
 
     init {
-        viewModelScope.launch {
+        launch {
             val prefs = seerrPreferencesStore.preferences.first()
-            serverUrl = prefs.serverUrl
-            apiKey = prefs.apiKey
-            isChecked = prefs.serverUrl.isNotBlank()
+            _serverUrl.value = prefs.serverUrl
+            _apiKey.value = prefs.apiKey
+            _isChecked.value = prefs.serverUrl.isNotBlank()
             if (prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()) {
-                connectionStatus = ConnectionStatus.Connected("", true)
+                _connectionStatus.value = ConnectionStatus.Connected("", true)
             }
         }
     }
 
     fun onServerUrlChanged(url: String) {
-        serverUrl = url
+        _serverUrl.value = url
         if (connectionStatus is ConnectionStatus.Connected) {
-            connectionStatus = ConnectionStatus.Idle
+            _connectionStatus.value = ConnectionStatus.Idle
         }
     }
 
     fun onApiKeyChanged(key: String) {
-        apiKey = key
+        _apiKey.value = key
         if (connectionStatus is ConnectionStatus.Connected) {
-            connectionStatus = ConnectionStatus.Idle
+            _connectionStatus.value = ConnectionStatus.Idle
         }
     }
 
     fun testConnection() {
         if (serverUrl.isBlank() || apiKey.isBlank()) {
-            connectionStatus = ConnectionStatus.Error("Server URL and API key are required")
+            _connectionStatus.value = ConnectionStatus.Error("Server URL and API key are required")
             return
         }
-        viewModelScope.launch {
-            isTesting = true
+        launch {
+            _isTesting.value = true
             try {
-                // Save credentials first so testConnection can use them
                 seerrPreferencesStore.setServerUrl(serverUrl)
                 seerrPreferencesStore.setApiKey(apiKey)
 
                 seerrRepository.testConnection()
                     .onSuccess { response ->
-                        connectionStatus = ConnectionStatus.Connected(response.version, true)
+                        _connectionStatus.value = ConnectionStatus.Connected(response.version, true)
                     }
                     .onFailure { error ->
-                        connectionStatus = ConnectionStatus.Error(
+                        _connectionStatus.value = ConnectionStatus.Error(
                             error.message ?: "Connection failed"
                         )
                     }
             } catch (e: Exception) {
-                connectionStatus = ConnectionStatus.Error(
+                _connectionStatus.value = ConnectionStatus.Error(
                     e.message ?: "Unexpected error occurred"
                 )
             }
-            isTesting = false
+            _isTesting.value = false
         }
     }
 
     fun setEnabled(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setEnabled(enabled) }
+        launch { seerrPreferencesStore.setEnabled(enabled) }
     }
 
     fun setSearchEnabled(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setSearchEnabled(enabled) }
+        launch { seerrPreferencesStore.setSearchEnabled(enabled) }
     }
 
     fun setRecommendationsEnabled(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setRecommendationsEnabled(enabled) }
+        launch { seerrPreferencesStore.setRecommendationsEnabled(enabled) }
     }
 
     fun setDiscoverEnabled(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverEnabled(enabled) }
+        launch { seerrPreferencesStore.setDiscoverEnabled(enabled) }
     }
 
     fun setDiscoverTrending(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverTrending(enabled) }
+        launch { seerrPreferencesStore.setDiscoverTrending(enabled) }
     }
 
     fun setDiscoverPopularMovies(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverPopularMovies(enabled) }
+        launch { seerrPreferencesStore.setDiscoverPopularMovies(enabled) }
     }
 
     fun setDiscoverPopularTv(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverPopularTv(enabled) }
+        launch { seerrPreferencesStore.setDiscoverPopularTv(enabled) }
     }
 
     fun setDiscoverUpcomingMovies(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverUpcomingMovies(enabled) }
+        launch { seerrPreferencesStore.setDiscoverUpcomingMovies(enabled) }
     }
 
     fun setDiscoverUpcomingTv(enabled: Boolean) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverUpcomingTv(enabled) }
+        launch { seerrPreferencesStore.setDiscoverUpcomingTv(enabled) }
     }
 
     fun setStreamingRegion(region: String) {
-        viewModelScope.launch { seerrPreferencesStore.setStreamingRegion(region) }
+        launch { seerrPreferencesStore.setStreamingRegion(region) }
     }
 
     fun setDiscoverRegion(region: String) {
-        viewModelScope.launch { seerrPreferencesStore.setDiscoverRegion(region) }
+        launch { seerrPreferencesStore.setDiscoverRegion(region) }
     }
 
     fun disconnect() {
-        viewModelScope.launch {
+        launch {
             seerrPreferencesStore.disconnect()
-            serverUrl = ""
-            apiKey = ""
-            connectionStatus = ConnectionStatus.Idle
+            _serverUrl.value = ""
+            _apiKey.value = ""
+            _connectionStatus.value = ConnectionStatus.Idle
         }
     }
 

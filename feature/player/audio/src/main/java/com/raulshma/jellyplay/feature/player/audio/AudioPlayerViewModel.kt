@@ -1,13 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
@@ -19,7 +13,9 @@ import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +23,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -35,148 +30,196 @@ class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val preferencesStore: UserPreferencesStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
+    private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
     private val sleepTimerManager: SleepTimerManager,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
     val preferences = preferencesStore.preferences
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
-    var title by mutableStateOf("")
+    var title by composeState("")
         private set
-    var artist by mutableStateOf("")
+    var artist by composeState("")
         private set
-    var album by mutableStateOf("")
+    var album by composeState("")
         private set
-    var albumArtUrl by mutableStateOf("")
+    var albumArtUrl by composeState("")
         private set
-    var albumArtBlurHash by mutableStateOf<String?>(null)
+    var albumArtBlurHash by composeState<String?>(null)
         private set
-    var isPlaying by mutableStateOf(false)
+    var isPlaying by composeState(false)
         private set
-    var currentPosition by mutableLongStateOf(0L)
+    var currentPosition by composeLongState(0L)
         private set
-    var duration by mutableLongStateOf(0L)
+    var duration by composeLongState(0L)
         private set
-    var speed by mutableFloatStateOf(1.0f)
+    var speed by composeFloatState(1.0f)
         private set
-    var shuffleMode by mutableStateOf(false)
+    var shuffleMode by composeState(false)
         private set
-    var repeatMode by mutableIntStateOf(0)
-        private set
-
-    var nightModeVolume by mutableFloatStateOf(0.4f)
-        private set
-    var nightModeGain by mutableStateOf(1200)
-        private set
-    var skipPreviousThresholdMs by mutableLongStateOf(3_000L)
+    var repeatMode by composeIntState(0)
         private set
 
-    var crossfadeDurationMs by mutableLongStateOf(0L)
+    var nightModeVolume by composeFloatState(0.4f)
+        private set
+    var nightModeGain by composeState(1200)
+        private set
+    var skipPreviousThresholdMs by composeLongState(3_000L)
         private set
 
-    var queue by mutableStateOf<List<AudioQueueItem>>(emptyList())
-        private set
-    var currentIndex by mutableIntStateOf(-1)
+    var crossfadeDurationMs by composeLongState(0L)
         private set
 
-    var nightModeEnabled by mutableStateOf(false)
+    var queue by composeState<List<AudioQueueItem>>(emptyList())
+        private set
+    var currentIndex by composeIntState(-1)
         private set
 
-    var dialogueBoostEnabled by mutableStateOf(false)
+    var nightModeEnabled by composeState(false)
         private set
 
-    private var _dialogueBoostStrength = mutableStateOf(EffectStrength.MODERATE)
+    var dialogueBoostEnabled by composeState(false)
+        private set
+
+    private var _dialogueBoostStrength = composeState(EffectStrength.MODERATE)
     val dialogueBoostStrength: EffectStrength by _dialogueBoostStrength
 
-    private var _nightModeStrength = mutableStateOf(EffectStrength.MODERATE)
+    private var _nightModeStrength = composeState(EffectStrength.MODERATE)
     val nightModeStrength: EffectStrength by _nightModeStrength
 
-    var equalizerEnabled by mutableStateOf(false)
+    var equalizerEnabled by composeState(false)
         private set
 
-    var equalizerSettings by mutableStateOf(com.raulshma.jellyplay.core.model.EqualizerSettings())
+    var equalizerSettings by composeState(com.raulshma.jellyplay.core.model.EqualizerSettings())
         private set
 
-    var equalizerPreset by mutableStateOf(EqualizerPreset.FLAT)
+    var equalizerPreset by composeState(EqualizerPreset.FLAT)
         private set
 
-    var bassBoostEnabled by mutableStateOf(false)
+    var bassBoostEnabled by composeState(false)
         private set
 
-    private var _bassBoostStrength = mutableStateOf(EffectStrength.MODERATE)
+    private var _bassBoostStrength = composeState(EffectStrength.MODERATE)
     val bassBoostStrength: EffectStrength by _bassBoostStrength
 
-    var virtualizerEnabled by mutableStateOf(false)
+    var virtualizerEnabled by composeState(false)
         private set
 
-    var virtualizerStrength by mutableStateOf(500)
+    var virtualizerStrength by composeState(500)
         private set
 
-    var reverbPreset by mutableStateOf(ReverbPreset.NONE)
+    var reverbPreset by composeState(ReverbPreset.NONE)
         private set
 
-    var lrBalance by mutableFloatStateOf(0f)
+    var lrBalance by composeFloatState(0f)
         private set
 
-    var pitchSemitones by mutableFloatStateOf(0f)
+    var pitchSemitones by composeFloatState(0f)
         private set
 
-    var autoEqByGenre by mutableStateOf(false)
+    var autoEqByGenre by composeState(false)
         private set
 
-    private val _fftData = MutableStateFlow(ByteArray(0))
-    val fftData: StateFlow<ByteArray> = _fftData.asStateFlow()
+    private val _fftData = stateFlow(ByteArray(0))
+    val fftData: StateFlow<ByteArray> = _fftData.flow
 
-    var normalizationMode by mutableStateOf(AudioNormalizationMode.NONE)
-        private set
-
-    var preAmpDb by mutableFloatStateOf(0f)
+    var normalizationMode by composeState(AudioNormalizationMode.NONE)
         private set
 
-    var isFavorite by mutableStateOf(false)
+    var preAmpDb by composeFloatState(0f)
         private set
 
-    var lyrics by mutableStateOf<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
+    var isFavorite by composeState(false)
         private set
 
-    var currentLyricIndex by mutableIntStateOf(-1)
+    var playbackError by composeState<String?>(null)
         private set
 
-    var lyricsSource by mutableStateOf(LyricsSource.UNKNOWN)
+    var isLoading by composeState(false)
         private set
 
-    var isFetchingLyrics by mutableStateOf(false)
+    var lyrics by composeState<List<com.raulshma.jellyplay.core.model.LyricsLine>>(emptyList())
         private set
 
-    var lyricsSearchResults by mutableStateOf<List<LrcLibTrack>>(emptyList())
+    var currentLyricIndex by composeIntState(-1)
         private set
 
-    var isSearchingLyrics by mutableStateOf(false)
+    var lyricsSource by composeState(LyricsSource.UNKNOWN)
         private set
 
-    var sleepTimerActive by mutableStateOf(false)
+    var isFetchingLyrics by composeState(false)
         private set
-    var sleepTimerEndOfEpisode by mutableStateOf(false)
+
+    var lyricsSearchResults by composeState<List<LrcLibTrack>>(emptyList())
         private set
-    var sleepTimerRemainingMs by mutableLongStateOf(0L)
+
+    var isSearchingLyrics by composeState(false)
         private set
-    var sleepTimerLastUsedDurationMs by mutableLongStateOf(0L)
+
+    var karaokeMode by composeState(false)
         private set
+
+    fun setKaraokeModeEnabled(enabled: Boolean) {
+        karaokeMode = enabled
+    }
+
+    fun toggleKaraokeMode() {
+        karaokeMode = !karaokeMode
+    }
+
+    val hasKaraokeLyrics: Boolean
+        get() = lyrics.any { it.words.isNotEmpty() }
+
+    var sleepTimerActive by composeState(false)
+        private set
+    var sleepTimerEndOfEpisode by composeState(false)
+        private set
+    var sleepTimerRemainingMs by composeLongState(0L)
+        private set
+    var sleepTimerLastUsedDurationMs by composeLongState(0L)
+        private set
+
+    private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
+    val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
+
+    private var downloadJob: Job? = null
 
     init {
-        viewModelScope.launch {
+        launch {
+            audioPlaybackManager.currentPlayingItemId.collect { itemId ->
+                downloadJob?.cancel()
+                if (itemId != null) {
+                    downloadJob = launch {
+                        downloadRepository.getDownloadByMediaItemIdFlow(itemId).collect { download ->
+                            _currentDownloadItem.set(download)
+                        }
+                    }
+                } else {
+                    _currentDownloadItem.set(null)
+                }
+            }
+        }
+
+        launch {
             audioPlaybackManager.title.collect { title = it }
         }
-        viewModelScope.launch {
+        launch {
+            audioPlaybackManager.playbackError.collect { playbackError = it }
+        }
+        launch {
+            audioPlaybackManager.isLoadingItem.collect { isLoading = it }
+        }
+        launch {
             audioPlaybackManager.artist.collect { artist = it }
         }
-        viewModelScope.launch {
+        launch {
             audioPlaybackManager.album.collect { album = it }
         }
-        viewModelScope.launch {
+        launch {
             audioPlaybackManager.albumArtUrl.collect { albumArtUrl = it }
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.isPlaying,
                 audioPlaybackManager.currentPosition,
@@ -189,7 +232,7 @@ class AudioPlayerViewModel @Inject constructor(
                 speed = spd
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.shuffleMode,
                 audioPlaybackManager.repeatMode,
@@ -202,7 +245,7 @@ class AudioPlayerViewModel @Inject constructor(
                 currentIndex = idx
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             audioPlaybackManager.currentPlayingItemId.collect { itemId ->
                 if (itemId != null) {
                     mediaRepository.getMediaDetail(itemId)
@@ -212,7 +255,7 @@ class AudioPlayerViewModel @Inject constructor(
                 }
             }
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.lyrics,
                 audioPlaybackManager.currentLyricIndex,
@@ -225,7 +268,7 @@ class AudioPlayerViewModel @Inject constructor(
                 isFetchingLyrics = fetching
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.nightModeEnabled,
                 audioPlaybackManager.dialogueBoostEnabled,
@@ -240,7 +283,7 @@ class AudioPlayerViewModel @Inject constructor(
                 equalizerPreset = eqPre
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.bassBoostEnabled,
                 audioPlaybackManager.virtualizerEnabled,
@@ -253,7 +296,7 @@ class AudioPlayerViewModel @Inject constructor(
                 reverbPreset = rev
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.lrBalance,
                 audioPlaybackManager.pitchSemitones,
@@ -263,10 +306,10 @@ class AudioPlayerViewModel @Inject constructor(
                 lrBalance = lr
                 pitchSemitones = pitch
                 autoEqByGenre = autoEq
-                _fftData.value = fft
+                _fftData.set(fft)
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 audioPlaybackManager.crossfadeDurationMs,
                 audioPlaybackManager.replayGainMode,
@@ -277,12 +320,12 @@ class AudioPlayerViewModel @Inject constructor(
                 preAmpDb = pre
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             sleepTimerManager.remainingMs.collect { remaining ->
                 sleepTimerRemainingMs = remaining
             }
         }
-        viewModelScope.launch {
+        launch {
             combine(
                 sleepTimerManager.isActive,
                 sleepTimerManager.isEndOfEpisodeMode,
@@ -291,7 +334,7 @@ class AudioPlayerViewModel @Inject constructor(
                 sleepTimerEndOfEpisode = endOfEpisode
             }.collect {}
         }
-        viewModelScope.launch {
+        launch {
             preferencesStore.preferences.collect { prefs ->
                 sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs
             }
@@ -301,7 +344,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun play(itemId: String) {
         audioPlaybackManager.play(itemId)
 
-        viewModelScope.launch {
+        launch {
             val prefs = preferencesStore.preferences.first()
             if (prefs.audioDefaultSpeed != 1.0f) {
                 audioPlaybackManager.changePlaybackSpeed(prefs.audioDefaultSpeed)
@@ -337,7 +380,7 @@ class AudioPlayerViewModel @Inject constructor(
             albumArtBlurHash = blurHashCache.get(itemId)
             return
         }
-        viewModelScope.launch {
+        launch {
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     val hash = detail.item.blurHashes.primary
@@ -394,7 +437,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun toggleDialogueBoost() {
         audioPlaybackManager.toggleDialogueBoost()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setDialogueBoostEnabled(dialogueBoostEnabled)
         }
     }
@@ -402,14 +445,14 @@ class AudioPlayerViewModel @Inject constructor(
     fun setDialogueBoostStrength(strength: EffectStrength) {
         _dialogueBoostStrength.value = strength
         audioPlaybackManager.setDialogueBoostStrength(strength)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setDialogueBoostStrength(strength)
         }
     }
 
     fun toggleNightMode() {
         audioPlaybackManager.toggleNightMode()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setNightModeEnabled(nightModeEnabled)
         }
     }
@@ -417,42 +460,42 @@ class AudioPlayerViewModel @Inject constructor(
     fun setNightModeStrength(strength: EffectStrength) {
         _nightModeStrength.value = strength
         audioPlaybackManager.setNightModeStrength(strength)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setNightModeStrength(strength)
         }
     }
 
     fun setReplayGainMode(mode: AudioNormalizationMode) {
         audioPlaybackManager.setReplayGainMode(mode)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setAudioNormalizationMode(mode)
         }
     }
 
     fun setReplayGainPreAmpDb(db: Float) {
         audioPlaybackManager.setReplayGainPreAmpDb(db)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setReplayGainPreAmpDb(db)
         }
     }
 
     fun toggleEqualizer() {
         audioPlaybackManager.toggleEqualizer()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setEqualizerEnabled(equalizerEnabled)
         }
     }
 
     fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
         audioPlaybackManager.setEqualizerBand(bandIndex, levelDb)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setEqualizerSettings(equalizerSettings)
         }
     }
 
     fun resetEqualizer() {
         audioPlaybackManager.resetEqualizer()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setEqualizerSettings(equalizerSettings)
             preferencesStore.setEqualizerPreset(equalizerPreset)
         }
@@ -460,7 +503,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun applyEqualizerPreset(preset: EqualizerPreset) {
         audioPlaybackManager.setEqualizerPreset(preset)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setEqualizerPreset(preset)
             preferencesStore.setEqualizerSettings(equalizerSettings)
         }
@@ -468,7 +511,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun toggleBassBoost() {
         audioPlaybackManager.toggleBassBoost()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setBassBoostEnabled(bassBoostEnabled)
         }
     }
@@ -476,49 +519,49 @@ class AudioPlayerViewModel @Inject constructor(
     fun setBassBoostStrength(strength: EffectStrength) {
         _bassBoostStrength.value = strength
         audioPlaybackManager.setBassBoostStrength(strength)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setBassBoostStrength(strength)
         }
     }
 
     fun toggleVirtualizer() {
         audioPlaybackManager.toggleVirtualizer()
-        viewModelScope.launch {
+        launch {
             preferencesStore.setVirtualizerEnabled(virtualizerEnabled)
         }
     }
 
     fun applyVirtualizerStrength(strength: Int) {
         audioPlaybackManager.setVirtualizerStrength(strength)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setVirtualizerStrength(strength)
         }
     }
 
     fun applyReverbPreset(preset: ReverbPreset) {
         audioPlaybackManager.setReverbPreset(preset)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setReverbPreset(preset)
         }
     }
 
     fun applyLrBalance(balance: Float) {
         audioPlaybackManager.setLrBalance(balance)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setLrBalance(balance)
         }
     }
 
     fun applyPitchSemitones(semitones: Float) {
         audioPlaybackManager.setPitchSemitones(semitones)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setPitchSemitones(semitones)
         }
     }
 
     fun applyAutoEqByGenre(enabled: Boolean) {
         audioPlaybackManager.setAutoEqByGenre(enabled)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setAutoEqByGenre(enabled)
         }
     }
@@ -545,20 +588,20 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun updateCrossfadeDuration(ms: Long) {
         audioPlaybackManager.setCrossfadeDurationMs(ms)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setCrossfadeDurationMs(ms)
         }
     }
 
     fun updateGaplessPlayback(enabled: Boolean) {
         audioPlaybackManager.setGaplessEnabled(enabled)
-        viewModelScope.launch {
+        launch {
             preferencesStore.setGaplessEnabled(enabled)
         }
     }
 
     fun startSleepTimer(durationMs: Long) {
-        viewModelScope.launch {
+        launch {
             preferencesStore.setSleepTimerDurationMs(durationMs)
             preferencesStore.setSleepTimerEndOfEpisode(false)
         }
@@ -572,7 +615,7 @@ class AudioPlayerViewModel @Inject constructor(
     }
 
     fun startSleepTimerEndOfEpisode() {
-        viewModelScope.launch {
+        launch {
             preferencesStore.setSleepTimerEndOfEpisode(true)
         }
         sleepTimerManager.setOnTimerExpired {
@@ -600,7 +643,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun toggleFavorite() {
         val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
-        viewModelScope.launch {
+        launch {
             mediaRepository.toggleFavorite(itemId)
                 .onSuccess { isFavorite = it }
         }
@@ -610,6 +653,46 @@ class AudioPlayerViewModel @Inject constructor(
         get() = audioPlaybackManager.currentPlayingItemId.value
 
     private fun keySentinel(id: String) = "§null§$id"
+
+    fun downloadCurrentTrack() {
+        val itemId = currentPlayingItemId ?: return
+        val existing = _currentDownloadItem.value
+        if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
+            launch {
+                downloadRepository.deleteDownload(existing.id)
+            }
+            return
+        }
+        launch {
+            try {
+                val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return@launch
+                val item = detail.item
+                val source = detail.mediaSources.firstOrNull() ?: return@launch
+                val streamUrl = playbackRepository.getStreamUrl(itemId, source.id)
+                if (streamUrl.isBlank()) return@launch
+                val imageUrl = playbackRepository.getImageUrl(itemId, maxWidth = 300)
+                val mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO.name
+
+                downloadRepository.startDownload(
+                    mediaItemId = itemId,
+                    name = item.name,
+                    mediaType = mediaType,
+                    mediaSourceId = source.id,
+                    downloadUrl = streamUrl,
+                    imageUrl = imageUrl,
+                    imageBlurHash = item.blurHashes.primary,
+                ).onSuccess { downloadItem ->
+                    if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                        downloadRepository.enqueueDownload(downloadItem.id)
+                        try {
+                            val backdropUrl = playbackRepository.getBackdropUrl(itemId, maxWidth = 1280)
+                            downloadRepository.saveOfflineMediaItem(item, imageUrl, backdropUrl)
+                        } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

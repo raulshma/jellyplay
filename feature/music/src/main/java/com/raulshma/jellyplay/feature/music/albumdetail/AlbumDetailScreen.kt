@@ -24,8 +24,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -46,11 +56,13 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumDetailScreen(
     albumId: String,
@@ -63,6 +75,17 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
+    val trackDownloads by viewModel.trackDownloads.collectAsStateWithLifecycle()
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            viewModel.loadAlbum(albumId)
+            isRefreshing = false
+        },
+    ) {
     when {
         viewModel.isLoading -> {
             ScreenLoadingState()
@@ -78,6 +101,7 @@ fun AlbumDetailScreen(
                 AlbumDetailContent(
                     detail = viewModel.detail!!,
                     tracks = viewModel.tracks,
+                    trackDownloads = trackDownloads,
                     getImageUrl = { viewModel.getImageUrl(it) },
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onTrackClick = onTrackClick,
@@ -88,11 +112,15 @@ fun AlbumDetailScreen(
                         }
                     },
                     onAddToQueue = { track -> viewModel.addToQueue(track) },
+                    onDownloadTrack = { track -> viewModel.downloadTrack(track) },
+                    onDownloadAlbum = { viewModel.downloadAlbum() },
+                    onDeleteAlbum = { viewModel.deleteAlbumDownloads() },
                     onArtistClick = onArtistClick,
                     onBack = onBack,
                 )
             }
         }
+    }
     }
 }
 
@@ -100,11 +128,15 @@ fun AlbumDetailScreen(
 private fun AlbumDetailContent(
     detail: MediaDetail,
     tracks: List<MediaItem>,
+    trackDownloads: Map<String, DownloadItem>,
     getImageUrl: (String) -> String,
     getBackdropUrl: (String) -> String,
     onTrackClick: (String) -> Unit,
     onPlayAlbum: (List<MediaItem>, Int) -> Unit,
     onAddToQueue: (MediaItem) -> Unit,
+    onDownloadTrack: (MediaItem) -> Unit,
+    onDownloadAlbum: () -> Unit,
+    onDeleteAlbum: () -> Unit,
     onArtistClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -168,12 +200,14 @@ private fun AlbumDetailContent(
                     )
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        item.albumArtist?.let {
+                        item.albumArtist?.let { artistName ->
+                            val artistId = item.artistItems.firstOrNull()?.id
                             Text(
-                                text = it,
+                                text = artistName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.tvFocusable().clickable {
+                                    if (artistId != null) onArtistClick(artistId)
                                 },
                             )
                         }
@@ -188,7 +222,10 @@ private fun AlbumDetailContent(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Button(
                             onClick = {
                                 if (tracks.isNotEmpty()) {
@@ -201,6 +238,39 @@ private fun AlbumDetailContent(
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
                             Text("Play All")
+                        }
+
+                        val allDownloaded = remember(tracks, trackDownloads) {
+                            tracks.isNotEmpty() && tracks.all { trackDownloads[it.id]?.status == DownloadStatus.COMPLETED }
+                        }
+                        val anyDownloading = remember(tracks, trackDownloads) {
+                            tracks.any { trackDownloads[it.id]?.status == DownloadStatus.DOWNLOADING || trackDownloads[it.id]?.status == DownloadStatus.PENDING }
+                        }
+
+                        androidx.compose.material3.IconButton(
+                            onClick = {
+                                if (allDownloaded) {
+                                    onDeleteAlbum()
+                                } else {
+                                    onDownloadAlbum()
+                                }
+                            },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                .size(40.dp)
+                        ) {
+                            if (anyDownloading) {
+                                JellyPlayCircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (allDownloaded) Tabler.Outline.Check else Tabler.Outline.Download,
+                                    contentDescription = "Download Album",
+                                    tint = if (allDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -228,8 +298,10 @@ private fun AlbumDetailContent(
                     track = track,
                     index = index + 1,
                     imageUrl = getImageUrl(track.id),
+                    downloadItem = trackDownloads[track.id],
                     onClick = { onTrackClick(track.id) },
                     onAddToQueue = { onAddToQueue(track) },
+                    onDownloadClick = { onDownloadTrack(track) },
                 )
             }
 
@@ -245,8 +317,10 @@ private fun TrackItem(
     track: MediaItem,
     index: Int,
     imageUrl: String,
+    downloadItem: DownloadItem?,
     onClick: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
+    onDownloadClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -293,6 +367,35 @@ private fun TrackItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+
+        if (onDownloadClick != null) {
+            androidx.compose.material3.IconButton(onClick = onDownloadClick) {
+                if (downloadItem?.status == DownloadStatus.DOWNLOADING || downloadItem?.status == DownloadStatus.PENDING) {
+                    val progressVal = if (downloadItem.totalSizeBytes > 0) {
+                        downloadItem.downloadedBytes.toFloat() / downloadItem.totalSizeBytes
+                    } else 0f
+                    if (progressVal > 0f) {
+                        JellyPlayCircularProgressIndicator(
+                            progress = { progressVal },
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    Icon(
+                        imageVector = if (downloadItem?.status == DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
+                        contentDescription = "Download Track",
+                        tint = if (downloadItem?.status == DownloadStatus.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 

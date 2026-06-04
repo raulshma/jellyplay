@@ -101,11 +101,6 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    if (state.homeMode == HomeMode.MUSIC) {
-        musicContent()
-        return
-    }
-
     MainHomeContent(
         state = state,
         viewModel = viewModel,
@@ -120,6 +115,7 @@ fun HomeScreen(
         onSearchItemClick = onSearchItemClick,
         onSearchSeerrClick = onSearchSeerrClick,
         onNewsletterClick = onNewsletterClick,
+        musicContent = musicContent,
     )
 }
 
@@ -138,6 +134,7 @@ private fun MainHomeContent(
     onSearchItemClick: (String) -> Unit,
     onSearchSeerrClick: (Int, String) -> Unit,
     onNewsletterClick: () -> Unit = {},
+    musicContent: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -326,13 +323,33 @@ private fun MainHomeContent(
                     )
                 }
                 state.offlineMode != OfflineMode.ONLINE -> {
+                    val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
+                        if (state.homeMode == HomeMode.MUSIC) {
+                            state.offlineLibrary.filter {
+                                it.mediaType == MediaType.AUDIO ||
+                                it.mediaType == MediaType.MUSIC ||
+                                it.mediaType == MediaType.ALBUM ||
+                                it.mediaType == MediaType.ARTIST
+                            }
+                        } else {
+                            state.offlineLibrary.filter {
+                                it.mediaType != MediaType.AUDIO &&
+                                it.mediaType != MediaType.MUSIC &&
+                                it.mediaType != MediaType.ALBUM &&
+                                it.mediaType != MediaType.ARTIST
+                            }
+                        }
+                    }
                     OfflineHomeContent(
-                        offlineLibrary = state.offlineLibrary,
+                        offlineLibrary = filteredOfflineLibrary,
                         onItemClick = onOfflineLibraryClick,
                         contentPadding = contentPad,
                         backgroundColor = backgroundColor,
                         onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
                     )
+                }
+                state.homeMode == HomeMode.MUSIC -> {
+                    musicContent()
                 }
                 else -> {
                     HomeContentList(

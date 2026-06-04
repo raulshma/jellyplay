@@ -109,11 +109,13 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         val id = UUID.randomUUID().toString()
-        val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-            ?: File(context.filesDir, "downloads")
+        val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
+        val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
+        val dir = context.getExternalFilesDir(dirType)
+            ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
         if (!dir.exists()) dir.mkdirs()
         val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
-        val extension = if (mediaType == MediaType.AUDIO.name) "mp3" else "mp4"
+        val extension = if (isAudioType) "mp3" else "mp4"
         val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
 
         val entity = DownloadEntity(
@@ -361,6 +363,10 @@ class DownloadRepositoryImpl @Inject constructor(
         offlineMediaDao.upsert(entity)
         preloadImageToCache(imageUrl)
         preloadImageToCache(backdropUrl)
+    }
+
+    override fun enqueueDownload(downloadId: String) {
+        enqueueDownloadWorker(downloadId)
     }
 
     private fun enqueueDownloadWorker(downloadId: String) {

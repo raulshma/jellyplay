@@ -55,6 +55,20 @@ class PlaybackRepositoryImpl @Inject constructor(
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long): String =
         apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks)
 
+    override fun getStreamUrl(
+        itemId: String,
+        mediaSourceId: String,
+        startTimeTicks: Long,
+        maxBitrate: Int?,
+        useAudioEndpoint: Boolean,
+    ): String = apiClient.getStreamUrl(
+        itemId = itemId,
+        mediaSourceId = mediaSourceId,
+        startTimeTicks = startTimeTicks,
+        maxBitrate = maxBitrate,
+        useAudioEndpoint = useAudioEndpoint,
+    )
+
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =
         apiClient.getSubtitleDeliveryUrl(deliveryUrl)
 

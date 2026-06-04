@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,8 +21,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +53,7 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun OfflineLibraryScreen(
     onItemClick: (String) -> Unit,
-    onPlayOffline: (itemId: String) -> Unit,
+    onPlayOffline: (itemId: String, mediaType: MediaType) -> Unit,
     onBack: () -> Unit,
     viewModel: OfflineLibraryViewModel = hiltViewModel(),
 ) {
@@ -54,6 +61,15 @@ fun OfflineLibraryScreen(
     val isLoading = viewModel.isLoading
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv = false)
+
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val filteredItems = remember(items, selectedTab) {
+        when (selectedTab) {
+            1 -> items.filter { it.mediaType == MediaType.SERIES || it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SEASON || it.mediaType == MediaType.EPISODE }
+            2 -> items.filter { it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.MUSIC || it.mediaType == MediaType.ALBUM || it.mediaType == MediaType.ARTIST }
+            else -> items
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = "Downloaded",
@@ -67,28 +83,63 @@ fun OfflineLibraryScreen(
                 title = "No downloaded content yet",
             )
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 150.dp),
-                contentPadding = PaddingValues(
-                    start = contentPad,
-                    end = contentPad,
-                    top = 8.dp,
-                    bottom = adaptiveInfo.bottomPadding(isTv = false),
-                ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(items, key = { it.id }) { item ->
-                    OfflineMediaCard(
-                        item = item,
-                        onClick = {
-                            if (item.mediaType == MediaType.SERIES) {
-                                onItemClick(item.id)
-                            } else {
-                                onPlayOffline(item.id)
-                            }
-                        },
+            Column(modifier = Modifier.fillMaxSize()) {
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    modifier = Modifier.padding(horizontal = contentPad),
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("All") },
                     )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Videos") },
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text("Music") },
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (filteredItems.isEmpty()) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Download,
+                            title = "No downloaded items in this category",
+                        )
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 150.dp),
+                        contentPadding = PaddingValues(
+                            start = contentPad,
+                            end = contentPad,
+                            top = 8.dp,
+                            bottom = adaptiveInfo.bottomPadding(isTv = false),
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(filteredItems, key = { it.id }) { item ->
+                            OfflineMediaCard(
+                                item = item,
+                                onClick = {
+                                    if (item.mediaType == MediaType.SERIES) {
+                                        onItemClick(item.id)
+                                    } else {
+                                        onPlayOffline(item.id, item.mediaType)
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -141,63 +192,87 @@ private fun OfflineMediaCard(
             modifier = Modifier.padding(top = 6.dp),
         )
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 2.dp),
-        ) {
-            if (item.year != null) {
+        val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC
+        if (isAudio) {
+            item.seriesName?.let { artist ->
                 Text(
-                    text = item.year.toString(),
+                    text = artist,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
-            if (item.communityRating != null && item.communityRating!! > 0) {
+            item.seasonName?.let { album ->
+                Text(
+                    text = album,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
                 if (item.year != null) {
                     Text(
-                        text = " · ",
+                        text = item.year.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                if (item.communityRating != null && item.communityRating!! > 0) {
+                    if (item.year != null) {
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        )
+                    }
+                    Icon(
+                        Tabler.Outline.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(10.dp),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        text = String.format("%.1f", item.communityRating),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                if (item.officialRating != null) {
+                    Text(
+                        text = " · ${item.officialRating}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     )
                 }
-                Icon(
-                    Tabler.Outline.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(10.dp),
-                    tint = MaterialTheme.colorScheme.tertiary,
-                )
-                Spacer(Modifier.width(2.dp))
+            }
+
+            if (item.mediaType == MediaType.SERIES && item.childCount > 0) {
                 Text(
-                    text = String.format("%.1f", item.communityRating),
+                    text = "${item.childCount} episodes",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
             }
-            if (item.officialRating != null) {
+
+            if (item.genres.isNotEmpty()) {
                 Text(
-                    text = " · ${item.officialRating}",
+                    text = item.genres.take(3).joinToString(", "),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-
-        if (item.mediaType == MediaType.SERIES && item.childCount > 0) {
-            Text(
-                text = "${item.childCount} episodes",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            )
-        }
-
-        if (item.genres.isNotEmpty()) {
-            Text(
-                text = item.genres.take(3).joinToString(", "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }

@@ -75,10 +75,12 @@ data class DownloadEntity(
     tableName = "lyrics_cache",
     indices = [
         Index(value = ["fetchedAt"]),
+        Index(value = ["itemId", "provider"], unique = true),
     ],
 )
 data class LyricsCacheEntity(
-    @PrimaryKey val itemId: String,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val itemId: String,
     val provider: String,
     val artistName: String? = null,
     val trackName: String? = null,

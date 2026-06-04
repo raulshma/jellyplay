@@ -2,10 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -15,7 +12,6 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -28,19 +24,18 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.SubtitleColor
-import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -53,58 +48,58 @@ class SettingsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val mediaRepository: MediaRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var preferences by mutableStateOf(UserPreferences())
+    var preferences by composeState(UserPreferences())
         private set
 
-    var currentUserName by mutableStateOf("")
+    var currentUserName by composeState("")
         private set
 
-    var cacheSizeMb by mutableStateOf(0L)
+    var cacheSizeMb by composeState(0L)
         private set
 
     val appVersion: String by lazy {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
     }
 
-    var currentUser by mutableStateOf<UserInfo?>(null)
+    var currentUser by composeState<UserInfo?>(null)
         private set
 
-    var currentServerUsers by mutableStateOf<List<UserInfo>>(emptyList())
+    var currentServerUsers by composeState<List<UserInfo>>(emptyList())
         private set
 
-    var isLoadingUsers by mutableStateOf(false)
+    var isLoadingUsers by composeState(false)
         private set
 
-    var libraryFolders by mutableStateOf<List<LibraryFolder>>(emptyList())
+    var libraryFolders by composeState<List<LibraryFolder>>(emptyList())
         private set
 
-    var isLoadingLibraries by mutableStateOf(false)
+    var isLoadingLibraries by composeState(false)
         private set
 
     val currentServerAddress = authRepository.currentServer
         .map { it?.address ?: "" }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), "")
 
-    var activeSessions by mutableStateOf<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
+    var activeSessions by composeState<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
         private set
 
-    var isLoadingSessions by mutableStateOf(false)
+    var isLoadingSessions by composeState(false)
         private set
 
-    var messageSentEvent by mutableStateOf<String?>(null)
+    var messageSentEvent by composeState<String?>(null)
         private set
 
-    private var sessionRefreshJob: kotlinx.coroutines.Job? = null
+    private var sessionRefreshJob: Job? = null
 
     init {
-        viewModelScope.launch {
+        launch {
             preferencesStore.preferences.collect { prefs ->
                 preferences = prefs
             }
         }
-        viewModelScope.launch {
+        launch {
             authRepository.currentUser.collect { user ->
                 currentUser = user
                 currentUserName = user?.name ?: ""
@@ -117,7 +112,7 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
-        viewModelScope.launch {
+        launch {
             authRepository.currentServerUsers.collect { users ->
                 currentServerUsers = users
                 isLoadingUsers = false
@@ -128,7 +123,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun loadLibraryFolders() {
-        viewModelScope.launch {
+        launch {
             isLoadingLibraries = true
             mediaRepository.getLibraryFolders()
                 .onSuccess { folders ->
@@ -139,13 +134,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun loadSessions() {
-        viewModelScope.launch {
+        launch {
             isLoadingSessions = true
             apiClient.getSessions()
                 .onSuccess { sessions ->
                     val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
-                    activeSessions = sessions.filter { 
-                        val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (e: Exception) { java.time.Instant.MIN }
+                    activeSessions = sessions.filter {
+                        val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
                         it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
                         (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
                     }
@@ -156,14 +151,14 @@ class SettingsViewModel @Inject constructor(
 
     private fun startSessionAutoRefresh() {
         sessionRefreshJob?.cancel()
-        sessionRefreshJob = viewModelScope.launch {
+        sessionRefreshJob = launch {
             while (true) {
                 kotlinx.coroutines.delay(10_000)
                 apiClient.getSessions()
                     .onSuccess { sessions ->
                         val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
-                        activeSessions = sessions.filter { 
-                            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (e: Exception) { java.time.Instant.MIN }
+                        activeSessions = sessions.filter {
+                            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
                             it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
                             (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
                         }
@@ -173,7 +168,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun sendMessageToSession(sessionId: String, header: String, text: String) {
-        viewModelScope.launch {
+        launch {
             apiClient.sendMessageToSession(sessionId, header, text)
                 .onSuccess {
                     messageSentEvent = "Message sent successfully"
@@ -194,55 +189,55 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setDynamicTheming(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setDynamicTheming(enabled) }
+        launch { preferencesStore.setDynamicTheming(enabled) }
     }
 
     fun setAccentColorSwatch(swatch: String) {
-        viewModelScope.launch { preferencesStore.setAccentColorSwatch(swatch) }
+        launch { preferencesStore.setAccentColorSwatch(swatch) }
     }
 
     fun setColorStyle(style: ColorStyle) {
-        viewModelScope.launch { preferencesStore.setColorStyle(style) }
+        launch { preferencesStore.setColorStyle(style) }
     }
 
     fun setThemeMode(mode: ThemeMode) {
-        viewModelScope.launch { preferencesStore.setThemeMode(mode) }
+        launch { preferencesStore.setThemeMode(mode) }
     }
 
     fun setContrastLevel(level: ContrastLevel) {
-        viewModelScope.launch { preferencesStore.setContrastLevel(level) }
+        launch { preferencesStore.setContrastLevel(level) }
     }
 
     fun setOledMode(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setOledMode(enabled) }
+        launch { preferencesStore.setOledMode(enabled) }
     }
 
     fun setPreferredPlayer(playerType: PlayerType) {
-        viewModelScope.launch { preferencesStore.setPreferredPlayer(playerType) }
+        launch { preferencesStore.setPreferredPlayer(playerType) }
     }
 
     fun setPreferredAudioLanguage(language: String?) {
-        viewModelScope.launch { preferencesStore.setPreferredAudioLanguage(language) }
+        launch { preferencesStore.setPreferredAudioLanguage(language) }
     }
 
     fun setPreferredSubtitleLanguage(language: String?) {
-        viewModelScope.launch { preferencesStore.setPreferredSubtitleLanguage(language) }
+        launch { preferencesStore.setPreferredSubtitleLanguage(language) }
     }
 
     fun setStreamingQuality(quality: StreamingQuality) {
-        viewModelScope.launch { preferencesStore.setStreamingQuality(quality) }
+        launch { preferencesStore.setStreamingQuality(quality) }
     }
 
     fun setMaxCacheSize(sizeMb: Int) {
-        viewModelScope.launch { preferencesStore.setMaxCacheSize(sizeMb) }
+        launch { preferencesStore.setMaxCacheSize(sizeMb) }
     }
 
     fun setAutoDeleteCache(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAutoDeleteCache(enabled) }
+        launch { preferencesStore.setAutoDeleteCache(enabled) }
     }
 
     fun clearCache() {
-        viewModelScope.launch {
+        launch {
             try {
                 context.cacheDir.deleteRecursively()
                 val externalCache = context.externalCacheDir
@@ -255,7 +250,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun calculateCacheSize() {
-        viewModelScope.launch {
+        launch {
             val cacheSize = withContext(Dispatchers.IO) { getDirSize(context.cacheDir) }
             val externalCacheSize = withContext(Dispatchers.IO) {
                 context.externalCacheDir?.let { getDirSize(it) } ?: 0L
@@ -277,15 +272,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun logout() {
-        viewModelScope.launch { authRepository.logout() }
+        launch { authRepository.logout() }
     }
 
     fun setPinLockEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setPinLockEnabled(enabled) }
+        launch { preferencesStore.setPinLockEnabled(enabled) }
     }
 
     fun setPin(pin: String) {
-        viewModelScope.launch {
+        launch {
             val hash = preferencesStore.hashPin(pin)
             preferencesStore.setPinHash(hash)
             preferencesStore.setPinLockEnabled(true)
@@ -293,7 +288,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun clearPin() {
-        viewModelScope.launch {
+        launch {
             preferencesStore.setPinLockEnabled(false)
             preferencesStore.setPinHash(null)
         }
@@ -304,231 +299,231 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setBiometricLockEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setBiometricLockEnabled(enabled) }
+        launch { preferencesStore.setBiometricLockEnabled(enabled) }
     }
 
     fun setAutoLockTimerMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setAutoLockTimerMs(ms) }
+        launch { preferencesStore.setAutoLockTimerMs(ms) }
     }
 
     fun setDialogueBoostEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setDialogueBoostEnabled(enabled) }
+        launch { preferencesStore.setDialogueBoostEnabled(enabled) }
     }
 
     fun setDialogueBoostStrength(strength: EffectStrength) {
-        viewModelScope.launch { preferencesStore.setDialogueBoostStrength(strength) }
+        launch { preferencesStore.setDialogueBoostStrength(strength) }
     }
 
     fun setEqualizerEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setEqualizerEnabled(enabled) }
+        launch { preferencesStore.setEqualizerEnabled(enabled) }
     }
 
     fun setNightModeEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setNightModeEnabled(enabled) }
+        launch { preferencesStore.setNightModeEnabled(enabled) }
     }
 
     fun setNightModeStrength(strength: EffectStrength) {
-        viewModelScope.launch { preferencesStore.setNightModeStrength(strength) }
+        launch { preferencesStore.setNightModeStrength(strength) }
     }
 
     fun setBassBoostEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setBassBoostEnabled(enabled) }
+        launch { preferencesStore.setBassBoostEnabled(enabled) }
     }
 
     fun setBassBoostStrength(strength: EffectStrength) {
-        viewModelScope.launch { preferencesStore.setBassBoostStrength(strength) }
+        launch { preferencesStore.setBassBoostStrength(strength) }
     }
 
     fun setVirtualizerEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVirtualizerEnabled(enabled) }
+        launch { preferencesStore.setVirtualizerEnabled(enabled) }
     }
 
     fun setVirtualizerStrength(strength: Int) {
-        viewModelScope.launch { preferencesStore.setVirtualizerStrength(strength) }
+        launch { preferencesStore.setVirtualizerStrength(strength) }
     }
 
     fun setReverbPreset(preset: com.raulshma.jellyplay.core.model.ReverbPreset) {
-        viewModelScope.launch { preferencesStore.setReverbPreset(preset) }
+        launch { preferencesStore.setReverbPreset(preset) }
     }
 
     fun setAutoEqByGenre(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAutoEqByGenre(enabled) }
+        launch { preferencesStore.setAutoEqByGenre(enabled) }
     }
 
     fun setDecoderMode(mode: DecoderMode) {
-        viewModelScope.launch { preferencesStore.setDecoderMode(mode) }
+        launch { preferencesStore.setDecoderMode(mode) }
     }
 
     fun setAudioPassthrough(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAudioPassthrough(enabled) }
+        launch { preferencesStore.setAudioPassthrough(enabled) }
     }
 
     fun setFrameRateMatching(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setFrameRateMatching(enabled) }
+        launch { preferencesStore.setFrameRateMatching(enabled) }
     }
 
     fun switchUser(userId: String, onComplete: () -> Unit) {
-        viewModelScope.launch {
+        launch {
             authRepository.switchUser(userId)
             onComplete()
         }
     }
 
     fun removeUser(userId: String) {
-        viewModelScope.launch {
+        launch {
             authRepository.removeUser(userId)
         }
     }
 
     fun setVideoSeekDurationMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setVideoSeekDurationMs(ms) }
+        launch { preferencesStore.setVideoSeekDurationMs(ms) }
     }
 
     fun setVideoDefaultOrientation(mode: OrientationMode) {
-        viewModelScope.launch { preferencesStore.setVideoDefaultOrientation(mode) }
+        launch { preferencesStore.setVideoDefaultOrientation(mode) }
     }
 
     fun setVideoControlsTimeoutMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setVideoControlsTimeoutMs(ms) }
+        launch { preferencesStore.setVideoControlsTimeoutMs(ms) }
     }
 
     fun setVideoGesturesEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVideoGesturesEnabled(enabled) }
+        launch { preferencesStore.setVideoGesturesEnabled(enabled) }
     }
 
     fun setVideoDefaultSpeed(speed: Float) {
-        viewModelScope.launch { preferencesStore.setVideoDefaultSpeed(speed) }
+        launch { preferencesStore.setVideoDefaultSpeed(speed) }
     }
 
     fun setVideoDefaultAspectRatio(ratio: String) {
-        viewModelScope.launch { preferencesStore.setVideoDefaultAspectRatio(ratio) }
+        launch { preferencesStore.setVideoDefaultAspectRatio(ratio) }
     }
 
     fun setVideoAutoplayNext(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVideoAutoplayNext(enabled) }
+        launch { preferencesStore.setVideoAutoplayNext(enabled) }
     }
 
     fun setVideoSwipeSeekMaxMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setVideoSwipeSeekMaxMs(ms) }
+        launch { preferencesStore.setVideoSwipeSeekMaxMs(ms) }
     }
 
     fun setVideoRememberBrightness(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVideoRememberBrightness(enabled) }
+        launch { preferencesStore.setVideoRememberBrightness(enabled) }
     }
 
     fun setAudioDefaultSpeed(speed: Float) {
-        viewModelScope.launch { preferencesStore.setAudioDefaultSpeed(speed) }
+        launch { preferencesStore.setAudioDefaultSpeed(speed) }
     }
 
     fun setAudioNightModeVolume(volume: Float) {
-        viewModelScope.launch { preferencesStore.setAudioNightModeVolume(volume) }
+        launch { preferencesStore.setAudioNightModeVolume(volume) }
     }
 
     fun setAudioNightModeGain(gain: Int) {
-        viewModelScope.launch { preferencesStore.setAudioNightModeGain(gain) }
+        launch { preferencesStore.setAudioNightModeGain(gain) }
     }
 
     fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setAudioSkipPreviousThresholdMs(ms) }
+        launch { preferencesStore.setAudioSkipPreviousThresholdMs(ms) }
     }
 
     fun setAudioAutoplayNext(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setAudioAutoplayNext(enabled) }
+        launch { preferencesStore.setAudioAutoplayNext(enabled) }
     }
 
     fun setAudioDelayMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setAudioDelay(ms) }
+        launch { preferencesStore.setAudioDelay(ms) }
     }
 
     fun setHomeMode(mode: HomeMode) {
-        viewModelScope.launch { preferencesStore.setHomeMode(mode) }
+        launch { preferencesStore.setHomeMode(mode) }
     }
 
     fun setSubtitleStyle(style: SubtitleStyle) {
-        viewModelScope.launch { preferencesStore.setSubtitleStyle(style) }
+        launch { preferencesStore.setSubtitleStyle(style) }
     }
 
     fun setEqualizerSettings(settings: EqualizerSettings) {
-        viewModelScope.launch { preferencesStore.setEqualizerSettings(settings) }
+        launch { preferencesStore.setEqualizerSettings(settings) }
     }
 
     fun setTrickplayEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setTrickplayEnabled(enabled) }
+        launch { preferencesStore.setTrickplayEnabled(enabled) }
     }
 
     fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
+        launch { preferencesStore.setTrickplayOnSeekGesture(enabled) }
     }
 
     fun setVideoPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
-        viewModelScope.launch { preferencesStore.setVideoPreloadBufferSize(size) }
+        launch { preferencesStore.setVideoPreloadBufferSize(size) }
     }
 
     fun setAudioPreloadBufferSize(size: com.raulshma.jellyplay.core.model.PreloadBufferSize) {
-        viewModelScope.launch { preferencesStore.setAudioPreloadBufferSize(size) }
+        launch { preferencesStore.setAudioPreloadBufferSize(size) }
     }
 
     fun setSegmentBehavior(
         type: com.raulshma.jellyplay.core.model.MediaSegmentType,
         behavior: com.raulshma.jellyplay.core.model.SegmentBehavior,
     ) {
-        viewModelScope.launch { preferencesStore.setSegmentBehavior(type, behavior) }
+        launch { preferencesStore.setSegmentBehavior(type, behavior) }
     }
 
     fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
+        launch { preferencesStore.setVideoEpisodeBrowserEnabled(enabled) }
     }
 
     fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setVideoShowPlaybackMetadata(enabled) }
+        launch { preferencesStore.setVideoShowPlaybackMetadata(enabled) }
     }
 
     fun setGaplessEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setGaplessEnabled(enabled) }
+        launch { preferencesStore.setGaplessEnabled(enabled) }
     }
 
     fun setCrossfadeDurationMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setCrossfadeDurationMs(ms) }
+        launch { preferencesStore.setCrossfadeDurationMs(ms) }
     }
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
-        viewModelScope.launch { preferencesStore.setAudioNormalizationMode(mode) }
+        launch { preferencesStore.setAudioNormalizationMode(mode) }
     }
 
     fun setReplayGainPreAmpDb(db: Float) {
-        viewModelScope.launch { preferencesStore.setReplayGainPreAmpDb(db) }
+        launch { preferencesStore.setReplayGainPreAmpDb(db) }
     }
 
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        viewModelScope.launch { preferencesStore.setDreamImageCategories(categories) }
+        launch { preferencesStore.setDreamImageCategories(categories) }
     }
 
     fun setDreamSlideshowIntervalMs(ms: Long) {
-        viewModelScope.launch { preferencesStore.setDreamSlideshowIntervalMs(ms) }
+        launch { preferencesStore.setDreamSlideshowIntervalMs(ms) }
     }
 
     fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setDreamKenBurnsEnabled(enabled) }
+        launch { preferencesStore.setDreamKenBurnsEnabled(enabled) }
     }
 
     fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        viewModelScope.launch { preferencesStore.setDreamTransitionStyle(style) }
+        launch { preferencesStore.setDreamTransitionStyle(style) }
     }
 
     fun setDreamShowTitle(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setDreamShowTitle(enabled) }
+        launch { preferencesStore.setDreamShowTitle(enabled) }
     }
 
     fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
-        viewModelScope.launch { preferencesStore.setEnabledHomeSectionTypes(types) }
+        launch { preferencesStore.setEnabledHomeSectionTypes(types) }
     }
 
     fun setHomeSectionOrder(order: List<HomeSectionType>) {
-        viewModelScope.launch { preferencesStore.setHomeSectionOrder(order) }
+        launch { preferencesStore.setHomeSectionOrder(order) }
     }
 
     fun setHiddenLibrarySectionIds(ids: Set<String>) {
-        viewModelScope.launch { preferencesStore.setHiddenLibrarySectionIds(ids) }
+        launch { preferencesStore.setHiddenLibrarySectionIds(ids) }
     }
 
     fun toggleHomeSectionType(type: HomeSectionType, enabled: Boolean) {
@@ -544,26 +539,26 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setNavBarShowLabels(show: Boolean) {
-        viewModelScope.launch { preferencesStore.setNavBarShowLabels(show) }
+        launch { preferencesStore.setNavBarShowLabels(show) }
     }
 
     fun setHomeHeroEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setHomeHeroEnabled(enabled) }
+        launch { preferencesStore.setHomeHeroEnabled(enabled) }
     }
 
     fun setPerformanceMode(enabled: Boolean) {
-        viewModelScope.launch { preferencesStore.setPerformanceMode(enabled) }
+        launch { preferencesStore.setPerformanceMode(enabled) }
     }
 
     fun setMpvConfig(config: MpvEngineConfig) {
-        viewModelScope.launch { preferencesStore.setMpvConfig(config) }
+        launch { preferencesStore.setMpvConfig(config) }
     }
 
     fun setLibVlcConfig(config: LibVlcEngineConfig) {
-        viewModelScope.launch { preferencesStore.setLibVlcConfig(config) }
+        launch { preferencesStore.setLibVlcConfig(config) }
     }
 
     fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
-        viewModelScope.launch { preferencesStore.setExoPlayerConfig(config) }
+        launch { preferencesStore.setExoPlayerConfig(config) }
     }
 }

@@ -153,6 +153,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
 import android.content.Intent
 
@@ -940,7 +941,9 @@ private fun DetailContent(
                                         Icon(Tabler.Outline.Share, contentDescription = null)
                                     }
                                 )
-                                if (!isAudio && item != null && detail != null && detail.mediaSources.isNotEmpty()) {
+                                val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
+                                        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
+                                if (canDownload) {
                                     val downloadStatus = activeDownload?.status
                                     val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
                                             downloadStatus == DownloadStatus.DOWNLOADING ||
@@ -1007,7 +1010,7 @@ private fun DetailContent(
         val context = LocalContext.current
         val availableBytes by produceState(initialValue = 0L) {
             value = withContext(Dispatchers.IO) {
-                val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                val downloadDir = context.getExternalFilesDir(if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES)
                     ?: context.filesDir
                 val stat = StatFs(downloadDir.absolutePath)
                 stat.availableBlocksLong * stat.blockSizeLong
@@ -1632,7 +1635,7 @@ private fun DetailActionButtons(
                             .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                     ) {
                         Icon(
-                            if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                            if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                             contentDescription = "Favorite",
                             tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         )
@@ -1737,7 +1740,7 @@ private fun DetailActionButtons(
                         .clickable(interactionSource = favoriteInteractionSource, indication = null) { onToggleFavorite() }
                 ) {
                     Icon(
-                        if (item.isFavorite) Tabler.Outline.Heart else Tabler.Outline.Heart,
+                        if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                         contentDescription = "Favorite",
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )

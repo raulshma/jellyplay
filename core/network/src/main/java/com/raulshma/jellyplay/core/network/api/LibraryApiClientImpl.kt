@@ -18,12 +18,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.api.UpdatePlaylistDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -559,8 +563,11 @@ class LibraryApiClientImpl @Inject constructor(
             fields = listOf(
                 ItemFields.OVERVIEW,
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                ItemFields.CAN_DELETE,
+                ItemFields.DATE_CREATED,
             ),
         ).content
+        val currentUserId = engine._currentUser.value?.id
         response.items.map { item ->
             Playlist(
                 id = item.id.toString(),
@@ -568,6 +575,12 @@ class LibraryApiClientImpl @Inject constructor(
                 overview = item.overview,
                 itemCount = item.childCount ?: 0,
                 imageTag = item.imageTags?.get(ImageType.PRIMARY)?.toString(),
+                userId = currentUserId,
+                isReadOnly = false,
+                isPublic = false,
+                canEdit = true,
+                canDelete = item.canDelete ?: true,
+                createdAt = item.dateCreated?.toString(),
             )
         }
     }
@@ -590,6 +603,7 @@ class LibraryApiClientImpl @Inject constructor(
         response.items.map { item ->
             PlaylistItem(
                 id = item.id.toString(),
+                playlistItemId = item.playlistItemId?.toString(),
                 name = item.name ?: "",
                 artist = item.albumArtist ?: item.artistItems?.firstOrNull()?.name,
                 album = item.album,
@@ -597,6 +611,83 @@ class LibraryApiClientImpl @Inject constructor(
                 runTimeTicks = item.runTimeTicks,
             )
         }
+    }
+
+    override suspend fun createPlaylist(
+        name: String,
+        overview: String?,
+        itemIds: List<String>,
+    ): Result<String> = engine.apiResult {
+        val userId = engine._currentUser.value?.id?.toUUID()
+        val dto = CreatePlaylistDto(
+            name = name,
+            ids = itemIds.map { it.toUUID() },
+            userId = userId,
+            mediaType = SdkMediaType.AUDIO,
+            users = emptyList(),
+            isPublic = false,
+        )
+        val response = engine.requireApi().playlistsApi.createPlaylist(dto).content
+        response.id?.toString() ?: throw IllegalStateException("Created playlist has no id")
+    }
+
+    override suspend fun updatePlaylist(
+        playlistId: String,
+        name: String?,
+        overview: String?,
+        isPublic: Boolean?,
+    ): Result<Unit> = engine.apiResult {
+        val dto = UpdatePlaylistDto(
+            name = name,
+            isPublic = isPublic,
+        )
+        engine.requireApi().playlistsApi.updatePlaylist(playlistId.toUUID(), dto).content
+        Unit
+    }
+
+    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = engine.apiResult {
+        engine.requireApi().request(
+            method = HttpMethod.DELETE,
+            pathTemplate = "Items/$playlistId",
+        )
+        Unit
+    }
+
+    override suspend fun addItemsToPlaylist(
+        playlistId: String,
+        itemIds: List<String>,
+    ): Result<Unit> = engine.apiResult {
+        val userId = engine._currentUser.value?.id?.toUUID()
+        engine.requireApi().playlistsApi.addItemToPlaylist(
+            playlistId = playlistId.toUUID(),
+            ids = itemIds.map { it.toUUID() },
+            userId = userId,
+        ).content
+        Unit
+    }
+
+    override suspend fun removeItemsFromPlaylist(
+        playlistId: String,
+        entryIds: List<String>,
+    ): Result<Unit> = engine.apiResult {
+        engine.requireApi().playlistsApi.removeItemFromPlaylist(
+            playlistId = playlistId,
+            entryIds = entryIds,
+        ).content
+        Unit
+    }
+
+    override suspend fun movePlaylistItem(
+        playlistId: String,
+        entryId: String,
+        newIndex: Int,
+    ): Result<Unit> = engine.apiResult {
+        engine.requireApi().playlistsApi.moveItem(
+            playlistId = playlistId,
+            itemId = entryId,
+            newIndex = newIndex,
+        ).content
+        Unit
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResult {
