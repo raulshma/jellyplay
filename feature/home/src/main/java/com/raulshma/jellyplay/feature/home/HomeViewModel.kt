@@ -3,8 +3,6 @@ package com.raulshma.jellyplay.feature.home
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -17,27 +15,25 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -57,7 +53,7 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
-) : ViewModel(), DefaultLifecycleObserver {
+) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
     companion object {
         private const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
@@ -65,11 +61,11 @@ class HomeViewModel @Inject constructor(
         private const val MIN_REFRESH_INTERVAL_MS = 30_000L
     }
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val _uiState = stateFlow(HomeUiState())
+    val uiState: StateFlow<HomeUiState> = _uiState.flow
 
-    val activeDownloadCount = downloadRepository.getActiveDownloadCount()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
@@ -84,13 +80,13 @@ class HomeViewModel @Inject constructor(
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
 
-    private val searchQueryFlow = MutableStateFlow("")
+    private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
     private var searchJob: Job? = null
 
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
 
-        viewModelScope.launch {
+        launch {
             var previousUserId: String? = null
             preferencesStore.activeUserId.collect { userId ->
                 if (previousUserId != null && previousUserId != userId) {
@@ -105,7 +101,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        launch {
             var hasSeenHomePreferences = false
             preferencesStore.preferences.collect { prefs ->
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
@@ -132,7 +128,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        launch {
             seerrPreferencesStore.preferences.collect { prefs ->
                 val wasEnabled = _uiState.value.discoverEnabled
                 seerrPreferences = prefs
@@ -144,7 +140,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        launch {
             offlineModeManager.offlineMode.collect { mode ->
                 val wasOffline = _uiState.value.offlineMode != OfflineMode.ONLINE
                 _uiState.update { it.copy(offlineMode = mode) }
@@ -156,20 +152,20 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        launch {
             offlineRepository.getOfflineLibrary().collect { items ->
                 _uiState.update { it.copy(offlineLibrary = items) }
             }
         }
 
-        viewModelScope.launch {
+        launch {
             newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
                 _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
             }
         }
 
-        viewModelScope.launch {
-            @OptIn(FlowPreview::class)
+        @OptIn(FlowPreview::class)
+        launch {
             searchQueryFlow
                 .debounce(400)
                 .distinctUntilChanged()
@@ -236,7 +232,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadInitial() {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             fetchAndUpdateSections()
             startPeriodicRefresh()
@@ -244,7 +240,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun refresh() {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(isLoading = true) }
             resetHomeScrollPosition()
             resetHomeFocusPosition()
@@ -255,7 +251,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun pullToRefresh() {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             fetchAndUpdateSections()
             startPeriodicRefresh()
@@ -281,7 +277,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun requestSeerrMedia(event: HomeUiEvent.RequestSeerrMedia) {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(result = DiscoverRequestResult(isLoading = true))) }
             seerrRequestDelegate.requestMedia(
                 mediaType = event.item.mediaType,
@@ -304,7 +300,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadSeerrServiceDetails(mediaType: String) {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(isLoadingServices = true)) }
             try {
                 val result = seerrRequestDelegate.fetchServiceDetails(mediaType)
@@ -316,7 +312,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadTvSeasons(tmdbId: Int) {
-        viewModelScope.launch {
+        launch {
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = emptyList())) }
             val seasons = seerrRequestDelegate.fetchTvSeasons(tmdbId)
             _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(tvSeasons = seasons)) }
@@ -324,7 +320,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        viewModelScope.launch {
+        launch {
             seerrRequestDelegate.prefetchDetails(tmdbId, mediaType)
             onDone()
         }
@@ -397,19 +393,19 @@ class HomeViewModel @Inject constructor(
         val deferredResults = mutableListOf<Pair<DiscoverSectionType, kotlinx.coroutines.Deferred<Result<SeerrSearchResponse>>>>()
 
         if (prefs.discoverTrending) {
-            deferredResults.add(DiscoverSectionType.TRENDING to viewModelScope.async { seerrRepository.getTrending() })
+            deferredResults.add(DiscoverSectionType.TRENDING to scope.async { seerrRepository.getTrending() })
         }
         if (prefs.discoverPopularMovies) {
-            deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies() })
+            deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to scope.async { seerrRepository.getDiscoverMovies() })
         }
         if (prefs.discoverPopularTv) {
-            deferredResults.add(DiscoverSectionType.POPULAR_TV to viewModelScope.async { seerrRepository.getDiscoverTv() })
+            deferredResults.add(DiscoverSectionType.POPULAR_TV to scope.async { seerrRepository.getDiscoverTv() })
         }
         if (prefs.discoverUpcomingMovies) {
-            deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to viewModelScope.async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
+            deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to scope.async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
         }
         if (prefs.discoverUpcomingTv) {
-            deferredResults.add(DiscoverSectionType.UPCOMING_TV to viewModelScope.async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
+            deferredResults.add(DiscoverSectionType.UPCOMING_TV to scope.async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
         }
 
         val newSections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
@@ -424,7 +420,7 @@ class HomeViewModel @Inject constructor(
 
     private fun startPeriodicRefresh() {
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
+        refreshJob = launch {
             while (true) {
                 val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
                 delay(interval)
@@ -441,7 +437,7 @@ class HomeViewModel @Inject constructor(
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         isAppInForeground = true
-        viewModelScope.launch {
+        launch {
             offlineModeManager.checkNetworkAndAutoDetect()
             val now = System.currentTimeMillis()
             if (now - lastRefreshTime >= REFRESH_INTERVAL_FOREGROUND_MS) {

@@ -2,14 +2,11 @@ package com.raulshma.jellyplay.feature.details
 
 import android.util.Log
 import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.model.UserPreferences
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -19,15 +16,14 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val TAG = "SeerrDetailVM"
@@ -37,80 +33,79 @@ class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val preferencesStore: UserPreferencesStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
         .stateIn(
-            scope = viewModelScope,
+            scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = UserPreferences()
         )
 
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
         .stateIn(
-            scope = viewModelScope,
+            scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = SeerrPreferences()
         )
 
-    private val _movieDetails = mutableStateOf<SeerrMovieDetails?>(null)
-    val movieDetails: State<SeerrMovieDetails?> = _movieDetails
+    private val _movieDetails = composeState<SeerrMovieDetails?>(null)
+    val movieDetails: State<SeerrMovieDetails?> = _movieDetails.asState()
 
-    private val _tvDetails = mutableStateOf<SeerrTvDetails?>(null)
-    val tvDetails: State<SeerrTvDetails?> = _tvDetails
+    private val _tvDetails = composeState<SeerrTvDetails?>(null)
+    val tvDetails: State<SeerrTvDetails?> = _tvDetails.asState()
 
-    private val _ratings = mutableStateOf<SeerrRatings?>(null)
-    val ratings: State<SeerrRatings?> = _ratings
+    private val _ratings = composeState<SeerrRatings?>(null)
+    val ratings: State<SeerrRatings?> = _ratings.asState()
 
-    private val _isLoading = mutableStateOf(false)
-    val isLoading: State<Boolean> = _isLoading
+    private val _isLoading = composeState(false)
+    val isLoading: State<Boolean> = _isLoading.asState()
 
-    private val _error = mutableStateOf<String?>(null)
-    val error: State<String?> = _error
+    private val _error = composeState<String?>(null)
+    val error: State<String?> = _error.asState()
 
-    private val _seerrRecommendations = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrRecommendations: StateFlow<List<SeerrSearchItem>> = _seerrRecommendations
+    private val _seerrRecommendations = stateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrRecommendations = _seerrRecommendations.flow
 
-    private val _seerrSimilar = MutableStateFlow<List<SeerrSearchItem>>(emptyList())
-    val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar
+    private val _seerrSimilar = stateFlow<List<SeerrSearchItem>>(emptyList())
+    val seerrSimilar = _seerrSimilar.flow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _requestResult = MutableStateFlow<SeerrRequestResult?>(null)
-    val requestResult: StateFlow<SeerrRequestResult?> = _requestResult
+    private val _requestResult = stateFlow<SeerrRequestResult?>(null)
+    val requestResult = _requestResult.flow
 
-    // Service details for request dialog
-    private val _radarrServers = MutableStateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> = _radarrServers
+    private val _radarrServers = stateFlow<List<SeerrRadarrServiceDetail>>(emptyList())
+    val radarrServers = _radarrServers.flow
 
-    private val _sonarrServers = MutableStateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> = _sonarrServers
+    private val _sonarrServers = stateFlow<List<SeerrSonarrServiceDetail>>(emptyList())
+    val sonarrServers = _sonarrServers.flow
 
-    private val _isLoadingServices = MutableStateFlow(false)
-    val isLoadingServices: StateFlow<Boolean> = _isLoadingServices
+    private val _isLoadingServices = stateFlow(false)
+    val isLoadingServices = _isLoadingServices.flow
 
-    private val _selectedSeasonNumber = mutableStateOf<Int?>(null)
-    val selectedSeasonNumber: State<Int?> = _selectedSeasonNumber
+    private val _selectedSeasonNumber = composeState<Int?>(null)
+    val selectedSeasonNumber: State<Int?> = _selectedSeasonNumber.asState()
 
-    private val _episodesBySeason = MutableStateFlow<Map<Int, List<SeerrEpisode>>>(emptyMap())
-    val episodesBySeason: StateFlow<Map<Int, List<SeerrEpisode>>> = _episodesBySeason
+    private val _episodesBySeason = stateFlow<Map<Int, List<SeerrEpisode>>>(emptyMap())
+    val episodesBySeason = _episodesBySeason.flow
 
-    private val _isLoadingEpisodes = MutableStateFlow(false)
-    val isLoadingEpisodes: StateFlow<Boolean> = _isLoadingEpisodes
+    private val _isLoadingEpisodes = stateFlow(false)
+    val isLoadingEpisodes = _isLoadingEpisodes.flow
 
     fun loadDetails(tmdbId: Int, mediaType: String) {
-        viewModelScope.launch {
+        launch {
             _isLoading.value = true
             _error.value = null
             _ratings.value = null
             _movieDetails.value = null
             _tvDetails.value = null
-            _seerrRecommendations.value = emptyList()
-            _seerrSimilar.value = emptyList()
+            _seerrRecommendations.set(emptyList())
+            _seerrSimilar.set(emptyList())
             _selectedSeasonNumber.value = null
-            _episodesBySeason.value = emptyMap()
-            _isLoadingEpisodes.value = false
+            _episodesBySeason.set(emptyMap())
+            _isLoadingEpisodes.set(false)
 
             var hasRatings = false
 
@@ -161,11 +156,11 @@ class SeerrDetailViewModel @Inject constructor(
                     }
 
                     recommendationsDeferred.await()?.let {
-                        _seerrRecommendations.value = it.results
+                        _seerrRecommendations.set(it.results)
                     }
 
                     similarDeferred.await()?.let {
-                        _seerrSimilar.value = it.results
+                        _seerrSimilar.set(it.results)
                     }
                 }
             } catch (e: Exception) {
@@ -179,7 +174,7 @@ class SeerrDetailViewModel @Inject constructor(
     private fun updateRatings(newRatings: SeerrRatings?, tmdbScore: Float?) {
         val current = _ratings.value ?: SeerrRatings()
         val merged = newRatings ?: current
-        
+
         _ratings.value = merged.copy(
             rt = merged.rt ?: current.rt,
             imdb = merged.imdb ?: current.imdb,
@@ -192,8 +187,8 @@ class SeerrDetailViewModel @Inject constructor(
      * Uses /service/ endpoints matching the Seerr web UI flow.
      */
     fun loadServiceDetails(mediaType: String) {
-        viewModelScope.launch {
-            _isLoadingServices.value = true
+        launch {
+            _isLoadingServices.set(true)
             try {
                 if (mediaType == "movie") {
                     seerrRepository.getServiceRadarrServers().onSuccess { servers ->
@@ -210,7 +205,7 @@ class SeerrDetailViewModel @Inject constructor(
                             }.awaitAll().filterNotNull()
                         }
                         Log.d(TAG, "Loaded ${details.size} Radarr service details")
-                        _radarrServers.value = details
+                        _radarrServers.set(details)
                     }
                 } else {
                     seerrRepository.getServiceSonarrServers().onSuccess { servers ->
@@ -227,11 +222,11 @@ class SeerrDetailViewModel @Inject constructor(
                             }.awaitAll().filterNotNull()
                         }
                         Log.d(TAG, "Loaded ${details.size} Sonarr service details")
-                        _sonarrServers.value = details
+                        _sonarrServers.set(details)
                     }
                 }
             } finally {
-                _isLoadingServices.value = false
+                _isLoadingServices.set(false)
             }
         }
     }
@@ -248,16 +243,16 @@ class SeerrDetailViewModel @Inject constructor(
     }
 
     private fun loadSeasonEpisodes(tvId: Int, seasonNumber: Int) {
-        viewModelScope.launch {
-            _isLoadingEpisodes.value = true
+        launch {
+            _isLoadingEpisodes.set(true)
             try {
                 seerrRepository.getTvSeasonDetails(tvId, seasonNumber).onSuccess { detail ->
                     val current = _episodesBySeason.value.toMutableMap()
                     current[seasonNumber] = detail.episodes
-                    _episodesBySeason.value = current
+                    _episodesBySeason.set(current)
                 }
             } catch (_: Exception) {}
-            _isLoadingEpisodes.value = false
+            _isLoadingEpisodes.set(false)
         }
     }
 
@@ -269,8 +264,8 @@ class SeerrDetailViewModel @Inject constructor(
         rootFolder: String? = null,
         tags: List<Int>? = null,
     ) {
-        viewModelScope.launch {
-            _requestResult.value = SeerrRequestResult(isLoading = true)
+        launch {
+            _requestResult.set(SeerrRequestResult(isLoading = true))
             seerrRepository.requestMedia(
                 tmdbId = item.id,
                 mediaType = item.mediaType,
@@ -280,7 +275,7 @@ class SeerrDetailViewModel @Inject constructor(
                 rootFolder = rootFolder,
                 tags = tags,
             ).onSuccess {
-                _requestResult.value = SeerrRequestResult(isLoading = false, success = true)
+                _requestResult.set(SeerrRequestResult(isLoading = false, success = true))
                 val currentMovie = _movieDetails.value
                 val currentTv = _tvDetails.value
                 val movieMediaInfo = currentMovie?.mediaInfo
@@ -295,27 +290,27 @@ class SeerrDetailViewModel @Inject constructor(
                     )
                 }
             }.onFailure {
-                _requestResult.value = SeerrRequestResult(isLoading = false, success = false, error = it.message)
+                _requestResult.set(SeerrRequestResult(isLoading = false, success = false, error = it.message))
             }
         }
     }
 
     fun clearRequestResult() {
-        _requestResult.value = null
+        _requestResult.set(null)
     }
 
     fun getSeerrPosterUrl(path: String?): String? {
         if (path == null) return null
         return "https://image.tmdb.org/t/p/w500$path"
     }
-    
+
     fun getSeerrBackdropUrl(path: String?): String? {
         if (path == null) return null
         return "https://image.tmdb.org/t/p/w1280$path"
     }
 
     fun prefetchRelatedDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
-        viewModelScope.launch {
+        launch {
             try {
                 coroutineScope {
                     if (mediaType == "movie") {

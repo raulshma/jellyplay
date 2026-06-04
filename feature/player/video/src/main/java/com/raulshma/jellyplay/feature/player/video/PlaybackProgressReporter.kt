@@ -6,20 +6,19 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 internal class PlaybackProgressReporter(
     private val playbackRepository: PlaybackRepository,
     private val viewModel: ViewModel,
-    private val uiState: MutableStateFlow<VideoPlayerUiState>,
+    private val uiState: StateFlowHandle<VideoPlayerUiState>,
     private val getCurrentItemId: () -> String?,
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,

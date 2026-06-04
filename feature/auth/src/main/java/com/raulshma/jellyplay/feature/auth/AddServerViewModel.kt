@@ -1,16 +1,13 @@
 package com.raulshma.jellyplay.feature.auth
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.network.ServerDiscoveryService
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class AddServerUiState(
@@ -26,10 +23,10 @@ data class AddServerUiState(
 class AddServerViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val discoveryService: ServerDiscoveryService,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    private val _uiState = MutableStateFlow(AddServerUiState())
-    val uiState = _uiState.asStateFlow()
+    private val _uiState: StateFlowHandle<AddServerUiState> = stateFlow(AddServerUiState())
+    val uiState = _uiState.flow
 
     private var discoveryJob: Job? = null
 
@@ -41,30 +38,32 @@ class AddServerViewModel @Inject constructor(
         if (_uiState.value.isDiscovering) return
 
         discoveryJob?.cancel()
-        _uiState.value = _uiState.value.copy(
-            isDiscovering = true,
-            discoveryFailed = false,
-            discoveredServers = emptyList(),
-        )
+        _uiState.update {
+            it.copy(
+                isDiscovering = true,
+                discoveryFailed = false,
+                discoveredServers = emptyList(),
+            )
+        }
 
-        discoveryJob = viewModelScope.launch {
+        discoveryJob = launch {
             try {
                 discoveryService.discoverLocalServers().collect { server ->
                     val current = _uiState.value.discoveredServers
-                    // Avoid duplicates
                     if (current.none { it.id == server.id || it.address == server.address }) {
-                        _uiState.value = _uiState.value.copy(
-                            discoveredServers = current + server,
-                        )
+                        _uiState.update {
+                            it.copy(discoveredServers = current + server)
+                        }
                     }
                 }
-                // Discovery completed (timeout reached)
-                _uiState.value = _uiState.value.copy(isDiscovering = false)
+                _uiState.update { it.copy(isDiscovering = false) }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isDiscovering = false,
-                    discoveryFailed = true,
-                )
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        discoveryFailed = true,
+                    )
+                }
             }
         }
     }
@@ -75,17 +74,19 @@ class AddServerViewModel @Inject constructor(
     fun stopDiscovery() {
         discoveryJob?.cancel()
         discoveryJob = null
-        _uiState.value = _uiState.value.copy(isDiscovering = false)
+        _uiState.update { it.copy(isDiscovering = false) }
     }
 
     /**
      * Update the manual address text field.
      */
     fun updateManualAddress(address: String) {
-        _uiState.value = _uiState.value.copy(
-            manualAddress = address,
-            connectError = null,
-        )
+        _uiState.update {
+            it.copy(
+                manualAddress = address,
+                connectError = null,
+            )
+        }
     }
 
     /**
@@ -93,28 +94,28 @@ class AddServerViewModel @Inject constructor(
      */
     fun connectToServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
         if (address.isBlank()) {
-            _uiState.value = _uiState.value.copy(connectError = "Please enter a server address")
+            _uiState.update { it.copy(connectError = "Please enter a server address") }
             return
         }
 
-        _uiState.value = _uiState.value.copy(isConnecting = true, connectError = null)
+        _uiState.update { it.copy(isConnecting = true, connectError = null) }
 
-        viewModelScope.launch {
+        launch {
             val result = authRepository.addServer(address.trim())
-            _uiState.value = _uiState.value.copy(isConnecting = false)
+            _uiState.update { it.copy(isConnecting = false) }
             result.onSuccess {
                 onResult(result)
             }.onFailure { throwable ->
-                _uiState.value = _uiState.value.copy(
-                    connectError = getConnectionErrorMessage(throwable),
-                )
+                _uiState.update {
+                    it.copy(connectError = getConnectionErrorMessage(throwable))
+                }
                 onResult(result)
             }
         }
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(connectError = null)
+        _uiState.update { it.copy(connectError = null) }
     }
 
     override fun onCleared() {

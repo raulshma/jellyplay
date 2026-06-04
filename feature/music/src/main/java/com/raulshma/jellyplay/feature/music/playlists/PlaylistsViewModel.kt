@@ -1,125 +1,120 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class PlaylistsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var playlists by mutableStateOf<List<Playlist>>(emptyList())
-        private set
+    private val _playlists = composeState<List<Playlist>>(emptyList())
+    val playlists: List<Playlist> get() = _playlists.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _isLoading = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
-    var dialogState by mutableStateOf<PlaylistDialogState>(PlaylistDialogState.None)
-        private set
+    private val _dialogState = composeState<PlaylistDialogState>(PlaylistDialogState.None)
+    val dialogState: PlaylistDialogState get() = _dialogState.value
 
-    var isMutating by mutableStateOf(false)
-        private set
+    private val _isMutating = composeState(false)
+    val isMutating: Boolean get() = _isMutating.value
 
     init {
         load()
     }
 
     fun load() {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
             mediaRepository.getPlaylists(limit = 100)
-                .onSuccess { playlists = it }
-                .onFailure { error = it.message }
-            isLoading = false
+                .onSuccess { _playlists.value = it }
+                .onFailure { _error.value = it.message }
+            _isLoading.value = false
         }
     }
 
     fun openCreateDialog() {
-        dialogState = PlaylistDialogState.Create()
+        _dialogState.value = PlaylistDialogState.Create()
     }
 
     fun openEditDialog(playlist: Playlist) {
         if (!playlist.canEdit) {
-            error = "This playlist is read-only"
+            _error.value = "This playlist is read-only"
             return
         }
-        dialogState = PlaylistDialogState.Edit(playlist)
+        _dialogState.value = PlaylistDialogState.Edit(playlist)
     }
 
     fun openDeleteDialog(playlist: Playlist) {
         if (!playlist.canDelete) {
-            error = "This playlist cannot be deleted"
+            _error.value = "This playlist cannot be deleted"
             return
         }
-        dialogState = PlaylistDialogState.Delete(playlist)
+        _dialogState.value = PlaylistDialogState.Delete(playlist)
     }
 
     fun dismissDialog() {
-        dialogState = PlaylistDialogState.None
+        _dialogState.value = PlaylistDialogState.None
     }
 
     fun createPlaylist(name: String, overview: String) {
         if (name.isBlank()) return
-        viewModelScope.launch {
-            isMutating = true
-            error = null
+        launch {
+            _isMutating.value = true
+            _error.value = null
             mediaRepository.createPlaylist(name.trim(), overview.trim().ifBlank { null })
                 .onSuccess {
-                    dialogState = PlaylistDialogState.None
+                    _dialogState.value = PlaylistDialogState.None
                     load()
                 }
-                .onFailure { error = it.message ?: "Failed to create playlist" }
-            isMutating = false
+                .onFailure { _error.value = it.message ?: "Failed to create playlist" }
+            _isMutating.value = false
         }
     }
 
     fun updatePlaylist(playlistId: String, name: String, overview: String) {
         if (name.isBlank()) return
-        viewModelScope.launch {
-            isMutating = true
-            error = null
+        launch {
+            _isMutating.value = true
+            _error.value = null
             mediaRepository.updatePlaylist(
                 playlistId = playlistId,
                 name = name.trim(),
                 overview = overview.trim().ifBlank { null },
             )
                 .onSuccess {
-                    dialogState = PlaylistDialogState.None
+                    _dialogState.value = PlaylistDialogState.None
                     load()
                 }
-                .onFailure { error = it.message ?: "Failed to update playlist" }
-            isMutating = false
+                .onFailure { _error.value = it.message ?: "Failed to update playlist" }
+            _isMutating.value = false
         }
     }
 
     fun deletePlaylist(playlist: Playlist) {
-        viewModelScope.launch {
-            isMutating = true
-            error = null
+        launch {
+            _isMutating.value = true
+            _error.value = null
             mediaRepository.deletePlaylist(playlist.id)
                 .onSuccess {
-                    dialogState = PlaylistDialogState.None
+                    _dialogState.value = PlaylistDialogState.None
                     load()
                 }
-                .onFailure { error = it.message ?: "Failed to delete playlist" }
-            isMutating = false
+                .onFailure { _error.value = it.message ?: "Failed to delete playlist" }
+            _isMutating.value = false
         }
     }
 
     fun clearError() {
-        error = null
+        _error.value = null
     }
 }
 

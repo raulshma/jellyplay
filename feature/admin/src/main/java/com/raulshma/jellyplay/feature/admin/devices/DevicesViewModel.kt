@@ -1,15 +1,10 @@
 package com.raulshma.jellyplay.feature.admin.devices
 
 import android.util.Log
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class DevicesState(
@@ -27,63 +22,63 @@ data class DevicesState(
 @HiltViewModel
 class DevicesViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var state by mutableStateOf(DevicesState())
-        private set
+    private val _state = composeState(DevicesState())
+    val state: DevicesState get() = _state.value
 
     init {
         loadDevices()
     }
 
     fun loadDevices() {
-        viewModelScope.launch {
-            state = state.copy(isLoading = true, error = null)
+        launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
             val result = apiClient.getDevices()
             result.onSuccess { devices ->
-                state = state.copy(devices = devices, isLoading = false)
+                _state.value = _state.value.copy(devices = devices, isLoading = false)
             }.onFailure { e ->
                 Log.e("Devices", "Failed to fetch devices", e)
-                state = state.copy(error = e.message, isLoading = false)
+                _state.value = _state.value.copy(error = e.message, isLoading = false)
             }
         }
     }
 
     fun refresh() {
-        viewModelScope.launch {
-            state = state.copy(isRefreshing = true)
+        launch {
+            _state.value = _state.value.copy(isRefreshing = true)
             val result = apiClient.getDevices()
             result.onSuccess { devices ->
-                state = state.copy(devices = devices, isRefreshing = false)
+                _state.value = _state.value.copy(devices = devices, isRefreshing = false)
             }.onFailure {
-                state = state.copy(isRefreshing = false)
+                _state.value = _state.value.copy(isRefreshing = false)
             }
         }
     }
 
     fun selectDevice(device: DeviceInfo?) {
-        state = state.copy(selectedDevice = device)
+        _state.value = _state.value.copy(selectedDevice = device)
     }
 
     fun showDeleteDialog(device: DeviceInfo) {
-        state = state.copy(selectedDevice = device, showDeleteDialog = true)
+        _state.value = _state.value.copy(selectedDevice = device, showDeleteDialog = true)
     }
 
     fun dismissDeleteDialog() {
-        state = state.copy(showDeleteDialog = false, selectedDevice = null)
+        _state.value = _state.value.copy(showDeleteDialog = false, selectedDevice = null)
     }
 
     fun deleteDevice() {
-        val deviceId = state.selectedDevice?.id ?: return
-        viewModelScope.launch {
+        val deviceId = _state.value.selectedDevice?.id ?: return
+        launch {
             apiClient.deleteDevice(deviceId)
-            state = state.copy(showDeleteDialog = false, selectedDevice = null)
+            _state.value = _state.value.copy(showDeleteDialog = false, selectedDevice = null)
             loadDevices()
         }
     }
 
     fun showEditNameDialog(device: DeviceInfo) {
-        state = state.copy(
+        _state.value = _state.value.copy(
             selectedDevice = device,
             showEditNameDialog = true,
             editDeviceId = device.id,
@@ -92,17 +87,17 @@ class DevicesViewModel @Inject constructor(
     }
 
     fun dismissEditNameDialog() {
-        state = state.copy(showEditNameDialog = false, editCustomName = "")
+        _state.value = _state.value.copy(showEditNameDialog = false, editCustomName = "")
     }
 
     fun updateEditCustomName(name: String) {
-        state = state.copy(editCustomName = name)
+        _state.value = _state.value.copy(editCustomName = name)
     }
 
     fun saveDeviceName() {
-        viewModelScope.launch {
-            apiClient.updateDeviceOptions(state.editDeviceId, state.editCustomName.ifBlank { null })
-            state = state.copy(showEditNameDialog = false)
+        launch {
+            apiClient.updateDeviceOptions(_state.value.editDeviceId, _state.value.editCustomName.ifBlank { null })
+            _state.value = _state.value.copy(showEditNameDialog = false)
             loadDevices()
         }
     }

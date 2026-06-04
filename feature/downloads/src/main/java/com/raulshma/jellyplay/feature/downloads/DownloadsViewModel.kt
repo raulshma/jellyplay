@@ -1,12 +1,6 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -16,76 +10,77 @@ import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadItem
-import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import javax.inject.Inject
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     @ApplicationContext context: Context,
     private val downloadRepository: DownloadRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
     private val workManager = WorkManager.getInstance(context)
 
-    var downloads by mutableStateOf<List<DownloadItem>>(emptyList())
-        private set
-    var totalStorageBytes by mutableLongStateOf(0L)
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
+    private val _downloads = composeState<List<DownloadItem>>(emptyList())
+    val downloads: List<DownloadItem> get() = _downloads.value
+
+    private val _totalStorageBytes = composeLongState(0L)
+    val totalStorageBytes: Long get() = _totalStorageBytes.value
+
+    private val _isLoading = composeState(true)
+    val isLoading: Boolean get() = _isLoading.value
 
     init {
-        viewModelScope.launch {
+        launch {
             downloadRepository.getAllDownloads()
                 .distinctUntilChanged { old, new ->
                     if (old.size != new.size) return@distinctUntilChanged false
                     old.zip(new).all { (o, n) -> o.downloadedBytes == n.downloadedBytes && o.id == n.id && o.status == n.status }
                 }
                 .collectLatest { items ->
-                    downloads = items
-                    isLoading = false
-                    val total = totalStorageBytes
+                    _downloads.value = items
+                    _isLoading.value = false
+                    val total = _totalStorageBytes.value
                     val newTotal = items.sumOf { it.downloadedBytes }
-                    if (total != newTotal) totalStorageBytes = newTotal
+                    if (total != newTotal) _totalStorageBytes.value = newTotal
                 }
         }
     }
 
     fun cancelDownload(item: DownloadItem) {
-        viewModelScope.launch {
+        launch {
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
             downloadRepository.cancelDownload(item.id)
         }
     }
 
     fun pauseDownload(item: DownloadItem) {
-        viewModelScope.launch {
+        launch {
             downloadRepository.pauseDownload(item.id)
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
         }
     }
 
     fun resumeDownload(item: DownloadItem) {
-        viewModelScope.launch {
+        launch {
             downloadRepository.resumeDownload(item.id)
             enqueueDownloadWorker(item.id)
         }
     }
 
     fun deleteDownload(item: DownloadItem) {
-        viewModelScope.launch {
+        launch {
             workManager.cancelUniqueWork("${DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
             downloadRepository.deleteDownload(item.id)
         }
     }
 
     fun retryDownload(item: DownloadItem) {
-        viewModelScope.launch {
+        launch {
             downloadRepository.retryDownload(item.id)
             enqueueDownloadWorker(item.id)
         }

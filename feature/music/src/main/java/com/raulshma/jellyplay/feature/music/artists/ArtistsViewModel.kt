@@ -1,16 +1,12 @@
 package com.raulshma.jellyplay.feature.music.artists
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,22 +26,22 @@ enum class ArtistSortOption(val label: String, val sortBy: String) {
 class ArtistsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var selectedSort by mutableStateOf(ArtistSortOption.NAME)
-        private set
+    private val _selectedSort = composeState(ArtistSortOption.NAME)
+    val selectedSort: ArtistSortOption get() = _selectedSort.value
 
-    private val sortFlow = MutableStateFlow(selectedSort)
+    private val sortFlow = MutableStateFlow(_selectedSort.value)
 
     val artists: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
             mediaTypes = listOf(MediaType.ARTIST),
             sortBy = sort.sortBy,
         )
-    }.cachedIn(viewModelScope)
+    }.cachedIn(scope)
 
     fun setSort(sort: ArtistSortOption) {
-        selectedSort = sort
+        _selectedSort.value = sort
         sortFlow.value = sort
     }
 

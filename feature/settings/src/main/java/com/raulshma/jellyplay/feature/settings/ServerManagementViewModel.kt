@@ -1,57 +1,51 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ServerManagementViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val preferencesStore: UserPreferencesStore,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var servers by mutableStateOf<List<ServerInfo>>(emptyList())
-        private set
+    private val _servers = composeState<List<ServerInfo>>(emptyList())
+    val servers: List<ServerInfo> get() = _servers.value
 
-    var activeServerId by mutableStateOf<String?>(null)
-        private set
+    private val _activeServerId = composeState<String?>(null)
+    val activeServerId: String? get() = _activeServerId.value
 
-    var isSwitching by mutableStateOf(false)
-        private set
+    private val _isSwitching = composeState(false)
+    val isSwitching: Boolean get() = _isSwitching.value
 
     init {
-        viewModelScope.launch {
+        launch {
             authRepository.servers.collect { serverList ->
-                servers = serverList
+                _servers.value = serverList
             }
         }
-        viewModelScope.launch {
+        launch {
             preferencesStore.activeServerId.collect { id ->
-                activeServerId = id
+                _activeServerId.value = id
             }
         }
     }
 
     fun switchServer(serverId: String, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            isSwitching = true
+        launch {
+            _isSwitching.value = true
             authRepository.switchServer(serverId)
                 .onSuccess { onSuccess() }
-            isSwitching = false
+            _isSwitching.value = false
         }
     }
 
     fun removeServer(serverId: String) {
-        viewModelScope.launch {
+        launch {
             authRepository.removeServer(serverId)
             if (activeServerId == serverId) {
                 val remaining = servers.filter { it.id != serverId }

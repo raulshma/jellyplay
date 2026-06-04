@@ -1,77 +1,71 @@
 package com.raulshma.jellyplay.feature.livetv.dvr
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class DvrViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-) : ViewModel() {
+) : JellyPlayViewModel() {
 
-    var timers by mutableStateOf<List<DvrTimer>>(emptyList())
-        private set
+    private val _timers = composeState<List<DvrTimer>>(emptyList())
+    val timers: List<DvrTimer> get() = _timers.value
 
-    var seriesTimers by mutableStateOf<List<DvrSeriesTimer>>(emptyList())
-        private set
+    private val _seriesTimers = composeState<List<DvrSeriesTimer>>(emptyList())
+    val seriesTimers: List<DvrSeriesTimer> get() = _seriesTimers.value
 
-    var isLoading by mutableStateOf(false)
-        private set
+    private val _isLoading = composeState(false)
+    val isLoading: Boolean get() = _isLoading.value
 
-    var error by mutableStateOf<String?>(null)
-        private set
+    private val _error = composeState<String?>(null)
+    val error: String? get() = _error.value
 
     init {
         load()
     }
 
     fun load() {
-        viewModelScope.launch {
-            isLoading = true
-            error = null
+        launch {
+            _isLoading.value = true
+            _error.value = null
 
             mediaRepository.getTimers()
-                .onSuccess { timers = it }
-                .onFailure { error = it.message }
+                .onSuccess { _timers.value = it }
+                .onFailure { _error.value = it.message }
 
             mediaRepository.getSeriesTimers()
-                .onSuccess { seriesTimers = it }
-                .onFailure { error = it.message }
+                .onSuccess { _seriesTimers.value = it }
+                .onFailure { _error.value = it.message }
 
-            isLoading = false
+            _isLoading.value = false
         }
     }
 
     fun cancelTimer(timerId: String) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.cancelTimer(timerId)
                 .onSuccess { load() }
-                .onFailure { error = it.message }
+                .onFailure { _error.value = it.message }
         }
     }
 
     fun cancelSeriesTimer(timerId: String) {
-        viewModelScope.launch {
-            // Series timers use the same cancel endpoint in Jellyfin
+        launch {
             mediaRepository.cancelTimer(timerId)
                 .onSuccess { load() }
-                .onFailure { error = it.message }
+                .onFailure { _error.value = it.message }
         }
     }
 
     fun createTimer(programId: String, channelId: String, startDate: String?, endDate: String?) {
-        viewModelScope.launch {
+        launch {
             mediaRepository.createTimer(programId, channelId, startDate, endDate)
                 .onSuccess { load() }
-                .onFailure { error = it.message }
+                .onFailure { _error.value = it.message }
         }
     }
 }
