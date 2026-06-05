@@ -706,6 +706,7 @@ private fun DetailContent(
                                         onToggleFavorite = onToggleFavorite,
                                         onMarkPlayed = onMarkPlayed,
                                         onMarkUnplayed = onMarkUnplayed,
+                                        onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(item.id)) },
                                         vertical = true,
                                         contentFocusRequester = contentFocusRequester,
                                     )
@@ -1088,7 +1089,6 @@ private fun MediaInfoSection(
     selectedSubtitleIndex: Int?,
     onAudioSelect: (Int?) -> Unit,
     onSubtitleSelect: (Int?) -> Unit,
-    onMediaInfoClick: () -> Unit = {},
     horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -1190,20 +1190,6 @@ private fun MediaInfoSection(
                     onClick = { picker = StreamPickerType.SUBTITLE },
                     containerColor = chipBackgroundColor,
                     modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            FadingItem {
-                QuickInfoPill(
-                    icon = Tabler.Outline.InfoCircle,
-                    text = "Technical Info",
-                    onClick = onMediaInfoClick,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 )
             }
         }
@@ -1470,6 +1456,7 @@ private fun DetailActionButtons(
     onToggleFavorite: () -> Unit,
     onMarkPlayed: () -> Unit,
     onMarkUnplayed: () -> Unit,
+    onMediaInfoClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
     contentFocusRequester: FocusRequester? = null,
@@ -1657,6 +1644,26 @@ private fun DetailActionButtons(
                         )
                     }
                 }
+                val infoVTvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                FadingItem(modifier = Modifier.weight(1f)) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(ShapeCache.smooth12)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                            .then(if (isTv) infoVTvFocusState.focusModifier else Modifier)
+                            .then(if (isTv) Modifier.tvFocusIndicator(infoVTvFocusState, ShapeCache.smooth12) else Modifier)
+                            .clickable { onMediaInfoClick() }
+                    ) {
+                        Icon(
+                            Tabler.Outline.InfoCircle,
+                            contentDescription = "Technical Info",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         }
     } else {
@@ -1759,6 +1766,26 @@ private fun DetailActionButtons(
                         if (item.isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
                         contentDescription = "Favorite",
                         tint = if (item.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+
+            val infoHFocusState = rememberTvFocusState(focusedScale = 1.08f)
+            FadingItem {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(ShapeCache.smooth16)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                        .then(if (isTv) infoHFocusState.focusModifier else Modifier)
+                        .then(if (isTv) Modifier.tvFocusIndicator(infoHFocusState, ShapeCache.smooth16) else Modifier)
+                        .clickable { onMediaInfoClick() }
+                ) {
+                    Icon(
+                        Tabler.Outline.InfoCircle,
+                        contentDescription = "Technical Info",
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -2027,6 +2054,7 @@ private fun DetailContentBody(
                 onToggleFavorite = onToggleFavorite,
                 onMarkPlayed = onMarkPlayed,
                 onMarkUnplayed = onMarkUnplayed,
+                onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(detail.item.id)) },
                 vertical = false,
                 contentFocusRequester = contentFocusRequester,
             )
@@ -2041,7 +2069,6 @@ private fun DetailContentBody(
                     selectedSubtitleIndex = selectedSubtitleIndex,
                     onAudioSelect = onAudioSelect,
                     onSubtitleSelect = onSubtitleSelect,
-                    onMediaInfoClick = { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaInfo(detail.item.id)) },
                 )
             }
         }
