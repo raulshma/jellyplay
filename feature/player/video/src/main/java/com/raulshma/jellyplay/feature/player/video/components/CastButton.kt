@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -59,7 +60,7 @@ internal fun CastButton(
         Icon(
             imageVector = Tabler.Outline.Cast,
             contentDescription = if (isConnected) "Cast connected" else "Cast",
-            tint = if (isConnected) Color(0xFF4285F4) else Color.White,
+            tint = if (isConnected) CastColors.connected else Color.White,
         )
     }
 }

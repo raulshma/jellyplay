@@ -70,6 +70,7 @@ import androidx.palette.graphics.Palette
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -411,7 +412,7 @@ fun PosterCard(
                             Text(
                                 text = "★",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFFFC107),
+                                color = RatingColors.star,
                             )
                             Text(
                                 text = "%.1f".format(item.communityRating),

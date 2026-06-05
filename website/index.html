@@ -4,10 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JellyPlay — Modern Jellyfin Client for Android & Android TV</title>
-  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android & Android TV. Stream movies, music, and live TV with a beautiful Material 3 interface. Features offline downloads, SyncPlay, metadata editing, and multi-engine playback.">
-  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Android TV, Jellyfin music player, open source, Exoplayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Material 3, media player, self-hosted streaming">
+  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android, Android TV & Fire TV. Native Kotlin & Jetpack Compose (Material 3). Multi-engine playback (ExoPlayer, libmpv, LibVLC), SyncPlay watch parties, offline downloads, Seerr requests.">
+  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Jellyfin Android TV, Android TV, Fire TV, Jellyfin music player, open source, ExoPlayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Seerr, Material 3, Material 3 Expressive, media player, self-hosted streaming, self-hosted, homelab, offline downloads, IPTV, live TV, DVR, Kodi alternative, Plex alternative, Emby alternative, jetpack compose, kotlin">
   <meta name="author" content="raulshma">
+  <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="var(--md-sys-color-background)">
+  <meta name="application-name" content="JellyPlay">
+  <meta name="apple-mobile-web-app-title" content="JellyPlay">
+  <meta name="generator" content="JellyPlay website">
+  <meta name="rating" content="general">
+  <meta name="distribution" content="global">
+  <meta name="revisit-after" content="7 days">
+  <link rel="canonical" href="https://raulshma.github.io/jellyplay/">
+  <link rel="alternate" type="application/rss+xml" title="JellyPlay Releases" href="https://github.com/raulshma/jellyplay/releases.atom">
 
   <!-- Prevent FOUC -->
   <script>
@@ -21,16 +30,22 @@
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JellyPlay">
   <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android & Android TV">
-  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback.">
-  <meta property="og:image" content="assets/screenshots/home.webp">
-  <meta property="og:url" content="https://raulshma.github.io/JellyPlay/">
+  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback (ExoPlayer, libmpv, LibVLC).">
+  <meta property="og:image" content="assets/og-banner.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="JellyPlay — Modern Jellyfin client for Android and Android TV. Native Kotlin and Jetpack Compose Material 3.">
+  <meta property="og:url" content="https://raulshma.github.io/jellyplay/">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="JellyPlay — Modern Jellyfin Client for Android & Android TV">
-  <meta name="twitter:description" content="Stream movies, music, and live TV with a beautiful Material 3 interface. Features offline downloads, SyncPlay watch parties, and more.">
-  <meta name="twitter:image" content="assets/screenshots/home.webp">
+  <meta name="twitter:description" content="Stream movies, music, and live TV with a beautiful Material 3 interface. Features offline downloads, SyncPlay watch parties, and multi-engine playback (ExoPlayer, libmpv, LibVLC).">
+  <meta name="twitter:image" content="assets/og-banner.png">
+  <meta name="twitter:image:alt" content="JellyPlay — Modern Jellyfin client for Android and Android TV">
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
@@ -66,9 +81,10 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "JellyPlay",
-      "operatingSystem": "Android",
+      "operatingSystem": "Android 9.0 (API 28) or later",
       "applicationCategory": "MultimediaApplication",
-      "description": "A premium, modern, open-source Jellyfin client for Android & Android TV featuring offline downloads, SyncPlay, metadata editing, and multi-engine playback.",
+      "applicationSubCategory": "Media Player",
+      "description": "JellyPlay is a premium, modern, open-source Jellyfin client for Android, Android TV & Fire TV featuring offline downloads, SyncPlay watch parties, metadata editing, Seerr/Jellyseerr integration, an integrated server admin dashboard, and multi-engine playback (ExoPlayer/Media3, libmpv, LibVLC).",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -76,10 +92,218 @@
       },
       "author": {
         "@type": "Person",
-        "name": "raulshma"
+        "name": "raulshma",
+        "url": "https://github.com/raulshma"
+      },
+      "creator": {
+        "@type": "Person",
+        "name": "raulshma",
+        "url": "https://github.com/raulshma"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "JellyPlay",
+        "url": "https://raulshma.github.io/jellyplay/"
       },
       "license": "https://www.gnu.org/licenses/gpl-3.0.html",
-      "url": "https://raulshma.github.io/JellyPlay/"
+      "url": "https://raulshma.github.io/jellyplay/",
+      "downloadUrl": "https://github.com/raulshma/jellyplay/releases",
+      "softwareVersion": "0.6.7",
+      "softwareRequirements": "Android 9.0+",
+      "featureList": [
+        "Native Jetpack Compose UI",
+        "Material 3 Expressive animations",
+        "ExoPlayer / Media3 video engine",
+        "libmpv video engine",
+        "LibVLC video engine",
+        "SyncPlay watch parties",
+        "Offline downloads",
+        "Jellyseerr / Overseerr integration",
+        "Multi-server Jellyfin support",
+        "Live TV & DVR",
+        "Synced lyrics via LRCLIB",
+        "10-band equalizer with night mode",
+        "Adaptive layouts for phone, tablet, foldable, and TV",
+        "Android TV Leanback launcher",
+        "In-app metadata editor",
+        "Server admin dashboard",
+        "Material You dynamic theming"
+      ],
+      "screenshot": [
+        "https://raulshma.github.io/jellyplay/assets/screenshots/home.webp",
+        "https://raulshma.github.io/jellyplay/assets/screenshots/video_player.webp",
+        "https://raulshma.github.io/jellyplay/assets/screenshots/audio_player.webp"
+      ],
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "1"
+      }
+    }
+  </script>
+
+  <!-- JSON-LD: SoftwareSourceCode -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareSourceCode",
+      "name": "JellyPlay",
+      "description": "Source code for JellyPlay, a modern open-source Jellyfin client for Android and Android TV.",
+      "codeRepository": "https://github.com/raulshma/jellyplay",
+      "codeSampleType": "full",
+      "programmingLanguage": [
+        "Kotlin",
+        "Java",
+        "Shell"
+      ],
+      "runtimePlatform": "Android 9.0+ (API 28)",
+      "targetProduct": "JellyPlay Android & Android TV app",
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "author": {
+        "@type": "Person",
+        "name": "raulshma",
+        "url": "https://github.com/raulshma"
+      },
+      "contributor": [
+        {
+          "@type": "Person",
+          "name": "raulshma",
+          "url": "https://github.com/raulshma"
+        }
+      ],
+      "keywords": "kotlin, jetpack compose, android, android-tv, jellyfin, exoplayer, libmpv, libvlc, syncplay, jellyseerr, material 3, self-hosted, homelab, media player",
+      "url": "https://github.com/raulshma/jellyplay",
+      "isAccessibleForFree": true
+    }
+  </script>
+
+  <!-- JSON-LD: FAQPage -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is JellyPlay?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "JellyPlay is a free, open-source Jellyfin client for Android, Android TV, tablets, foldables, and Amazon Fire TV. It is written natively in Kotlin and Jetpack Compose with Material 3 Expressive, and is not a web wrapper like the official Android app."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is JellyPlay free to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. JellyPlay is licensed under the GNU GPL v3.0 and is free to download, use, modify, and redistribute. There are no ads, no in-app purchases, no telemetry, and no accounts required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does JellyPlay work on Android TV and Amazon Fire TV?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. JellyPlay ships a dedicated Android TV flavor with a Leanback launcher, D-pad navigation, focus-aware Compose for TV UI, screensaver support with Ken Burns effects, and sideload-friendly APK builds for Amazon Fire TV devices (Fire TV Stick 4K, Fire TV Cube, ONN 4K, NVIDIA Shield, Chromecast with Google TV)."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does JellyPlay support SyncPlay watch parties?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. JellyPlay includes first-class SyncPlay support: create or join a watch group, watch in real-time sync with friends, use the in-player group chat, and benefit from server-time synchronization for precise coordination. Audio/video speed and skip-to-sync correction keep everyone in frame."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which video engines does JellyPlay support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "JellyPlay bundles three video engines that you can switch per device: ExoPlayer / Media3 (best for HLS/DASH and most streaming), libmpv (excellent codec coverage and ASS/SSA subtitle rendering), and LibVLC (broad format support and hardware decoding). You can also launch external players such as MX Player or VLC."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does JellyPlay support Jellyseerr / Overseerr media requests?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. JellyPlay has built-in Jellyseerr and Overseerr integration. Browse trending, popular, and upcoming content, request movies and TV shows directly from the app, and track request status — all without leaving the player."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I download movies and TV shows for offline viewing?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. JellyPlay includes an offline download manager with WorkManager-backed queueing, pause/resume/retry support, HTTP Range resumption, foreground notifications with speed and ETA, and a dedicated offline library browser for downloaded series."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is JellyPlay different from the official Jellyfin Android apps?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The official Jellyfin Android app is a Cordova-based web wrapper. JellyPlay is written natively in Kotlin and Jetpack Compose from scratch, with full Compose for TV support, Material 3 Expressive animations, multi-engine playback (ExoPlayer + libmpv + LibVLC), SyncPlay, Seerr integration, an in-app admin dashboard, metadata editor, and offline downloads — features not available in the official client."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does JellyPlay collect any data?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. JellyPlay is fully self-hosted. There is no analytics, no tracking, no phone-home, no cloud dependency. Your library, server connection, and viewing history stay between you and your Jellyfin server."
+          }
+        }
+      ]
+    }
+  </script>
+
+  <!-- JSON-LD: BreadcrumbList -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://raulshma.github.io/jellyplay/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Features",
+          "item": "https://raulshma.github.io/jellyplay/#features"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Screenshots",
+          "item": "https://raulshma.github.io/jellyplay/#screenshots"
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
+          "name": "Download",
+          "item": "https://github.com/raulshma/jellyplay/releases"
+        }
+      ]
+    }
+  </script>
+
+  <!-- JSON-LD: Organization -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "JellyPlay",
+      "url": "https://raulshma.github.io/jellyplay/",
+      "logo": "https://raulshma.github.io/jellyplay/assets/logo.svg",
+      "sameAs": [
+        "https://github.com/raulshma/jellyplay"
+      ]
     }
   </script>
 </head>

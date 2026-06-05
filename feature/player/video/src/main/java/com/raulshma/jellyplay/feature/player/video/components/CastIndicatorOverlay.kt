@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Cast
+import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 @Composable
@@ -72,7 +73,7 @@ fun CastIndicatorOverlay(
             Icon(
                 imageVector = Tabler.Outline.Cast,
                 contentDescription = null,
-                tint = Color(0xFF4285F4),
+                tint = CastColors.connected,
                 modifier = Modifier
                     .size(14.dp)
                     .graphicsLayer { alpha = pulseAlpha },
@@ -85,7 +86,7 @@ fun CastIndicatorOverlay(
                         scaleY = pulseAlpha * 0.3f + 0.7f
                         alpha = pulseAlpha
                     }
-                    .background(Color(0xFF2ECC71), shape = CircleShape),
+                    .background(CastColors.indicator, shape = CircleShape),
             )
             Text(
                 text = "Casting",

@@ -312,6 +312,7 @@ private fun MainHomeContent(
             darkTheme = !isLightTheme,
             oledMode = state.oledMode,
             colorStyle = state.colorStyle,
+            accentColorSwatch = state.accentColorSwatch,
         ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {

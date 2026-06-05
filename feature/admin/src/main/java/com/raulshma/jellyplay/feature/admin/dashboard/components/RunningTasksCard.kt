@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
 
@@ -143,7 +144,7 @@ private fun TaskItem(
 private fun TaskStateBadge(state: TaskState) {
     val color: Color = when (state) {
         TaskState.RUNNING -> MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> Color(0xFFFF9800)
+        TaskState.CANCELLING -> StatusColors.warning
         TaskState.IDLE -> MaterialTheme.colorScheme.outline
     }
     Box(

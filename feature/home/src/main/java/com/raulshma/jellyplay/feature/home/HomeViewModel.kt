@@ -119,6 +119,7 @@ class HomeViewModel @Inject constructor(
                     dynamicTheming = prefs.dynamicTheming,
                     oledMode = prefs.oledMode,
                     colorStyle = prefs.colorStyle,
+                    accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
                 ) }
 
