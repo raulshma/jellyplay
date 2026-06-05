@@ -228,32 +228,23 @@ fun ScreenLoadingState(
     message: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                slideInVertically(
-                    initialOffsetY = { it / 10 },
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                ),
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
-            ) {
-                JellyPlayLoadingIndicator(
-                    color = MaterialTheme.colorScheme.primary,
+            JellyPlayLoadingIndicator(
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (message != null) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (message != null) {
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
     }
@@ -268,45 +259,36 @@ fun ScreenEmptyState(
     onAction: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                slideInVertically(
-                    initialOffsetY = { it / 10 },
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                ),
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (description != null) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (description != null) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (actionLabel != null && onAction != null) {
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.material3.OutlinedButton(onClick = onAction) {
-                        Text(actionLabel)
-                    }
+            }
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedButton(onClick = onAction) {
+                    Text(actionLabel)
                 }
             }
         }

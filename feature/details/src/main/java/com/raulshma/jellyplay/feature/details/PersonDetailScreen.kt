@@ -103,6 +103,7 @@ fun PersonDetailScreen(
                 ) {
                     itemsIndexed(items = viewModel.filmography, key = { _, it -> it.id }, contentType = { _, _ -> "mediaItem" }) { index, item ->
                         val visible = remember { mutableStateOf(false) }
+                        val clickHandler = remember(item.id) { { onItemClick(item.id) } }
                         LaunchedEffect(Unit) { visible.value = true }
                         AnimatedVisibility(
                             visible = visible.value,
@@ -116,7 +117,7 @@ fun PersonDetailScreen(
                             PosterCard(
                                 item = item,
                                 imageUrl = viewModel.getImageUrl(item.id),
-                                onClick = { onItemClick(item.id) },
+                                onClick = clickHandler,
                             )
                         }
                     }

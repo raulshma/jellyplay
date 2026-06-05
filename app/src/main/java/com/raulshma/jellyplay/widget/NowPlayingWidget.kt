@@ -145,12 +145,22 @@ class NowPlayingWidget : AppWidgetProvider() {
             positionMs: Long = 0L,
             durationMs: Long = 0L,
         ) {
+            val scaledArt = albumArt?.let { art ->
+                if (art.byteCount > 512 * 1024) {
+                    val scale = (512f * 1024 / art.byteCount.coerceAtLeast(1)).let {
+                        kotlin.math.sqrt(it.toDouble()).toFloat()
+                    }
+                    val w = (art.width * scale).toInt().coerceAtLeast(1)
+                    val h = (art.height * scale).toInt().coerceAtLeast(1)
+                    Bitmap.createScaledBitmap(art, w, h, true)
+                } else art
+            }
             val intent = Intent(context, NowPlayingWidget::class.java).apply {
                 action = ACTION_UPDATE
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_SUBTITLE, subtitle)
                 putExtra(EXTRA_IS_PLAYING, isPlaying)
-                putExtra(EXTRA_ALBUM_ART, albumArt)
+                putExtra(EXTRA_ALBUM_ART, scaledArt)
                 putExtra(EXTRA_POSITION_MS, positionMs)
                 putExtra(EXTRA_DURATION_MS, durationMs)
             }

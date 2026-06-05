@@ -56,11 +56,35 @@ class MediaRepositoryImpl @Inject constructor(
                 size > DETAIL_CACHE_MAX_ENTRIES
         }
 
+    fun invalidateDetailCache(itemId: String? = null) {
+        if (itemId != null) {
+            detailCache.remove(itemId)
+        } else {
+            detailCache.clear()
+        }
+    }
+
+    private data class CachedHomeSections(val sections: List<HomeSection>, val fetchedAt: Long)
+    @Volatile
+    private var cachedHomeSections: CachedHomeSections? = null
+    private val homeSectionsLock = Any()
+
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
         hiddenLibraryIds: Set<String>,
-    ): Result<List<HomeSection>> =
-        apiClient.getHomeSections(enabledSections, hiddenLibraryIds)
+    ): Result<List<HomeSection>> {
+        val cached = cachedHomeSections
+        if (cached != null && android.os.SystemClock.elapsedRealtime() - cached.fetchedAt < HOME_SECTIONS_CACHE_TTL_MS) {
+            return Result.success(cached.sections)
+        }
+        return apiClient.getHomeSections(enabledSections, hiddenLibraryIds).also { result ->
+            result.getOrNull()?.let { sections ->
+                synchronized(homeSectionsLock) {
+                    cachedHomeSections = CachedHomeSections(sections, android.os.SystemClock.elapsedRealtime())
+                }
+            }
+        }
+    }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
         apiClient.getLibraryFolders()
@@ -439,14 +463,23 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
-    override suspend fun toggleFavorite(itemId: String): Result<Boolean> =
-        apiClient.toggleFavorite(itemId)
+    override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
+        cachedHomeSections = null
+        invalidateDetailCache(itemId)
+        return apiClient.toggleFavorite(itemId)
+    }
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> =
-        apiClient.markPlayed(itemId)
+    override suspend fun markPlayed(itemId: String): Result<Unit> {
+        cachedHomeSections = null
+        invalidateDetailCache(itemId)
+        return apiClient.markPlayed(itemId)
+    }
 
-    override suspend fun markUnplayed(itemId: String): Result<Unit> =
-        apiClient.markUnplayed(itemId)
+    override suspend fun markUnplayed(itemId: String): Result<Unit> {
+        cachedHomeSections = null
+        invalidateDetailCache(itemId)
+        return apiClient.markUnplayed(itemId)
+    }
 
     override suspend fun getLiveTvChannels(startIndex: Int, limit: Int): Result<List<LiveTvChannel>> =
         apiClient.getLiveTvChannels(startIndex, limit)
@@ -499,6 +532,13 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun cleanupLyricsCache() {
+        try {
+            lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
+        } catch (_: Exception) {
+        }
+    }
+
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
         apiClient.getNewsletterData(sinceDate, limit)
 
@@ -508,6 +548,8 @@ class MediaRepositoryImpl @Inject constructor(
         private const val DETAIL_CACHE_MAX_ENTRIES = 30
         /** 2 minutes — short enough that server changes are reflected quickly. */
         private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
+        /** 60 seconds — prevents burst API calls on repeated home screen loads. */
+        private const val HOME_SECTIONS_CACHE_TTL_MS = 60 * 1000L
         private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
 
         private fun parseLrc(lrcContent: String): List<LyricsLine> {

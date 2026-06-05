@@ -29,8 +29,6 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))
 
-    implementation(libs.room.ktx)
-
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.work)
@@ -39,6 +37,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.paging.runtime)
     implementation(libs.work.runtime.ktx)
+    implementation(libs.room.ktx)
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.cast)

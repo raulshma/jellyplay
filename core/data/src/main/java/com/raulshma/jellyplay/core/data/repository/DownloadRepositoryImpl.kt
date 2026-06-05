@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import android.content.Context
 import android.os.Environment
+import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -10,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
@@ -41,6 +43,7 @@ class DownloadRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadDao: DownloadDao,
     private val offlineMediaDao: OfflineMediaDao,
+    private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
@@ -108,9 +111,16 @@ class DownloadRepositoryImpl @Inject constructor(
             }
         }
 
-        val id = UUID.randomUUID().toString()
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
         val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
+        val downloadDir = context.getExternalFilesDir(dirType) ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
+        val statFs = android.os.StatFs(downloadDir.absolutePath)
+        val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
+        if (availableBytes < 100L * 1024 * 1024) {
+            throw IllegalStateException("Insufficient storage space. Less than 100 MB available on device.")
+        }
+
+        val id = UUID.randomUUID().toString()
         val dir = context.getExternalFilesDir(dirType)
             ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
         if (!dir.exists()) dir.mkdirs()
@@ -435,10 +445,12 @@ class DownloadRepositoryImpl @Inject constructor(
                 if (trickplayDir.exists()) trickplayDir.deleteRecursively()
             }
         }
-        downloadDao.deleteDownloadById(entity.id)
-        offlineMediaDao.deleteById(entity.mediaItemId)
-        offlineMediaDao.deleteOrphanedSeasons()
-        offlineMediaDao.deleteOrphanedSeries()
+        database.withTransaction {
+            downloadDao.deleteDownloadById(entity.id)
+            offlineMediaDao.deleteById(entity.mediaItemId)
+            offlineMediaDao.deleteOrphanedSeasons()
+            offlineMediaDao.deleteOrphanedSeries()
+        }
     }
 
     private fun DownloadEntity.toDownloadItem() = DownloadItem(

@@ -2,27 +2,22 @@ package com.raulshma.jellyplay.core.data.streaming
 
 import com.raulshma.jellyplay.core.model.AudioBitrateTier
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Picks an audio bitrate tier based on measured bandwidth and the user's
- * [StreamingQuality] selection. When the user chooses [StreamingQuality.AUTO],
- * the selector picks the best tier that comfortably fits the available
- * bandwidth, leaving a 1.5x headroom for stability.
- *
- * Bitrate tiers are conservative for audio since tracks typically range from
- * 96 kbps (low) to 320 kbps (high); lossless tracks require ~1 Mbps.
- */
 @Singleton
 class AdaptiveBitrateSelector @Inject constructor(
     private val bandwidthMonitor: BandwidthMonitor,
+    private val bandwidthInterceptor: BandwidthInterceptor,
 ) {
-    val bandwidthKbps: StateFlow<Double> = bandwidthMonitor.estimatedBandwidthKbps
+    val bandwidthKbps: StateFlow<Double> = bandwidthInterceptor.estimatedBandwidthKbps
 
     fun selectTier(maxAllowed: AudioBitrateTier = AudioBitrateTier.LOSSLESS): AudioBitrateTier {
-        val availableKbps = bandwidthMonitor.estimatedBandwidthKbps.value
+        val networkKbps = bandwidthInterceptor.estimatedBandwidthKbps.value
+        val localKbps = bandwidthMonitor.estimatedBandwidthKbps.value
+        val availableKbps = maxOf(networkKbps, localKbps)
         if (availableKbps <= 0.0) {
             return AudioBitrateTier.LOW
         }

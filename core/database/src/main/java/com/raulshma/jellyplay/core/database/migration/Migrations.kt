@@ -60,6 +60,11 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+// MIGRATION_5_6 through MIGRATION_8_9: no-op version bumps added when
+// entities were touched but no schema change was required. The bumps
+// guarantee Room treats the database as up-to-date without rewriting
+// the migration history.
+
 val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
     }
@@ -305,6 +310,13 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
             )
             """.trimIndent()
         )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_servers_address ON servers(address)")
+    }
+}
+
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_servers_address ON servers(address)")
     }
 }
 
@@ -324,4 +336,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_13_14,
     MIGRATION_14_15,
     MIGRATION_15_16,
+    MIGRATION_16_17,
 )

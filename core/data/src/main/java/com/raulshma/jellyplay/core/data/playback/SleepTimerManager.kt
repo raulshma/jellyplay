@@ -23,6 +23,10 @@ class SleepTimerManager @Inject constructor() {
     private val _remainingMs = MutableStateFlow(0L)
     val remainingMs: StateFlow<Long> = _remainingMs.asStateFlow()
 
+    private companion object {
+        const val SLEEP_TIMER_TICK_MS = 5_000L
+    }
+
     private val _isEndOfEpisodeMode = MutableStateFlow(false)
     val isEndOfEpisodeMode: StateFlow<Boolean> = _isEndOfEpisodeMode.asStateFlow()
 
@@ -46,13 +50,15 @@ class SleepTimerManager @Inject constructor() {
 
         timerJob = scope.launch {
             while (isActive && SystemClock.elapsedRealtime() < targetElapsedMs) {
-                delay(1000L)
+                delay(SLEEP_TIMER_TICK_MS)
                 _remainingMs.value = (targetElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
             }
             if (isActive) {
                 _isActive.value = false
                 _remainingMs.value = 0
-                onTimerExpired?.invoke()
+                try {
+                    onTimerExpired?.invoke()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -75,7 +81,9 @@ class SleepTimerManager @Inject constructor() {
     fun triggerEndOfEpisode() {
         if (_isEndOfEpisodeMode.value && _isActive.value) {
             cancel()
-            onTimerExpired?.invoke()
+            try {
+                onTimerExpired?.invoke()
+            } catch (_: Exception) {}
         }
     }
 

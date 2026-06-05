@@ -199,4 +199,6 @@ interface MediaRepository {
     suspend fun cancelTimer(timerId: String): Result<Unit>
 
     suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
+
+    suspend fun cleanupLyricsCache()
 }

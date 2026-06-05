@@ -344,7 +344,12 @@ class SyncPlayPlaybackCore @Inject constructor(
     }
 
     private fun isSyncCorrectionWarranted(): Boolean {
-        return true
+        val cb = callbacks ?: return false
+        val lastReported = lastPlayCommandTimeMs
+        val latest = cb.currentPositionMs()
+        val delta = kotlin.math.abs(lastReported - latest).toDouble()
+        val drift = delta
+        return drift >= SYNC_CORRECTION_THRESHOLD_MS
     }
 
     private fun scheduleEnableSync() {
@@ -420,7 +425,8 @@ class SyncPlayPlaybackCore @Inject constructor(
         private const val MIN_DELAY_SKIP_TO_SYNC = 400.0
         private const val ENABLE_SYNC_TIMEOUT = 1500L
         private const val SYNC_CORRECTION_INITIAL_DELAY = 500L
-        private const val SYNC_CORRECTION_INTERVAL = 1000L
+        private const val SYNC_CORRECTION_INTERVAL = 2000L
+        private const val SYNC_CORRECTION_THRESHOLD_MS = 100L
         private const val MIN_SPEED = 0.2
     }
 }

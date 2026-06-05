@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
 import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +48,7 @@ fun MusicHomeScreen(
     val isLoading = viewModel.isLoading
     val error = viewModel.error
     val backgroundColor = rememberScreenBackgroundColor()
+    val scope = rememberCoroutineScope()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -55,9 +58,14 @@ fun MusicHomeScreen(
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = {
-            isRefreshing = true
-            viewModel.loadSections()
-            isRefreshing = false
+            scope.launch {
+                isRefreshing = true
+                try {
+                    viewModel.loadSections()
+                } finally {
+                    isRefreshing = false
+                }
+            }
         },
         modifier = Modifier
             .fillMaxSize()
@@ -66,7 +74,7 @@ fun MusicHomeScreen(
     ) {
         when {
             error != null && sections.isEmpty() -> {
-                ErrorScreen(message = error, onRetry = { viewModel.loadSections() })
+                ErrorScreen(message = error, onRetry = { scope.launch { viewModel.loadSections() } })
             }
             else -> {
                 if (isLoading && sections.isEmpty()) {

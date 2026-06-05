@@ -12,6 +12,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,12 +22,13 @@ class JellyPlayTileService : TileService() {
 
     @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
 
+    private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
 
     override fun onStartListening() {
         super.onStartListening()
         updateTile()
-        job = CoroutineScope(Dispatchers.Main).launch {
+        job = tileScope.launch {
             audioPlaybackManager.isPlaying.collect { isPlaying ->
                 updateTile(isPlaying)
             }

@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusable
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,14 +74,20 @@ fun ArtistDetailScreen(
         viewModel.loadArtist(artistId)
     }
 
+    val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = {
-            isRefreshing = true
-            viewModel.loadArtist(artistId)
-            isRefreshing = false
+            scope.launch {
+                isRefreshing = true
+                try {
+                    viewModel.loadArtist(artistId)
+                } finally {
+                    isRefreshing = false
+                }
+            }
         },
     ) {
     when {
@@ -89,7 +97,7 @@ fun ArtistDetailScreen(
         viewModel.error != null -> {
             ErrorScreen(
                 message = viewModel.error!!,
-                onRetry = { viewModel.loadArtist(artistId) },
+                onRetry = { scope.launch { viewModel.loadArtist(artistId) } },
             )
         }
         else -> {
