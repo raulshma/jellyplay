@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.details.CollectionDetailScreen
 import com.raulshma.jellyplay.feature.details.MediaDetailScreen
+import com.raulshma.jellyplay.feature.details.MediaInfoScreen
 import com.raulshma.jellyplay.feature.details.PersonDetailScreen
 import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
 
@@ -43,6 +44,13 @@ fun EntryProviderScope<NavKey>.detailsSection(
             onNavigateToSeries = { seriesId -> navigator.navigate(Route.MediaDetail(seriesId)) },
             onNavigate = { route -> navigator.navigate(route) },
             onEditClick = { itemId -> navigator.navigate(Route.MetadataEditor(itemId)) },
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.MediaInfo> { key ->
+        MediaInfoScreen(
+            itemId = key.itemId,
             onBack = { navigator.goBack() },
         )
     }

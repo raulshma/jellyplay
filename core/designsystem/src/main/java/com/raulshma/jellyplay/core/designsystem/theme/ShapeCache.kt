@@ -71,9 +71,12 @@ fun expressiveListShape(
     outerRadius: androidx.compose.ui.unit.Dp = 22.dp,
     innerRadius: androidx.compose.ui.unit.Dp = 8.dp,
 ): AbsoluteSmoothCornerShape {
+    val key = "${index}_${count}_${outerRadius.value}_${innerRadius.value}"
+    expressiveListShapeCache[key]?.let { return it }
+
     val outer = outerRadius
     val inner = innerRadius
-    return when {
+    val shape = when {
         count <= 1 -> AbsoluteSmoothCornerShape(outer, 60)
         index == 0 -> AbsoluteSmoothCornerShape(
             cornerRadiusTL = outer,
@@ -97,4 +100,8 @@ fun expressiveListShape(
         )
         else -> AbsoluteSmoothCornerShape(inner, 60)
     }
+    expressiveListShapeCache.put(key, shape)
+    return shape
 }
+
+private val expressiveListShapeCache = android.util.LruCache<String, AbsoluteSmoothCornerShape>(128)

@@ -24,6 +24,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
             onSetupWizard = onSetupWizard,
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
+            onFavoritesClick = { navigator.navigate(Route.Favorites) },
         )
     }
 

@@ -71,6 +71,7 @@ class AudioPlaybackManager @Inject constructor(
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
     private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
+    private val bandwidthInterceptor: com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -84,11 +85,12 @@ class AudioPlaybackManager @Inject constructor(
                 currentPreferences = prefs
             }
         }
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            scope.launch(Dispatchers.IO) {
-                restorePersistedQueue()
-                observeQueuePersistence()
-            }
+    }
+
+    fun start() {
+        scope.launch(Dispatchers.IO) {
+            restorePersistedQueue()
+            observeQueuePersistence()
         }
     }
     private var mediaSession: MediaSession? = null
@@ -123,7 +125,7 @@ class AudioPlaybackManager @Inject constructor(
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
-    val estimatedBandwidthKbps: StateFlow<Double> = bandwidthMonitor.estimatedBandwidthKbps
+    val estimatedBandwidthKbps: StateFlow<Double> = bandwidthInterceptor.estimatedBandwidthKbps
 
     private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
     val currentAudioBitrateTier: StateFlow<com.raulshma.jellyplay.core.model.AudioBitrateTier> = _currentAudioBitrateTier.asStateFlow()
@@ -1082,7 +1084,9 @@ class AudioPlaybackManager @Inject constructor(
             reverbHelper.setEnabled(true)
         }
         visualizerHelper.attach(audioSessionId)
-        visualizerHelper.setEnabled(true)
+        if (visualizerHelper.isEnabled) {
+            visualizerHelper.setEnabled(true)
+        }
     }
 
     fun setEqualizerPreset(preset: EqualizerPreset) {
@@ -1402,7 +1406,9 @@ class AudioPlaybackManager @Inject constructor(
             reverbHelper.setPreset(_reverbPreset.value)
         }
         visualizerHelper.attach(secondary.audioSessionId)
-        visualizerHelper.setEnabled(true)
+        if (visualizerHelper.isEnabled) {
+            visualizerHelper.setEnabled(true)
+        }
 
         _isCrossfading.value = false
 
@@ -1535,7 +1541,7 @@ class AudioPlaybackManager @Inject constructor(
                     }
                 }
             }
-            delay(100)
+            delay(250)
             }
         }
     }

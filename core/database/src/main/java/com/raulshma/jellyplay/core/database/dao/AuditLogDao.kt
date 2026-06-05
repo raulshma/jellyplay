@@ -13,7 +13,7 @@ interface AuditLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: MediaAuditLogEntity)
 
-    @Query("SELECT * FROM media_audit_log ORDER BY timestamp DESC")
+    @Query("SELECT * FROM media_audit_log ORDER BY timestamp DESC LIMIT 500")
     fun getAll(): Flow<List<MediaAuditLogEntity>>
 
     @Query("SELECT * FROM media_audit_log WHERE actionType = :actionType ORDER BY timestamp DESC")

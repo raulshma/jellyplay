@@ -80,14 +80,14 @@ class MusicHomeViewModel @Inject constructor(
                 _offlineLibrary.value = items
             }
         }
-        loadSections()
+        launch { loadSections() }
     }
 
     fun toggleOfflineMode() {
         offlineModeManager.toggleManualOffline()
     }
 
-    fun loadSections() {
+    suspend fun loadSections() {
         launch {
             if (offlineMode != OfflineMode.ONLINE) {
                 _isLoading.value = false

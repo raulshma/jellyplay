@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
 
 class ContinueWatchingWidget : AppWidgetProvider() {
 
-    private var updateScope: CoroutineScope? = null
+    private val widgetScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var updateJob: kotlinx.coroutines.Job? = null
 
     @EntryPoint
     @InstallIn(SingletonComponent::class)
@@ -42,9 +43,8 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         )
         val store = entryPoint.preferencesStore()
 
-        updateScope?.cancel()
-        updateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        updateScope!!.launch {
+        updateJob?.cancel()
+        updateJob = widgetScope.launch {
             val items = store.continueWatching.first()
             appWidgetIds.forEach { appWidgetId ->
                 updateWidget(context, appWidgetManager, appWidgetId, items)
@@ -64,14 +64,12 @@ class ContinueWatchingWidget : AppWidgetProvider() {
 
     override fun onDisabled(context: Context?) {
         super.onDisabled(context)
-        updateScope?.cancel()
-        updateScope = null
+        updateJob?.cancel()
     }
 
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
-        updateScope?.cancel()
-        updateScope = null
+        updateJob?.cancel()
     }
 
     companion object {

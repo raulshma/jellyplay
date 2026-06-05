@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 
 @HiltWorker
@@ -33,11 +34,13 @@ class WatchedMediaScanWorker @AssistedInject constructor(
             val adminUserId = user?.id ?: return Result.failure()
 
             val batchSize = 200
+            val maxItems = 10_000
             var startIndex = 0
             val allItems = mutableListOf<com.raulshma.jellyplay.core.model.WatchedMediaItem>()
             var hasMore = true
 
             while (hasMore) {
+                if (isStopped) break
                 val result = apiClient.getWatchedItems(
                     userId = adminUserId,
                     includeItemTypes = config.includeItemTypes.toList(),
@@ -50,7 +53,9 @@ class WatchedMediaScanWorker @AssistedInject constructor(
 
                 allItems.addAll(result.second)
                 startIndex += batchSize
-                hasMore = result.second.size >= batchSize
+                hasMore = result.second.size >= batchSize && allItems.size < maxItems
+
+                if (hasMore) delay(500)
 
                 scanStateDao.update(
                     entity.copy(

@@ -32,7 +32,9 @@ class BandwidthMonitor @Inject constructor() {
         synchronized(samples) {
             samples.addLast(BandwidthSample(bytesTransferred, elapsedMs))
             while (samples.size > maxSamples) {
-                samples.removeFirst()
+                val removed = samples.removeFirst()
+                _totalBytes.value = (_totalBytes.value - removed.bytes).coerceAtLeast(0L)
+                _totalElapsedMs.value = (_totalElapsedMs.value - removed.elapsedMs).coerceAtLeast(0L)
             }
         }
         _totalBytes.value = _totalBytes.value + bytesTransferred

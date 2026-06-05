@@ -95,8 +95,7 @@ private val dominantColorCache = android.util.LruCache<String, Color>(500)
 @Composable
 fun rememberDominantColor(imageUrl: String?, fallback: Color = MaterialTheme.colorScheme.surfaceContainer): Color {
     val context = LocalContext.current
-    val cached = imageUrl?.let { dominantColorCache.get(it) }
-    var color by remember { mutableStateOf(cached ?: fallback) }
+    var color by remember(imageUrl) { mutableStateOf(imageUrl?.let { dominantColorCache.get(it) } ?: fallback) }
     val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {
@@ -545,15 +544,13 @@ fun MediaRow(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoadingScreen(modifier: Modifier = Modifier) {
-    AnimatedEntrance(visible = true) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            JellyPlayLoadingIndicator(
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        JellyPlayLoadingIndicator(
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

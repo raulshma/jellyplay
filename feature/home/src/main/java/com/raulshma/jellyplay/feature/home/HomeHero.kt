@@ -182,44 +182,48 @@ fun HeroHeader(
     }
 
     val heroTransition = rememberInfiniteTransition(label = "hero_animations")
-    val breathScale by heroTransition.animateFloat(
+    val rawBreathScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = if (isVisible) 1.04f else 1.0f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
             animation = tween(12000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breath"
     )
+    val breathScale = if (isVisible) rawBreathScale else 1.0f
 
-    val playPulseScale by heroTransition.animateFloat(
+    val rawPlayPulseScale by heroTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = if (isVisible) 1.35f else 1.0f,
+        targetValue = 1.35f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "playPulseScale"
     )
-    val playPulseAlpha by heroTransition.animateFloat(
+    val playPulseScale = if (isVisible) rawPlayPulseScale else 1.0f
+    val rawPlayPulseAlpha by heroTransition.animateFloat(
         initialValue = 0.45f,
-        targetValue = if (isVisible) 0.0f else 0.45f,
+        targetValue = 0.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1800, easing = AlphaEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "playPulseAlpha"
     )
+    val playPulseAlpha = if (isVisible) rawPlayPulseAlpha else 0.45f
 
-    val ratingPulse by heroTransition.animateFloat(
+    val rawRatingPulse by heroTransition.animateFloat(
         initialValue = 0.9f,
-        targetValue = if (isVisible) 1.1f else 0.9f,
+        targetValue = 1.1f,
         animationSpec = infiniteRepeatable(
             animation = tween(2000, easing = FancyTransitionEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "ratingPulse"
     )
+    val ratingPulse = if (isVisible) rawRatingPulse else 0.9f
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
         if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {

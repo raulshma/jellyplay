@@ -41,7 +41,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         AudioQueueEntity::class,
         AudioQueueStateEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
