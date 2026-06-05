@@ -172,8 +172,8 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun restoreSession(): Result<Unit> = runCatching {
-        val serverId = preferencesStore.activeServerId.first()
-        val userId = preferencesStore.activeUserId.first()
+        val serverId: String? = preferencesStore.activeServerId.first()
+        val userId: String? = preferencesStore.activeUserId.first()
         if (serverId != null && userId != null) {
             val serverEntity = serverDao.getServerById(serverId)
             if (serverEntity == null) {
