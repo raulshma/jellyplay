@@ -33,6 +33,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var downloadDao: DownloadDao
     @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+    @Inject lateinit var mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository
+    @Inject lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
+    @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -45,7 +48,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
                 }
             }
         }
-        applicationScope.launch { recoverPendingDownloads() }
+        audioPlaybackManager.start()
+        applicationScope.launch {
+            recoverPendingDownloads()
+            cleanupStuckDownloads()
+            mediaRepository.cleanupLyricsCache()
+            offlineRepository.cleanupOrphans()
+        }
     }
 
     private fun configureSentryUserContext() {
@@ -93,13 +102,37 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
         }
     }
 
+    private suspend fun cleanupStuckDownloads() {
+        try {
+            downloadDao.resetStuckDownloading()
+            val failed = downloadDao.getFailedDownloads()
+            for (download in failed) {
+                if (download.downloadPath.isNotBlank()) {
+                    val file = java.io.File(download.downloadPath)
+                    if (file.exists() && file.length() == 0L) {
+                        file.delete()
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private val imageClient by lazy {
+        okHttpClient.newBuilder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(8, 15, java.util.concurrent.TimeUnit.MINUTES))
+            .build()
+    }
+
     private val imageLoader by lazy {
         val cacheMb = userPreferencesStore.preferences.value.maxCacheSizeMb
         val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
 
         ImageLoader.Builder(this)
             .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
+                add(OkHttpNetworkFetcherFactory(callFactory = { imageClient }))
             }
             .memoryCache {
                 MemoryCache.Builder()

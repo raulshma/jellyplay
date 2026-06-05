@@ -5,7 +5,10 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "servers")
+@Entity(
+    tableName = "servers",
+    indices = [Index(value = ["address"], unique = true)],
+)
 data class ServerEntity(
     @PrimaryKey val id: String,
     val name: String,

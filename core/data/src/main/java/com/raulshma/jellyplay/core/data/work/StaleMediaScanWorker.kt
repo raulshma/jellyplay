@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 
 @HiltWorker
@@ -29,11 +30,13 @@ class StaleMediaScanWorker @AssistedInject constructor(
         return try {
             val config = json.decodeFromString<MediaCleanupConfig>(entity.configJson)
             val batchSize = 200
+            val maxItems = 10_000
             var startIndex = 0
             val allItems = mutableListOf<com.raulshma.jellyplay.core.model.StaleMediaItem>()
             var hasMore = true
 
             while (hasMore) {
+                if (isStopped) break
                 val result = apiClient.getStaleItems(
                     daysThreshold = config.daysThreshold,
                     includeNeverPlayed = config.includeNeverPlayed,
@@ -45,7 +48,9 @@ class StaleMediaScanWorker @AssistedInject constructor(
 
                 allItems.addAll(result.second)
                 startIndex += batchSize
-                hasMore = result.second.size >= batchSize
+                hasMore = result.second.size >= batchSize && allItems.size < maxItems
+
+                if (hasMore) delay(500)
 
                 scanStateDao.update(
                     entity.copy(

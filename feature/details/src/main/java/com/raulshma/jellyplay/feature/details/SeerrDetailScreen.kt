@@ -124,7 +124,7 @@ fun SeerrDetailScreen(
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
 
-    val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val outerIsLightTheme = rememberIsLightTheme()
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
@@ -291,7 +291,7 @@ private fun SeerrDetailContent(
     }
     val scrollFraction by remember { derivedStateOf { (scrollOffset / collapsedHeight).coerceIn(0f, 1f) } }
 
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val isLightTheme = rememberIsLightTheme()
 
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
@@ -1931,4 +1931,12 @@ private fun getFlagEmoji(countryCode: String): String? {
     val firstChar = Character.codePointAt(countryCode, 0) - 0x41 + 0x1F1E6
     val secondChar = Character.codePointAt(countryCode, 1) - 0x41 + 0x1F1E6
     return String(Character.toChars(firstChar)) + String(Character.toChars(secondChar))
+}
+
+@Composable
+private fun rememberIsLightTheme(): Boolean {
+    val bg = MaterialTheme.colorScheme.background
+    return remember(bg) {
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
 }

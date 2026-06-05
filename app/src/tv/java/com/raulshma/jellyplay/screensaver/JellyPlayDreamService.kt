@@ -129,11 +129,11 @@ class JellyPlayDreamService : DreamService() {
                 val prefs = preferencesStore.preferences.first()
                 val fetched = imageProvider.fetchImages(
                     categories = prefs.dreamImageCategories,
-                    count = 50,
+                    count = 25,
                 )
                 images = fetched
-                if (fetched.size > 5) {
-                    imageProvider.prefetchImages(fetched.take(5).map { it.backdropUrl })
+                if (fetched.size > 3) {
+                    imageProvider.prefetchImages(fetched.take(3).map { it.backdropUrl })
                 }
             } catch (_: Exception) {
                 images = emptyList()

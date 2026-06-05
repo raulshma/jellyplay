@@ -188,7 +188,7 @@ fun MediaDetailScreen(
     }
     val backdropUrl = viewModel.getBackdropUrl(targetBackdropId)
 
-    val outerIsLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -299,8 +299,8 @@ fun MediaDetailScreen(
             onMarkUnplayed = remember(viewModel) { { viewModel.markUnplayed() } },
             onSubtitleSelect = remember(viewModel) { { idx: Int? -> viewModel.selectSubtitle(idx) } },
             onAudioSelect = remember(viewModel) { { idx: Int? -> viewModel.selectAudio(idx) } },
-            onItemClick = onItemClick,
-            onPersonClick = onPersonClick,
+            onItemClick = remember { onItemClick },
+            onPersonClick = remember { onPersonClick },
             onNavigateToSeries = onNavigateToSeries,
             onSeasonSelected = remember(viewModel, detail, itemId) {
                 { seasonId: String ->
@@ -481,7 +481,7 @@ private fun DetailContent(
         }
     }
 
-    val isLightTheme = MaterialTheme.colorScheme.background.let { bg -> (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f }
+    val isLightTheme = rememberIsLightTheme()
 
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
@@ -2848,4 +2848,11 @@ private fun FadingItem(
     }
 }
 
+@Composable
+private fun rememberIsLightTheme(): Boolean {
+    val bg = MaterialTheme.colorScheme.background
+    return remember(bg) {
+        (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
+    }
+}
 

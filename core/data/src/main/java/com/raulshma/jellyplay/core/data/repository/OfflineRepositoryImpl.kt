@@ -1,39 +1,49 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.room.withTransaction
+import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class OfflineRepositoryImpl @Inject constructor(
     private val offlineMediaDao: OfflineMediaDao,
     private val downloadDao: DownloadDao,
+    private val database: JellyPlayDatabase,
 ) : OfflineRepository {
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
-        combine(
-            offlineMediaDao.getTopLevelItems(),
-            downloadDao.getAllDownloads().conflate(),
-        ) { entities, downloads ->
-            val downloadMap = downloads.associateBy { it.mediaItemId }
-            entities.map { entity ->
-                val download = downloadMap[entity.id]
-                entity.toOfflineMediaItem().copy(
-                    downloadPath = download?.downloadPath,
-                    downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                    downloadedBytes = download?.downloadedBytes ?: 0L,
-                    totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                )
+        offlineMediaDao.getTopLevelItems().flatMapLatest { entities ->
+            if (entities.isEmpty()) {
+                kotlinx.coroutines.flow.flowOf(emptyList())
+            } else {
+                downloadDao.getDownloadsByMediaItemIdsFlow(entities.map { it.id })
+                    .map { downloads ->
+                        val downloadMap = downloads.associateBy { it.mediaItemId }
+                        entities.map { entity ->
+                            val download = downloadMap[entity.id]
+                            entity.toOfflineMediaItem().copy(
+                                downloadPath = download?.downloadPath,
+                                downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
+                                downloadedBytes = download?.downloadedBytes ?: 0L,
+                                totalSizeBytes = download?.totalSizeBytes ?: 0L,
+                            )
+                        }
+                    }
             }
         }.distinctUntilChanged()
 
@@ -66,18 +76,21 @@ class OfflineRepositoryImpl @Inject constructor(
         offlineMediaDao.getOfflineItemCount()
 
     override suspend fun deleteOfflineItem(id: String) {
-        downloadDao.getDownloadByMediaItemId(id)?.let { download ->
-            if (download.downloadPath.isNotBlank()) {
-                val file = java.io.File(download.downloadPath)
+        val download = downloadDao.getDownloadByMediaItemId(id)
+        download?.let {
+            if (it.downloadPath.isNotBlank()) {
+                val file = java.io.File(it.downloadPath)
                 if (file.exists()) file.delete()
                 file.parentFile?.let { parent ->
                     val trickplayDir = java.io.File(parent, "trickplay")
                     if (trickplayDir.exists()) trickplayDir.deleteRecursively()
                 }
             }
-            downloadDao.deleteDownloadById(download.id)
         }
-        offlineMediaDao.deleteById(id)
+        database.withTransaction {
+            download?.let { downloadDao.deleteDownloadById(it.id) }
+            offlineMediaDao.deleteById(id)
+        }
         cleanupOrphans()
     }
 
@@ -93,10 +106,11 @@ class OfflineRepositoryImpl @Inject constructor(
                 }
             }
         }
-        // Batch-delete all download records in a single SQL statement.
-        val ids = downloads.map { it.id }
-        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
-        offlineMediaDao.deleteBySeriesId(seriesId)
+        database.withTransaction {
+            val ids = downloads.map { it.id }
+            if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
+            offlineMediaDao.deleteBySeriesId(seriesId)
+        }
         cleanupOrphans()
     }
 
@@ -112,10 +126,11 @@ class OfflineRepositoryImpl @Inject constructor(
                 }
             }
         }
-        // Batch-delete all download records in a single SQL statement.
-        val ids = downloads.map { it.id }
-        if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
-        offlineMediaDao.deleteBySeasonId(seasonId)
+        database.withTransaction {
+            val ids = downloads.map { it.id }
+            if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
+            offlineMediaDao.deleteBySeasonId(seasonId)
+        }
         cleanupOrphans()
     }
 
