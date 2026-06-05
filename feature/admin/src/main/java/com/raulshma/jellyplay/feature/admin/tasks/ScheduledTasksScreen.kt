@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -150,7 +151,7 @@ private fun TaskItem(
 
     val stateColor = when (task.state) {
         TaskState.RUNNING -> MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> Color(0xFFFF9800)
+        TaskState.CANCELLING -> StatusColors.warning
         TaskState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -245,7 +246,7 @@ private fun TaskItem(
                         Text(
                             "Cancelling...",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFFF9800),
+                            color = StatusColors.warning,
                         )
                     }
                 }
@@ -291,7 +292,7 @@ private fun TaskItem(
 private fun TaskStateBadge(state: TaskState) {
     val (text, color) = when (state) {
         TaskState.RUNNING -> "Running" to MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> "Cancelling" to Color(0xFFFF9800)
+        TaskState.CANCELLING -> "Cancelling" to StatusColors.warning
         TaskState.IDLE -> "Idle" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Box(

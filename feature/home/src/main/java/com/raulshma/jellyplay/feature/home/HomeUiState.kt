@@ -23,6 +23,7 @@ data class HomeUiState(
     val dynamicTheming: Boolean = true,
     val oledMode: Boolean = false,
     val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
+    val accentColorSwatch: String = "dynamic",
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     val discoverEnabled: Boolean = false,

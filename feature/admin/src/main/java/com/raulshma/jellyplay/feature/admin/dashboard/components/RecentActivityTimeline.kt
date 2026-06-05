@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 
@@ -77,7 +78,7 @@ private fun TimelineEntry(
         ActivityLogSeverity.ERROR,
         ActivityLogSeverity.FATAL -> MaterialTheme.colorScheme.error
 
-        ActivityLogSeverity.WARNING -> Color(0xFFFF9800)
+        ActivityLogSeverity.WARNING -> StatusColors.warning
 
         ActivityLogSeverity.DEBUG,
         ActivityLogSeverity.TRACE -> MaterialTheme.colorScheme.outline

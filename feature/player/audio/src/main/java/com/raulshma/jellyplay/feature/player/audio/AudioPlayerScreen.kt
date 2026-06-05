@@ -215,6 +215,7 @@ fun AudioPlayerScreen(
         darkTheme = isDarkTheme,
         oledMode = preferences.oledMode,
         colorStyle = preferences.colorStyle,
+        accentColorSwatch = preferences.accentColorSwatch,
     ) {
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         val sharedContainerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {

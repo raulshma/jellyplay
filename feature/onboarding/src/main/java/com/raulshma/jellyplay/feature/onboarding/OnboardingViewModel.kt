@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.onboarding
 
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -64,6 +65,14 @@ class OnboardingViewModel @Inject constructor(
 
     fun setContrastLevel(level: ContrastLevel) {
         launch { preferencesStore.setContrastLevel(level) }
+    }
+
+    fun setAccentColorSwatch(swatch: String) {
+        launch { preferencesStore.setAccentColorSwatch(swatch) }
+    }
+
+    fun setColorStyle(style: ColorStyle) {
+        launch { preferencesStore.setColorStyle(style) }
     }
 
     fun setPerformanceMode(enabled: Boolean) {

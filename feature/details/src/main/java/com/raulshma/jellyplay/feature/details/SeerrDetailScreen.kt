@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.core.animateFloatAsState
@@ -132,6 +133,7 @@ fun SeerrDetailScreen(
         darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
         colorStyle = preferences.colorStyle,
+        accentColorSwatch = preferences.accentColorSwatch,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
@@ -1286,7 +1288,7 @@ private fun EpisodeRow(episode: SeerrEpisode) {
                                 imageVector = com.composables.icons.tabler.Tabler.Outline.Star,
                                 contentDescription = null,
                                 modifier = Modifier.size(13.dp),
-                                tint = Color(0xFFFFC107)
+                                tint = RatingColors.star
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
