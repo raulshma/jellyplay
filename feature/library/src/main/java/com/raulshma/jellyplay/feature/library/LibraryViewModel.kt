@@ -5,8 +5,10 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -44,6 +46,7 @@ enum class PlayedStatus(val displayName: String) {
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _folders = stateFlow<List<LibraryFolder>>(emptyList())
@@ -67,6 +70,9 @@ class LibraryViewModel @Inject constructor(
     private val _showFilters = stateFlow(false)
     val showFilters = _showFilters.flow
 
+    private val _viewMode = stateFlow(LibraryViewMode.GRID)
+    val viewMode = _viewMode.flow
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow) { folder, filters ->
         folder to filters
@@ -84,6 +90,20 @@ class LibraryViewModel @Inject constructor(
     init {
         loadFolders()
         loadGenres()
+        loadViewMode()
+    }
+
+    private fun loadViewMode() {
+        launch {
+            preferencesStore.preferences.collect { prefs ->
+                _viewMode.set(prefs.libraryViewMode)
+            }
+        }
+    }
+
+    fun setViewMode(mode: LibraryViewMode) {
+        _viewMode.set(mode)
+        launch { preferencesStore.setLibraryViewMode(mode) }
     }
 
     private fun loadFolders() {

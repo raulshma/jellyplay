@@ -4,6 +4,8 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.settings.AboutScreen
+import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
@@ -25,6 +27,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onSetupWizard = onSetupWizard,
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
             onFavoritesClick = { navigator.navigate(Route.Favorites) },
+            onAboutClick = { navigator.navigate(Route.About) },
         )
     }
 
@@ -45,6 +48,19 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.SeerrSettings> {
         SeerrSettingsScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.About> {
+        AboutScreen(
+            onBack = { navigator.goBack() },
+            onLicensesClick = { navigator.navigate(Route.Licenses) },
+        )
+    }
+
+    entry<Route.Licenses> {
+        LicensesScreen(
             onBack = { navigator.goBack() },
         )
     }

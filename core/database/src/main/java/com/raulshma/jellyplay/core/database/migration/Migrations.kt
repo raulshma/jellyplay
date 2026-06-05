@@ -320,6 +320,24 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
     }
 }
 
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS search_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                query TEXT NOT NULL,
+                userId TEXT NOT NULL,
+                searchedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_search_history_userId ON search_history(userId)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_search_history_query_userId ON search_history(query, userId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_search_history_searchedAt ON search_history(searchedAt)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -337,4 +355,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_14_15,
     MIGRATION_15_16,
     MIGRATION_16_17,
+    MIGRATION_17_18,
 )

@@ -138,6 +138,21 @@ class LibraryApiClientImpl @Inject constructor(
                 }
             }
 
+            if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
+                getRecommendations(limit = 20)
+                    .onSuccess { recommendations ->
+                        if (recommendations.isNotEmpty()) {
+                            sections.add(HomeSection(
+                                "recommendations",
+                                "Recommended For You",
+                                HomeSectionType.RECOMMENDATIONS,
+                                recommendations,
+                            ))
+                        }
+                    }
+                    .onFailure { if (firstError == null) firstError = it }
+            }
+
             if (sections.isEmpty() && firstError != null) {
                 throw firstError!!
             }
@@ -459,6 +474,34 @@ class LibraryApiClientImpl @Inject constructor(
                 ).content.items.map { it.toMediaItem() }.filterByParentalRating()
             }
         }
+
+    override suspend fun getRecommendations(limit: Int): Result<List<MediaItem>> = runCatching {
+        val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
+        val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
+
+        val seedItems = (continueWatching + nextUp)
+            .distinctBy { it.id }
+            .take(5)
+
+        if (seedItems.isEmpty()) return@runCatching emptyList<MediaItem>()
+
+        val seedIds = seedItems.map { it.id }.toSet()
+        val semaphore = Semaphore(3)
+        val allSimilar = coroutineScope {
+            seedItems.map { seed ->
+                async {
+                    semaphore.acquire()
+                    try { getSimilarItems(seed.id, limit = limit / seedItems.size + 2).getOrDefault(emptyList()) }
+                    finally { semaphore.release() }
+                }
+            }.flatMap { it.await() }
+        }
+
+        allSimilar
+            .filter { it.id !in seedIds }
+            .distinctBy { it.id }
+            .take(limit)
+    }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         runCatching {

@@ -30,6 +30,7 @@ enum class HomeSectionType {
     FAVORITES,
     LIVE_TV,
     DOWNLOADED,
+    RECOMMENDATIONS,
     ;
 
     val displayName: String
@@ -41,6 +42,7 @@ enum class HomeSectionType {
             FAVORITES -> "Favorites"
             LIVE_TV -> "Live TV"
             DOWNLOADED -> "Downloaded"
+            RECOMMENDATIONS -> "Recommended For You"
         }
 
     val description: String
@@ -52,6 +54,7 @@ enum class HomeSectionType {
             FAVORITES -> "Your favorited items"
             LIVE_TV -> "Live television channels"
             DOWNLOADED -> "Offline downloaded items"
+            RECOMMENDATIONS -> "Personalized picks based on your watch history"
         }
 
     companion object {
@@ -60,6 +63,7 @@ enum class HomeSectionType {
             NEXT_UP,
             LATEST_MEDIA,
             RECENTLY_ADDED,
+            RECOMMENDATIONS,
         )
     }
 }
@@ -79,3 +83,10 @@ data class Genre(
     val id: String,
     val name: String,
 )
+
+@Immutable
+@Serializable
+enum class LibraryViewMode {
+    GRID,
+    LIST,
+}

@@ -231,6 +231,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setStreamingQuality(quality) }
     }
 
+    fun setWifiOnlyDownloads(enabled: Boolean) {
+        launch { preferencesStore.setWifiOnlyDownloads(enabled) }
+    }
+
     fun setMaxCacheSize(sizeMb: Int) {
         launch { preferencesStore.setMaxCacheSize(sizeMb) }
     }
