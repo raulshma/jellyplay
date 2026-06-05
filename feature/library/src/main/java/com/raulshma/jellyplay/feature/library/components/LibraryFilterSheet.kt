@@ -87,8 +87,8 @@ fun LibraryFilterSheet(
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
-        val contentColor = if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
-        val contentColorMedium = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f)
+        val contentColor = MaterialTheme.colorScheme.onSurface
+        val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant
         val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
 
         Column(
@@ -169,8 +169,8 @@ fun LibraryFilterSheet(
                         colors = ToggleButtonDefaults.toggleButtonColors(
                             containerColor = glassBg,
                             contentColor = contentColor,
-                            checkedContainerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.White,
-                            checkedContentColor = if (isLight) Color.White else Color.Black,
+                            checkedContainerColor = MaterialTheme.colorScheme.primary,
+                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
                         Text(
@@ -222,8 +222,8 @@ fun LibraryFilterSheet(
                         colors = ToggleButtonDefaults.toggleButtonColors(
                             containerColor = glassBg,
                             contentColor = contentColor,
-                            checkedContainerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.White,
-                            checkedContentColor = if (isLight) Color.White else Color.Black,
+                            checkedContainerColor = MaterialTheme.colorScheme.primary,
+                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
                         Text(
@@ -320,7 +320,7 @@ private fun SectionLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 10.dp),
     )
@@ -360,14 +360,14 @@ private fun GlassFilterChip(
 
     val isLight = LocalIsLightTheme.current
     val bgColor = when {
-        selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
+        selected -> MaterialTheme.colorScheme.primary
         else -> if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     }
     val textColor = when {
-        selected -> if (isLight) Color.White else Color.Black
-        else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
+        selected -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
     }
-    val checkTint = if (isLight) Color.White else Color.Black
+    val checkTint = MaterialTheme.colorScheme.onPrimary
 
     Box(
         modifier = Modifier

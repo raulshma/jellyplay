@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -134,7 +135,7 @@ private fun StatsSection(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.3.sp,
             ),
-            color = Color(0xFF8AB4F8),
+            color = MaterialTheme.extendedColors.statsOverlayText,
         )
         content()
     }

@@ -5,8 +5,9 @@
     </style>
 
     <style name="Theme.JellyPlay.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#090514</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowBackground">#FFFBF8FD</item>
+        <item name="windowSplashScreenBackground">#FFFBF8FD</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
         <item name="postSplashScreenTheme">@style/Theme.JellyPlay</item>
     </style>
 </resources>

@@ -115,6 +115,8 @@ import androidx.fragment.app.FragmentActivity
 import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
+import com.raulshma.jellyplay.core.ui.components.AccentColorPicker
+import com.raulshma.jellyplay.core.ui.components.ColorStylePicker
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1484,18 +1486,18 @@ fun SettingsScreen(
                                 )
                             }
                             "accent_color" -> {
-                                SettingAccentColorPicker(
+                                AccentColorPicker(
                                     selectedSwatch = preferences.accentColorSwatch,
                                     onSwatchSelected = { viewModel.setAccentColorSwatch(it) },
-                                    index = currentIdx++, count = totalCount,
                                 )
+                                currentIdx++
                             }
                             "color_style" -> {
-                                SettingColorStylePicker(
+                                ColorStylePicker(
                                     selectedStyle = preferences.colorStyle,
                                     onStyleSelected = { viewModel.setColorStyle(it) },
-                                    index = currentIdx++, count = totalCount,
                                 )
+                                currentIdx++
                             }
                             "dynamic_theming" -> {
                                 SettingToggleItem(

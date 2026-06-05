@@ -221,6 +221,7 @@ fun MediaDetailScreen(
         darkTheme = !outerIsLightTheme,
         oledMode = preferences.oledMode,
         colorStyle = preferences.colorStyle,
+        accentColorSwatch = preferences.accentColorSwatch,
     ) {
         val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
         val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -2831,12 +2832,12 @@ private fun FadingItem(
     }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(600),
+        animationSpec = tween(300),
         label = "itemAlpha"
     )
     val blurRadius by animateFloatAsState(
         targetValue = if (visible) 0f else 8f,
-        animationSpec = tween(800),
+        animationSpec = tween(400),
         label = "itemBlur"
     )
     Box(

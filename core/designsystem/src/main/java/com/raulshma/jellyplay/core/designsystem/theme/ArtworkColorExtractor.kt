@@ -81,17 +81,26 @@ object ArtworkColorExtractor {
         darkTheme: Boolean,
         oledMode: Boolean = false,
         colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
+        accentColorSwatch: String = "dynamic",
     ): ColorScheme {
-        val seedColor = artworkColors.vibrant
+        val swatch = AccentColorSwatch.entries.find { it.name.lowercase() == accentColorSwatch }
+        val artworkSeed = artworkColors.vibrant
             ?: artworkColors.dominant
             ?: artworkColors.muted
-            ?: return if (darkTheme) darkColorScheme() else lightColorScheme()
+        val seedColor = if (swatch != null && swatch != AccentColorSwatch.DYNAMIC) {
+            Color(if (darkTheme) swatch.darkColor else swatch.lightColor)
+        } else {
+            artworkSeed
+        }
+        if (seedColor == null) {
+            return if (darkTheme) darkColorScheme() else lightColorScheme()
+        }
 
         return ColorGenerator.generateColorScheme(
             seedColor = seedColor,
             style = colorStyle,
             darkTheme = darkTheme,
-            oledMode = oledMode
+            oledMode = oledMode,
         )
     }
 

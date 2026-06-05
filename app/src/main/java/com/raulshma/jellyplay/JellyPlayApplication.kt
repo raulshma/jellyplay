@@ -41,14 +41,18 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
-        SentryAndroid.init(this) { options ->
-            options.dsn?.let { dsn ->
-                if (dsn.isNotBlank()) {
-                    configureSentryUserContext()
+        applicationScope.launch {
+            SentryAndroid.init(this@JellyPlayApplication) { options ->
+                options.dsn?.let { dsn ->
+                    if (dsn.isNotBlank()) {
+                        configureSentryUserContext()
+                    }
                 }
             }
         }
-        audioPlaybackManager.start()
+        applicationScope.launch {
+            audioPlaybackManager.start()
+        }
         applicationScope.launch {
             recoverPendingDownloads()
             cleanupStuckDownloads()

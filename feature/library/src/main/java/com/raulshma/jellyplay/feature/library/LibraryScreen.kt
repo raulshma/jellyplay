@@ -67,7 +67,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,7 +75,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
@@ -132,17 +130,7 @@ fun LibraryScreen(
         }
     }
 
-    val isLightTheme = LocalIsLightTheme.current
-
-    val artworkColors = LocalArtworkColors.current
-    val baseColor = artworkColors?.darkMuted
-        ?: artworkColors?.dominant
-        ?: MaterialTheme.colorScheme.background
-    val backgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
-    } else {
-        lerp(baseColor, Color.Black, 0.65f)
-    }
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     var headerVisible by remember { mutableStateOf(true) }
 
@@ -223,7 +211,7 @@ fun LibraryScreen(
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                 ),
-                                color = if (isLightTheme) MaterialTheme.colorScheme.onBackground else Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                             )
                             ErrorAwareStatusIndicator(
                                 status = headerStatus,
@@ -374,7 +362,7 @@ fun LibraryScreen(
                         Text(
                             text = "${pagedItems.itemCount} items",
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.5f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(
                                 horizontal = 24.dp,
                                 vertical = 8.dp,
@@ -416,18 +404,18 @@ fun LibraryScreen(
                                             Tabler.Outline.Search,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
-                                            tint = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.3f),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                         )
                                         Text(
                                             text = "No items found",
                                             style = MaterialTheme.typography.bodyLarge,
-                                            color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.5f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         if (hasActiveFilters) {
                                             Text(
                                                 text = "Try adjusting your filters",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = if (isLightTheme) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.3f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                             )
                                         }
                                     }
@@ -726,12 +714,12 @@ private fun GlassPill(
 
     val isLight = LocalIsLightTheme.current
     val surfaceColor = when {
-        selected -> if (isLight) MaterialTheme.colorScheme.primary else Color.White
-        else -> if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
+        selected -> MaterialTheme.colorScheme.primary
+        else -> if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     }
     val contentColor = when {
-        selected -> if (isLight) Color.White else Color.Black
-        else -> if (isLight) MaterialTheme.colorScheme.onSurface else Color.White
+        selected -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Surface(
@@ -796,8 +784,8 @@ private fun GlassDismissTag(
 
     val isLight = LocalIsLightTheme.current
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
-    val textColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
-    val iconTint = if (isLight) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)
+    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+    val iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
 
     Row(
         modifier = Modifier
