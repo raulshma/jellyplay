@@ -89,7 +89,7 @@
 
         <receiver
             android:name=".widget.NowPlayingWidget"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -100,7 +100,7 @@
 
         <receiver
             android:name=".widget.ContinueWatchingWidget"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -108,6 +108,11 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/continue_watching_widget_info" />
         </receiver>
+
+        <service
+            android:name=".widget.ContinueWatchingWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
         <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
