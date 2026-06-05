@@ -41,6 +41,7 @@ class JellyfinWebSocketClient @Inject constructor(
     private var clientName: String? = null
     private val reconnectAttempts = AtomicInteger(0)
     private val maxReconnectAttempts = 5
+    private var backgroundRetryJob: kotlinx.coroutines.Job? = null
 
     private val _isConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _isConnected
@@ -105,7 +106,19 @@ class JellyfinWebSocketClient @Inject constructor(
     private fun scheduleReconnect() {
         val attempts = reconnectAttempts.incrementAndGet()
         if (attempts > maxReconnectAttempts) {
-            Log.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, giving up")
+            Log.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, scheduling slow background retry")
+            backgroundRetryJob?.cancel()
+            backgroundRetryJob = scope.launch {
+                while (serverUrl != null && token != null) {
+                    delay(60_000L)
+                    if (serverUrl != null && token != null) {
+                        Log.d(TAG, "Background WebSocket retry")
+                        reconnectAttempts.set(0)
+                        connectInternal()
+                        return@launch
+                    }
+                }
+            }
             return
         }
         val delayMs = (1000L * (1L shl (attempts - 1).coerceAtMost(4)) + (0..1000L).random()).coerceAtMost(30_000L)
@@ -122,6 +135,7 @@ class JellyfinWebSocketClient @Inject constructor(
         serverUrl = null
         token = null
         deviceId = null
+        backgroundRetryJob?.cancel()
         reconnectAttempts.set(maxReconnectAttempts + 1)
         _isConnected.value = false
         webSocket?.close(1000, "Client disconnecting")

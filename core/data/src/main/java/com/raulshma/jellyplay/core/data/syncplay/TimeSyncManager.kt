@@ -52,7 +52,7 @@ class TimeSyncManager @Inject constructor(
             }
             _pingUpdated.tryEmit(Unit)
             while (isSyncing.get()) {
-                delay(60_000)
+                delay(120_000)
                 sync()
                 _pingUpdated.tryEmit(Unit)
             }

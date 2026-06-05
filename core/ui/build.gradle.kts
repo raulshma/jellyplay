@@ -52,7 +52,7 @@ dependencies {
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.kotlinx.serialization.json)
-    implementation("androidx.compose.animation:animation-android")
+    implementation(libs.compose.animation)
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer)
     implementation(libs.smooth.corner.rect)

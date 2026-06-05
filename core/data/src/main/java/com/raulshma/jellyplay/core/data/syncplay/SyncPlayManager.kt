@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -72,8 +73,11 @@ class SyncPlayManager @Inject constructor(
         keepAliveJob?.cancel()
         keepAliveJob = scope.launch {
             while (true) {
-                delay(30_000)
-                webSocketClient.sendKeepAlive()
+                delay(60_000)
+                try {
+                    webSocketClient.sendKeepAlive()
+                } catch (_: Exception) {
+                }
             }
         }
     }
@@ -265,16 +269,18 @@ class SyncPlayManager @Inject constructor(
     private fun startPingReporting() {
         pingReportJob?.cancel()
         pingReportJob = scope.launch {
-            timeSyncManager.pingUpdated.collect {
-                if (isInSyncPlaySession) {
-                    try {
-                        val ping = timeSyncManager.getPingMs()
-                        apiClient.syncPlayPing(ping)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to report ping", e)
+            timeSyncManager.pingUpdated
+                .sample(PING_REPORT_INTERVAL_MS)
+                .collect {
+                    if (isInSyncPlaySession) {
+                        try {
+                            val ping = timeSyncManager.getPingMs()
+                            apiClient.syncPlayPing(ping)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to report ping", e)
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -329,5 +335,6 @@ class SyncPlayManager @Inject constructor(
     companion object {
         private const val TAG = "SyncPlayManager"
         private const val STALE_SKEW_ALLOWANCE_MS = 1500L
+        private const val PING_REPORT_INTERVAL_MS = 10_000L
     }
 }

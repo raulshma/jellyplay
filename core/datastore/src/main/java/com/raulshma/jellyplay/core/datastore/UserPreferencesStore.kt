@@ -941,4 +941,131 @@ class UserPreferencesStore @Inject constructor(
     suspend fun setColorStyle(style: ColorStyle) {
         context.dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
     }
+
+    suspend fun restorePreferences(prefs: UserPreferences) {
+        val json = Json { encodeDefaults = true }
+        context.dataStore.edit { settings ->
+            settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
+            prefs.preferredSubtitleLanguage?.let { settings[Keys.PREFERRED_SUBTITLE_LANG] = it }
+            prefs.preferredAudioLanguage?.let { settings[Keys.PREFERRED_AUDIO_LANG] = it }
+            settings[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, com.raulshma.jellyplay.core.model.MediaStreamSelection>>(),
+                prefs.mediaStreamSelections,
+            )
+            settings[Keys.DYNAMIC_THEMING] = prefs.dynamicTheming
+            settings[Keys.THEME_MODE] = prefs.themeMode.name
+            settings[Keys.CONTRAST_LEVEL] = prefs.contrastLevel.name
+            settings[Keys.OLED_MODE] = prefs.oledMode
+            settings[Keys.SUBTITLE_STYLE] = json.encodeToString(
+                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.SubtitleStyle>(),
+                prefs.subtitleStyle,
+            )
+            settings[Keys.STREAMING_QUALITY] = prefs.streamingQuality.name
+            settings[Keys.MAX_CACHE_SIZE_MB] = prefs.maxCacheSizeMb
+            settings[Keys.AUTO_DELETE_CACHE] = prefs.autoDeleteCache
+            settings[Keys.PIN_LOCK_ENABLED] = prefs.pinLockEnabled
+            prefs.pinHash?.let { settings[Keys.PIN_HASH] = it }
+            settings[Keys.BIOMETRIC_LOCK_ENABLED] = prefs.biometricLockEnabled
+            settings[Keys.AUTO_LOCK_TIMER_MS] = prefs.autoLockTimerMs
+            settings[Keys.DIALOGUE_BOOST_ENABLED] = prefs.dialogueBoostEnabled
+            settings[Keys.DIALOGUE_BOOST_STRENGTH] = prefs.dialogueBoostStrength.name
+            settings[Keys.EQUALIZER_ENABLED] = prefs.equalizerEnabled
+            settings[Keys.EQUALIZER_SETTINGS] = json.encodeToString(
+                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.EqualizerSettings>(),
+                prefs.equalizerSettings,
+            )
+            settings[Keys.AUDIO_DELAY_MS] = prefs.audioDelayMs
+            settings[Keys.DECODER_MODE] = prefs.decoderMode.name
+            settings[Keys.AUDIO_PASSTHROUGH] = prefs.audioPassthrough
+            settings[Keys.FRAME_RATE_MATCHING] = prefs.frameRateMatching
+            settings[Keys.NIGHT_MODE_ENABLED] = prefs.nightModeEnabled
+            settings[Keys.NIGHT_MODE_STRENGTH] = prefs.nightModeStrength.name
+            settings[Keys.HOME_MODE] = prefs.homeMode.name
+            settings[Keys.VIDEO_SEEK_DURATION_MS] = prefs.videoSeekDurationMs
+            settings[Keys.VIDEO_DEFAULT_ORIENTATION] = prefs.videoDefaultOrientation.name
+            settings[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = prefs.videoControlsTimeoutMs
+            settings[Keys.VIDEO_GESTURES_ENABLED] = prefs.videoGesturesEnabled
+            settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
+            settings[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = prefs.videoDefaultAspectRatio
+            settings[Keys.VIDEO_AUTOPLAY_NEXT] = prefs.videoAutoplayNext
+            settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
+            settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
+            settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel
+            settings[Keys.AUDIO_DEFAULT_SPEED] = prefs.audioDefaultSpeed
+            settings[Keys.AUDIO_NIGHT_MODE_VOLUME] = prefs.audioNightModeVolume
+            settings[Keys.AUDIO_NIGHT_MODE_GAIN] = prefs.audioNightModeGain
+            settings[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = prefs.audioSkipPreviousThresholdMs
+            settings[Keys.AUDIO_AUTOPLAY_NEXT] = prefs.audioAutoplayNext
+            settings[Keys.TRICKPLAY_ENABLED] = prefs.trickplayEnabled
+            settings[Keys.TRICKPLAY_ON_SEEK_GESTURE] = prefs.trickplayOnSeekGesture
+            settings[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<com.raulshma.jellyplay.core.model.MediaSegmentType, com.raulshma.jellyplay.core.model.SegmentBehavior>>(),
+                prefs.segmentBehaviors,
+            )
+            settings[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = prefs.videoEpisodeBrowserEnabled
+            settings[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = prefs.videoShowPlaybackMetadata
+            settings[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = prefs.videoPreloadBufferSize.name
+            settings[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = prefs.audioPreloadBufferSize.name
+            settings[Keys.AUDIO_NORMALIZATION_MODE] = prefs.audioNormalizationMode.name
+            settings[Keys.AUDIO_NORMALIZATION_ENABLED] = prefs.audioNormalizationEnabled
+            settings[Keys.REPLAYGAIN_PRE_AMP_DB] = prefs.replayGainPreAmpDb
+            settings[Keys.CHANNEL_MIX_MODE] = prefs.channelMixMode.name
+            settings[Keys.CHANNEL_MIX_ENABLED] = prefs.channelMixEnabled
+            settings[Keys.AUDIO_GAPLESS_ENABLED] = prefs.audioGaplessEnabled
+            settings[Keys.AUDIO_CROSSFADE_DURATION_MS] = prefs.audioCrossfadeDurationMs
+            settings[Keys.SLEEP_TIMER_DURATION_MS] = prefs.sleepTimerDurationMs
+            settings[Keys.SLEEP_TIMER_END_OF_EPISODE] = prefs.sleepTimerEndOfEpisode
+            settings[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(
+                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.DreamImageCategory>>(),
+                prefs.dreamImageCategories,
+            )
+            settings[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = prefs.dreamSlideshowIntervalMs
+            settings[Keys.DREAM_KEN_BURNS_ENABLED] = prefs.dreamKenBurnsEnabled
+            settings[Keys.DREAM_TRANSITION_STYLE] = prefs.dreamTransitionStyle.name
+            settings[Keys.DREAM_SHOW_TITLE] = prefs.dreamShowTitle
+            settings[Keys.EQUALIZER_PRESET] = prefs.equalizerPreset.name
+            settings[Keys.BASS_BOOST_ENABLED] = prefs.bassBoostEnabled
+            settings[Keys.BASS_BOOST_STRENGTH] = prefs.bassBoostStrength.name
+            settings[Keys.VIRTUALIZER_ENABLED] = prefs.virtualizerEnabled
+            settings[Keys.VIRTUALIZER_STRENGTH] = prefs.virtualizerStrength
+            settings[Keys.REVERB_PRESET] = prefs.reverbPreset.name
+            settings[Keys.LR_BALANCE] = prefs.lrBalance
+            settings[Keys.AUTO_EQ_BY_GENRE] = prefs.autoEqByGenre
+            settings[Keys.PITCH_SEMITONES] = prefs.pitchSemitones
+            settings[Keys.DOWNLOAD_CONNECTIONS] = prefs.downloadConnections
+            settings[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(
+                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
+                prefs.enabledHomeSectionTypes,
+            )
+            settings[Keys.HOME_SECTION_ORDER] = json.encodeToString(
+                kotlinx.serialization.serializer<List<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
+                prefs.homeSectionOrder,
+            )
+            settings[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] = json.encodeToString(
+                kotlinx.serialization.serializer<Set<String>>(),
+                prefs.hiddenLibrarySectionIds,
+            )
+            settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
+            settings[Keys.HOME_HERO_ENABLED] = prefs.homeHeroEnabled
+            settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
+            settings[Keys.MPV_CONFIG] = json.encodeToString(
+                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.MpvEngineConfig>(),
+                prefs.mpvConfig,
+            )
+            settings[Keys.LIBVLC_CONFIG] = json.encodeToString(
+                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.LibVlcEngineConfig>(),
+                prefs.libVlcConfig,
+            )
+            settings[Keys.EXO_CONFIG] = json.encodeToString(
+                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig>(),
+                prefs.exoPlayerConfig,
+            )
+            settings[Keys.PERFORMANCE_MODE] = prefs.performanceMode
+            settings[Keys.NEWSLETTER_ENABLED] = prefs.newsletterEnabled
+            settings[Keys.NEWSLETTER_DAY_OF_WEEK] = prefs.newsletterDayOfWeek
+            settings[Keys.NEWSLETTER_LAST_VIEWED_MS] = prefs.newsletterLastViewedMs
+            settings[Keys.ACCENT_COLOR_SWATCH] = prefs.accentColorSwatch
+            settings[Keys.COLOR_STYLE] = prefs.colorStyle.name
+        }
+    }
 }

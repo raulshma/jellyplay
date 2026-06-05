@@ -127,6 +127,7 @@ fun SettingsScreen(
     onAdminDashboard: () -> Unit = {},
     onSetupWizard: () -> Unit = {},
     onNewsletterClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -201,6 +202,18 @@ fun SettingsScreen(
     var showPinDisableAuth by remember { mutableStateOf(false) }
     var pinDisableAuthError by remember { mutableStateOf<String?>(null) }
     var showBiometricDisableAuth by remember { mutableStateOf(false) }
+
+    val settingsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        uri?.let { viewModel.exportSettings(it) }
+    }
+
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri?.let { viewModel.importSettings(it) }
+    }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -474,6 +487,14 @@ fun SettingsScreen(
                             }
                         }
                     }
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Heart,
+                        title = "Browse Favorites",
+                        subtitle = "View all your favorited items",
+                        index = idx, count = totalCount + 1,
+                        onClick = onFavoritesClick,
+                    )
                 }
             }
 
@@ -1775,6 +1796,41 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(if (isTv) 15 else 14) {
+                SettingsGroup(
+                    icon = Tabler.Outline.DatabaseExport,
+                    title = "Backup & Restore",
+                    summary = { "Export or import app settings" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.FileExport,
+                        title = "Export Settings",
+                        subtitle = "Save current settings to a JSON file",
+                        index = 0, count = 2,
+                        onClick = {
+                            settingsLauncher.launch("jellyplay-settings.json")
+                        },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.FileImport,
+                        title = "Import Settings",
+                        subtitle = "Restore settings from a backup file",
+                        index = 1, count = 2,
+                        onClick = {
+                            importLauncher.launch(arrayOf("application/json"))
+                        },
+                    )
+                }
+
+                LaunchedEffect(viewModel.backupRestoreStatus) {
+                    viewModel.backupRestoreStatus?.let { msg ->
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        viewModel.clearBackupRestoreStatus()
+                    }
+                }
+            }
+
+            AnimatedSettingsEntrance(if (isTv) 16 else 15) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                     SettingInfoItem(
                         icon = Tabler.Outline.Video,

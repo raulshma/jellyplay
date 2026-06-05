@@ -97,7 +97,12 @@ interface MediaRepository {
     suspend fun getFavorites(
         mediaTypes: List<MediaType>? = null,
         limit: Int = 50,
+        startIndex: Int = 0,
     ): Result<SearchResult>
+
+    fun getFavoritesPaged(
+        mediaTypes: List<MediaType>? = null,
+    ): Flow<PagingData<MediaItem>>
 
     suspend fun getLyrics(itemId: String): Result<LyricsResult>
 
@@ -194,4 +199,6 @@ interface MediaRepository {
     suspend fun cancelTimer(timerId: String): Result<Unit>
 
     suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
+
+    suspend fun cleanupLyricsCache()
 }

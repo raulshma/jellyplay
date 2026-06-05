@@ -348,7 +348,7 @@ class DetailViewModel @Inject constructor(
             val allEpisodes = episodes.values.flatten()
             if (allEpisodes.isEmpty()) {
                 if (hasMoreSeasonsToLoad()) {
-                    withContext(Dispatchers.Main) { loadNextUnfetchedSeason() }
+                    loadNextUnfetchedSeason()
                 }
                 return@launch
             }
@@ -358,13 +358,11 @@ class DetailViewModel @Inject constructor(
             if (resumeEpisode != null) {
                 val s = resumeEpisode.seasonNumber ?: 1
                 val e = resumeEpisode.episodeNumber ?: resumeEpisode.indexNumber ?: 1
-                withContext(Dispatchers.Main) {
-                    smartPlayTarget = SmartPlayTarget(
-                        episode = resumeEpisode,
-                        label = "Resume S${s}:E${e}",
-                        startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
-                    )
-                }
+                smartPlayTarget = SmartPlayTarget(
+                    episode = resumeEpisode,
+                    label = "Resume S${s}:E${e}",
+                    startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
+                )
                 return@launch
             }
 
@@ -380,31 +378,27 @@ class DetailViewModel @Inject constructor(
                 } else {
                     "Play S${s}:E${e}"
                 }
-                withContext(Dispatchers.Main) {
-                    smartPlayTarget = SmartPlayTarget(
-                        episode = nextEpisode,
-                        label = label,
-                        startPositionTicks = 0,
-                    )
-                }
+                smartPlayTarget = SmartPlayTarget(
+                    episode = nextEpisode,
+                    label = label,
+                    startPositionTicks = 0,
+                )
                 return@launch
             }
 
             if (hasMoreSeasonsToLoad()) {
-                withContext(Dispatchers.Main) { loadNextUnfetchedSeason() }
+                loadNextUnfetchedSeason()
                 return@launch
             }
 
             val first = sorted.first()
             val s = first.seasonNumber ?: 1
             val e = first.episodeNumber ?: first.indexNumber ?: 1
-            withContext(Dispatchers.Main) {
-                smartPlayTarget = SmartPlayTarget(
-                    episode = first,
-                    label = "Replay S${s}:E${e}",
-                    startPositionTicks = 0,
-                )
-            }
+            smartPlayTarget = SmartPlayTarget(
+                episode = first,
+                label = "Replay S${s}:E${e}",
+                startPositionTicks = 0,
+            )
         }
     }
 
@@ -426,24 +420,22 @@ class DetailViewModel @Inject constructor(
         launch(Dispatchers.Default) {
             val allEpisodes = episodes.values.flatten().sortedByPlaybackOrder()
             if (allEpisodes.isEmpty()) {
-                withContext(Dispatchers.Main) { smartPlayTarget = null }
+                smartPlayTarget = null
                 return@launch
             }
             val currentIndex = allEpisodes.indexOfFirst { it.id == currentEpisode.id }
             if (currentIndex < 0) {
-                withContext(Dispatchers.Main) { smartPlayTarget = null }
+                smartPlayTarget = null
                 return@launch
             }
             val s = currentEpisode.seasonNumber ?: 1
             val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
             val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
-            withContext(Dispatchers.Main) {
-                smartPlayTarget = SmartPlayTarget(
-                    episode = currentEpisode,
-                    label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}",
-                    startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
-                )
-            }
+            smartPlayTarget = SmartPlayTarget(
+                episode = currentEpisode,
+                label = if (hasProgress) "Resume S${s}:E${e}" else "Play S${s}:E${e}",
+                startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
+            )
         }
     }
 

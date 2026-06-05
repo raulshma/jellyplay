@@ -22,8 +22,8 @@ kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 palette = "1.0.0"
 coreKtx = "1.18.0"
+collection = "1.5.0"
 activityCompose = "1.13.0"
-appcompat = "1.8.0-alpha01"
 coreSplashScreen = "1.2.0"
 lifecycle = "2.11.0-beta01"
 junit = "4.13.2"
@@ -51,16 +51,13 @@ sentry = "8.14.0"
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
+androidx-collection-ktx = { group = "androidx.collection", name = "collection-ktx", version.ref = "collection" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
-
 # Compose BOM
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 compose-animation = { group = "androidx.compose.animation", name = "animation-android" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }

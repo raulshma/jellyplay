@@ -31,6 +31,7 @@ import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.UUID
 
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
@@ -531,11 +532,13 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getFavorites(
         mediaTypes: List<MediaType>?,
         limit: Int,
+        startIndex: Int,
     ): Result<SearchResult> = engine.apiResult {
         val response = engine.requireApi().itemsApi.getItems(
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
             filters = listOf(ItemFilter.IS_FAVORITE),
             limit = limit,
+            startIndex = startIndex,
             recursive = true,
             fields = listOf(
                 ItemFields.OVERVIEW,
@@ -545,7 +548,7 @@ class LibraryApiClientImpl @Inject constructor(
         SearchResult(
             items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
             totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
+            startIndex = startIndex,
         )
     }
 
@@ -706,21 +709,30 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResult {
         val uuid = itemId.toUUID()
-        val isFavorite = currentIsFavorite ?: engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+        val cached = favoriteCache[uuid]
+        val isFavorite = currentIsFavorite ?: cached ?: run {
+            val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+            favoriteCache.put(uuid, fetched)
+            fetched
+        }
         if (isFavorite) {
             engine.requireApi().userLibraryApi.unmarkFavoriteItem(
                 userId = engine._currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
             )
+            favoriteCache.put(uuid, false)
             false
         } else {
             engine.requireApi().userLibraryApi.markFavoriteItem(
                 userId = engine._currentUser.value?.id!!.toUUID(),
                 itemId = uuid,
             )
+            favoriteCache.put(uuid, true)
             true
         }
     }
+
+    private val favoriteCache = androidx.collection.LruCache<UUID, Boolean>(200)
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val server = engine._currentServer.value ?: return ""

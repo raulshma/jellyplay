@@ -33,7 +33,7 @@ class AudioVisualizerHelper {
 
         visualizer = try {
             Visualizer(audioSessionId).apply {
-                captureSize = Visualizer.getCaptureSizeRange()[1]
+                captureSize = Visualizer.getCaptureSizeRange()[0]
                 setDataCaptureListener(
                     object : Visualizer.OnDataCaptureListener {
                         override fun onWaveFormDataCapture(
@@ -58,7 +58,7 @@ class AudioVisualizerHelper {
                             }
                         }
                     },
-                    Visualizer.getMaxCaptureRate() / 2,
+                    Visualizer.getMaxCaptureRate() / 4,
                     true,
                     true,
                 )

@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +50,15 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 
     override suspend fun refreshPlaybackReportingStatus() {
         _pluginStatus.value = apiClient.checkPlaybackReportingPlugin().getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
+        cleanupOldAuditLogs()
+    }
+
+    private suspend fun cleanupOldAuditLogs() {
+        try {
+            val ninetyDaysAgo = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+            auditLogDao.deleteOlderThan(ninetyDaysAgo)
+        } catch (_: Exception) {
+        }
     }
 
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatching {
@@ -65,10 +76,18 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             val userId = user.id
             val isActive = activeUserIds.contains(userId)
 
-            val moviePlayed = apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0)
-            val episodePlayed = apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0)
-            val songPlayed = apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
-            val movieTotal = apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) + moviePlayed
+            val stats = coroutineScope {
+                val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+                val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
+                val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
+                val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+                intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
+            }
+            val moviePlayed = stats[0]
+            val episodePlayed = stats[1]
+            val songPlayed = stats[2]
+            val movieUnplayed = stats[3]
+            val movieTotal = movieUnplayed + moviePlayed
             val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
             val pluginData = pluginMap[userId]
@@ -307,11 +326,9 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                val entity = scanStateDao.getById(scanId)
-                if (entity != null) {
-                    scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
-                }
+            val entity = scanStateDao.getById(scanId)
+            if (entity != null) {
+                scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
             }
         }
     }
@@ -386,11 +403,9 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                val entity = scanStateDao.getById(scanId)
-                if (entity != null) {
-                    scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
-                }
+            val entity = scanStateDao.getById(scanId)
+            if (entity != null) {
+                scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
             }
         }
     }

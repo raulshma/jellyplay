@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -113,6 +114,7 @@ abstract class NetworkModule {
         fun provideOkHttpClient(
             @ApplicationContext context: Context,
             userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            bandwidthInterceptor: BandwidthInterceptor,
         ): OkHttpClient {
             val cacheDir = File(context.cacheDir, "http_cache")
             cacheDir.mkdirs()
@@ -126,14 +128,25 @@ abstract class NetworkModule {
                 .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
+                .addNetworkInterceptor(bandwidthInterceptor)
                 .addNetworkInterceptor { chain ->
                     val response = chain.proceed(chain.request())
                     val path = chain.request().url.encodedPath
+                    val query = chain.request().url.queryParameterNames
                     val cacheMaxAge = when {
                         path.startsWith("/Items/") && path.contains("/Images/") -> 604800
                         path.startsWith("/Genres/") -> 300
                         path == "/System/Info/Public" -> 600
                         path.startsWith("/Library/MediaFolders") -> 300
+                        path == "/System/Info" -> 120
+                        path == "/System/Info/Public" -> 600
+                        path.startsWith("/Sessions") -> 10
+                        path.startsWith("/ScheduledTasks") -> 30
+                        path == "/Shows/NextUp" || query.contains("resume") && path == "/Items" -> 120
+                        path.startsWith("/Shows/") && path.contains("/Episodes") -> 300
+                        path.startsWith("/Shows/") && path.contains("/Seasons") -> 300
+                        path.contains("/Similar") -> 300
+                        path == "/Items" && !query.contains("Resume") -> 60
                         else -> null
                     }
                     if (response.isSuccessful && cacheMaxAge != null) {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -54,7 +55,7 @@ class LogsViewModel @Inject constructor(
     val state: LogsState get() = _state.value
 
     private val _liveEvents = MutableSharedFlow<ActivityLogEntry>(extraBufferCapacity = 64)
-    val liveEvents: SharedFlow<ActivityLogEntry> = _liveEvents
+    val liveEvents: SharedFlow<ActivityLogEntry> = _liveEvents.asSharedFlow()
 
     private var webSocket: WebSocket? = null
     private var pollingJob: Job? = null

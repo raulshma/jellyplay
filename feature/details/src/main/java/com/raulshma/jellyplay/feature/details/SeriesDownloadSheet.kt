@@ -76,7 +76,7 @@ fun SeriesDownloadSheet(
 ) {
     var expandedSeasonId by remember { mutableStateOf<String?>(null) }
     var selectedEpisodeIds by remember(seasons) {
-        mutableStateOf(seasons.associate { it.id to mutableSetOf<String>() })
+        mutableStateOf(seasons.associate { it.id to emptySet<String>() })
     }
 
     val allSelectableIds = remember(seasons, downloadedEpisodeIds, episodes) {
@@ -254,15 +254,13 @@ fun SeriesDownloadSheet(
                         TriStateCheckbox(
                             state = triState,
                             onClick = {
-                                val current = selectedEpisodeIds.toMutableMap()
-                                val seasonSet = (current[season.id] ?: mutableSetOf()).toMutableSet()
-                                if (selectableInSeason.all { it in seasonSet }) {
-                                    seasonSet.removeAll(selectableInSeason)
+                                val currentSet = selectedEpisodeIds[season.id].orEmpty()
+                                val newSet = if (selectableInSeason.all { it in currentSet }) {
+                                    currentSet - selectableInSeason.toSet()
                                 } else {
-                                    seasonSet.addAll(selectableInSeason)
+                                    currentSet + selectableInSeason
                                 }
-                                current[season.id] = seasonSet
-                                selectedEpisodeIds = current
+                                selectedEpisodeIds = selectedEpisodeIds + (season.id to newSet)
                             },
                         )
                         Spacer(Modifier.width(4.dp))
@@ -351,16 +349,13 @@ fun SeriesDownloadSheet(
                                             .clip(shape)
                                             .background(episodeBgColor)
                                             .clickable(enabled = !isDownloaded) {
-                                                val current = selectedEpisodeIds.toMutableMap()
-                                                val seasonSet = (current[season.id]
-                                                    ?: mutableSetOf()).toMutableSet()
-                                                if (episode.id in seasonSet) {
-                                                    seasonSet.remove(episode.id)
+                                                val currentSet = selectedEpisodeIds[season.id].orEmpty()
+                                                val newSet = if (episode.id in currentSet) {
+                                                    currentSet - episode.id
                                                 } else {
-                                                    seasonSet.add(episode.id)
+                                                    currentSet + episode.id
                                                 }
-                                                current[season.id] = seasonSet
-                                                selectedEpisodeIds = current
+                                                selectedEpisodeIds = selectedEpisodeIds + (season.id to newSet)
                                             }
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,

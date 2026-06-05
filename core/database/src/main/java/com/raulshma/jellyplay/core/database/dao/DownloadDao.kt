@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface DownloadDao {
 
-    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
-    fun getAllDownloads(): Flow<List<DownloadEntity>>
+    @Query("SELECT * FROM downloads ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllDownloads(limit: Int = 500): Flow<List<DownloadEntity>>
 
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
@@ -73,8 +73,11 @@ interface DownloadDao {
     suspend fun getDownloadsForSeason(seasonId: String): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
-    suspend fun getDownloadsByMediaItemIds(mediaItemIds: List<String>): List<DownloadEntity>
-
-    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
     fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
+
+    @Query("UPDATE downloads SET status = 'PENDING' WHERE status IN ('DOWNLOADING') AND id IN (SELECT id FROM downloads WHERE status = 'DOWNLOADING')")
+    suspend fun resetStuckDownloading()
+
+    @Query("SELECT * FROM downloads WHERE status = 'FAILED'")
+    suspend fun getFailedDownloads(): List<DownloadEntity>
 }
