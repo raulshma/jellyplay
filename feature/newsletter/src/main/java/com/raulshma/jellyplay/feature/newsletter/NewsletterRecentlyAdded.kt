@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -105,7 +106,7 @@ fun NewsletterMediaCard(
                     Text(
                         text = "\u2605 ${"%.1f".format(item.communityRating)}",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color(0xFFFFC107),
+                        color = RatingColors.star,
                     )
                 }
             }

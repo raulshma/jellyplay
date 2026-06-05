@@ -65,6 +65,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.LogFile
@@ -458,7 +459,7 @@ private fun ActivityLogTab(
 private fun ActivityEntryItem(entry: ActivityLogEntry, isNew: Boolean = false) {
     val severityColor = when (entry.severity) {
         ActivityLogSeverity.ERROR, ActivityLogSeverity.FATAL -> MaterialTheme.colorScheme.error
-        ActivityLogSeverity.WARNING -> Color(0xFFFF9800)
+        ActivityLogSeverity.WARNING -> StatusColors.warning
         ActivityLogSeverity.TRACE, ActivityLogSeverity.DEBUG -> MaterialTheme.colorScheme.onSurfaceVariant
         ActivityLogSeverity.INFORMATION -> MaterialTheme.colorScheme.primary
     }
@@ -546,10 +547,10 @@ private fun parseLogLine(line: String): AnnotatedString = buildAnnotatedString {
         append(line.substring(0, match.range.first))
         val level = match.value.uppercase()
         val color = when (level) {
-            "ERROR", "FATAL" -> Color(0xFFEF5350)
-            "WARN", "WARNING" -> Color(0xFFFF9800)
-            "INFO" -> Color(0xFF42A5F5)
-            "DEBUG", "TRACE" -> Color(0xFF78909C)
+            "ERROR", "FATAL" -> StatusColors.error
+            "WARN", "WARNING" -> StatusColors.warning
+            "INFO" -> StatusColors.info
+            "DEBUG", "TRACE" -> StatusColors.debug
             else -> Color.Unspecified
         }
         withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) {

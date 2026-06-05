@@ -41,9 +41,12 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.components.AccentColorPicker
+import com.raulshma.jellyplay.core.ui.components.ColorStylePicker
 
 @Composable
 fun AppearanceStep(
@@ -51,11 +54,15 @@ fun AppearanceStep(
     dynamicTheming: Boolean,
     oledMode: Boolean,
     contrastLevel: ContrastLevel,
+    accentColorSwatch: String,
+    colorStyle: ColorStyle,
     homeHeroEnabled: Boolean,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicThemingChange: (Boolean) -> Unit,
     onOledModeChange: (Boolean) -> Unit,
     onContrastLevelChange: (ContrastLevel) -> Unit,
+    onAccentColorSwatchChange: (String) -> Unit,
+    onColorStyleChange: (ColorStyle) -> Unit,
     onHomeHeroEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -125,6 +132,20 @@ fun AppearanceStep(
                     )
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+
+            AccentColorPicker(
+                selectedSwatch = accentColorSwatch,
+                onSwatchSelected = onAccentColorSwatchChange,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            ColorStylePicker(
+                selectedStyle = colorStyle,
+                onStyleSelected = onColorStyleChange,
+            )
 
             Spacer(Modifier.height(8.dp))
 

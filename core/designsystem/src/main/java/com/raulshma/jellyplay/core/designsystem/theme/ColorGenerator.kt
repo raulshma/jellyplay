@@ -40,12 +40,33 @@ object ColorGenerator {
         val onTertiary = bestContrast(tertiary)
         val onTertiaryContainer = bestContrast(tertiaryContainer)
 
-        val onSurface = if (darkTheme) Color(0xFFE6E1E5) else Color(0xFF1C1B1F)
+        val onSurface = when {
+            darkTheme && contrastLevel == ContrastLevel.HIGH -> Color(0xFFFFFFFF)
+            darkTheme && contrastLevel == ContrastLevel.MEDIUM -> Color(0xFFF5EFF4)
+            darkTheme -> Color(0xFFE6E1E5)
+            contrastLevel == ContrastLevel.HIGH -> Color(0xFF000000)
+            contrastLevel == ContrastLevel.MEDIUM -> Color(0xFF111014)
+            else -> Color(0xFF1C1B1F)
+        }
         val onBackground = onSurface
 
         val surfaceVariant = getSurfaceVariantColor(hue, sat, darkTheme)
-        val onSurfaceVariant = if (darkTheme) Color(0xFFCAC4D0) else Color(0xFF49454F)
-        val outline = if (darkTheme) Color(0xFF938F99) else Color(0xFF79747E)
+        val onSurfaceVariant = when {
+            darkTheme && contrastLevel == ContrastLevel.HIGH -> Color(0xFFFFFFFF)
+            darkTheme && contrastLevel == ContrastLevel.MEDIUM -> Color(0xFFDDD6DC)
+            darkTheme -> Color(0xFFCAC4D0)
+            contrastLevel == ContrastLevel.HIGH -> Color(0xFF2B292F)
+            contrastLevel == ContrastLevel.MEDIUM -> Color(0xFF3A373D)
+            else -> Color(0xFF49454F)
+        }
+        val outline = when {
+            darkTheme && contrastLevel == ContrastLevel.HIGH -> Color(0xFFE6E0E5)
+            darkTheme && contrastLevel == ContrastLevel.MEDIUM -> Color(0xFFB5AFB6)
+            darkTheme -> Color(0xFF938F99)
+            contrastLevel == ContrastLevel.HIGH -> Color(0xFF3D3A40)
+            contrastLevel == ContrastLevel.MEDIUM -> Color(0xFF5C5860)
+            else -> Color(0xFF79747E)
+        }
         val outlineVariant = if (darkTheme) Color(0xFF49454F) else Color(0xFFCAC4D0)
 
         val error = if (darkTheme) Color(0xFFF2B8B5) else Color(0xFFB3261E)

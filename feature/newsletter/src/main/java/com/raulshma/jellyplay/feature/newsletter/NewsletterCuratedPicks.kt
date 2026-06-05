@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
+import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -198,7 +199,7 @@ private fun CuratedFeaturedCard(
                     Text(
                         text = "\u2605 ${String.format("%.1f", rating)}",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color(0xFFFFC107),
+                        color = RatingColors.star,
                     )
                 }
                 if (item.runTimeTicks != null && item.runTimeTicks!! > 0 && item.mediaType != MediaType.SERIES) {
@@ -297,7 +298,7 @@ private fun CuratedPickCard(
                     Text(
                         text = "\u2605 ${"%.1f".format(item.communityRating)}",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color(0xFFFFC107),
+                        color = RatingColors.star,
                     )
                 }
             }

@@ -296,11 +296,13 @@ fun JellyPlayTheme(
                 dynamicLightColorScheme(context)
             }
         }
-        accentColorSwatch == "dynamic" && effectiveOledMode -> OledColorScheme
-        accentColorSwatch == "dynamic" && effectiveDarkTheme -> when (contrastLevel) {
-            ContrastLevel.MEDIUM -> MediumContrastDarkColorScheme
-            ContrastLevel.HIGH -> HighContrastDarkColorScheme
-            ContrastLevel.DEFAULT -> DarkColorScheme
+        accentColorSwatch == "dynamic" && effectiveDarkTheme -> {
+            val base = when (contrastLevel) {
+                ContrastLevel.MEDIUM -> MediumContrastDarkColorScheme
+                ContrastLevel.HIGH -> HighContrastDarkColorScheme
+                ContrastLevel.DEFAULT -> DarkColorScheme
+            }
+            if (effectiveOledMode) base.withOledSurfaces() else base
         }
         accentColorSwatch == "dynamic" -> when (contrastLevel) {
             ContrastLevel.MEDIUM -> MediumContrastLightColorScheme
@@ -337,6 +339,7 @@ fun JellyPlayTheme(
         LocalJellyPlayTypography provides typography,
         LocalJellyPlayShapes provides shapes,
         LocalIsLightTheme provides isLightColor(colorScheme.background),
+        LocalExtendedColors provides ExtendedColors(),
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
