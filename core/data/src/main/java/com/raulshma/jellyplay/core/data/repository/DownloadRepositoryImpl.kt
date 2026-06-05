@@ -30,6 +30,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -380,8 +381,12 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     private fun enqueueDownloadWorker(downloadId: String) {
+        val wifiOnly = runBlocking {
+            preferencesStore.preferences.first().wifiOnlyDownloads
+        }
+        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiredNetworkType(networkType)
             .build()
         val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setConstraints(constraints)

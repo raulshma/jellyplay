@@ -130,6 +130,7 @@ fun SettingsScreen(
     onSetupWizard: () -> Unit = {},
     onNewsletterClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
+    onAboutClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -1382,18 +1383,26 @@ fun SettingsScreen(
                     summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    val storageTotal = 4
+                    val storageTotal = 5
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
                         title = "Cache Used",
                         subtitle = "${viewModel.cacheSizeMb} MB",
                         index = 0, count = storageTotal,
                     )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Wifi,
+                        title = "WiFi Only",
+                        subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
+                        checked = preferences.wifiOnlyDownloads,
+                        index = 1, count = storageTotal,
+                        onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.Trash,
                         title = "Clear Cache",
                         subtitle = "Free up storage space",
-                        index = 1, count = storageTotal,
+                        index = 2, count = storageTotal,
                         onClick = { viewModel.clearCache() },
                     )
                     SettingToggleItem(
@@ -1401,7 +1410,7 @@ fun SettingsScreen(
                         title = "Auto-delete Cache",
                         subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
                         checked = preferences.autoDeleteCache,
-                        index = 2, count = storageTotal,
+                        index = 3, count = storageTotal,
                         onCheckedChange = { viewModel.setAutoDeleteCache(it) },
                     )
                     SettingListItem(
@@ -1409,7 +1418,7 @@ fun SettingsScreen(
                         title = "Max Cache Size",
                         subtitle = "Maximum disk space for caching",
                         trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
-                        index = 3, count = storageTotal,
+                        index = 4, count = storageTotal,
                         onClick = {
                             val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
                             val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
@@ -1834,11 +1843,12 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(if (isTv) 16 else 15) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    SettingInfoItem(
-                        icon = Tabler.Outline.Video,
-                        title = "Version",
-                        subtitle = "JellyPlay v${viewModel.appVersion}",
+                    SettingListItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        title = "About JellyPlay",
+                        subtitle = "Version ${viewModel.appVersion}",
                         index = 0, count = 1,
+                        onClick = onAboutClick,
                     )
                 }
             }

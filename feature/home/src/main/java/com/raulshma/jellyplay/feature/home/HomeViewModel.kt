@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
+import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -49,6 +51,7 @@ class HomeViewModel @Inject constructor(
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
+    private val searchHistoryRepository: SearchHistoryRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -82,6 +85,9 @@ class HomeViewModel @Inject constructor(
 
     private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
     private var searchJob: Job? = null
+
+    private val _searchHistory = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
+    val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
 
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
@@ -162,6 +168,16 @@ class HomeViewModel @Inject constructor(
         launch {
             newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
                 _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
+            }
+        }
+
+        launch {
+            preferencesStore.activeUserId.collect { userId ->
+                if (userId != null) {
+                    searchHistoryRepository.getRecent(userId).collect { history ->
+                        _searchHistory.value = history
+                    }
+                }
             }
         }
 
@@ -327,6 +343,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun deleteSearchHistoryItem(id: Long) {
+        launch { searchHistoryRepository.deleteById(id) }
+    }
+
+    fun clearSearchHistory() {
+        launch {
+            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            searchHistoryRepository.clearAll(userId)
+        }
+    }
+
     private suspend fun fetchAndUpdateSections() {
         if (!refreshMutex.tryLock()) return
         try {
@@ -480,6 +507,12 @@ class HomeViewModel @Inject constructor(
                 }
                 jellyfinDeferred.await().onSuccess { result ->
                     _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = result.items)) }
+                    if (result.items.isNotEmpty()) {
+                        val userId = preferencesStore.activeUserId.first()
+                        if (userId != null) {
+                            searchHistoryRepository.saveQuery(query, userId)
+                        }
+                    }
                 }
                 seerrDeferred.await()?.let { results ->
                     _uiState.update { it.copy(searchState = it.searchState.copy(seerrResults = results)) }

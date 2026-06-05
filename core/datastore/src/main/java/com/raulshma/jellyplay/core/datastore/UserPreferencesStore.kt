@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -108,6 +109,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
         val COLOR_STYLE = stringPreferencesKey("color_style")
+        val LIBRARY_VIEW_MODE = stringPreferencesKey("library_view_mode")
         val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
 
         val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
@@ -145,6 +147,7 @@ class UserPreferencesStore @Inject constructor(
 
         val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
         val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
+        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
         val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
         val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
@@ -194,7 +197,7 @@ class UserPreferencesStore @Inject constructor(
                 "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
                 "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
-                "newsletter_enabled",
+                "newsletter_enabled", "wifi_only_downloads",
             )
 
             migrateInts(prefs,
@@ -458,6 +461,7 @@ class UserPreferencesStore @Inject constructor(
             lrBalance = readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
             autoEqByGenre = readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
             pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
+            wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
             downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
             enabledHomeSectionTypes = try {
                 prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
@@ -505,6 +509,9 @@ class UserPreferencesStore @Inject constructor(
             colorStyle = try {
                 ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
             } catch (_: Exception) { ColorStyle.TONAL_SPOT },
+            libraryViewMode = try {
+                LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
+            } catch (_: Exception) { LibraryViewMode.GRID },
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -859,6 +866,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
     }
 
+    suspend fun setWifiOnlyDownloads(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+    }
+
     suspend fun setDownloadConnections(count: Int) {
         context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
     }
@@ -940,6 +951,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setColorStyle(style: ColorStyle) {
         context.dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+    }
+
+    suspend fun setLibraryViewMode(mode: LibraryViewMode) {
+        context.dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
     }
 
     suspend fun restorePreferences(prefs: UserPreferences) {
@@ -1032,6 +1047,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.LR_BALANCE] = prefs.lrBalance
             settings[Keys.AUTO_EQ_BY_GENRE] = prefs.autoEqByGenre
             settings[Keys.PITCH_SEMITONES] = prefs.pitchSemitones
+            settings[Keys.WIFI_ONLY_DOWNLOADS] = prefs.wifiOnlyDownloads
             settings[Keys.DOWNLOAD_CONNECTIONS] = prefs.downloadConnections
             settings[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(
                 kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
@@ -1066,6 +1082,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.NEWSLETTER_LAST_VIEWED_MS] = prefs.newsletterLastViewedMs
             settings[Keys.ACCENT_COLOR_SWATCH] = prefs.accentColorSwatch
             settings[Keys.COLOR_STYLE] = prefs.colorStyle.name
+            settings[Keys.LIBRARY_VIEW_MODE] = prefs.libraryViewMode.name
         }
     }
 }

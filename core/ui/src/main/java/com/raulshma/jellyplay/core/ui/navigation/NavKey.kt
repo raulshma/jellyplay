@@ -110,6 +110,10 @@ sealed class Route : NavKey {
     @Serializable data object Favorites : Route()
 
     @Serializable data class MediaInfo(val itemId: String) : Route()
+
+    @Serializable data object About : Route()
+
+    @Serializable data object Licenses : Route()
 }
 
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(

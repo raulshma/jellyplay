@@ -33,10 +33,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -85,7 +88,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
+import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -111,6 +116,7 @@ fun LibraryScreen(
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
+    val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
@@ -122,6 +128,7 @@ fun LibraryScreen(
     )
 
     val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
     val hasActiveFilters by remember {
         derivedStateOf {
             filters.mediaTypes.isNotEmpty() ||
@@ -421,33 +428,73 @@ fun LibraryScreen(
                                     }
                                 }
                             } else {
-                                LazyVerticalGrid(
-                                    state = gridState,
-                                    columns = GridCells.Adaptive(gridCellSize),
-                                    contentPadding = gridPadding,
-                                    horizontalArrangement = Arrangement.spacedBy(spacing),
-                                    verticalArrangement = Arrangement.spacedBy(spacing),
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    items(
-                                        count = pagedItems.itemCount,
-                                        key = pagedItems.itemKey { it.id },
-                                        contentType = { "mediaItem" },
-                                    ) { index ->
-                                        val item = pagedItems[index]
-                                        if (item != null) {
-                                            PosterCard(
-                                                item = item,
-                                                imageUrl = viewModel.getImageUrl(item.id),
-                                                onClick = { onItemClick(item.id) },
-                                                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                                                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                                                    (item.playbackPositionTicks?.toFloat()
-                                                        ?: 0f) / item.runTimeTicks!!.toFloat()
-                                                } else 0f,
-                                                blurHash = item.blurHashes.primary,
-                                                sharedElementKey = "poster_${item.id}",
-                                            )
+                                if (viewMode == LibraryViewMode.LIST) {
+                                    LazyColumn(
+                                        state = listState,
+                                        contentPadding = gridPadding,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        items(
+                                            count = pagedItems.itemCount,
+                                            key = pagedItems.itemKey { it.id },
+                                            contentType = { "mediaItem" },
+                                        ) { index ->
+                                            val item = pagedItems[index]
+                                            if (item != null) {
+                                                LibraryListItem(
+                                                    title = item.name,
+                                                    subtitle = buildString {
+                                                        if (item.year != null) append("${item.year}")
+                                                        val typeLabel = when (item.mediaType) {
+                                                            com.raulshma.jellyplay.core.model.MediaType.EPISODE -> "Episode"
+                                                            com.raulshma.jellyplay.core.model.MediaType.SERIES -> "Series"
+                                                            com.raulshma.jellyplay.core.model.MediaType.MOVIE -> "Movie"
+                                                            com.raulshma.jellyplay.core.model.MediaType.AUDIO -> "Audio"
+                                                            com.raulshma.jellyplay.core.model.MediaType.MUSIC -> "Music"
+                                                            else -> null
+                                                        }
+                                                        if (typeLabel != null) {
+                                                            if (isNotEmpty()) append(" · ")
+                                                            append(typeLabel)
+                                                        }
+                                                    },
+                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    blurHash = item.blurHashes.primary,
+                                                    onClick = { onItemClick(item.id) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    LazyVerticalGrid(
+                                        state = gridState,
+                                        columns = GridCells.Adaptive(gridCellSize),
+                                        contentPadding = gridPadding,
+                                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                                        verticalArrangement = Arrangement.spacedBy(spacing),
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        items(
+                                            count = pagedItems.itemCount,
+                                            key = pagedItems.itemKey { it.id },
+                                            contentType = { "mediaItem" },
+                                        ) { index ->
+                                            val item = pagedItems[index]
+                                            if (item != null) {
+                                                PosterCard(
+                                                    item = item,
+                                                    imageUrl = viewModel.getImageUrl(item.id),
+                                                    onClick = { onItemClick(item.id) },
+                                                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                                                    progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                                                        (item.playbackPositionTicks?.toFloat()
+                                                            ?: 0f) / item.runTimeTicks!!.toFloat()
+                                                    } else 0f,
+                                                    blurHash = item.blurHashes.primary,
+                                                    sharedElementKey = "poster_${item.id}",
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -498,6 +545,20 @@ fun LibraryScreen(
                                     }
                                 },
                             ) {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.setViewMode(
+                                            if (viewMode == LibraryViewMode.GRID) LibraryViewMode.LIST else LibraryViewMode.GRID
+                                        )
+                                    },
+                                    shapes = IconButtonDefaults.shapes(),
+                                ) {
+                                    Icon(
+                                        if (viewMode == LibraryViewMode.GRID) Tabler.Outline.List else Tabler.Outline.GridDots,
+                                        contentDescription = if (viewMode == LibraryViewMode.GRID) "List view" else "Grid view",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                                 IconButton(
                                     onClick = onSmartPlaylistsClick,
                                     shapes = IconButtonDefaults.shapes(),
