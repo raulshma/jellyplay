@@ -14,7 +14,12 @@
 	<img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white&style=for-the-badge" />
 	<img alt="Material 3" src="https://custom-icon-badges.demolab.com/badge/material%20you-lightblue?style=for-the-badge&logoColor=333&logo=material-you" />
 	<img alt="Media3" src="https://img.shields.io/badge/Media3-FF6F00?style=for-the-badge&logo=android&logoColor=white" />
+	<img alt="License GPL-3.0" src="https://img.shields.io/github/license/raulshma/jellyplay?style=for-the-badge&color=blue" />
 	<img alt="Status - Beta" src="https://img.shields.io/badge/Status-Beta-orange?style=for-the-badge" />
+</p>
+
+<p align="center">
+	<sub>Native Jellyfin client for Android, Android TV & Fire TV &nbsp;&middot;&nbsp; Material 3 Expressive &nbsp;&middot;&nbsp; ExoPlayer, libmpv & LibVLC &nbsp;&middot;&nbsp; Self-hosted, no tracking</sub>
 </p>
 
 <div align="center">
@@ -25,7 +30,7 @@
 
 Whether you want to stream movies, play music with synchronized lyrics, manage your server via an integrated **Admin Dashboard**, edit library metadata on the go, request content via **Jellyseerr/Overseerr**, download media for **offline playback**, catch up with a weekly **Newsletter digest**, or join real-time **SyncPlay watch parties**, JellyPlay has you covered with built-in multi-engine support (**ExoPlayer, libmpv, LibVLC**), **remote control** from the server, and a guided **Onboarding Wizard** for personalized setup.
 
-[Key Features](#features) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building & Flavors](#building) • [Permissions](#permissions) • [Project Structure](#project-structure)
+[Key Features](#features) • [Why JellyPlay?](#why-jellyplay) • [Comparison](#jellyplay-vs-other-jellyfin-clients) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building & Flavors](#building) • [Permissions](#permissions) • [Project Structure](#project-structure) • [Docs](./docs) • [Website](https://raulshma.github.io/jellyplay/)
 
 </div>
 
@@ -52,6 +57,35 @@ Whether you want to stream movies, play music with synchronized lyrics, manage y
 > [!NOTE]
 > **JellyPlay is currently in Active Beta.** 🧪
 > The application is under active development. While the core features (such as playback, multi-server support, and offline downloads) are functional and stable, you may encounter occasional visual bugs or edge-case issues. We highly appreciate any bug reports, feedback, and contributions!
+
+## Why JellyPlay?
+
+JellyPlay is built for people who self-host a [Jellyfin](https://jellyfin.org/)
+media server and want a **truly native**, **beautiful**, and **capable** client
+on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
+
+- **Native, not a web wrapper.** Written from scratch in **Kotlin** and
+  [Jetpack Compose](https://developer.android.com/jetpack/compose), with
+  [Compose for TV](https://developer.android.com/tv/compose) on the big
+  screen. No Cordova, no embedded browser, no compromises.
+- **Three video engines.** Pick **[ExoPlayer / Media3](https://developer.android.com/media/media3)**,
+  **[libmpv](https://github.com/mpv-player/mpv)**, or **[LibVLC](https://www.videolan.org/vlc/)**
+  per device — each has its own strengths for codec support, post-processing,
+  and ASS/SSA subtitle rendering.
+- **One app, every form factor.** Adaptive layouts across phones, tablets,
+  foldables, and Android TV with a dedicated Leanback launcher. Edge-to-edge
+  immersive mode, predictive back gesture, and Material 3 dynamic theming
+  from your artwork.
+- **Self-hosted first.** No accounts, no telemetry, no cloud dependency.
+  Multi-server, multi-user support with Quick Connect and token-based auth.
+  **Offline downloads** with HTTP Range resumption for travel.
+- **Beyond streaming.** **SyncPlay** watch parties, **Jellyseerr / Overseerr**
+  requests, a full **metadata editor**, an in-app **server admin dashboard**,
+  synchronized lyrics via LRCLIB, 10-band equalizer with night mode, and a
+  weekly **newsletter digest** of your library activity.
+
+> If you're looking for a Kodi alternative, a Plex alternative, or a
+> self-hosted media player for Android & Android TV — give JellyPlay a try.
 
 ## Features
 
@@ -366,6 +400,43 @@ feature/newsletter/      Weekly server digest with library activity, curated pic
 
 ---
 
+## Documentation
+
+Looking for setup, integration, or troubleshooting guides?
+
+- 📘 [Setup guide](./docs/setup.md) — install JellyPlay on any device
+- 🎬 [Android TV & Fire TV setup](./docs/android-tv-setup.md) — sideload & install on the big screen
+- 📡 [Jellyseerr/Seerr/Overseerr integration](./docs/seerr-integration.md) — request movies & shows from inside the app
+- 👯 [SyncPlay watch parties](./docs/syncplay-guide.md) — synchronized group playback
+- ⬇️ [Offline downloads](./docs/offline-downloads.md) — download media for travel
+- 🎵 [Music player & synced lyrics](./docs/lyrics-music-player.md) — get the most out of your library
+
+---
+
+## See Also
+
+Other open-source projects in the Jellyfin ecosystem:
+
+- [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin) — the free software media system
+- [jellyfin/jellyfin-android](https://github.com/jellyfin/jellyfin-android) — the official Android client (web wrapper)
+- [jellyfin/jellyfin-androidtv](https://github.com/jellyfin/jellyfin-androidtv) — the official Android TV client
+- [jarnedemeulemeester/findroid](https://github.com/jarnedemeulemeester/findroid) — third-party native Android client
+- [damontecres/Wholphin](https://github.com/damontecres/Wholphin) — OSS Android TV client
+- [MakD/AFinity](https://github.com/MakD/AFinity) — modern Compose + LibMPV client
+- [streamyfin/streamyfin](https://github.com/streamyfin/streamyfin) — cross-platform Expo client
+- [fallensword/awesome-jellyfin](https://github.com/awesome-jellyfin/awesome-jellyfin) — curated list of Jellyfin plugins, themes & clients
+
+---
+
+## Contributing
+
+We welcome contributions of all sizes — bug reports, feature requests, code,
+translations, and documentation.
+
 ## License
 
-This project is licensed under the GNU General Public License v3.0 — see the `LICENSE` file for details.
+This project is licensed under the **GNU General Public License v3.0** — see
+the [`LICENSE`](LICENSE) file for details.
+
+By contributing to JellyPlay, you agree that your contributions will be
+licensed under the same GPL-3.0 license.
