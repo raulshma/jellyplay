@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -60,9 +62,13 @@ class MainViewModel @Inject constructor(
 
     init {
         launch {
-            authRepository.restoreSession()
-            isAuthenticated.first()
-            preferences.first()
+            coroutineScope {
+                val authDeferred = async { authRepository.restoreSession() }
+                val prefsDeferred = async { preferences.first() }
+                authDeferred.await()
+                prefsDeferred.await()
+                isAuthenticated.first()
+            }
             _isRestoring.set(false)
         }
 

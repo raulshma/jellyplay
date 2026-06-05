@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
+import android.animation.Animator
 import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -65,11 +68,26 @@ class MainActivity : FragmentActivity() {
         runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
         splashScreen.setOnExitAnimationListener { splashScreenView ->
+            val iconView = splashScreenView.iconView
+            val iconPulse = if (iconView != null) {
+                ObjectAnimator.ofPropertyValuesHolder(
+                    iconView,
+                    PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.25f, 1f),
+                    PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.25f, 1f),
+                ).apply {
+                    duration = 650L
+                    interpolator = OvershootInterpolator(0.8f)
+                    start()
+                }
+            } else null
+
             ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f).apply {
-                duration = 400L
+                startDelay = 400L
+                duration = 500L
                 interpolator = DecelerateInterpolator()
                 addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                    override fun onAnimationEnd(animation: Animator) {
+                        iconPulse?.cancel()
                         splashScreenView.remove()
                     }
                 })
