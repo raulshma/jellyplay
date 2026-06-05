@@ -388,7 +388,9 @@ class HomeViewModel @Inject constructor(
                     if (currentIds != lastContinueWatchingIds) {
                         lastContinueWatchingIds = currentIds
                         preferencesStore.setContinueWatching(continueWatching)
-                        val intent = android.content.Intent("com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING")
+                        val intent = android.content.Intent(
+                            "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
+                        )
                         intent.setPackage(context.packageName)
                         context.sendBroadcast(intent)
                     }

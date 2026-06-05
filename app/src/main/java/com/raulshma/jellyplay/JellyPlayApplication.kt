@@ -36,6 +36,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository
     @Inject lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+    @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,6 +54,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
         applicationScope.launch {
             audioPlaybackManager.start()
         }
+        nowPlayingWidgetUpdater.start()
         applicationScope.launch {
             recoverPendingDownloads()
             cleanupStuckDownloads()

@@ -115,7 +115,8 @@ class MainViewModel @Inject constructor(
 
     fun handleShortcutIntent(intent: Intent) {
         val route = when (intent.action) {
-            AppShortcutManager.ACTION_CONTINUE_WATCHING -> Route.Home
+            AppShortcutManager.ACTION_CONTINUE_WATCHING ->
+                Route.NewsletterSectionList("CONTINUE_WATCHING")
             AppShortcutManager.ACTION_SEARCH -> Route.Search
             AppShortcutManager.ACTION_PLAY_MUSIC -> Route.MusicBrowse
             AppShortcutManager.ACTION_DOWNLOADS -> Route.Downloads

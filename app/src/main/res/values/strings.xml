@@ -10,4 +10,26 @@
     <string name="shortcut_play_music_long">Play Music</string>
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="shortcut_downloads_long">Open Downloads</string>
+
+    <string name="widget_now_playing_description">See and control the music you\'re listening to right from your home screen.</string>
+    <string name="widget_continue_watching_description">Jump back into the shows and movies you started but haven\'t finished.</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="widget_open_to_play">Tap to open JellyPlay</string>
+    <string name="widget_continue_watching_empty">Nothing to continue yet</string>
+    <string name="widget_continue_watching_empty_subtitle">Start watching a show and it will appear here</string>
+    <string name="widget_placeholder_title">Track title</string>
+    <string name="widget_placeholder_subtitle">Artist name</string>
+    <string name="widget_album_art">Album art</string>
+    <string name="widget_app_icon">JellyPlay</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next track</string>
+    <string name="widget_previous">Previous track</string>
+    <string name="widget_rewind">Rewind 10 seconds</string>
+    <string name="widget_forward">Forward 10 seconds</string>
+    <string name="widget_seek_to">Seek to position</string>
+    <string name="widget_continue_watching_title">Continue Watching</string>
+    <string name="widget_continue_watching_see_all">See all</string>
+    <string name="widget_minutes_left">%1$d min left</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
 </resources>
