@@ -58,6 +58,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -131,6 +132,49 @@ import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+
+private val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
+    "MediaDetail",
+    "MetadataEditor",
+    "SeerrDetail",
+    "PersonDetail",
+    "MediaInfo",
+    "CollectionDetail",
+    "OfflineSeries",
+    "ArtistDetail",
+    "AlbumDetail",
+    "SmartPlaylistDetail",
+    "MoodPlaylistDetail",
+    "PlaylistDetail",
+    "GenreDetail",
+    "NewsletterSectionList",
+    "UserStatisticsDetail",
+)
+
+private fun isDetailRoute(route: Route): Boolean = when (route) {
+    is Route.MediaDetail,
+    is Route.MetadataEditor,
+    is Route.SeerrDetail,
+    is Route.PersonDetail,
+    is Route.MediaInfo,
+    is Route.CollectionDetail,
+    is Route.OfflineSeries,
+    is Route.ArtistDetail,
+    is Route.AlbumDetail,
+    is Route.SmartPlaylistDetail,
+    is Route.MoodPlaylistDetail,
+    is Route.PlaylistDetail,
+    is Route.GenreDetail,
+    is Route.NewsletterSectionList,
+    is Route.UserStatisticsDetail -> true
+    else -> false
+}
+
+private fun isDetailScene(scene: Scene<NavKey>): Boolean {
+    val className = scene.entries.lastOrNull()?.contentKey?.toString()?.substringBefore('(')
+        ?: return false
+    return className in DETAIL_ROUTE_CLASS_NAMES
+}
 
 @Composable
 fun JellyPlayApp(
@@ -903,6 +947,13 @@ private fun MainNavDisplay(
                                 fastEffects
                             )
                         }
+                        isDetailScene(targetLast) || isDetailScene(initialLast) -> {
+                            fadeIn(
+                                animationSpec = defaultEffects,
+                            ) togetherWith fadeOut(
+                                animationSpec = fastEffects,
+                            )
+                        }
                         else -> {
                             fadeIn(
                                 animationSpec = defaultEffects,
@@ -925,6 +976,7 @@ private fun MainNavDisplay(
                     }
                 },
                 popTransitionSpec = {
+                    val targetLast = targetState
                     val initialLast = initialState
                     val isModalPop = initialLast == Route.Settings ||
                             initialLast == Route.Downloads ||
@@ -934,51 +986,71 @@ private fun MainNavDisplay(
                             initialLast == Route.ScheduledTasks ||
                             initialLast == Route.Devices ||
                             initialLast == Route.Logs
-                    if (isModalPop) {
-                        fadeIn(fastEffects) togetherWith fadeOut(
-                            fastEffects
-                        ) + slideOutVertically(
-                                targetOffsetY = { it / 4 },
-                                animationSpec = defaultSpatialOffset,
-                            )
-                    } else {
-                        fadeIn(
+                    when {
+                        isModalPop -> {
+                            fadeIn(fastEffects) togetherWith fadeOut(
+                                fastEffects
+                            ) + slideOutVertically(
+                                    targetOffsetY = { it / 4 },
+                                    animationSpec = defaultSpatialOffset,
+                                )
+                        }
+                        isDetailScene(initialLast) || isDetailScene(targetLast) -> {
+                            fadeIn(
                                 animationSpec = defaultEffects,
-                            ) + slideInHorizontally(
-                                initialOffsetX = { -it / 12 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleIn(
-                                initialScale = 1.015f,
-                                animationSpec = defaultSpatial,
                             ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            ) + slideOutHorizontally(
-                                targetOffsetX = { it / 10 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleOut(
-                                targetScale = 0.985f,
                                 animationSpec = defaultEffects,
                             )
+                        }
+                        else -> {
+                            fadeIn(
+                                    animationSpec = defaultEffects,
+                                ) + slideInHorizontally(
+                                    initialOffsetX = { -it / 12 },
+                                    animationSpec = defaultSpatialOffset,
+                                ) + scaleIn(
+                                    initialScale = 1.015f,
+                                    animationSpec = defaultSpatial,
+                                ) togetherWith fadeOut(
+                                    animationSpec = fastEffects,
+                                ) + slideOutHorizontally(
+                                    targetOffsetX = { it / 10 },
+                                    animationSpec = defaultSpatialOffset,
+                                ) + scaleOut(
+                                    targetScale = 0.985f,
+                                    animationSpec = defaultEffects,
+                                )
+                        }
                     }
                 },
                 predictivePopTransitionSpec = { _ ->
-                    fadeIn(
-                                animationSpec = defaultEffects,
-                            ) + slideInHorizontally(
-                                initialOffsetX = { -it / 12 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleIn(
-                                initialScale = 1.015f,
-                                animationSpec = defaultSpatial,
-                            ) togetherWith fadeOut(
-                                animationSpec = fastEffects,
-                            ) + slideOutHorizontally(
-                                targetOffsetX = { it / 10 },
-                                animationSpec = defaultSpatialOffset,
-                            ) + scaleOut(
-                                targetScale = 0.985f,
-                                animationSpec = defaultEffects,
-                            )
+                    val targetLast = targetState
+                    val initialLast = initialState
+                    if (isDetailScene(initialLast) || isDetailScene(targetLast)) {
+                        fadeIn(
+                            animationSpec = defaultEffects,
+                        ) togetherWith fadeOut(
+                            animationSpec = defaultEffects,
+                        )
+                    } else {
+                        fadeIn(
+                            animationSpec = defaultEffects,
+                        ) + slideInHorizontally(
+                            initialOffsetX = { -it / 12 },
+                            animationSpec = defaultSpatialOffset,
+                        ) + scaleIn(
+                            initialScale = 1.015f,
+                            animationSpec = defaultSpatial,
+                        ) togetherWith fadeOut(
+                            animationSpec = fastEffects,
+                        ) + slideOutHorizontally(
+                            targetOffsetX = { it / 10 },
+                            animationSpec = defaultSpatialOffset,
+                        ) + scaleOut(
+                            targetScale = 0.985f,
+                            animationSpec = defaultEffects,
+                        )
+                    }
                 },
         entryProvider = entryProvider {
             homeSection(
