@@ -74,7 +74,9 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             val view = RemoteViews(context.packageName, R.layout.library_recommendations_item)
             val title = buildTitle(item)
             view.setTextViewText(R.id.lr_item_title, title)
+            view.setViewVisibility(R.id.lr_item_title, View.VISIBLE)
             view.setTextViewText(R.id.lr_item_subtitle, buildSubtitle(item))
+            view.setViewVisibility(R.id.lr_item_subtitle, View.VISIBLE)
             val bitmap = runBlocking {
                 WidgetImageLoader.loadPoster(context, item.posterUrl)
             }
