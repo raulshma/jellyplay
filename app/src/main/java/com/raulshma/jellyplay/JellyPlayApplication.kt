@@ -16,6 +16,8 @@ import coil3.size.Size
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import io.sentry.Sentry
 import io.sentry.android.core.SentryAndroid
@@ -28,7 +30,14 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
-class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
+class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+
+    @Inject lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var downloadDao: DownloadDao
@@ -55,6 +64,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory {
             audioPlaybackManager.start()
         }
         nowPlayingWidgetUpdater.start()
+        com.raulshma.jellyplay.widget.WidgetWorkScheduler.enqueuePeriodic(this)
         applicationScope.launch {
             recoverPendingDownloads()
             cleanupStuckDownloads()

@@ -32,4 +32,47 @@
     <string name="widget_minutes_left">%1$d min left</string>
     <string name="widget_progress_percent">%1$d%%</string>
     <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">Library Picks</string>
+    <string name="widget_library_recommendations_title">Library Picks</string>
+    <string name="widget_library_recommendations_subtitle">Because you watched</string>
+    <string name="widget_library_recommendations_description">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
+    <string name="widget_library_recommendations_empty">No recommendations yet</string>
+    <string name="widget_library_recommendations_empty_subtitle">Open JellyPlay to start exploring your library</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_label">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_title">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_subtitle">Trending this week</string>
+    <string name="widget_seerr_recommendations_description">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
+    <string name="widget_seerr_recommendations_empty">Seerr is not connected</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">Configure Seerr in JellyPlay settings to see picks</string>
+    <string name="widget_seerr_no_recommendations">No recommendations yet</string>
+    <string name="widget_seerr_no_recommendations_subtitle">Tap refresh or check back later</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">Refresh</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">Choose recommendations</string>
+    <string name="widget_config_save">Save</string>
+    <string name="widget_config_source_similar">Because you watched</string>
+    <string name="widget_config_source_similar_description">Personalized picks based on your most recently watched item</string>
+    <string name="widget_config_source_latest">Latest in your library</string>
+    <string name="widget_config_source_latest_description">Freshly added media across your libraries</string>
+    <string name="widget_config_source_favorites">Your favorites</string>
+    <string name="widget_config_source_favorites_description">Items you have marked as favorite</string>
+    <string name="widget_config_source_surprise_me">Surprise me</string>
+    <string name="widget_config_source_surprise_me_description">A randomized shuffle from your library</string>
+    <string name="widget_config_source_trending">Trending this week</string>
+    <string name="widget_config_source_trending_description">What everyone is talking about</string>
+    <string name="widget_config_source_popular_movies">Popular movies</string>
+    <string name="widget_config_source_popular_movies_description">Top rated movies right now</string>
+    <string name="widget_config_source_popular_tv">Popular TV</string>
+    <string name="widget_config_source_popular_tv_description">Top rated shows right now</string>
+    <string name="widget_config_source_upcoming_movies">Upcoming movies</string>
+    <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
+    <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
+    <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
 </resources>

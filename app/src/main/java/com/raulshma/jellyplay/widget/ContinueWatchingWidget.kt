@@ -109,10 +109,8 @@ class ContinueWatchingWidget : AppWidgetProvider() {
 
             // Item click template: each fillInIntent adds a per-item deep link
             // and the extras get merged into the template.
-            val templateUri = Uri.parse("${DeepLinkHandler.SCHEME_CUSTOM}://media/")
             val templateIntent = Intent(context, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
-                data = templateUri
                 addCategory(Intent.CATEGORY_DEFAULT)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
