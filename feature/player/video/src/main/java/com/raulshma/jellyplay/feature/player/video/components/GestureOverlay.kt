@@ -4,10 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
-import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -19,17 +16,15 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,24 +32,46 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import kotlin.math.pow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+
+private fun brightnessIcon(value: Float) = when {
+    value <= 0f -> Tabler.Outline.BrightnessDown
+    value < 0.3f -> Tabler.Outline.BrightnessHalf
+    else -> Tabler.Outline.BrightnessUp
+}
+
+private fun volumeIcon(value: Float) = when {
+    value == 0f -> Tabler.Outline.VolumeOff
+    value < 0.33f -> Tabler.Outline.VolumeOff
+    else -> Tabler.Outline.Volume
+}
+
+private fun applySensitivityCurve(rawDelta: Float): Float {
+    val sign = if (rawDelta >= 0) 1f else -1f
+    val magnitude = abs(rawDelta)
+    val curved = (magnitude / 0.5f).pow(0.8f) * 0.5f
+    return sign * curved.coerceIn(0f, 0.5f)
+}
 
 @Composable
 internal fun GestureOverlay(
@@ -70,20 +87,28 @@ internal fun GestureOverlay(
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
     onEdgeSwipe: () -> Unit,
+    onHapticPulse: () -> Unit = {},
+    overlayDismissDelayMs: Long = 800L,
 ) {
     val currentOnSeekGesture by rememberUpdatedState(onSeekGesture)
     val currentOnBrightnessGesture by rememberUpdatedState(onBrightnessGesture)
     val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
     val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
     val currentOnEdgeSwipe by rememberUpdatedState(onEdgeSwipe)
+    val currentOnHapticPulse by rememberUpdatedState(onHapticPulse)
 
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
+    val deadZonePx = with(LocalDensity.current) { 30.dp.toPx() }
+
+    var lastBrightnessBoundHaptic by remember { mutableLongStateOf(0L) }
+    var lastVolumeBoundHaptic by remember { mutableLongStateOf(0L) }
+    val hapticMinInterval = 300L
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx) {
+                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startX = down.position.x
@@ -92,13 +117,15 @@ internal fun GestureOverlay(
                         var isHorizontal = false
                         var isEdgeSwipeGesture = false
                         var edgeSwipeConsumed = false
+                        var prevBrightnessBoundHapticTime = 0L
+                        var prevVolumeBoundHapticTime = 0L
                         do {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
                             val totalDx = change.position.x - startX
                             val totalDy = change.position.y - startY
-                            if (!decided && (abs(totalDx) > 50 || abs(totalDy) > 50)) {
+                            if (!decided && (abs(totalDx) > deadZonePx || abs(totalDy) > deadZonePx)) {
                                 decided = true
                                 isHorizontal = abs(totalDx) > abs(totalDy)
                                 isEdgeSwipeGesture = isHorizontal &&
@@ -116,11 +143,25 @@ internal fun GestureOverlay(
                                 } else {
                                     val halfWidth = size.width / 2f
                                     val dy = change.position.y - change.previousPosition.y
-                                    val delta = -(dy / size.height) * 0.5f
+                                    val rawDelta = -(dy / size.height) * 0.5f
+                                    val delta = applySensitivityCurve(rawDelta)
+                                    val now = System.currentTimeMillis()
                                     if (change.position.x > halfWidth) {
                                         currentOnVolumeGesture(delta)
+                                        if ((volumeValue <= 0f && delta < 0f) || (volumeValue >= 1f && delta > 0f)) {
+                                            if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
+                                                prevVolumeBoundHapticTime = now
+                                                currentOnHapticPulse()
+                                            }
+                                        }
                                     } else {
                                         currentOnBrightnessGesture(delta)
+                                        if ((brightnessValue <= 0f && delta < 0f) || (brightnessValue >= 1f && delta > 0f)) {
+                                            if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
+                                                prevBrightnessBoundHapticTime = now
+                                                currentOnHapticPulse()
+                                            }
+                                        }
                                     }
                                 }
                                 change.consume()
@@ -143,8 +184,9 @@ internal fun GestureOverlay(
         if (brightnessValue >= 0f) {
             EdgeBarOverlay(
                 value = brightnessValue,
-                icon = Tabler.Outline.BrightnessUp,
+                icon = brightnessIcon(brightnessValue),
                 label = "${(brightnessValue * 100).toInt()}%",
+                isAtBound = brightnessValue <= 0.01f || brightnessValue >= 0.99f,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 24.dp),
@@ -154,8 +196,9 @@ internal fun GestureOverlay(
         if (volumeValue >= 0f) {
             EdgeBarOverlay(
                 value = volumeValue,
-                icon = if (volumeValue == 0f) Tabler.Outline.VolumeOff else Tabler.Outline.Volume,
+                icon = volumeIcon(volumeValue),
                 label = "${(volumeValue * 100).toInt()}%",
+                isAtBound = volumeValue <= 0.01f || volumeValue >= 0.99f,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 24.dp),
@@ -259,8 +302,25 @@ private fun EdgeBarOverlay(
     value: Float,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
+    isAtBound: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val boundGlowAlpha = remember { Animatable(0f) }
+
+    LaunchedEffect(isAtBound) {
+        if (isAtBound) {
+            boundGlowAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 200),
+            )
+        } else {
+            boundGlowAlpha.snapTo(0f)
+        }
+    }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val glowColor = primaryColor.copy(alpha = boundGlowAlpha.value * 0.4f)
+
     AnimatedVisibility(
         visible = true,
         enter = playerEdgeBarEnter(),
@@ -275,13 +335,22 @@ private fun EdgeBarOverlay(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.1f)),
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .then(
+                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                            drawCircle(
+                                color = glowColor,
+                                radius = size.minDimension * 0.8f,
+                                center = Offset(size.width / 2f, size.height / 2f),
+                            )
+                        } else Modifier
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = if (isAtBound) primaryColor else Color.White,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -290,7 +359,15 @@ private fun EdgeBarOverlay(
                     .width(5.dp)
                     .height(160.dp)
                     .clip(ShapeCache.smoothPill)
-                    .background(Color.White.copy(alpha = 0.15f)),
+                    .background(Color.White.copy(alpha = 0.15f))
+                    .then(
+                        if (boundGlowAlpha.value > 0.01f) Modifier.drawBehind {
+                            drawRoundRect(
+                                color = glowColor,
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.minDimension / 2f),
+                            )
+                        } else Modifier
+                    ),
             ) {
                 Box(
                     modifier = Modifier
@@ -300,8 +377,8 @@ private fun EdgeBarOverlay(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                    primaryColor,
+                                    primaryColor.copy(alpha = 0.7f),
                                 )
                             )
                         )
@@ -310,9 +387,9 @@ private fun EdgeBarOverlay(
             }
             Text(
                 label,
-                color = Color.White,
+                color = if (isAtBound) primaryColor else Color.White,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = if (isAtBound) FontWeight.Bold else FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
                 ),
             )
