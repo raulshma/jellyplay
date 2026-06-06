@@ -166,6 +166,16 @@
             </intent-filter>
         </activity>
         <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
+
+        <receiver
+            android:name="com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.raulshma.jellyplay.notification.OPEN_DETAIL" />
+                <action android:name="com.raulshma.jellyplay.notification.MARK_SEEN" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

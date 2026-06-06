@@ -132,6 +132,7 @@ data class UserPreferences(
     val accentColorSwatch: String = "dynamic",
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
+    val notificationPreferences: NotificationPreferences = NotificationPreferences(),
 )
 
 @Immutable

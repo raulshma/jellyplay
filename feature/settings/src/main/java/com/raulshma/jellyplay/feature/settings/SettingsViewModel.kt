@@ -21,6 +21,9 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.CheckFrequency
+import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -30,6 +33,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val mediaRepository: MediaRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
+    private val notificationScheduler: NotificationScheduler,
 ) : JellyPlayViewModel() {
 
     var preferences by composeState(UserPreferences())
@@ -567,6 +572,13 @@ class SettingsViewModel @Inject constructor(
 
     fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
         launch { preferencesStore.setExoPlayerConfig(config) }
+    }
+
+    fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
+        launch {
+            preferencesStore.updateNotificationPreferences(transform)
+            notificationScheduler.scheduleOrUpdate()
+        }
     }
 
     var backupRestoreStatus by composeState<String?>(null)

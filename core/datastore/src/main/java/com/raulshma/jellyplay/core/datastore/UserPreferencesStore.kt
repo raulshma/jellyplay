@@ -13,7 +13,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -38,6 +40,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
@@ -185,6 +188,17 @@ class UserPreferencesStore @Inject constructor(
         val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
         val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
         val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
+
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
+        val NOTIFICATIONS_QUIET_HOURS_ENABLED = booleanPreferencesKey("notifications_quiet_hours_enabled")
+        val NOTIFICATIONS_QUIET_HOURS_START = intPreferencesKey("notifications_quiet_hours_start")
+        val NOTIFICATIONS_QUIET_HOURS_END = intPreferencesKey("notifications_quiet_hours_end")
+        val NOTIFICATIONS_SOUND_ENABLED = booleanPreferencesKey("notifications_sound_enabled")
+        val NOTIFICATIONS_VIBRATE_ENABLED = booleanPreferencesKey("notifications_vibrate_enabled")
+        val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
+        val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
+        val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -525,6 +539,24 @@ class UserPreferencesStore @Inject constructor(
             libraryViewMode = try {
                 LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
             } catch (_: Exception) { LibraryViewMode.GRID },
+            notificationPreferences = NotificationPreferences(
+                enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
+                checkFrequency = try {
+                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
+                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
+                quietHoursEnabled = readBool(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED, "notifications_quiet_hours_enabled", false),
+                quietHoursStart = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_START, "notifications_quiet_hours_start", 1380),
+                quietHoursEnd = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_END, "notifications_quiet_hours_end", 420),
+                soundEnabled = readBool(prefs, Keys.NOTIFICATIONS_SOUND_ENABLED, "notifications_sound_enabled", true),
+                vibrateEnabled = readBool(prefs, Keys.NOTIFICATIONS_VIBRATE_ENABLED, "notifications_vibrate_enabled", true),
+                lightsEnabled = readBool(prefs, Keys.NOTIFICATIONS_LIGHTS_ENABLED, "notifications_lights_enabled", true),
+                maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
+                libraryConfigs = try {
+                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
+                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                    } ?: emptyMap()
+                } catch (_: Exception) { emptyMap() },
+            ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -1164,6 +1196,61 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.ACCENT_COLOR_SWATCH] = prefs.accentColorSwatch
             settings[Keys.COLOR_STYLE] = prefs.colorStyle.name
             settings[Keys.LIBRARY_VIEW_MODE] = prefs.libraryViewMode.name
+            val np = prefs.notificationPreferences
+            settings[Keys.NOTIFICATIONS_ENABLED] = np.enabled
+            settings[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
+            settings[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
+            settings[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
+            settings[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
+            settings[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
+            settings[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
+                np.libraryConfigs,
+            )
+        }
+    }
+
+    val notificationPreferences: StateFlow<NotificationPreferences> = preferences.map { it.notificationPreferences }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, NotificationPreferences())
+
+    suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
+        context.dataStore.edit { prefs ->
+            val current = NotificationPreferences(
+                enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
+                checkFrequency = try {
+                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
+                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
+                quietHoursEnabled = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] ?: false,
+                quietHoursStart = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] ?: 1380,
+                quietHoursEnd = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] ?: 420,
+                soundEnabled = prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] ?: true,
+                vibrateEnabled = prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] ?: true,
+                lightsEnabled = prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] ?: true,
+                maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
+                libraryConfigs = try {
+                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
+                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                    } ?: emptyMap()
+                } catch (_: Exception) { emptyMap() },
+            )
+            val updated = transform(current)
+            prefs[Keys.NOTIFICATIONS_ENABLED] = updated.enabled
+            prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = updated.checkFrequency.name
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = updated.quietHoursEnabled
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] = updated.quietHoursStart
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] = updated.quietHoursEnd
+            prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] = updated.soundEnabled
+            prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = updated.vibrateEnabled
+            prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = updated.lightsEnabled
+            prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] = updated.maxPerCheck
+            prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
+                updated.libraryConfigs,
+            )
         }
     }
 }
