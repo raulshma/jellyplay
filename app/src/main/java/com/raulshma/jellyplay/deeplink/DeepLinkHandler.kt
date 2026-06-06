@@ -9,7 +9,7 @@ import javax.inject.Singleton
 @Singleton
 class DeepLinkHandler @Inject constructor() {
 
-    private val supportedHosts = setOf("media", "newsletter")
+    private val supportedHosts = setOf("media", "newsletter", "seerr")
 
     fun parse(intent: Intent): Route? {
         val uri = intent.data ?: return null
@@ -36,6 +36,13 @@ class DeepLinkHandler @Inject constructor() {
             "newsletter" -> {
                 val section = segments.firstOrNull() ?: uri.lastPathSegment
                 section?.let { routeForPath("newsletter", it) }
+            }
+            "seerr" -> {
+                val tmdbId = segments.getOrNull(0)?.toIntOrNull() ?: return null
+                val mediaType = segments.getOrNull(1)?.takeIf { it.isNotBlank() }
+                    ?: uri.getQueryParameter("type")?.takeIf { it.isNotBlank() }
+                    ?: "movie"
+                Route.SeerrDetail(tmdbId = tmdbId, mediaType = mediaType)
             }
             else -> null
         }
@@ -73,6 +80,10 @@ class DeepLinkHandler @Inject constructor() {
 
         fun createContinueWatchingLink(): String {
             return "$SCHEME_CUSTOM://newsletter/CONTINUE_WATCHING"
+        }
+
+        fun createSeerrLink(tmdbId: Int, mediaType: String): String {
+            return "$SCHEME_CUSTOM://seerr/$tmdbId/$mediaType"
         }
     }
 }

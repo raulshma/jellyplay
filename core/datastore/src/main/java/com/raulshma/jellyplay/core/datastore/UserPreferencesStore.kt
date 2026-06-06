@@ -39,6 +39,9 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.LibraryWidgetItem
+import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.core.model.WidgetConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -172,6 +175,16 @@ class UserPreferencesStore @Inject constructor(
         val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
 
         val TYPED_MIGRATION_DONE = booleanPreferencesKey("_typed_migration_done")
+
+        // ── Home-screen recommendations widgets ──
+        val WIDGET_CONFIG = stringPreferencesKey("widget_config")
+        val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
+        val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
+        val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
+        val SEERR_WIDGET_ITEMS = stringPreferencesKey("seerr_widget_items")
+        val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
+        val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
+        val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -932,6 +945,74 @@ class UserPreferencesStore @Inject constructor(
                 } catch (_: Exception) { emptyList() }
             } ?: emptyList()
         }
+
+    val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.WIDGET_CONFIG]?.let {
+                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            } ?: WidgetConfig()
+        }
+
+    val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<LibraryWidgetItem>>(it) } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+
+    val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+
+    val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<SeerrWidgetItem>>(it) } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+
+    val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+
+    val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }.distinctUntilChanged()
+
+    suspend fun setWidgetConfig(config: WidgetConfig) {
+        context.dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setLibraryWidgetItems(
+        items: List<LibraryWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.LIBRARY_WIDGET_VERSION] = version
+            prefs[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setSeerrWidgetItems(
+        items: List<SeerrWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.SEERR_WIDGET_VERSION] = version
+            prefs[Keys.SEERR_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setWidgetLastRefreshMs(ms: Long) {
+        context.dataStore.edit { it[Keys.WIDGET_LAST_REFRESH_MS] = ms }
+    }
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }

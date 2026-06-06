@@ -299,13 +299,15 @@ private fun MainContent(
 
     val context = LocalContext.current
 
-    LaunchedEffect(viewModel.navigationRequest) {
-        viewModel.navigationRequest.collect { route ->
+    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRoute) {
+        pendingRoute?.let { route ->
             if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
                 navigationState.topLevelRoute.value = route
             } else {
                 navigator.navigate(route)
             }
+            viewModel.consumePendingRoute()
         }
     }
 

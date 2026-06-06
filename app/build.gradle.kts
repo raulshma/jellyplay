@@ -149,9 +149,12 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.navigation3)
 
     implementation(libs.work.runtime.ktx)
+    implementation(libs.datastore.preferences)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.play.services.cast.framework)
