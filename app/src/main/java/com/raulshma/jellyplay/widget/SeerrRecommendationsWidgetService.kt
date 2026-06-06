@@ -66,7 +66,9 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             val item = items.getOrNull(position) ?: return loadingView()
             val view = RemoteViews(context.packageName, R.layout.seerr_recommendations_item)
             view.setTextViewText(R.id.sr_item_title, item.title)
+            view.setViewVisibility(R.id.sr_item_title, View.VISIBLE)
             view.setTextViewText(R.id.sr_item_subtitle, buildSubtitle(item))
+            view.setViewVisibility(R.id.sr_item_subtitle, View.VISIBLE)
             val rating = item.voteAverage
             if (rating != null && rating > 0f) {
                 view.setTextViewText(R.id.sr_item_rating, "★ %.1f".format(rating))
