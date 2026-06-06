@@ -61,4 +61,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSearchHistoryDao(database: JellyPlayDatabase) = database.searchHistoryDao()
+
+    @Provides
+    fun provideSeenMediaDao(database: JellyPlayDatabase) = database.seenMediaDao()
 }

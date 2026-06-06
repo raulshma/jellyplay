@@ -338,6 +338,24 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
     }
 }
 
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS seen_media (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                itemId TEXT NOT NULL,
+                libraryId TEXT NOT NULL,
+                mediaType TEXT NOT NULL,
+                seenAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_seen_media_itemId ON seen_media(itemId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_seen_media_seenAt ON seen_media(seenAt)")
+    }
+}
+
 val ALL_MIGRATIONS = listOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -356,4 +374,5 @@ val ALL_MIGRATIONS = listOf(
     MIGRATION_15_16,
     MIGRATION_16_17,
     MIGRATION_17_18,
+    MIGRATION_18_19,
 )

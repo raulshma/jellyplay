@@ -16,6 +16,7 @@ import coil3.size.Size
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -46,6 +47,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     @Inject lateinit var audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
     @Inject lateinit var nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
+    @Inject lateinit var notificationScheduler: NotificationScheduler
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -70,6 +72,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             cleanupStuckDownloads()
             mediaRepository.cleanupLyricsCache()
             offlineRepository.cleanupOrphans()
+            notificationScheduler.scheduleOrUpdate()
         }
     }
 
