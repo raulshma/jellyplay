@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.view.WindowManager
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -184,6 +185,7 @@ fun VideoPlayerScreen(
     }
 
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+    var overlayDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val isScreenLocked = uiState.isScreenLocked
 
@@ -684,7 +686,7 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onClearOverlays = remember(doSeekTo) {
+            onClearOverlays = remember(doSeekTo, scope) {
                 {
                     if (isGestureSeeking) {
                         doSeekTo(gestureSeekPositionMs)
@@ -694,10 +696,14 @@ fun VideoPlayerScreen(
                     }
                     seekDirection = 0
                     seekOffsetMs = 0L
-                    brightnessOverlay = -1f
-                    volumeOverlay = -1f
                     volumeGestureAccumulator = 0f
                     isGestureSeeking = false
+                    overlayDismissJob?.cancel()
+                    overlayDismissJob = scope.launch {
+                        delay(800)
+                        brightnessOverlay = -1f
+                        volumeOverlay = -1f
+                    }
                 }
             },
             showControls = showControls,
@@ -707,6 +713,19 @@ fun VideoPlayerScreen(
                         showControls = true
                     } else {
                         onBack()
+                    }
+                }
+            },
+            onHapticPulse = remember(activity) {
+                {
+                    activity?.let { act ->
+                        val view = act.window.decorView
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        }
                     }
                 }
             },

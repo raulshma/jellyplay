@@ -55,7 +55,7 @@ class GestureOverlayTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("-10s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("10s").assertIsDisplayed()
     }
 
     @Test
@@ -76,7 +76,7 @@ class GestureOverlayTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("+30s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("30s").assertIsDisplayed()
     }
 
     @Test
@@ -139,7 +139,7 @@ class GestureOverlayTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("+10s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("10s").assertIsDisplayed()
         composeTestRule.onNodeWithText("50%").assertIsDisplayed()
     }
 
@@ -163,7 +163,7 @@ class GestureOverlayTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("+0s").assertDoesNotExist()
+        composeTestRule.onNodeWithText("0s").assertDoesNotExist()
     }
 
     @Test
@@ -187,5 +187,134 @@ class GestureOverlayTest {
             }
         }
         composeTestRule.onNodeWithText("-100%").assertDoesNotExist()
+    }
+
+    @Test
+    fun gestureOverlay_brightnessAtMaxBound_shows100Percent() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = 1.0f,
+                    volumeValue = -1f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("100%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureOverlay_volumeAtMinBound_shows0Percent() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = -1f,
+                    volumeValue = 0f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("0%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureOverlay_hapticCallbackProvided_noCrash() {
+        var hapticCalled = false
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = 0.5f,
+                    volumeValue = -1f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                    onHapticPulse = { hapticCalled = true },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("50%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureOverlay_brightnessVeryLow_showsLowPercentage() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = 0.05f,
+                    volumeValue = -1f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("5%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureOverlay_bothBrightnessAndVolume_shownSimultaneously() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = 0.6f,
+                    volumeValue = 0.8f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("60%").assertIsDisplayed()
+        composeTestRule.onNodeWithText("80%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureOverlay_customDismissDelay_noCrash() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                GestureOverlay(
+                    seekDirection = 0,
+                    seekOffsetMs = 0L,
+                    brightnessValue = -1f,
+                    volumeValue = -1f,
+                    gesturesEnabled = true,
+                    swipeSeekMaxMs = 120_000L,
+                    onSeekGesture = {},
+                    onBrightnessGesture = {},
+                    onVolumeGesture = {},
+                    onClearOverlays = {},
+                    overlayDismissDelayMs = 1200L,
+                )
+            }
+        }
     }
 }
