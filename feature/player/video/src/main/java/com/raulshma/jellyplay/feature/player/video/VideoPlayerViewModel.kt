@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -101,7 +102,13 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     private var autoplayNext: Boolean = false
     private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
-    private val trickplayManager = TrickplayManager(playbackRepository)
+    private val trickplayManager = TrickplayManager(
+        playbackRepository = playbackRepository,
+        lowRamDevice = run {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
+        },
+    )
     private var videoMediaSession: MediaSession? = null
 
     val castManagerField: CastManager = castManager
@@ -578,23 +585,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
-        val prefs = cachedPreferences
-        val config = com.raulshma.jellyplay.feature.player.video.engine.EngineConfig(
-            decoderMode = _uiState.value.decoderMode,
-            audioPassthrough = _uiState.value.audioPassthrough,
-            audioDelayMs = _uiState.value.audioDelayMs,
-            subtitleDelayMs = style.offsetMs,
-            subtitleStyle = style,
-            audioEffects = com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig(
-                dialogueBoostEnabled = _uiState.value.dialogueBoostEnabled,
-                dialogueBoostStrength = _uiState.value.dialogueBoostStrength,
-                nightModeEnabled = _uiState.value.nightModeEnabled,
-                nightModeStrength = _uiState.value.nightModeStrength,
-                equalizerEnabled = equalizerEnabled,
-                equalizerSettings = prefs.equalizerSettings
-            )
-        )
-        playerSessionManager.engine?.updateConfig(config)
+        updateConfigWithUiState()
         launch {
             preferencesStore.setSubtitleStyle(style)
         }
@@ -802,7 +793,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun setVideoEffects(effects: VideoEffectsConfig) {
         _uiState.update { it.copy(videoEffects = effects) }
-        updateConfigWithUiState()
+        updateConfigWithUiStateDebounced()
     }
 
     private fun updateConfigWithUiState() {
@@ -833,6 +824,16 @@ class VideoPlayerViewModel @Inject constructor(
             )
         )
         playerSessionManager.engine?.updateConfig(config)
+    }
+
+    private var configDebounceJob: Job? = null
+
+    private fun updateConfigWithUiStateDebounced() {
+        configDebounceJob?.cancel()
+        configDebounceJob = launch {
+            delay(50)
+            updateConfigWithUiState()
+        }
     }
 
     fun playNextEpisode() {
@@ -1237,7 +1238,13 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun toggleVideoStats() {
-        _uiState.update { it.copy(showVideoStats = !_uiState.value.showVideoStats) }
+        val newValue = !_uiState.value.showVideoStats
+        _uiState.update { it.copy(showVideoStats = newValue) }
+        playerSessionManager.engine?.setVideoStatsEnabled(newValue)
+    }
+
+    fun setControlsVisible(visible: Boolean) {
+        playerSessionManager.engine?.setPollingIntervalMs(if (visible) 250L else 1000L)
     }
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
@@ -1392,19 +1399,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private fun mapSubtitleCodecToMime(codec: String?): String? {
-        if (codec == null) return null
-        return when (codec.lowercase()) {
-            "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-            "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-            "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
-            "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.APPLICATION_TTML
-            else -> null
-        }
-    }
-
     private fun reportCurrentPlaybackStopped() {
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = playSessionId
@@ -1555,15 +1549,15 @@ class VideoPlayerViewModel @Inject constructor(
         castManager.release()
         activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
-            ).launch {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching {
-                    playbackRepository.reportPlaybackStopped(
-                        itemId = itemId,
-                        sessionId = sessionId,
-                        positionTicks = positionTicks,
-                    )
+                    kotlinx.coroutines.withTimeout(5_000) {
+                        playbackRepository.reportPlaybackStopped(
+                            itemId = itemId,
+                            sessionId = sessionId,
+                            positionTicks = positionTicks,
+                        )
+                    }
                 }
             }
         }

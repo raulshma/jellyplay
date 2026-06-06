@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,9 +18,13 @@ import java.util.concurrent.ConcurrentHashMap
 
 class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
+    lowRamDevice: Boolean = false,
 ) {
 
-    private val thumbnailCache = object : LruCache<Int, Bitmap>((MAX_THUMBNAIL_CACHE_BYTES / 1024).toInt()) {
+    private val maxThumbnailCacheBytes = if (lowRamDevice) LOW_RAM_THUMBNAIL_BYTES else MAX_THUMBNAIL_CACHE_BYTES
+    private val maxSpriteSheetCacheBytes = if (lowRamDevice) LOW_RAM_SPRITE_SHEET_BYTES else MAX_SPRITE_SHEET_CACHE_BYTES
+
+    private val thumbnailCache = object : LruCache<Int, Bitmap>((maxThumbnailCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
             // Recycle the native bitmap memory when it is evicted from the cache.
@@ -30,7 +33,7 @@ class TrickplayManager(
             if (!oldValue.isRecycled) oldValue.recycle()
         }
     }
-    private val spriteSheetCache = object : LruCache<Int, Bitmap>((MAX_SPRITE_SHEET_CACHE_BYTES / 1024).toInt()) {
+    private val spriteSheetCache = object : LruCache<Int, Bitmap>((maxSpriteSheetCacheBytes / 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.allocationByteCount / 1024
         override fun entryRemoved(evictedBySize: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
             // Only recycle sprite sheets when the cache evicts them automatically;
@@ -41,7 +44,7 @@ class TrickplayManager(
     }
     private val sheetMutexes = ConcurrentHashMap<Int, Mutex>()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
     private var preloadJob: kotlinx.coroutines.Job? = null
@@ -81,20 +84,20 @@ class TrickplayManager(
         thumbnailCache.get(thumbnailIndex)?.let { return it }
 
         return withContext(Dispatchers.Default) {
-            val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
-            val sheetIndex = thumbnailIndex / thumbnailsPerSheet
-            val tileIndex = thumbnailIndex % thumbnailsPerSheet
-            val tileCol = tileIndex % currentInfo.tileWidth
-            val tileRow = tileIndex / currentInfo.tileWidth
-
-            val sheet = spriteSheetCache.get(sheetIndex)
-                ?: loadSpriteSheet(id, sheetIndex, currentInfo)
-                ?: return@withContext null
-
-            val offsetX = tileCol * currentInfo.width
-            val offsetY = tileRow * currentInfo.height
-
             try {
+                val thumbnailsPerSheet = currentInfo.tileWidth * currentInfo.tileHeight
+                val sheetIndex = thumbnailIndex / thumbnailsPerSheet
+                val tileIndex = thumbnailIndex % thumbnailsPerSheet
+                val tileCol = tileIndex % currentInfo.tileWidth
+                val tileRow = tileIndex / currentInfo.tileWidth
+
+                val sheet = spriteSheetCache.get(sheetIndex)
+                    ?: loadSpriteSheet(id, sheetIndex, currentInfo)
+                    ?: return@withContext null
+
+                val offsetX = tileCol * currentInfo.width
+                val offsetY = tileRow * currentInfo.height
+
                 val thumbnail = Bitmap.createBitmap(
                     sheet, offsetX, offsetY, currentInfo.width, currentInfo.height,
                 )
@@ -200,12 +203,15 @@ class TrickplayManager(
         localCacheDir = null
         persistDir = null
         sheetMutexes.clear()
-        scope.coroutineContext.cancelChildren()
+        scope.cancel()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     companion object {
         private const val MAX_THUMBNAIL_CACHE_BYTES = 16 * 1024 * 1024L
         private const val MAX_SPRITE_SHEET_CACHE_BYTES = 64 * 1024 * 1024L
+        private const val LOW_RAM_THUMBNAIL_BYTES = 8 * 1024 * 1024L
+        private const val LOW_RAM_SPRITE_SHEET_BYTES = 24 * 1024 * 1024L
         private const val PRELOAD_NEIGHBOR_COUNT = 1
     }
 }

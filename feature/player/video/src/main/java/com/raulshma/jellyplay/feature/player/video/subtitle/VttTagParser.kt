@@ -61,7 +61,7 @@ object VttTagParser {
     fun stripTags(text: String): String =
         TAG_PATTERN.replace(text, "")
 
-    private const val MAX_CACHED_CUES = 64
+    private const val MAX_CACHED_CUES = 32
 
     private data class Segment(val text: String, val styles: List<SpanStyle>)
 }

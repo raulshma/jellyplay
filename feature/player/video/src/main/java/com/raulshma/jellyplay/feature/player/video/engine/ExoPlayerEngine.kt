@@ -13,7 +13,6 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -50,6 +49,7 @@ import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -65,13 +65,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 
 class ExoPlayerEngine(
     private val context: Context,
 ) : MediaEngine {
 
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -152,6 +152,11 @@ class ExoPlayerEngine(
     private var audioEffectsAttached = false
     private var lastAudioEffectsConfig: AudioEffectsConfig? = null
 
+    private val _pollingIntervalMs = MutableStateFlow(1000L)
+    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
+    private val _videoStatsEnabled = MutableStateFlow(false)
+    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
+
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
@@ -194,7 +199,6 @@ class ExoPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         release()
-        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
 
@@ -276,7 +280,7 @@ class ExoPlayerEngine(
         }
 
         val subtitleConfigs = request.externalSubtitles.mapNotNull { sub ->
-            val mimeType = sub.mimeType ?: mapSubtitleCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
+            val mimeType = sub.mimeType ?: SubtitleMimeMapper.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
                 .setId(sub.id)
                 .setMimeType(mimeType)
@@ -338,7 +342,7 @@ class ExoPlayerEngine(
     }
 
     override fun release() {
-        engineScope.cancel()
+        engineScope.coroutineContext.cancelChildren()
         player?.removeListener(listener)
         playerView?.player = null
         playerView = null
@@ -404,6 +408,7 @@ class ExoPlayerEngine(
     }
 
     override fun updateConfig(config: EngineConfig) {
+        if (currentConfig == config) return
         val oldConfig = currentConfig
         currentConfig = config
 
@@ -561,6 +566,9 @@ class ExoPlayerEngine(
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
 
+    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
+    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
+
     override val positionFlow: Flow<Long> = callbackFlow {
         val p = player ?: run { close(); return@callbackFlow }
         val posListener = object : Player.Listener {
@@ -578,17 +586,17 @@ class ExoPlayerEngine(
         val ticker = engineScope.launch {
             while (isActive) {
                 if (!p.isPlaying) {
-                    // Suspend the ticker entirely while paused. Wakes up the
-                    // instant playback resumes via _isPlaying.
                     _isPlaying.first { it }
                 }
-                delay(500)
+                delay(_pollingIntervalMs.value)
                 runCatching {
                     val currentlyPlaying = p.isPlaying
                     if (currentlyPlaying) {
                         trySend(p.currentPosition)
                         _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
-                        updateVideoStats()
+                        if (_videoStatsEnabled.value) {
+                            updateVideoStats()
+                        }
                     } else if (currentlyPlaying != lastPlayingState) {
                         trySend(p.currentPosition)
                         _bufferedPositionMs.value = p.bufferedPosition.coerceAtLeast(0L)
@@ -606,11 +614,16 @@ class ExoPlayerEngine(
 
     private fun updateVideoStats() {
         val p = player ?: return
+        val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
+        val bandwidthEstimate = bandwidthMeter.bitrateEstimate
+
+        val last = lastVideoStats
+        if (last != null && last.bufferedPositionMs == bufferedPos && last.estimatedBandwidthBps == bandwidthEstimate) {
+            return
+        }
+
         val videoFormat = p.videoFormat
         val audioFormat = p.audioFormat
-        val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
-
-        val bandwidthEstimate = bandwidthMeter.bitrateEstimate
 
         val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
@@ -772,7 +785,7 @@ class ExoPlayerEngine(
     override fun addExternalSubtitle(source: SubtitleSource) = runOnPlayerThread {
         val exo = player ?: return@runOnPlayerThread
         val item = currentMediaItem ?: return@runOnPlayerThread
-        val mimeType = source.mimeType ?: mapSubtitleCodecToMime(source.codec ?: source.label) ?: return@runOnPlayerThread
+        val mimeType = source.mimeType ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label) ?: return@runOnPlayerThread
 
         val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
             .setId(source.id)
@@ -800,16 +813,4 @@ class ExoPlayerEngine(
         if (wasPlaying) exo.play()
     }
 
-    private fun mapSubtitleCodecToMime(codecOrLabel: String?): String? {
-        if (codecOrLabel == null) return null
-        return when (codecOrLabel.lowercase()) {
-            "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-            "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-            "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
-            "pgs" -> MimeTypes.APPLICATION_PGS
-            "mov_text" -> MimeTypes.APPLICATION_TTML
-            else -> null
-        }
-    }
 }

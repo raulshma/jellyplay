@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.NativeKeyEvent
@@ -62,6 +64,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -174,6 +178,10 @@ fun VideoPlayerScreen(
     var gestureDeltaMs by remember { mutableLongStateOf(0L) }
     var isGestureSeeking by remember { mutableStateOf(false) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showControls) {
+        viewModel.setControlsVisible(showControls)
+    }
 
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
 
@@ -1121,13 +1129,20 @@ private fun SubtitleCueBox(
         when (style.edgeType) {
             SubtitleEdgeType.NONE -> Unit
             SubtitleEdgeType.OUTLINE -> {
-                SubtitleOutlineOffsets.forEach { (x, y) ->
-                    SubtitleTextLayer(
-                        text = annotatedText,
-                        color = edgeColor,
-                        textStyle = textStyle,
-                        modifier = Modifier.offset(x.dp, y.dp),
-                    )
+                val textMeasurer = rememberTextMeasurer()
+                val measuredText = remember(annotatedText, textStyle) {
+                    textMeasurer.measure(annotatedText, textStyle)
+                }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    SubtitleOutlineOffsets.forEach { (x, y) ->
+                        val offsetPx = with(density) { Offset(x.dp.toPx(), y.dp.toPx()) }
+                        drawText(
+                            measuredText,
+                            topLeft = offsetPx,
+                            color = edgeColor,
+                        )
+                    }
                 }
             }
             SubtitleEdgeType.DROP_SHADOW -> {

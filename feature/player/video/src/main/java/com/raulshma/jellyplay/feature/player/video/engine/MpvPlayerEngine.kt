@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -45,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -65,8 +63,8 @@ class MpvPlayerEngine(
         private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
     }
 
-    private val isLowRamDevice by lazy { detectLowRamDevice() }
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilities(
         supportsPip = true,
@@ -105,6 +103,11 @@ class MpvPlayerEngine(
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
+    private val _pollingIntervalMs = MutableStateFlow(1000L)
+    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
+    private val _videoStatsEnabled = MutableStateFlow(false)
+    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
+
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
@@ -120,15 +123,6 @@ class MpvPlayerEngine(
     private var wasPlayingBeforeActivityPause = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    private fun detectLowRamDevice(): Boolean {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            am.isLowRamDevice || am.memoryClass <= 256
-        } else {
-            am.memoryClass <= 256
-        }
-    }
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -347,7 +341,7 @@ class MpvPlayerEngine(
         nightMode.detach()
         audioNormalization.detach()
         channelMix.detach()
-        engineScope.cancel()
+        engineScope.coroutineContext.cancelChildren()
         val view = mpvView
         mpvView = null
         view?.let {
@@ -706,6 +700,9 @@ class MpvPlayerEngine(
             mpvView?.mpv?.getPropertyInt("audio-device-id") ?: 0
         } catch (_: Exception) { 0 }
 
+    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
+    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
+
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         var lastPlayingState = _isPlaying.value
@@ -714,11 +711,14 @@ class MpvPlayerEngine(
                 if (!_isPlaying.value) {
                     _isPlaying.first { it }
                 }
-                delay(500)
+                delay(_pollingIntervalMs.value)
                 trySend(currentPositionMs)
                 val currentlyPlaying = _isPlaying.value
                 if (currentlyPlaying || currentlyPlaying != lastPlayingState) {
-                    updateBufferAndStats()
+                    updateBufferPosition()
+                    if (_videoStatsEnabled.value) {
+                        updateVideoStatsOnly()
+                    }
                 }
                 lastPlayingState = currentlyPlaying
             }
@@ -726,7 +726,7 @@ class MpvPlayerEngine(
         awaitClose { ticker.cancel() }
     }
 
-    private fun updateBufferAndStats() {
+    private fun updateBufferPosition() {
         val m = mpvView?.mpv ?: return
         try {
             val duration = (m.getPropertyDouble("duration") ?: 0.0) * 1000.0
@@ -738,7 +738,10 @@ class MpvPlayerEngine(
                 _bufferedPositionMs.value = (posMs + (cacheDuration * 1000.0)).toLong().coerceAtMost(duration.toLong())
             }
         } catch (_: Exception) {}
+    }
 
+    private fun updateVideoStatsOnly() {
+        val m = mpvView?.mpv ?: return
         try {
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
@@ -1065,6 +1068,7 @@ class MpvPlayerEngine(
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()
 
     private fun logSubtitleRenderState(reason: String) {
+        if (!com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) return
         val m = mpvView?.mpv ?: return
         try {
             val sid = m.getPropertyString("sid")
@@ -1084,6 +1088,7 @@ class MpvPlayerEngine(
     }
 
     private fun logMpvMessage(prefix: String, level: Int, text: String) {
+        if (!com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG && level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN) return
         val cleanText = redactSensitive(text.trim()).takeIf { it.isNotBlank() } ?: return
         if (level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN && !MPV_SUBTITLE_LOG_PATTERN.containsMatchIn("$prefix $cleanText")) {
             return
