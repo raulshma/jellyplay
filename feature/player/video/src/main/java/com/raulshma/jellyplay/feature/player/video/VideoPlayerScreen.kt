@@ -985,19 +985,29 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(isSeeking, seekPositionMs) {
-        if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-            seekTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
-        } else if (!isSeeking) {
+    LaunchedEffect(Unit) {
+        snapshotFlow { seekPositionMs }
+            .collect { pos ->
+                if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+                    seekTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
+    }
+
+    LaunchedEffect(isSeeking) {
+        if (!isSeeking) {
             seekTrickplayBitmap = null
         }
     }
 
-    LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
-        if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
-            gestureTrickplayVisible = true
-            gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
-        }
+    LaunchedEffect(Unit) {
+        snapshotFlow { gestureSeekPositionMs }
+            .collect { pos ->
+                if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+                    gestureTrickplayVisible = true
+                    gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
     }
 
     LaunchedEffect(isGestureSeeking) {
@@ -1008,10 +1018,17 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(isTv, isSeeking, seekPositionMs) {
-        if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-            tvTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
-        } else if (!isSeeking) {
+    LaunchedEffect(Unit) {
+        snapshotFlow { seekPositionMs }
+            .collect { pos ->
+                if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+                    tvTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
+    }
+
+    LaunchedEffect(isSeeking) {
+        if (!isSeeking) {
             tvTrickplayBitmap = null
         }
     }
