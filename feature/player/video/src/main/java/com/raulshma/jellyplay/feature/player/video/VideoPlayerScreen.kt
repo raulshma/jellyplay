@@ -233,6 +233,9 @@ fun VideoPlayerScreen(
             onBack()
         }
     }
+    LaunchedEffect(Unit) {
+        viewModel.closePlayer.collect { if (it) onBack() }
+    }
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
         if (!isInPipMode) {
