@@ -20,6 +20,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.Calendar
 
 @HiltWorker
@@ -52,8 +54,12 @@ class NewMediaCheckWorker @AssistedInject constructor(
         return try {
             checkForNewMedia(prefs)
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: SocketTimeoutException) {
             Result.retry()
+        } catch (e: IOException) {
+            Result.retry()
+        } catch (_: Exception) {
+            Result.failure()
         }
     }
 

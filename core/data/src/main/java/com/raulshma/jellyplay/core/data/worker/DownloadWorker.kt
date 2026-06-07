@@ -12,15 +12,16 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.UserDao
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,30 +39,18 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-class DownloadWorker(
-    context: Context,
-    params: WorkerParameters,
+@HiltWorker
+class DownloadWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val dao: DownloadDao,
+    private val userDao: UserDao,
+    private val preferencesStore: UserPreferencesStore,
+    private val client: OkHttpClient,
 ) : CoroutineWorker(context, params) {
-
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface DownloadWorkerEntryPoint {
-        fun downloadDao(): DownloadDao
-        fun serverDao(): com.raulshma.jellyplay.core.database.dao.ServerDao
-        fun userDao(): com.raulshma.jellyplay.core.database.dao.UserDao
-        fun preferencesStore(): com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-        fun okHttpClient(): OkHttpClient
-    }
 
     override suspend fun doWork(): Result {
         val downloadId = inputData.getString(KEY_DOWNLOAD_ID) ?: return Result.failure()
-        val entryPoint = EntryPointAccessors.fromApplication(
-            applicationContext,
-            DownloadWorkerEntryPoint::class.java,
-        )
-        val dao = entryPoint.downloadDao()
-        val prefs = entryPoint.preferencesStore()
-        val client = entryPoint.okHttpClient()
 
         val entity = dao.getDownloadById(downloadId) ?: return Result.failure()
 
@@ -78,9 +67,9 @@ class DownloadWorker(
         val existingBytes = entity.downloadedBytes
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
 
-        val activeUserId = prefs.activeUserId.firstOrNull()
+        val activeUserId = preferencesStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
-            entryPoint.userDao().getUserById(uid)?.accessToken
+            userDao.getUserById(uid)?.accessToken
         }
 
         val downloadClient = client.newBuilder()
@@ -89,7 +78,7 @@ class DownloadWorker(
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
 
-        val numConnections = prefs.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
+        val numConnections = preferencesStore.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
 
         return try {
             if (existingBytes > 0L) {

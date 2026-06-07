@@ -15,8 +15,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import android.graphics.Bitmap
@@ -63,7 +61,6 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         private val playbackRepository: PlaybackRepository,
     ) : RemoteViewsFactory {
 
-        private val scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var items: List<MediaItem> = emptyList()
 
         override fun onCreate() = Unit
@@ -73,7 +70,6 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         }
 
         override fun onDestroy() {
-            scope.coroutineContext[Job]?.cancel()
             items = emptyList()
         }
 

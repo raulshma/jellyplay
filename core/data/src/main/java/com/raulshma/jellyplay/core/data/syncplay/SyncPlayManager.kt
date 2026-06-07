@@ -253,6 +253,7 @@ class SyncPlayManager @Inject constructor(
         queueCore.clear()
         playbackCore.onGroupLeft()
         timeSyncManager.stop()
+        webSocketClient.disconnect()
         return apiResult
     }
 
@@ -330,6 +331,7 @@ class SyncPlayManager @Inject constructor(
         queueCore.clear()
         playbackCore.onGroupLeft()
         timeSyncManager.stop()
+        webSocketClient.disconnect()
     }
 
     companion object {
