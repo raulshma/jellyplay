@@ -24,14 +24,17 @@ internal class PlaybackProgressReporter(
     private val getResolvedPlayMethod: () -> PlayMethod,
     private val getMediaEngine: () -> MediaEngine?,
     private val onAutoSkip: (MediaSegment) -> Unit,
+    private val onPlaybackEndedNoNext: () -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
     private val autoSkippedSegments = mutableSetOf<String>()
+    private var endedNoNextTriggered = false
 
     fun startPositionTracking() {
         positionJob?.cancel()
         autoSkippedSegments.clear()
+        endedNoNextTriggered = false
         val engine = getMediaEngine() ?: return
         positionJob = viewModel.viewModelScope.launch {
             var lastPos = Long.MIN_VALUE
@@ -53,8 +56,19 @@ internal class PlaybackProgressReporter(
                     }
                 }
                 checkAutoSkip(pos)
+                checkEndedNoNext(pos, dur)
             }
         }
+    }
+
+    private fun checkEndedNoNext(currentPositionMs: Long, durationMs: Long) {
+        if (endedNoNextTriggered) return
+        if (durationMs <= 0L) return
+        if (currentPositionMs < durationMs - 500L) return
+        val state = uiState.value
+        if (state.nextEpisode != null) return
+        endedNoNextTriggered = true
+        onPlaybackEndedNoNext()
     }
 
     private fun checkAutoSkip(currentPositionMs: Long) {
