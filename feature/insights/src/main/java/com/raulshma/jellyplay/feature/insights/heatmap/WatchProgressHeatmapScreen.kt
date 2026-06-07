@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +70,8 @@ import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -90,6 +94,7 @@ fun WatchProgressHeatmapScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
 
     if (state.shareRequested) {
         LaunchedEffect(state.shareRequested) {
@@ -112,62 +117,125 @@ fun WatchProgressHeatmapScreen(
             }
         },
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
-            if (state.isLoading) {
-                Box(
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Loading...", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
                 ) {
-                    Text("Loading...", style = MaterialTheme.typography.bodyMedium)
+                    if (!state.isPluginAvailable) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
+                            Text(
+                                text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    YearSelector(
+                        year = state.year,
+                        onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    StreakStats(streakInfo = state.streakInfo)
+
+                    Spacer(Modifier.height(16.dp))
+
+                    FilterChips(
+                        currentFilter = state.filter,
+                        onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    HeatmapGrid(
+                        year = state.year,
+                        dailyActivities = state.dailyActivities,
+                        onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
+                    )
                 }
             } else {
-                if (!state.isPluginAvailable) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.errorContainer,
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        Text(
-                            text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(12.dp),
+                        if (!state.isPluginAvailable) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                            ) {
+                                Text(
+                                    text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(12.dp),
+                                )
+                            }
+                        }
+
+                        YearSelector(
+                            year = state.year,
+                            onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
+                        )
+
+                        StreakStats(streakInfo = state.streakInfo)
+
+                        FilterChips(
+                            currentFilter = state.filter,
+                            onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Text(
+                            text = "Activity Grid",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        HeatmapGrid(
+                            year = state.year,
+                            dailyActivities = state.dailyActivities,
+                            onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
+                        )
+                    }
                 }
-
-                YearSelector(
-                    year = state.year,
-                    onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                StreakStats(streakInfo = state.streakInfo)
-
-                Spacer(Modifier.height(16.dp))
-
-                FilterChips(
-                    currentFilter = state.filter,
-                    onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                HeatmapGrid(
-                    year = state.year,
-                    dailyActivities = state.dailyActivities,
-                    onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
-                )
             }
         }
     }
@@ -211,14 +279,42 @@ private fun YearSelector(
 }
 
 @Composable
-private fun StreakStats(streakInfo: com.raulshma.jellyplay.core.data.repository.StreakInfo) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+private fun StreakStats(
+    streakInfo: com.raulshma.jellyplay.core.data.repository.StreakInfo,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        ),
     ) {
-        StatItem("Current Streak", "${streakInfo.currentStreak} days")
-        StatItem("Longest Streak", "${streakInfo.longestStreak} days")
-        StatItem("Active Days", "${streakInfo.totalActiveDays}")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatItem("Current Streak", "${streakInfo.currentStreak} days")
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(24.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            )
+            StatItem("Longest Streak", "${streakInfo.longestStreak} days")
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(24.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            )
+            StatItem("Active Days", "${streakInfo.totalActiveDays}")
+        }
     }
 }
 
@@ -394,6 +490,8 @@ private fun HeatmapGrid(
         listOf("Sun", "", "Tue", "", "Thu", "", "Sat")
     }
 
+    val gridWidthDp = with(LocalDensity.current) { (numWeeks * (cellSizePx + cellGapPx)).toDp() }
+
     Box(modifier = Modifier.fillMaxWidth()) {
         DayLabels(
             dayLabels = dayLabels,
@@ -402,33 +500,38 @@ private fun HeatmapGrid(
             monthLabelHeightPx = monthLabelHeightPx,
         )
 
-        Column(modifier = Modifier.padding(start = labelWidth)) {
-            Row(
+        val scrollState = rememberScrollState()
+        LaunchedEffect(numWeeks, year) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(start = labelWidth)
+                .horizontalScroll(scrollState),
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(gridWidthDp)
                     .height(monthLabelHeight),
             ) {
                 monthPositions.forEach { (weekIndex, monthLabel) ->
-                    val cellStepDp = with(LocalDensity.current) { (cellSizePx + cellGapPx) }
-                    Box(
-                        modifier = Modifier
-                            .width(with(LocalDensity.current) { cellStepDp.toDp() })
-                            .height(monthLabelHeight),
-                        contentAlignment = Alignment.BottomStart,
-                    ) {
-                        Text(
-                            text = monthLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 9.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    val xOffset = with(LocalDensity.current) { (weekIndex * (cellSizePx + cellGapPx)).toDp() }
+                    Text(
+                        text = monthLabel,
+                        modifier = Modifier.offset(x = xOffset),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
+            Spacer(Modifier.height(2.dp))
+
             Canvas(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(gridWidthDp)
                     .height(
                         with(LocalDensity.current) {
                             ((cellSizePx + cellGapPx) * 7 + 4f).toDp()

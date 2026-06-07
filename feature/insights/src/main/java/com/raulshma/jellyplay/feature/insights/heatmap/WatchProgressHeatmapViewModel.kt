@@ -66,8 +66,10 @@ class WatchProgressHeatmapViewModel @Inject constructor(
     private var cachedResolvedItems = mutableMapOf<String, ResolvedMediaItem>()
 
     init {
-        launch { watchHistoryRepository.refreshPlaybackReportingStatus() }
-        loadHeatmapData()
+        launch {
+            watchHistoryRepository.refreshPlaybackReportingStatus()
+            loadHeatmapData()
+        }
     }
 
     fun onEvent(event: HeatmapEvent) {
