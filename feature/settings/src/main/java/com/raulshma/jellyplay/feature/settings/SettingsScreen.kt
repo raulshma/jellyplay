@@ -329,6 +329,30 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(2) {
                 SettingsGroup(
+                    icon = Tabler.Outline.Activity,
+                    title = "My Activity & Insights",
+                    summary = { "Favorites and viewing statistics" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Heart,
+                        title = "Browse Favorites",
+                        subtitle = "View all your favorited items",
+                        index = 0, count = 2,
+                        onClick = onFavoritesClick,
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.ChartBar,
+                        title = "Watch Progress Heatmap",
+                        subtitle = "View your viewing activity over the past year",
+                        index = 1, count = 2,
+                        onClick = onWatchProgressHeatmapClick,
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(2) {
+                SettingsGroup(
                     icon = Tabler.Outline.Wand,
                     title = "Setup Wizard",
                     summary = { "Re-run the initial setup experience" },
@@ -531,7 +555,7 @@ fun SettingsScreen(
             AnimatedSettingsEntrance(3) {
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
-                    title = "Home Screen",
+                    title = "Home Screen Layout",
                     summary = {
                         val enabled = preferences.enabledHomeSectionTypes
                         "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
@@ -644,22 +668,6 @@ fun SettingsScreen(
                             }
                         }
                     }
-
-                    SettingListItem(
-                        icon = Tabler.Outline.Heart,
-                        title = "Browse Favorites",
-                        subtitle = "View all your favorited items",
-                        index = idx, count = totalCount + 2,
-                        onClick = onFavoritesClick,
-                    )
-
-                    SettingListItem(
-                        icon = Tabler.Outline.ChartBar,
-                        title = "Watch Progress Heatmap",
-                        subtitle = "View your viewing activity over the past year",
-                        index = idx + 1, count = totalCount + 2,
-                        onClick = onWatchProgressHeatmapClick,
-                    )
                 }
             }
 
