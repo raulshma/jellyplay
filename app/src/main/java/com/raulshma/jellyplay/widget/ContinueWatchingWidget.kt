@@ -16,11 +16,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 class ContinueWatchingWidget : AppWidgetProvider() {
 
@@ -29,9 +25,6 @@ class ContinueWatchingWidget : AppWidgetProvider() {
     interface WidgetEntryPoint {
         fun preferencesStore(): UserPreferencesStore
     }
-
-    private val widgetScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var updateJob: kotlinx.coroutines.Job? = null
 
     override fun onUpdate(
         context: Context,
@@ -55,12 +48,10 @@ class ContinueWatchingWidget : AppWidgetProvider() {
 
     override fun onDisabled(context: Context?) {
         super.onDisabled(context)
-        updateJob?.cancel()
     }
 
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
-        updateJob?.cancel()
     }
 
     companion object {

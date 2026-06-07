@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.notification.receiver
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,6 +9,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -49,6 +49,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         )
                     } finally {
                         pendingResult.finish()
+                        scope.cancel()
                     }
                 }
             }

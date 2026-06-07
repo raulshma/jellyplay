@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -46,6 +47,7 @@ import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -1527,6 +1529,8 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager.requestAutoEnterPip(false)
     }
 
+    private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private var released = false
 
     fun release() {
@@ -1549,7 +1553,7 @@ class VideoPlayerViewModel @Inject constructor(
         castManager.release()
         activePlayerController.clearEngine()
         if (itemId != null && positionTicks > 0) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            releaseScope.launch {
                 runCatching {
                     kotlinx.coroutines.withTimeout(5_000) {
                         playbackRepository.reportPlaybackStopped(

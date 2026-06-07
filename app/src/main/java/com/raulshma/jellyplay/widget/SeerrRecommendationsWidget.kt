@@ -19,6 +19,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -46,6 +47,8 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         fun seerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
     }
 
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -62,9 +65,14 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         triggerInitialRefresh(context)
     }
 
+    override fun onDisabled(context: Context?) {
+        super.onDisabled(context)
+        refreshScope.cancel()
+    }
+
     private fun triggerInitialRefresh(context: Context) {
         val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        refreshScope.launch {
             try {
                 WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
             } finally {
@@ -81,7 +89,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             val ids = appWidgetManager.getAppWidgetIds(componentName)
             appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.sr_widget_grid)
             val pending = goAsync()
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            refreshScope.launch {
                 try {
                     WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
                 } finally {
