@@ -118,6 +118,7 @@ import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
+import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
@@ -1088,6 +1089,7 @@ private fun MainNavDisplay(
             syncPlaySection(navigator)
             onboardingSection { navigator.goBack() }
             newsletterSection(navigator)
+            insightsSection(navigator)
         },
         modifier = modifier,
     )

@@ -34,6 +34,7 @@ import okhttp3.OkHttpClient
 import okhttp3.ConnectionPool
 import okhttp3.Protocol
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 import java.io.File
@@ -100,6 +101,7 @@ abstract class NetworkModule {
         @Singleton
         fun provideJellyfin(
             @ApplicationContext context: Context,
+            okHttpClient: OkHttpClient,
         ): Jellyfin = createJellyfin {
             this.context = context
             clientInfo = ClientInfo(
@@ -107,6 +109,7 @@ abstract class NetworkModule {
                 version = context.packageManager
                     .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
             )
+            apiClientFactory = OkHttpFactory(okHttpClient)
         }
 
         @Provides

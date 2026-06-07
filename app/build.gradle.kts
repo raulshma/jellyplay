@@ -127,6 +127,7 @@ dependencies {
     implementation(project(":feature:admin"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:newsletter"))
+    implementation(project(":feature:insights"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

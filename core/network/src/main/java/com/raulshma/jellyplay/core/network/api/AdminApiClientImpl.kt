@@ -8,11 +8,6 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.jellyfin.sdk.model.api.DayOfWeek
 import org.jellyfin.sdk.model.api.TaskTriggerInfoType
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -147,17 +142,10 @@ class AdminApiClientImpl @Inject constructor(
     }
 
     override suspend fun getLogFileContent(fileName: String): Result<String> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/System/Logs/Log?name=${java.net.URLEncoder.encode(fileName, "UTF-8")}"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", user.accessToken)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to get log file: ${response.code}")
-            response.body?.string() ?: ""
-        }
+        engine.requireApi()
+            .request(pathTemplate = "/System/Logs/Log", queryParameters = mapOf("name" to fileName))
+            .body
+            .decodeToString()
     }
 
     override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?, minDate: String?, hasUserId: Boolean?): Result<List<ActivityLogEntry>> = engine.apiResult {
@@ -176,27 +164,13 @@ class AdminApiClientImpl @Inject constructor(
     }
 
     override suspend fun sendMessageToSession(sessionId: String, header: String, text: String, timeoutMs: Long): Result<Unit> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/Sessions/$sessionId/Command"
-        val body = buildJsonObject {
-            put("Name", JsonPrimitive("DisplayMessage"))
-            put("Arguments", buildJsonObject {
-                put("Header", JsonPrimitive(header))
-                put("Text", JsonPrimitive(text))
-                put("TimeoutMs", JsonPrimitive(timeoutMs.toString()))
-            })
-        }
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", user.accessToken)
-            .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw Exception("Failed to send message: ${response.code}")
-            }
-        }
+        engine.requireApi().sessionApi.sendMessageCommand(
+            sessionId = sessionId,
+            data = org.jellyfin.sdk.model.api.MessageCommand(
+                header = header.takeIf { it.isNotBlank() },
+                text = text,
+                timeoutMs = timeoutMs,
+            ),
+        )
     }
 }
