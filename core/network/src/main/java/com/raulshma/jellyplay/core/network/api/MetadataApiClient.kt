@@ -20,6 +20,7 @@ interface MetadataApiClient {
         lockData: Boolean, lockedFields: List<String>,
         preferredMetadataLanguage: String?, preferredMetadataCountryCode: String?,
         taglines: List<String>, productionLocations: List<String>, dateCreated: String?,
+        type: String = "Unknown",
     ): Result<Unit>
 
     suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo>

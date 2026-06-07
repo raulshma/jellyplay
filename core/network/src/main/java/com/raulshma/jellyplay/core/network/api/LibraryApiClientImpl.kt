@@ -36,6 +36,7 @@ import java.util.UUID
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
+    private val lyricsApi: LyricsApi,
 ) : LibraryApiClient {
 
     override suspend fun getHomeSections(
@@ -596,9 +597,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        LyricsApi.fetchLyrics(engine.okHttpClient, server.address, itemId, user.accessToken)
+        lyricsApi.fetchLyrics(itemId)
     }
 
     override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = engine.apiResult {
@@ -778,10 +777,16 @@ class LibraryApiClientImpl @Inject constructor(
     private val favoriteCache = androidx.collection.LruCache<UUID, Boolean>(200)
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
-        val server = engine._currentServer.value ?: return ""
-        val indexPart = imageIndex?.let { "/$it" } ?: ""
-        val widthPart = maxWidth?.let { "?maxWidth=$it" } ?: ""
-        return "${server.address}/Items/$itemId/Images/$imageType$indexPart$widthPart"
+        val api = engine.api ?: return ""
+        val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)
+            ?: return ""
+        return api.imageApi.getItemImageUrl(
+            itemId = runCatching { itemId.toUUID() }.getOrNull() ?: return "",
+            imageType = imageTypeEnum,
+            tag = tag,
+            maxWidth = maxWidth,
+            imageIndex = imageIndex,
+        )
     }
 
     override fun getBackdropImageUrl(itemId: String, maxWidth: Int, tag: String?): String =

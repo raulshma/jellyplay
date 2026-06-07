@@ -136,6 +136,7 @@ fun SettingsScreen(
     onNewsletterClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
+    onWatchProgressHeatmapClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -648,8 +649,16 @@ fun SettingsScreen(
                         icon = Tabler.Outline.Heart,
                         title = "Browse Favorites",
                         subtitle = "View all your favorited items",
-                        index = idx, count = totalCount + 1,
+                        index = idx, count = totalCount + 2,
                         onClick = onFavoritesClick,
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.ChartBar,
+                        title = "Watch Progress Heatmap",
+                        subtitle = "View your viewing activity over the past year",
+                        index = idx + 1, count = totalCount + 2,
+                        onClick = onWatchProgressHeatmapClick,
                     )
                 }
             }

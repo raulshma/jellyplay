@@ -28,6 +28,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
             onFavoritesClick = { navigator.navigate(Route.Favorites) },
             onAboutClick = { navigator.navigate(Route.About) },
+            onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
         )
     }
 
