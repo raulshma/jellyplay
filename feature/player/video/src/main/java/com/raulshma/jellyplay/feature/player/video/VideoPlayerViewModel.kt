@@ -49,10 +49,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -88,9 +90,8 @@ class VideoPlayerViewModel @Inject constructor(
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
 
-    private val _closePlayer = MutableStateFlow(false)
-    val closePlayer: StateFlow<Boolean> = _closePlayer.asStateFlow()
-    fun clearClosePlayer() { _closePlayer.value = false }
+    private val _closePlayer = Channel<Unit>(Channel.BUFFERED)
+    val closePlayer = _closePlayer.receiveAsFlow()
 
     private val playerSessionManager = PlayerSessionManager(
         context = context,
@@ -130,7 +131,7 @@ class VideoPlayerViewModel @Inject constructor(
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
         onAutoSkip = { segment -> skipSegment(segment) },
-        onPlaybackEndedNoNext = { _closePlayer.value = true },
+        onPlaybackEndedNoNext = { _closePlayer.trySend(Unit) },
     )
     private val syncPlayBridge = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
