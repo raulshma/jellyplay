@@ -51,10 +51,10 @@ enum class MediaSegmentType(
     ;
 
     companion object {
-        private val API_NAME_MAP = entries.associateBy { it.name }
+        private val API_NAME_MAP = entries.associateBy { it.name.uppercase() }
 
         fun fromApiName(name: String): MediaSegmentType =
-            API_NAME_MAP[name] ?: UNKNOWN
+            API_NAME_MAP[name.uppercase()] ?: UNKNOWN
 
         val SEGMENT_PRIORITY = listOf(
             COMMERCIAL, RECAP, PREVIEW, INTRO, OUTRO, UNKNOWN,

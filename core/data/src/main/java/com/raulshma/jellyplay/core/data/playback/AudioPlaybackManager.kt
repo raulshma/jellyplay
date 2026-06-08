@@ -82,7 +82,25 @@ class AudioPlaybackManager @Inject constructor(
     init {
         scope.launch {
             preferencesStore.preferences.collect { prefs ->
+                val prevVisualizer = currentPreferences.audioVisualizerEnabled
+                val prevPreset = currentPreferences.equalizerPreset
+                val prevBalance = currentPreferences.lrBalance
+                val prevPitch = currentPreferences.pitchSemitones
+
                 currentPreferences = prefs
+
+                if (prefs.audioVisualizerEnabled != prevVisualizer) {
+                    enableVisualizer(prefs.audioVisualizerEnabled)
+                }
+                if (prefs.equalizerPreset != prevPreset) {
+                    setEqualizerPreset(prefs.equalizerPreset)
+                }
+                if (prefs.lrBalance != prevBalance) {
+                    setLrBalance(prefs.lrBalance)
+                }
+                if (prefs.pitchSemitones != prevPitch) {
+                    setPitchSemitones(prefs.pitchSemitones)
+                }
             }
         }
     }

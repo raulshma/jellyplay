@@ -7,6 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +26,7 @@ import javax.inject.Singleton
 class OfflineModeManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor,
+    private val userPreferencesStore: UserPreferencesStore,
 ) : DefaultLifecycleObserver {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -37,14 +40,28 @@ class OfflineModeManager @Inject constructor(
 
     init {
         scope.launch {
-            networkMonitor.networkStatus.collect { status ->
-                when {
-                    status == NetworkStatus.Offline -> {
-                        if (_offlineMode.value == OfflineMode.ONLINE) {
-                            _offlineMode.value = OfflineMode.OFFLINE_AUTO
-                        }
+            combine(
+                userPreferencesStore.preferences,
+                networkMonitor.networkStatus
+            ) { prefs, status ->
+                Pair(prefs, status)
+            }.collect { (prefs, status) ->
+                if (prefs.manualOfflineEnabled) {
+                    _offlineMode.value = OfflineMode.OFFLINE_MANUAL
+                } else {
+                    val current = _offlineMode.value
+                    if (current == OfflineMode.OFFLINE_MANUAL) {
+                        _offlineMode.value = OfflineMode.ONLINE
                     }
-                    status == NetworkStatus.Online || status == NetworkStatus.Local -> {
+
+                    val nowOffline = status == NetworkStatus.Offline
+                    if (nowOffline) {
+                        if (prefs.autoOfflineEnabled) {
+                            _offlineMode.value = OfflineMode.OFFLINE_AUTO
+                        } else {
+                            _offlineMode.value = OfflineMode.ONLINE
+                        }
+                    } else {
                         if (_offlineMode.value == OfflineMode.OFFLINE_AUTO) {
                             _offlineMode.value = OfflineMode.ONLINE
                         }
@@ -64,14 +81,19 @@ class OfflineModeManager @Inject constructor(
     }
 
     fun toggleManualOffline() {
-        _offlineMode.value = when (_offlineMode.value) {
-            OfflineMode.ONLINE -> OfflineMode.OFFLINE_MANUAL
-            OfflineMode.OFFLINE_MANUAL -> OfflineMode.ONLINE
-            OfflineMode.OFFLINE_AUTO -> OfflineMode.ONLINE
+        val currentManual = userPreferencesStore.preferences.value.manualOfflineEnabled
+        scope.launch {
+            userPreferencesStore.setManualOffline(!currentManual)
         }
     }
 
     fun checkNetworkAndAutoDetect() {
+        val prefs = userPreferencesStore.preferences.value
+        if (prefs.manualOfflineEnabled) {
+            _offlineMode.value = OfflineMode.OFFLINE_MANUAL
+            return
+        }
+
         val activeNetwork = connectivityManager.activeNetwork
         val capabilities = activeNetwork?.let {
             connectivityManager.getNetworkCapabilities(it)
@@ -81,7 +103,7 @@ class OfflineModeManager @Inject constructor(
         val isValidated = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
         if (activeNetwork == null || !hasInternet) {
-            if (_offlineMode.value == OfflineMode.ONLINE) {
+            if (prefs.autoOfflineEnabled && _offlineMode.value == OfflineMode.ONLINE) {
                 _offlineMode.value = OfflineMode.OFFLINE_AUTO
             }
         } else if (isValidated && _offlineMode.value == OfflineMode.OFFLINE_AUTO) {

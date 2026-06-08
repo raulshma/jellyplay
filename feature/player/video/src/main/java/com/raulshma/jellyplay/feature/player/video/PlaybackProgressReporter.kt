@@ -23,18 +23,22 @@ internal class PlaybackProgressReporter(
     private val getPlaySessionId: () -> String,
     private val getResolvedPlayMethod: () -> PlayMethod,
     private val getMediaEngine: () -> MediaEngine?,
+    private val getIncognitoModeEnabled: () -> Boolean,
     private val onAutoSkip: (MediaSegment) -> Unit,
     private val onPlaybackEndedNoNext: () -> Unit,
+    private val onWatchedThresholdReached: (String) -> Unit,
 ) {
     private var positionJob: Job? = null
     private var progressJob: Job? = null
     private val autoSkippedSegments = mutableSetOf<String>()
     private var endedNoNextTriggered = false
+    private var watchedThresholdTriggered = false
 
     fun startPositionTracking() {
         positionJob?.cancel()
         autoSkippedSegments.clear()
         endedNoNextTriggered = false
+        watchedThresholdTriggered = false
         val engine = getMediaEngine() ?: return
         positionJob = viewModel.viewModelScope.launch {
             var lastPos = Long.MIN_VALUE
@@ -57,6 +61,13 @@ internal class PlaybackProgressReporter(
                 }
                 checkAutoSkip(pos)
                 checkEndedNoNext(pos, dur)
+                if (!watchedThresholdTriggered && dur > 0) {
+                    val progressPercent = (pos.toFloat() / dur.toFloat()) * 100f
+                    if (progressPercent >= 95f) {
+                        watchedThresholdTriggered = true
+                        getCurrentItemId()?.let { onWatchedThresholdReached(it) }
+                    }
+                }
             }
         }
     }
@@ -86,6 +97,7 @@ internal class PlaybackProgressReporter(
         progressJob = viewModel.viewModelScope.launch {
             while (true) {
                 delay(10_000)
+                if (getIncognitoModeEnabled()) continue
                 val engine = getMediaEngine() ?: break
                 val itemId = getCurrentItemId() ?: break
                 val positionTicks = engine.currentPositionMs * 10_000
@@ -104,6 +116,7 @@ internal class PlaybackProgressReporter(
     }
 
     suspend fun reportStart(itemId: String, sessionId: String, mediaSourceId: String?, playMethod: PlayMethod) {
+        if (getIncognitoModeEnabled()) return
         playbackRepository.reportPlaybackStart(
             PlaybackStartInfo(
                 itemId = itemId,
@@ -121,6 +134,7 @@ internal class PlaybackProgressReporter(
         val engine = getMediaEngine()
         val positionTicks = engine?.currentPositionMs?.let { it * 10_000 } ?: 0L
         cancelJobs()
+        if (getIncognitoModeEnabled()) return
         if (itemId != null && positionTicks > 0) {
             viewModel.viewModelScope.launch {
                 playbackRepository.reportPlaybackStopped(
