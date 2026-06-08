@@ -221,6 +221,31 @@ data class MediaItemStub(
 
 @Immutable
 @Serializable
+data class ViewingStreak(
+    val currentStreak: Int = 0,
+    val longestStreak: Int = 0,
+    val streakStartDate: String? = null,
+)
+
+@Immutable
+@Serializable
+data class MonthlyComparison(
+    val currentMonthMinutes: Long = 0,
+    val previousMonthMinutes: Long = 0,
+    val percentageChange: Float = 0f,
+)
+
+@Immutable
+@Serializable
+data class MusicStatistics(
+    val totalListeningHours: Float = 0f,
+    val topArtists: List<ContentBreakdown> = emptyList(),
+    val topGenres: List<ContentBreakdown> = emptyList(),
+    val topTracks: List<UserTopItem> = emptyList(),
+)
+
+@Immutable
+@Serializable
 data class UserDetailPage(
     val user: JellyfinUser = JellyfinUser(),
     val statistics: UserStatistics = UserStatistics(),
@@ -232,6 +257,14 @@ data class UserDetailPage(
     val genreBreakdown: List<ContentBreakdown> = emptyList(),
     val methodBreakdown: List<ContentBreakdown> = emptyList(),
     val deviceBreakdown: List<ContentBreakdown> = emptyList(),
+    val weeklyWatchTimeSec: Long = 0,
+    val monthlyWatchTimeSec: Long = 0,
+    val viewingStreak: ViewingStreak = ViewingStreak(),
+    val trendData: List<PlaybackActivityPoint> = emptyList(),
+    val averageDailyMinutes: Int = 0,
+    val monthlyComparison: MonthlyComparison = MonthlyComparison(),
+    val musicStats: MusicStatistics = MusicStatistics(),
+    val genrePieData: List<ContentBreakdown> = emptyList(),
 )
 
 @Immutable

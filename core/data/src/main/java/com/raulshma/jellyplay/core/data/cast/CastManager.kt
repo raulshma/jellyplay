@@ -10,6 +10,7 @@ import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,11 +42,13 @@ sealed class CastSessionEvent {
 class CastManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val googleCastStrategy: GoogleCastStrategy,
+    private val dlnaCastStrategy: DlnaCastStrategy,
 ) {
     companion object {
         private const val TAG = "CastManager"
         const val STRATEGY_GOOGLE = "google"
         const val STRATEGY_LIBVLC = "libvlc"
+        const val STRATEGY_DLNA = "dlna"
     }
 
     private val strategies = mutableMapOf<String, CastStrategy>()
@@ -59,6 +63,7 @@ class CastManager @Inject constructor(
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var tickerJob: Job? = null
     private var strategyObserverJob: Job? = null
+    private var deviceMergeJob: Job? = null
 
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
@@ -78,11 +83,17 @@ class CastManager @Inject constructor(
     private val _castVolume = MutableStateFlow(1f)
     val castVolume: StateFlow<Float> = _castVolume.asStateFlow()
 
+    private val _allDiscoveredDevices = MutableStateFlow<List<CastDevice>>(emptyList())
+
     val castPlayerForSession: Player? get() = castPlayer
 
     fun isActive(): Boolean = castPlayer != null && isConnected
 
     fun setVolume(volume: Float) {
+        if (activeStrategyName == STRATEGY_DLNA) {
+            dlnaCastStrategy.setRendererVolume(volume)
+            return
+        }
         val player = castPlayer ?: return
         player.volume = volume.coerceIn(0f, 1f)
         _castVolume.value = player.volume
@@ -123,6 +134,14 @@ class CastManager @Inject constructor(
     }
 
     private suspend fun updateCastState() {
+        if (activeStrategyName == STRATEGY_DLNA) {
+            dlnaCastStrategy.refreshPlaybackState()
+            _castPositionMs.value = dlnaCastStrategy.rendererPositionMs.value
+            _castDurationMs.value = dlnaCastStrategy.rendererDurationMs.value
+            _castIsPlaying.value = dlnaCastStrategy.rendererIsPlaying.value
+            _castVolume.value = dlnaCastStrategy.rendererVolume.value
+            return
+        }
         val player = castPlayer ?: return
         val snapshot = withContext(Dispatchers.Default) {
             CastPlayerSnapshot(
@@ -142,11 +161,17 @@ class CastManager @Inject constructor(
 
     private fun toggleTicker() {
         tickerJob?.cancel()
-        val player = castPlayer
-        if (player != null && player.isPlaying) {
+        val isDlna = activeStrategyName == STRATEGY_DLNA
+        val shouldTick = if (isDlna) {
+            dlnaCastStrategy.isConnected.value
+        } else {
+            castPlayer != null && castPlayer?.isPlaying == true
+        }
+        if (shouldTick) {
+            val interval = if (isDlna) 1000L else 500L
             tickerJob = coroutineScope.launch {
                 while (isActive) {
-                    delay(500)
+                    delay(interval)
                     updateCastState()
                 }
             }
@@ -180,7 +205,9 @@ class CastManager @Inject constructor(
 
     init {
         strategies[STRATEGY_GOOGLE] = googleCastStrategy
+        strategies[STRATEGY_DLNA] = dlnaCastStrategy
         ensureGoogleSessionListener()
+        startDeviceMerge()
     }
 
     fun registerStrategy(name: String, strategy: CastStrategy) {
@@ -227,6 +254,19 @@ class CastManager @Inject constructor(
     private val activeStrategy: CastStrategy?
         get() = strategies[activeStrategyName]
 
+    private fun startDeviceMerge() {
+        deviceMergeJob?.cancel()
+        deviceMergeJob = coroutineScope.launch {
+            val flows = strategies.entries.map { (name, strategy) ->
+                strategy.discoveredDevices
+            }
+            if (flows.isEmpty()) return@launch
+            combine(flows) { deviceLists ->
+                deviceLists.flatMap { it }
+            }.collect { _allDiscoveredDevices.value = it }
+        }
+    }
+
     val isCastAvailable: Boolean
         get() = activeStrategy?.isAvailable?.value == true
 
@@ -246,17 +286,20 @@ class CastManager @Inject constructor(
         get() = activeStrategy?.isConnecting ?: googleCastStrategy.isConnecting
 
     val discoveredDevices: StateFlow<List<CastDevice>>
-        get() = activeStrategy?.discoveredDevices ?: googleCastStrategy.discoveredDevices
+        get() = _allDiscoveredDevices
 
     fun startDiscovery(context: android.content.Context) {
-        activeStrategy?.startDiscovery(context)
+        strategies.values.forEach { it.startDiscovery(context) }
     }
 
     fun stopDiscovery() {
-        activeStrategy?.stopDiscovery()
+        strategies.values.forEach { it.stopDiscovery() }
     }
 
     fun connect(context: android.content.Context, device: CastDevice) {
+        if (device.strategyName.isNotBlank() && device.strategyName != activeStrategyName) {
+            setActiveStrategy(device.strategyName)
+        }
         activeStrategy?.connect(context, device)
     }
 
@@ -265,15 +308,27 @@ class CastManager @Inject constructor(
     }
 
     fun play() {
-        castPlayer?.play()
+        if (activeStrategyName == STRATEGY_DLNA) {
+            dlnaCastStrategy.play()
+        } else {
+            castPlayer?.play()
+        }
     }
 
     fun pause() {
-        castPlayer?.pause()
+        if (activeStrategyName == STRATEGY_DLNA) {
+            dlnaCastStrategy.pause()
+        } else {
+            castPlayer?.pause()
+        }
     }
 
     fun seekTo(positionMs: Long) {
-        castPlayer?.seekTo(positionMs)
+        if (activeStrategyName == STRATEGY_DLNA) {
+            dlnaCastStrategy.seekTo(positionMs)
+        } else {
+            castPlayer?.seekTo(positionMs)
+        }
     }
 
     private fun ensureGoogleSessionListener() {
@@ -312,6 +367,10 @@ class CastManager @Inject constructor(
         startPositionMs: Long = 0,
         listener: Player.Listener,
     ) {
+        if (activeStrategyName == STRATEGY_DLNA) {
+            loadDlnaMedia(mediaItem, startPositionMs)
+            return
+        }
         ensureGoogleSessionListener()
         externalListener?.let { castPlayer?.removeListener(it) }
         externalListener = listener
@@ -320,6 +379,16 @@ class CastManager @Inject constructor(
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.play()
+        coroutineScope.launch { updateCastState() }
+        toggleTicker()
+    }
+
+    private fun loadDlnaMedia(mediaItem: MediaItem, startPositionMs: Long) {
+        val url = mediaItem.localConfiguration?.uri?.toString() ?: return
+        val title = mediaItem.mediaMetadata.title?.toString() ?: ""
+        dlnaCastStrategy.loadMedia(url, title, startPositionMs)
+        externalListener?.let { castPlayer?.removeListener(it) }
+        externalListener = null
         coroutineScope.launch { updateCastState() }
         toggleTicker()
     }
@@ -336,6 +405,8 @@ class CastManager @Inject constructor(
         tickerJob = null
         strategyObserverJob?.cancel()
         strategyObserverJob = null
+        deviceMergeJob?.cancel()
+        deviceMergeJob = null
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
         castPlayer?.release()
@@ -352,6 +423,8 @@ class CastManager @Inject constructor(
         tickerJob = null
         strategyObserverJob?.cancel()
         strategyObserverJob = null
+        deviceMergeJob?.cancel()
+        deviceMergeJob = null
         strategies.values.forEach { it.stopDiscovery() }
     }
 

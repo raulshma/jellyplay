@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -199,6 +200,8 @@ class UserPreferencesStore @Inject constructor(
         val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
         val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
         val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
+
+        val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -1251,6 +1254,41 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
                 updated.libraryConfigs,
             )
+        }
+    }
+
+    val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
+        get() = context.dataStore.data.map { prefs ->
+            prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                try {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    suspend fun addRecentDlnaDevice(device: DlnaDeviceRef) {
+        context.dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+
+            val updated = (listOf(device) + current.filter { it.id != device.id })
+                .distinctBy { it.id }
+                .take(5)
+            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun removeRecentDlnaDevice(deviceId: String) {
+        context.dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(current.filter { it.id != deviceId })
         }
     }
 }
