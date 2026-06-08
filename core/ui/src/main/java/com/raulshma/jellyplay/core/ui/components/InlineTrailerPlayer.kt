@@ -56,9 +56,9 @@ fun InlineTrailerPlayer(
         val muteVal = if (muted) 1 else 0
         val controlsVal = if (showControls) 1 else 0
         val pointerEvents = if (showControls) "auto" else "none"
-        val iframeStyle = if (cropToFill) {
+        val playerStyle = if (cropToFill) {
             """
-            .video-container iframe {
+            #player {
                 position: absolute;
                 top: 50%;
                 left: 50%;
@@ -66,21 +66,32 @@ fun InlineTrailerPlayer(
                 height: 56.25vw; /* 16:9 ratio */
                 min-height: 100vh;
                 min-width: 177.77vh; /* 16:9 ratio */
-                transform: translate(-50%, -50%);
+                transform: translate(-50%, -50%)${if (!showControls) " scale(1.25)" else ""};
                 border: none;
                 pointer-events: $pointerEvents;
+                opacity: 0;
+                transition: opacity 1.0s ease-in-out;
+            }
+            #player.visible {
+                opacity: 1;
             }
             """.trimIndent()
         } else {
             """
-            .video-container iframe {
+            #player {
                 position: absolute;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
+                transform: ${if (!showControls) "scale(1.25)" else "none"};
                 border: none;
                 pointer-events: $pointerEvents;
+                opacity: 0;
+                transition: opacity 1.0s ease-in-out;
+            }
+            #player.visible {
+                opacity: 1;
             }
             """.trimIndent()
         }
@@ -98,17 +109,87 @@ fun InlineTrailerPlayer(
                 height: 100%;
                 overflow: hidden;
             }
-            $iframeStyle
+            $playerStyle
         </style>
         </head>
         <body>
         <div class="video-container">
-            <iframe 
-                src="https://www.youtube-nocookie.com/embed/$videoKey?autoplay=$autoplayVal&mute=$muteVal&controls=$controlsVal&loop=1&playlist=$videoKey&playsinline=1&enablejsapi=1"
-                allow="autoplay"
-                allowfullscreen>
-            </iframe>
+            <div id="player"></div>
         </div>
+        <script>
+            // Load the YouTube IFrame API asynchronously
+            var tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            var firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+            var player;
+            function onYouTubeIframeAPIReady() {
+                player = new YT.Player('player', {
+                    height: '100%',
+                    width: '100%',
+                    videoId: '$videoKey',
+                    playerVars: {
+                        'autoplay': $autoplayVal,
+                        'mute': $muteVal,
+                        'controls': $controlsVal,
+                        'loop': 1,
+                        'playlist': '$videoKey',
+                        'playsinline': 1,
+                        'enablejsapi': 1,
+                        'showinfo': 0,
+                        'rel': 0,
+                        'iv_load_policy': 3,
+                        'modestbranding': 1,
+                        'disablekb': 1,
+                        'fs': 0
+                    },
+                    events: {
+                        'onReady': onPlayerReady,
+                        'onStateChange': onPlayerStateChange
+                    }
+                });
+            }
+
+            function onPlayerReady(event) {
+                if ($muteVal === 1) {
+                    event.target.mute();
+                }
+                if ($autoplayVal === 1) {
+                    event.target.playVideo();
+                }
+            }
+
+            function onPlayerStateChange(event) {
+                if (event.data === 1) { // YT.PlayerState.PLAYING
+                    var p = document.getElementById('player');
+                    if (p) p.classList.add('visible');
+                } else if (event.data === 0) { // YT.PlayerState.ENDED
+                    event.target.playVideo();
+                }
+            }
+
+            // Safety timeout: if player has not loaded in 5 seconds, force it to be visible
+            setTimeout(function() {
+                var p = document.getElementById('player');
+                if (p && !p.classList.contains('visible')) {
+                    p.classList.add('visible');
+                }
+            }, 5000);
+
+            // Interface functions for Android WebView lifecycle management
+            function pausePlayer() {
+                if (player && typeof player.pauseVideo === 'function') {
+                    player.pauseVideo();
+                }
+            }
+
+            function playPlayer() {
+                if (player && typeof player.playVideo === 'function') {
+                    player.playVideo();
+                }
+            }
+        </script>
         </body>
         </html>
         """.trimIndent()
@@ -237,14 +318,14 @@ fun InlineTrailerPlayer(
                 Lifecycle.Event.ON_PAUSE -> {
                     webView.onPause()
                     webView.evaluateJavascript(
-                        "var iframe = document.querySelector('iframe'); if(iframe) { iframe.contentWindow.postMessage('{\"event\":\"command\",\"func\":\"pauseVideo\",\"args\":\"\"}', '*'); }", 
+                        "if (typeof pausePlayer === 'function') { pausePlayer(); } else { var iframe = document.querySelector('iframe'); if(iframe) { iframe.contentWindow.postMessage('{\"event\":\"command\",\"func\":\"pauseVideo\",\"args\":\"\"}', '*'); } }", 
                         null
                     )
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     webView.onResume()
                     webView.evaluateJavascript(
-                        "var iframe = document.querySelector('iframe'); if(iframe) { iframe.contentWindow.postMessage('{\"event\":\"command\",\"func\":\"playVideo\",\"args\":\"\"}', '*'); }", 
+                        "if (typeof playPlayer === 'function') { playPlayer(); } else { var iframe = document.querySelector('iframe'); if(iframe) { iframe.contentWindow.postMessage('{\"event\":\"command\",\"func\":\"playVideo\",\"args\":\"\"}', '*'); } }", 
                         null
                     )
                 }
