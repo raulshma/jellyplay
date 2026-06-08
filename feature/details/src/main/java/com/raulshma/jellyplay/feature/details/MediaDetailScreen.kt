@@ -58,6 +58,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
@@ -112,6 +114,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -120,7 +123,12 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
@@ -176,9 +184,15 @@ fun MediaDetailScreen(
     }
 
     val detail by viewModel.detail
+    LaunchedEffect(detail) {
+        detail?.let {
+            viewModel.loadSeerrDataIfNeeded(it)
+        }
+    }
     val isLoading by viewModel.isLoading
     val error by viewModel.error
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
 
     val currentItem = detail?.item
     val targetBackdropId = if (currentItem?.mediaType == MediaType.EPISODE && currentItem.seriesId != null) {
@@ -191,6 +205,7 @@ fun MediaDetailScreen(
     val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+    var activeTrailerKey by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel.seriesDownloadResult) {
@@ -231,6 +246,7 @@ fun MediaDetailScreen(
         val seerrSimilar by viewModel.seerrSimilar.collectAsStateWithLifecycle()
         val isSeerrConnected by viewModel.isSeerrConnected.collectAsStateWithLifecycle()
         val isSeerrRecommendationsEnabled by viewModel.isSeerrRecommendationsEnabled.collectAsStateWithLifecycle()
+        val relatedVideos by viewModel.relatedVideos.collectAsStateWithLifecycle()
         val effectiveIsSeerrConnected = isSeerrConnected
         val seerrRequestResult by viewModel.seerrRequestResult.collectAsStateWithLifecycle()
         val seerrRadarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
@@ -324,6 +340,19 @@ fun MediaDetailScreen(
             albumTracks = viewModel.albumTracks,
             collectionItems = viewModel.collectionItems,
             onPlayAlbumTrack = remember(viewModel) { { index: Int -> viewModel.playAlbum(index) } },
+            relatedVideos = relatedVideos,
+            onVideoClick = { video ->
+                if (video.site?.lowercase() == "youtube" && video.key != null) {
+                    activeTrailerKey = video.key
+                } else if (video.key != null) {
+                    val url = when (video.site?.lowercase()) {
+                        "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
+                        else -> null
+                    }
+                    url?.let { uriHandler.openUri(it) }
+                }
+            },
+            preferences = preferences,
         )
 
         // Seerr request dialog
@@ -399,6 +428,36 @@ fun MediaDetailScreen(
     ) { data ->
         Snackbar(snackbarData = data)
     }
+
+    activeTrailerKey?.let { key ->
+        Dialog(
+            onDismissRequest = { activeTrailerKey = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                InlineTrailerPlayer(
+                    videoKey = key,
+                    modifier = Modifier.fillMaxSize(),
+                    muted = false,
+                    showControls = true,
+                    autoplay = true,
+                    onEmbedFailed = {
+                        activeTrailerKey = null
+                        uriHandler.openUri("https://www.youtube.com/watch?v=$key")
+                    }
+                )
+            }
+        }
+    }
     } // Box
 }
 
@@ -447,6 +506,9 @@ private fun DetailContent(
     albumTracks: List<MediaItem> = emptyList(),
     collectionItems: List<MediaItem> = emptyList(),
     onPlayAlbumTrack: (Int) -> Unit = {},
+    relatedVideos: List<SeerrRelatedVideo> = emptyList(),
+    onVideoClick: (SeerrRelatedVideo) -> Unit = {},
+    preferences: UserPreferences,
 ) {
     val item = detail?.item
     val listState = rememberLazyListState()
@@ -455,6 +517,14 @@ private fun DetailContent(
     val isSeries = item?.mediaType == MediaType.SERIES
     var showDownloadDialog by remember { mutableStateOf(false) }
     val artworkColors = LocalArtworkColors.current
+
+    val trailerVideo = remember(relatedVideos) {
+        relatedVideos.firstOrNull {
+            it.site?.lowercase() == "youtube" &&
+            (it.type?.lowercase() == "trailer" || it.type?.lowercase() == "teaser")
+        } ?: relatedVideos.firstOrNull { it.site?.lowercase() == "youtube" }
+    }
+    var autoplayEmbedFailed by remember { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
@@ -561,8 +631,6 @@ private fun DetailContent(
                     alpha = 1f - (scrollFraction * 0.8f)
                 }
         ) {
-            val slowEffectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-            val fastEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
             AnimatedContent(
                 targetState = targetBackdropId,
                 transitionSpec = {
@@ -593,6 +661,29 @@ private fun DetailContent(
                     blurHash = item?.blurHashes?.backdrop,
                     modifier = backdropModifier,
                     contentScale = ContentScale.Crop,
+                )
+            }
+
+            // Trailer player rendered outside AnimatedContent so it composes
+            // independently when relatedVideos loads asynchronously.
+            val playAutoplayTrailer = preferences.trailerAutoplay && trailerVideo != null && !autoplayEmbedFailed
+            val trailerKey = trailerVideo?.key
+            if (playAutoplayTrailer && trailerKey != null) {
+                InlineTrailerPlayer(
+                    videoKey = trailerKey,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                    muted = true,
+                    showControls = false,
+                    autoplay = true,
+                    focusable = false,
+                    cropToFill = true,
+                    onEmbedFailed = { autoplayEmbedFailed = true },
                 )
             }
 
@@ -756,7 +847,9 @@ private fun DetailContent(
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
                                     onPlayAlbumTrack = onPlayAlbumTrack,
-                                    showActionButtons = false
+                                    showActionButtons = false,
+                                    relatedVideos = relatedVideos,
+                                    onVideoClick = onVideoClick
                                 )
                             }
                         } else if (error != null) {
@@ -859,6 +952,8 @@ private fun DetailContent(
                                     onSeerrRequest = onSeerrRequest,
                                     onNavigate = onNavigate,
                                     onPlayAlbumTrack = onPlayAlbumTrack,
+                                    relatedVideos = relatedVideos,
+                                    onVideoClick = onVideoClick
                                 )
                             }
                         } else if (error != null) {
@@ -1834,6 +1929,8 @@ private fun DetailContentBody(
     isSeerrRecommendationsEnabled: Boolean = false,
     getSeerrPosterUrl: (String?) -> String? = { null },
     onSeerrRequest: (SeerrSearchItem) -> Unit = {},
+    relatedVideos: List<SeerrRelatedVideo> = emptyList(),
+    onVideoClick: (SeerrRelatedVideo) -> Unit = {},
 ) {
     val showContent = true
 
@@ -2216,6 +2313,12 @@ private fun DetailContentBody(
 
         }
                 }
+            }
+        }
+
+        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+            if (relatedVideos.isNotEmpty()) {
+                VideosSection(videos = relatedVideos, onVideoClick = onVideoClick)
             }
         }
 
@@ -2883,4 +2986,105 @@ private fun rememberIsLightTheme(): Boolean {
         (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f) > 0.5f
     }
 }
+
+@Composable
+private fun VideosSection(
+    videos: List<SeerrRelatedVideo>,
+    onVideoClick: (SeerrRelatedVideo) -> Unit,
+) {
+    Column {
+        FadingItem {
+            Text(
+                text = "Videos",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.padding(horizontal = 24.dp),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .tvFocusRestorer()
+                .tvFocusExitHandler(),
+        ) {
+            items(videos, key = { it.key ?: "" }, contentType = { "video" }) { video ->
+                val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
+                    "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
+                } else null
+
+                val isTv = LocalTvMode.current
+                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
+
+                FadingItem {
+                    Card(
+                        modifier = Modifier
+                            .width(240.dp)
+                            .aspectRatio(16f / 9f)
+                            .then(if (isTv) videoCardFocusState.focusModifier else Modifier)
+                            .then(if (isTv) Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8) else Modifier)
+                            .clickable {
+                                onVideoClick(video)
+                            },
+                        shape = ShapeCache.smooth8
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (thumbnailUrl != null) {
+                                MediaImage(
+                                    url = thumbnailUrl,
+                                    contentDescription = video.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                            ),
+                                            startY = 100f
+                                        )
+                                    )
+                            )
+                            
+                            Text(
+                                text = video.name ?: "Video",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(8.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            Icon(
+                                Tabler.Outline.PlayerPlay,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.Center).size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 

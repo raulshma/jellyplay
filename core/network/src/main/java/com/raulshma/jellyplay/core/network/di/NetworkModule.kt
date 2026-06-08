@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import dagger.Binds
@@ -88,6 +90,12 @@ abstract class NetworkModule {
     abstract fun bindSeerrApiClient(
         impl: ResilientSeerrApiClient,
     ): SeerrApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindTmdbApiClient(
+        impl: TmdbApiClientImpl,
+    ): TmdbApiClient
 
     companion object {
         @Provides

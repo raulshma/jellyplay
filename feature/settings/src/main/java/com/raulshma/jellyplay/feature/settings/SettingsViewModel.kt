@@ -224,6 +224,10 @@ class SettingsViewModel @Inject constructor(
         launch { preferencesStore.setPreferredPlayer(playerType) }
     }
 
+    fun setTrailerAutoplay(enabled: Boolean) {
+        launch { preferencesStore.setTrailerAutoplay(enabled) }
+    }
+
     fun setPreferredAudioLanguage(language: String?) {
         launch { preferencesStore.setPreferredAudioLanguage(language) }
     }
