@@ -60,10 +60,12 @@ fun ServerManagementScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
+    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     JellyPlayScreenScaffold(
         title = "Server Management",
         onBack = onBack,
+        backgroundColor = backgroundColor,
         actions = {
             IconButton(onClick = onAddServer) {
                 Icon(Tabler.Outline.Plus, "Add Server")
