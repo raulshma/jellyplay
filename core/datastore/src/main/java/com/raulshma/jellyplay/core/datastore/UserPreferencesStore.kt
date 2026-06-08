@@ -131,6 +131,7 @@ class UserPreferencesStore @Inject constructor(
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
         val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
+        val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
         val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
         val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
@@ -219,7 +220,7 @@ class UserPreferencesStore @Inject constructor(
                 "dynamic_theming", "oled_mode", "auto_delete_cache",
                 "pin_lock_enabled", "biometric_lock_enabled", "dialogue_boost_enabled",
                 "equalizer_enabled", "audio_passthrough", "frame_rate_matching",
-                "night_mode_enabled", "video_gestures_enabled", "video_autoplay_next",
+                "night_mode_enabled", "video_gestures_enabled", "video_autoplay_next", "trailer_autoplay",
                 "video_remember_brightness", "audio_autoplay_next", "trickplay_enabled",
                 "trickplay_on_seek_gesture", "video_episode_browser_enabled",
                 "video_show_playback_metadata", "audio_normalization_enabled",
@@ -430,6 +431,7 @@ class UserPreferencesStore @Inject constructor(
             videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
             videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
             videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", false),
+            trailerAutoplay = readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
             videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
             videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", false),
             videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
@@ -754,6 +756,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
         context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
+    }
+
+    suspend fun setTrailerAutoplay(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
@@ -1119,6 +1125,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
             settings[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = prefs.videoDefaultAspectRatio
             settings[Keys.VIDEO_AUTOPLAY_NEXT] = prefs.videoAutoplayNext
+            settings[Keys.TRAILER_AUTOPLAY] = prefs.trailerAutoplay
             settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
             settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
             settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel

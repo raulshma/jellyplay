@@ -687,13 +687,14 @@ fun SettingsScreen(
                         add("speed" to 5)
                         add("aspect" to 6)
                         add("autoplay" to 7)
-                        add("browser" to 8)
-                        add("metadata" to 9)
-                        add("swipe" to 10)
-                        add("brightness" to 11)
-                        add("trickplay" to 12)
-                        add("trickplayGesture" to 13)
-                        add("preload" to 14)
+                        add("autoplayTrailers" to 8)
+                        add("browser" to 9)
+                        add("metadata" to 10)
+                        add("swipe" to 11)
+                        add("brightness" to 12)
+                        add("trickplay" to 13)
+                        add("trickplayGesture" to 14)
+                        add("preload" to 15)
                     }
                     val total = videoItems.size
 
@@ -762,11 +763,19 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
                     SettingToggleItem(
+                        icon = Tabler.Outline.PlayerPlay,
+                        title = "Autoplay Trailers",
+                        subtitle = if (preferences.trailerAutoplay) "Muted trailer playback in backdrop area" else "Trailer autoplay disabled",
+                        checked = preferences.trailerAutoplay,
+                        index = 8, count = total,
+                        onCheckedChange = { viewModel.setTrailerAutoplay(it) },
+                    )
+                    SettingToggleItem(
                         icon = Tabler.Outline.Video,
                         title = "Episode Browser",
                         subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
                         checked = preferences.videoEpisodeBrowserEnabled,
-                        index = 8, count = total,
+                        index = 9, count = total,
                         onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                     )
                     SettingToggleItem(
@@ -774,7 +783,7 @@ fun SettingsScreen(
                         title = "Playback Metadata",
                         subtitle = if (preferences.videoShowPlaybackMetadata) "Show play method, codecs, HDR and Atmos info above seekbar" else "Metadata display hidden",
                         checked = preferences.videoShowPlaybackMetadata,
-                        index = 9, count = total,
+                        index = 10, count = total,
                         onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
                     )
                     SettingListItem(
@@ -782,7 +791,7 @@ fun SettingsScreen(
                         title = "Swipe Seek Range",
                         subtitle = "Maximum seek distance",
                         trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        index = 10, count = total,
+                        index = 11, count = total,
                         onClick = { showSwipeSeekPicker = true },
                     )
                     SettingToggleItem(
@@ -790,7 +799,7 @@ fun SettingsScreen(
                         title = "Remember Brightness",
                         subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                         checked = preferences.videoRememberBrightness,
-                        index = 11, count = total,
+                        index = 12, count = total,
                         onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
                     )
                     SettingToggleItem(
@@ -798,7 +807,7 @@ fun SettingsScreen(
                         title = "Trickplay Preview",
                         subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
                         checked = preferences.trickplayEnabled,
-                        index = 12, count = total,
+                        index = 13, count = total,
                         onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                     )
                     SettingToggleItem(
@@ -806,7 +815,7 @@ fun SettingsScreen(
                         title = "Trickplay on Gestures",
                         subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
                         checked = preferences.trickplayOnSeekGesture,
-                        index = 13, count = total,
+                        index = 14, count = total,
                         onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                     )
                     SettingListItem(
@@ -814,7 +823,7 @@ fun SettingsScreen(
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during playback",
                         trailingText = preferences.videoPreloadBufferSize.displayName,
-                        index = 14, count = total,
+                        index = 15, count = total,
                         onClick = { showPreloadBufferPicker = true },
                     )
                 }

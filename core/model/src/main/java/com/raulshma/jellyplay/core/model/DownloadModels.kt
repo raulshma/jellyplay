@@ -76,6 +76,7 @@ data class UserPreferences(
     val videoDefaultSpeed: Float = 1.0f,
     val videoDefaultAspectRatio: String = "AUTO",
     val videoAutoplayNext: Boolean = false,
+    val trailerAutoplay: Boolean = true,
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = false,
     val videoBrightnessLevel: Float = 0.5f,
