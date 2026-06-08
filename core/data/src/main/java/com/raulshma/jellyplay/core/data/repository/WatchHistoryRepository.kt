@@ -36,6 +36,7 @@ interface WatchHistoryRepository {
     suspend fun getDailyActivity(year: Int, filter: HeatmapFilter): List<DailyWatchActivity>
     suspend fun getItemsForDay(date: String, filter: HeatmapFilter): List<PlaybackReportingDetail>
     suspend fun getPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem>
+    suspend fun getMinimumActivityDate(): String?
 }
 
 @Singleton
@@ -45,6 +46,23 @@ class WatchHistoryRepositoryImpl @Inject constructor(
 
     private val _playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
     override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> = _playbackReportingStatus.asStateFlow()
+
+    override suspend fun getMinimumActivityDate(): String? {
+        val user = apiClient.currentUser.first() ?: return null
+        return try {
+            val result = apiClient.getItemsWithUserData(
+                userId = user.id,
+                isPlayed = true,
+                sortBy = "DatePlayed",
+                sortOrder = "Ascending",
+                startIndex = 0,
+                limit = 1,
+            ).getOrDefault(Pair(0, emptyList()))
+            result.second.firstOrNull()?.lastPlayedDate
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     override suspend fun refreshPlaybackReportingStatus() {
         _playbackReportingStatus.value = apiClient.checkPlaybackReportingPlugin()
@@ -65,11 +83,28 @@ class WatchHistoryRepositoryImpl @Inject constructor(
             HeatmapFilter.ALL -> null
         }
 
-        val points = apiClient.getPlaybackReportingPlayActivity(
-            days = days,
-            dataType = "count",
-            filter = filterParam,
-        ).getOrDefault(emptyList())
+        val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
+        val points = if (isPluginAvailable) {
+            apiClient.getPlaybackReportingPlayActivity(
+                days = days,
+                dataType = "count",
+                filter = filterParam,
+            ).getOrDefault(emptyList())
+        } else emptyList()
+
+        if (!isPluginAvailable || points.isEmpty()) {
+            // Fallback to basic watch history
+            val items = getPlayedItems(year, filter)
+            val countsByDate = mutableMapOf<String, Long>()
+            for (item in items) {
+                val lastPlayed = item.lastPlayedDate ?: continue
+                val dateStr = lastPlayed.take(10)
+                countsByDate[dateStr] = countsByDate.getOrDefault(dateStr, 0L) + item.playCount.coerceAtLeast(1)
+            }
+            return countsByDate.map { (date, value) ->
+                DailyWatchActivity(date = date, value = value)
+            }.sortedBy { it.date }
+        }
 
         return points.map { point ->
             DailyWatchActivity(date = point.date, value = point.value)
@@ -83,11 +118,50 @@ class WatchHistoryRepositoryImpl @Inject constructor(
             HeatmapFilter.MUSIC -> "Audio"
             HeatmapFilter.ALL -> null
         }
-        return apiClient.getPlaybackReportingUserItems(
-            userId = user.id,
-            date = date,
-            filter = filterParam,
-        ).getOrDefault(emptyList())
+
+        val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
+        val details = if (isPluginAvailable) {
+            apiClient.getPlaybackReportingUserItems(
+                userId = user.id,
+                date = date,
+                filter = filterParam,
+            ).getOrDefault(emptyList())
+        } else emptyList()
+
+        if (!isPluginAvailable || details.isEmpty()) {
+            // Fallback to basic watch history
+            val year = date.take(4).toIntOrNull() ?: java.time.LocalDate.now().year
+            val items = getPlayedItems(year, filter)
+            val filteredItems = items.filter { item ->
+                item.lastPlayedDate?.startsWith(date) == true
+            }
+            return filteredItems.map { item ->
+                val timeStr = item.lastPlayedDate?.let { dateStr ->
+                    runCatching {
+                        val parsed = java.time.ZonedDateTime.parse(dateStr)
+                        parsed.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                    }.getOrElse {
+                        runCatching {
+                            val parsed = java.time.LocalDateTime.parse(dateStr)
+                            parsed.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                        }.getOrDefault("")
+                    }
+                } ?: ""
+
+                PlaybackReportingDetail(
+                    time = timeStr,
+                    itemId = item.id,
+                    name = item.name,
+                    type = item.mediaType.name,
+                    client = "JellyPlay",
+                    method = "DirectPlay",
+                    device = "Mobile",
+                    duration = (item.runTimeTicks ?: 0L) * 100L, // convert ticks to nanoseconds
+                )
+            }
+        }
+
+        return details
     }
 
     override suspend fun getPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
@@ -108,7 +182,20 @@ class WatchHistoryRepositoryImpl @Inject constructor(
                 limit = batchSize,
             ).getOrDefault(Pair(0, emptyList()))
 
-            allItems.addAll(result.second)
+            if (result.second.isEmpty()) break
+
+            var reachedEarlierYear = false
+            for (item in result.second) {
+                val lastPlayed = item.lastPlayedDate ?: continue
+                val itemYear = lastPlayed.take(4).toIntOrNull() ?: continue
+                if (itemYear == year) {
+                    allItems.add(item)
+                } else if (itemYear < year) {
+                    reachedEarlierYear = true
+                }
+            }
+
+            if (reachedEarlierYear) break
             startIndex += batchSize
         } while (result.second.size == batchSize && result.first > startIndex)
 

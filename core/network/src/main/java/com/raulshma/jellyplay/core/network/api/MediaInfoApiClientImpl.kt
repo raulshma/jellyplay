@@ -486,11 +486,60 @@ class MediaInfoApiClientImpl @Inject constructor(
         }
     }
 
+    private suspend fun getPlaybackReportingTypeFilterList(server: String, token: String): List<String> {
+        val url = "${server}/user_usage_stats/type_filter_list"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        return try {
+            engine.okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    JellyfinApiEngine.sharedJson.decodeFromString<List<String>>(body)
+                } else emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResultWithRetry {
         val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
         val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
-        val filterParam = filter?.let { "&filter=$it" } ?: ""
-        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType$filterParam"
+
+        val currentUserId = engine._currentUser.value?.id
+        var targetUserId: String? = null
+        val mediaTypes = mutableListOf<String>()
+
+        if (filter != null) {
+            val tokens = filter.split(",")
+            for (tokenStr in tokens) {
+                val trimmed = tokenStr.trim()
+                if (trimmed.length in 32..36 && (trimmed.contains("-") || trimmed.all { it.isLetterOrDigit() })) {
+                    targetUserId = trimmed
+                } else if (trimmed.isNotEmpty()) {
+                    mediaTypes.add(trimmed)
+                }
+            }
+        }
+
+        if (targetUserId == null) {
+            targetUserId = currentUserId
+        }
+
+        val serverFilter = if (mediaTypes.isNotEmpty()) {
+            mediaTypes.joinToString(",")
+        } else {
+            val fetchedTypes = getPlaybackReportingTypeFilterList(server, token)
+            if (fetchedTypes.isNotEmpty()) {
+                fetchedTypes.joinToString(",")
+            } else {
+                "Movie,Episode,Audio,Video,MusicVideo,TvChannel,Recording"
+            }
+        }
+
+        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType&filter=$serverFilter"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", token)
@@ -500,17 +549,25 @@ class MediaInfoApiClientImpl @Inject constructor(
             if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
             val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
             val points = mutableListOf<PlaybackActivityPoint>()
+            
+            val targetClean = targetUserId?.replace("-", "")?.lowercase()
+
             for (element in json) {
                 val obj = element.jsonObject
-                val usage = obj["user_usage"]?.jsonObject
-                if (usage != null) {
-                    for ((date, value) in usage) {
-                        points.add(
-                            PlaybackActivityPoint(
-                                date = date,
-                                value = (value as? JsonPrimitive)?.content?.toLongOrNull() ?: 0,
+                val entryId = obj["user_id"]?.jsonPrimitive?.content ?: ""
+                val entryClean = entryId.replace("-", "").lowercase()
+                
+                if (targetClean == null || entryClean == targetClean) {
+                    val usage = obj["user_usage"]?.jsonObject
+                    if (usage != null) {
+                        for ((date, value) in usage) {
+                            points.add(
+                                PlaybackActivityPoint(
+                                    date = date,
+                                    value = (value as? JsonPrimitive)?.content?.toLongOrNull() ?: 0,
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
