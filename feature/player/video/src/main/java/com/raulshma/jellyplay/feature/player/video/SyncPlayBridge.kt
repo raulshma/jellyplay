@@ -125,6 +125,8 @@ internal class SyncPlayBridge(
     fun reset() {
         syncPlayManager.playbackCore.reset()
         currentPlaylistItemId = null
+        eventJob?.cancel()
+        eventJob = null
         uiState.update { it.copy(isSyncPlaySyncing = false) }
     }
 

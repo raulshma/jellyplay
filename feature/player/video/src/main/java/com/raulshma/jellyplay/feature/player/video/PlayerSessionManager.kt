@@ -361,6 +361,8 @@ class PlayerSessionManager(
     fun release() {
         _engine.value?.release()
         _engine.value = null
+        lastPlaybackRequest = null
+        lastPlayerType = null
         _sessionState.update { PlayerSessionState() }
     }
 
