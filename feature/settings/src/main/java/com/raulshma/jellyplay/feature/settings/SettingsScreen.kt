@@ -317,114 +317,15 @@ fun SettingsScreen(
                         modifier = Modifier.padding(vertical = 8.dp),
                     ) {
                         SettingListItem(
-                            icon = Tabler.Outline.Server,
-                            title = "Servers",
-                            subtitle = "Manage your Jellyfin servers",
-                            index = 0, count = 3,
-                            onClick = onServerManagement,
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.User,
-                            title = "Switch User",
-                            subtitle = userName.ifBlank { "Manage users" },
-                            index = 1, count = 3,
-                            onClick = onUserManagement,
-                        )
-                        SettingListItem(
                             icon = Tabler.Outline.Logout,
                             title = "Sign Out",
                             subtitle = "Log out of current account",
-                            index = 2, count = 3,
+                            index = 0, count = 1,
                             isDestructive = true,
                             onClick = {
                                 viewModel.logout()
                                 onLogout()
                             },
-                        )
-                    }
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(2) {
-                    SettingsGroup(
-                        icon = Tabler.Outline.Activity,
-                        title = "My Activity & Insights",
-                        summary = { "Favorites and viewing statistics" },
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    ) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Heart,
-                            title = "Browse Favorites",
-                            subtitle = "View all your favorited items",
-                            index = 0, count = 2,
-                            onClick = onFavoritesClick,
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.ChartBar,
-                            title = "Watch Progress Heatmap",
-                            subtitle = "View your viewing activity over the past year",
-                            index = 1, count = 2,
-                            onClick = onWatchProgressHeatmapClick,
-                        )
-                    }
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(2) {
-                    SettingsGroup(
-                        icon = Tabler.Outline.Wand,
-                        title = "Setup Wizard",
-                        summary = { "Re-run the initial setup experience" },
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    ) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Wand,
-                            title = "Re-run Setup",
-                            subtitle = "Configure your preferences again",
-                            index = 0, count = 1,
-                            onClick = onSetupWizard,
-                        )
-                    }
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(3) {
-                    if (viewModel.currentUser?.isAdmin == true) {
-                        SettingsGroup(
-                            icon = Tabler.Outline.Server,
-                            title = "Administration",
-                            summary = { "Server management dashboard" },
-                            modifier = Modifier.padding(vertical = 8.dp),
-                        ) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Server,
-                                title = "Dashboard",
-                                subtitle = "Server info, tasks, devices, and logs",
-                                index = 0, count = 1,
-                                onClick = onAdminDashboard,
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                AnimatedSettingsEntrance(3) {
-                    SettingsGroup(
-                        icon = Tabler.Outline.Puzzle,
-                        title = "Integrations",
-                        summary = { "Seerr" },
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    ) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Puzzle,
-                            title = "Seerr",
-                            subtitle = "Media request and discovery manager",
-                            index = 0, count = 1,
-                            onClick = onSeerrSettings,
                         )
                     }
                 }
@@ -2075,19 +1976,7 @@ fun SettingsScreen(
                 }
             }
 
-            item {
-                AnimatedSettingsEntrance(if (isTv) 16 else 15) {
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        SettingListItem(
-                            icon = Tabler.Outline.InfoCircle,
-                            title = "About JellyPlay",
-                            subtitle = "Version ${viewModel.appVersion}",
-                            index = 0, count = 1,
-                            onClick = onAboutClick,
-                        )
-                    }
-                }
-            }
+
         }
     }
 }

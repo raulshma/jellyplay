@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +19,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -97,6 +118,14 @@ fun HomeScreen(
     onSearchItemClick: (String) -> Unit = {},
     onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
     onNewsletterClick: () -> Unit = {},
+    onServerManagementClick: () -> Unit = {},
+    onUserManagementClick: () -> Unit = {},
+    onSeerrSettingsClick: () -> Unit = {},
+    onAdminDashboardClick: () -> Unit = {},
+    onSetupWizardClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {},
+    onAboutClick: () -> Unit = {},
+    onWatchProgressHeatmapClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -115,6 +144,14 @@ fun HomeScreen(
         onSearchItemClick = onSearchItemClick,
         onSearchSeerrClick = onSearchSeerrClick,
         onNewsletterClick = onNewsletterClick,
+        onServerManagementClick = onServerManagementClick,
+        onUserManagementClick = onUserManagementClick,
+        onSeerrSettingsClick = onSeerrSettingsClick,
+        onAdminDashboardClick = onAdminDashboardClick,
+        onSetupWizardClick = onSetupWizardClick,
+        onFavoritesClick = onFavoritesClick,
+        onAboutClick = onAboutClick,
+        onWatchProgressHeatmapClick = onWatchProgressHeatmapClick,
         musicContent = musicContent,
     )
 }
@@ -134,6 +171,14 @@ private fun MainHomeContent(
     onSearchItemClick: (String) -> Unit,
     onSearchSeerrClick: (Int, String) -> Unit,
     onNewsletterClick: () -> Unit = {},
+    onServerManagementClick: () -> Unit,
+    onUserManagementClick: () -> Unit,
+    onSeerrSettingsClick: () -> Unit,
+    onAdminDashboardClick: () -> Unit,
+    onSetupWizardClick: () -> Unit,
+    onFavoritesClick: () -> Unit,
+    onAboutClick: () -> Unit,
+    onWatchProgressHeatmapClick: () -> Unit,
     musicContent: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -264,6 +309,11 @@ private fun MainHomeContent(
         }
     }
 
+    val baseIconColor = if (isLightTheme) MaterialTheme.colorScheme.onSurface else Color.White
+    val appBarIconColor = lerp(baseIconColor, MaterialTheme.colorScheme.onSurface, scrollFraction)
+    val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+    val dockScale = 1f - (0.04f * scrollFraction)
+
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
     val mediaImageUrlBuilder = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
@@ -291,28 +341,220 @@ private fun MainHomeContent(
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
-    BackHandler(enabled = isFabExpanded || isSearchFocused) {
-        if (isFabExpanded) isFabExpanded = false
-        else if (isSearchFocused) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val isDrawerOpen = drawerState.isOpen
+
+    BackHandler(enabled = isFabExpanded || isSearchFocused || isDrawerOpen) {
+        if (isDrawerOpen) {
+            scope.launch { drawerState.close() }
+        } else if (isFabExpanded) {
+            isFabExpanded = false
+        } else if (isSearchFocused) {
             isSearchExpanded = false
             viewModel.onEvent(HomeUiEvent.ClearSearch)
             focusManager.clearFocus()
         }
     }
 
-    @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-    PullToRefreshBox(
-        isRefreshing = state.isRefreshing,
-        onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
-        modifier = Modifier.fillMaxSize(),
+    ArtworkThemeWrapper(
+        imageUrl = backdropUrl,
+        dynamicTheming = state.dynamicTheming,
+        darkTheme = !isLightTheme,
+        oledMode = state.oledMode,
+        colorStyle = state.colorStyle,
+        accentColorSwatch = state.accentColorSwatch,
     ) {
-        ArtworkThemeWrapper(
-            imageUrl = backdropUrl,
-            dynamicTheming = state.dynamicTheming,
-            darkTheme = !isLightTheme,
-            oledMode = state.oledMode,
-            colorStyle = state.colorStyle,
-            accentColorSwatch = state.accentColorSwatch,
+        @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = @Composable {
+                ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
+                modifier = Modifier
+                    .width(320.dp)
+                    .fillMaxHeight(),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val user = state.currentUser
+                    if (user != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        shape = androidx.compose.foundation.shape.CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.User,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = "Welcome back,",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = user.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    Text(
+                        text = "ACCOUNT",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Server, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Server Management") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onServerManagementClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Users, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Switch User") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onUserManagementClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "ACTIVITY & INSIGHTS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Heart, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Browse Favorites") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onFavoritesClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.ChartBar, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Watch History Heatmap") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onWatchProgressHeatmapClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "SYSTEM",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+                    )
+                    if (user?.isAdmin == true) {
+                        NavigationDrawerItem(
+                            icon = { Icon(Tabler.Outline.Shield, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                            label = { Text("Admin Dashboard") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                onAdminDashboardClick()
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                unselectedContainerColor = Color.Transparent
+                            )
+                        )
+                    }
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Puzzle, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Seerr Integration") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onSeerrSettingsClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.Wand, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("Setup Wizard") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onSetupWizardClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+                    NavigationDrawerItem(
+                        icon = { Icon(Tabler.Outline.InfoCircle, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        label = { Text("About JellyPlay") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onAboutClick()
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        )
+                    )
+                }
+            }
+        }
+    ) {
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
+            modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
             when {
@@ -449,8 +691,56 @@ private fun MainHomeContent(
                             androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
                         },
                 )
+
+                // Floating menu button at the top left, aligned horizontally with HomeTopDock
+                Box(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(
+                            horizontal = (4f + 12f * scrollFraction).dp,
+                            vertical = (4f + 4f * scrollFraction).dp
+                        )
+                        .align(Alignment.TopStart)
+                ) {
+                    androidx.compose.material3.Surface(
+                        onClick = {
+                            scope.launch { drawerState.open() }
+                        },
+                        shape = RoundedCornerShape((24f + 4f * scrollFraction).dp),
+                        color = if (isSearchFocused) {
+                            Color.Transparent
+                        } else {
+                            lerp(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                scrollFraction
+                            )
+                        },
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = dockScale
+                                scaleY = dockScale
+                                alpha = if (isSearchFocused) 0f else 1f
+                                shadowElevation = if (scrollFraction > 0f) 8f * scrollFraction else 0f
+                            }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Menu2,
+                                contentDescription = "Open Shortcuts Menu",
+                                tint = appBarIconColorFaded,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
         }
-        }
+    }
+    }
     }
 
     state.seerrRequestState.requestItem?.let { item ->
