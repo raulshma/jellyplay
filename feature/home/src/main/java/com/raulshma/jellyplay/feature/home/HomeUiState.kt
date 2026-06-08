@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 
+import com.raulshma.jellyplay.core.model.UserInfo
+
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
@@ -32,6 +34,7 @@ data class HomeUiState(
     val searchState: HomeSearchState = HomeSearchState(),
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
     val newsletterBannerVisible: Boolean = false,
+    val currentUser: UserInfo? = null,
 )
 
 @Immutable
