@@ -70,6 +70,13 @@ class PlayerLifecycleManager @Inject constructor(
         _pipDismissed.value = false
     }
 
+    fun reset() {
+        activeCallbacks = null
+        _isInPipMode.value = false
+        _shouldAutoEnterPip.value = false
+        _pipDismissed.value = false
+    }
+
     // ── Activity lifecycle ──
     // Called by MainActivity. Delegates directly to the engine's callbacks:
     // - ExoPlayer: no-op (PlayerView handles lifecycle)

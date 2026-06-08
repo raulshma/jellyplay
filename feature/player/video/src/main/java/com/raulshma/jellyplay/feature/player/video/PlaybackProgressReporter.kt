@@ -149,5 +149,8 @@ internal class PlaybackProgressReporter(
     fun cancelJobs() {
         progressJob?.cancel()
         positionJob?.cancel()
+        autoSkippedSegments.clear()
+        endedNoNextTriggered = false
+        watchedThresholdTriggered = false
     }
 }

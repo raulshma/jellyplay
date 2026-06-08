@@ -1478,23 +1478,53 @@ class VideoPlayerViewModel @Inject constructor(
         syncPlayBridge.reset()
         releaseVideoMediaSession()
         playerSessionManager.release()
-        playerLifecycleManager.activeCallbacks = null
+        playerLifecycleManager.reset()
         trickplayManager.clear()
         selectedSubtitleTrackId = null
+        selectedAudioTrackId = null
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
+        mediaDetail = null
+        autoplayNext = false
+        equalizerEnabled = false
 
-        _uiState.update { it.copy(
-            segments = emptyList(),
-            nextEpisode = null,
-            seriesId = null,
-            remoteSubtitles = emptyList(),
-            chapters = emptyList(),
-            seriesSeasons = emptyList(),
-            seasonEpisodes = emptyList(),
-            currentSeasonId = null,
-            isLoadingEpisodes = false,
-        ) }
+        _uiState.update { currentState ->
+            VideoPlayerUiState(
+                preferredPlayerType = currentState.preferredPlayerType,
+                seekDurationMs = currentState.seekDurationMs,
+                defaultOrientation = currentState.defaultOrientation,
+                controlsTimeoutMs = currentState.controlsTimeoutMs,
+                gesturesEnabled = currentState.gesturesEnabled,
+                defaultSpeed = currentState.defaultSpeed,
+                swipeSeekMaxMs = currentState.swipeSeekMaxMs,
+                rememberBrightness = currentState.rememberBrightness,
+                brightnessLevel = currentState.brightnessLevel,
+                segmentBehaviors = currentState.segmentBehaviors,
+                videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
+                showPlaybackMetadata = currentState.showPlaybackMetadata,
+                keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
+                subtitleStyle = currentState.subtitleStyle,
+                dialogueBoostEnabled = currentState.dialogueBoostEnabled,
+                dialogueBoostStrength = currentState.dialogueBoostStrength,
+                nightModeEnabled = currentState.nightModeEnabled,
+                nightModeStrength = currentState.nightModeStrength,
+                audioPassthrough = currentState.audioPassthrough,
+                decoderMode = currentState.decoderMode,
+                audioNormalizationMode = currentState.audioNormalizationMode,
+                audioNormalizationEnabled = currentState.audioNormalizationEnabled,
+                channelMixMode = currentState.channelMixMode,
+                channelMixEnabled = currentState.channelMixEnabled,
+                bassBoostEnabled = currentState.bassBoostEnabled,
+                bassBoostStrength = currentState.bassBoostStrength,
+                virtualizerEnabled = currentState.virtualizerEnabled,
+                virtualizerStrength = currentState.virtualizerStrength,
+                reverbPreset = currentState.reverbPreset,
+                sleepTimerActive = currentState.sleepTimerActive,
+                sleepTimerEndOfEpisode = currentState.sleepTimerEndOfEpisode,
+                sleepTimerRemainingMs = currentState.sleepTimerRemainingMs,
+                sleepTimerLastUsedDurationMs = currentState.sleepTimerLastUsedDurationMs,
+            )
+        }
     }
 
     fun startSleepTimer(durationMs: Long) {
