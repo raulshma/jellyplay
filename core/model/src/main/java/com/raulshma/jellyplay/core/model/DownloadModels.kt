@@ -134,6 +134,7 @@ data class UserPreferences(
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),
+    val showAdvancedSettings: Boolean = false,
 )
 
 @Immutable

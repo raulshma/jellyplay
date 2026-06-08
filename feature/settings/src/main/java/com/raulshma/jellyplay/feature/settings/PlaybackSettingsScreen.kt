@@ -119,6 +119,7 @@ fun PlaybackSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<PlaybackSettingsDialog>(PlaybackSettingsDialog.None) }
@@ -128,6 +129,12 @@ fun PlaybackSettingsScreen(
         title = "Playback",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -147,32 +154,19 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val videoItems = buildList {
-                        add("player" to 0)
-                        add("seek" to 1)
-                        add("orientation" to 2)
-                        add("timeout" to 3)
-                        add("gestures" to 4)
-                        add("speed" to 5)
-                        add("aspect" to 6)
-                        add("autoplay" to 7)
-                        add("autoplayTrailers" to 8)
-                        add("browser" to 9)
-                        add("metadata" to 10)
-                        add("swipe" to 11)
-                        add("brightness" to 12)
-                        add("trickplay" to 13)
-                        add("trickplayGesture" to 14)
-                        add("preload" to 15)
+                    var idx = 0
+                    val total = run {
+                        var c = 7
+                        if (showAdvanced) c += 9
+                        c
                     }
-                    val total = videoItems.size
 
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
                         title = "Player Engine",
                         subtitle = "Choose media playback engine",
                         trailingText = preferences.preferredPlayer.displayName,
-                        index = 0, count = total,
+                        index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.PlayerPicker },
                     )
                     SettingListItem(
@@ -180,7 +174,7 @@ fun PlaybackSettingsScreen(
                         title = "Seek Duration",
                         subtitle = "Double-tap to seek",
                         trailingText = "${preferences.videoSeekDurationMs / 1000}s",
-                        index = 1, count = total,
+                        index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.VideoSeekDurationPicker },
                     )
                     SettingListItem(
@@ -188,23 +182,15 @@ fun PlaybackSettingsScreen(
                         title = "Orientation",
                         subtitle = "Default screen orientation",
                         trailingText = preferences.videoDefaultOrientation.displayName,
-                        index = 2, count = total,
+                        index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.OrientationPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Clock,
-                        title = "Controls Timeout",
-                        subtitle = "Auto-hide player controls",
-                        trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
-                        index = 3, count = total,
-                        onClick = { activeDialog = PlaybackSettingsDialog.ControlsTimeoutPicker },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.HandMove,
                         title = "Gestures",
                         subtitle = if (preferences.videoGesturesEnabled) "Swipe and tap gestures active" else "Touch gestures disabled",
                         checked = preferences.videoGesturesEnabled,
-                        index = 4, count = total,
+                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
                     )
                     SettingListItem(
@@ -212,7 +198,7 @@ fun PlaybackSettingsScreen(
                         title = "Default Speed",
                         subtitle = "Initial playback speed",
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
-                        index = 5, count = total,
+                        index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.VideoSpeedPicker },
                     )
                     SettingListItem(
@@ -220,7 +206,7 @@ fun PlaybackSettingsScreen(
                         title = "Default Aspect",
                         subtitle = "Video aspect ratio",
                         trailingText = preferences.videoDefaultAspectRatio,
-                        index = 6, count = total,
+                        index = idx++, count = total,
                         onClick = { activeDialog = PlaybackSettingsDialog.AspectRatioPicker },
                     )
                     SettingToggleItem(
@@ -228,78 +214,89 @@ fun PlaybackSettingsScreen(
                         title = "Auto-play Next",
                         subtitle = if (preferences.videoAutoplayNext) "Automatically plays next episode" else "Manual episode selection",
                         checked = preferences.videoAutoplayNext,
-                        index = 7, count = total,
+                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Clipboard,
-                        title = "Autoplay Trailers",
-                        subtitle = if (preferences.trailerAutoplay) "Trailers play automatically" else "Trailers require manual play",
-                        checked = preferences.trailerAutoplay,
-                        index = 8, count = total,
-                        onCheckedChange = { viewModel.setTrailerAutoplay(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.List,
-                        title = "Episode Browser",
-                        subtitle = if (preferences.videoEpisodeBrowserEnabled) "Show episode list during playback" else "Hide episode list",
-                        checked = preferences.videoEpisodeBrowserEnabled,
-                        index = 9, count = total,
-                        onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.InfoCircle,
-                        title = "Playback Metadata",
-                        subtitle = if (preferences.videoShowPlaybackMetadata) "Show codec and stream info" else "Hide codec info",
-                        checked = preferences.videoShowPlaybackMetadata,
-                        index = 10, count = total,
-                        onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.ArrowBarRight,
-                        title = "Swipe Seek Range",
-                        subtitle = "Maximum seek range for swipe gesture",
-                        trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        index = 11, count = total,
-                        onClick = { activeDialog = PlaybackSettingsDialog.SwipeSeekPicker },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.BrightnessHalf,
-                        title = "Remember Brightness",
-                        subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
-                        checked = preferences.videoRememberBrightness,
-                        index = 12, count = total,
-                        onCheckedChange = { enabled ->
-                            viewModel.setVideoRememberBrightness(enabled)
-                        },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Photo,
-                        title = "Trickplay Preview",
-                        subtitle = if (preferences.trickplayEnabled) "Show thumbnails on seek bar" else "No seek bar thumbnails",
-                        checked = preferences.trickplayEnabled,
-                        index = 13, count = total,
-                        onCheckedChange = { viewModel.setTrickplayEnabled(it) },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.HandMove,
-                        title = "Trickplay on Gestures",
-                        subtitle = if (preferences.trickplayOnSeekGesture) "Show thumbnails during swipe seek" else "No thumbnails during seek",
-                        checked = preferences.trickplayOnSeekGesture,
-                        index = 14, count = total,
-                        onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Refresh,
-                        title = "Preload Buffer",
-                        subtitle = "Amount to buffer ahead during playback",
-                        trailingText = preferences.videoPreloadBufferSize.displayName,
-                        index = 15, count = total,
-                        onClick = { activeDialog = PlaybackSettingsDialog.PreloadBufferPicker },
-                    )
+                    if (showAdvanced) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Controls Timeout",
+                            subtitle = "Auto-hide player controls",
+                            trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.ControlsTimeoutPicker },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Clipboard,
+                            title = "Autoplay Trailers",
+                            subtitle = if (preferences.trailerAutoplay) "Trailers play automatically" else "Trailers require manual play",
+                            checked = preferences.trailerAutoplay,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setTrailerAutoplay(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.List,
+                            title = "Episode Browser",
+                            subtitle = if (preferences.videoEpisodeBrowserEnabled) "Show episode list during playback" else "Hide episode list",
+                            checked = preferences.videoEpisodeBrowserEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.InfoCircle,
+                            title = "Playback Metadata",
+                            subtitle = if (preferences.videoShowPlaybackMetadata) "Show codec and stream info" else "Hide codec info",
+                            checked = preferences.videoShowPlaybackMetadata,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowBarRight,
+                            title = "Swipe Seek Range",
+                            subtitle = "Maximum seek range for swipe gesture",
+                            trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.SwipeSeekPicker },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.BrightnessHalf,
+                            title = "Remember Brightness",
+                            subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
+                            checked = preferences.videoRememberBrightness,
+                            index = idx++, count = total,
+                            onCheckedChange = { enabled ->
+                                viewModel.setVideoRememberBrightness(enabled)
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Photo,
+                            title = "Trickplay Preview",
+                            subtitle = if (preferences.trickplayEnabled) "Show thumbnails on seek bar" else "No seek bar thumbnails",
+                            checked = preferences.trickplayEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setTrickplayEnabled(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.HandMove,
+                            title = "Trickplay on Gestures",
+                            subtitle = if (preferences.trickplayOnSeekGesture) "Show thumbnails during swipe seek" else "No thumbnails during seek",
+                            checked = preferences.trickplayOnSeekGesture,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = "Preload Buffer",
+                            subtitle = "Amount to buffer ahead during playback",
+                            trailingText = preferences.videoPreloadBufferSize.displayName,
+                            index = idx, count = total,
+                            onClick = { activeDialog = PlaybackSettingsDialog.PreloadBufferPicker },
+                        )
+                    }
                 }
             }
 
+            if (showAdvanced) {
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.BadgeHd,
@@ -682,6 +679,16 @@ fun PlaybackSettingsScreen(
                             },
                         )
                     }
+                }
+            }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 9,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+                    )
                 }
             }
         }

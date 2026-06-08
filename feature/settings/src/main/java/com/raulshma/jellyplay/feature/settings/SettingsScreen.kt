@@ -120,6 +120,10 @@ fun SettingsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = preferences.showAdvancedSettings,
+                onToggle = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
+            )
             androidx.compose.material3.IconButton(onClick = onNewsletterClick) {
                 Icon(
                     Tabler.Outline.Mail,

@@ -61,6 +61,7 @@ fun AudioSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<AudioSettingsDialog>(AudioSettingsDialog.None) }
@@ -70,6 +71,12 @@ fun AudioSettingsScreen(
         title = "Audio Player",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -89,15 +96,19 @@ fun AudioSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val audioItems = mutableListOf<Int>()
-                    for (i in 0..20) audioItems.add(i)
                     var idx = 0
                     val total = run {
-                        var c = 9
-                        if (preferences.equalizerEnabled) c++
-                        if (preferences.dialogueBoostEnabled) c++
-                        if (preferences.nightModeEnabled) c++
-                        if (preferences.audioNormalizationMode != AudioNormalizationMode.NONE) c++
+                        var c = 2
+                        if (showAdvanced) {
+                            c += 7
+                            if (preferences.equalizerEnabled) c++
+                            if (preferences.dialogueBoostEnabled) c++
+                            if (preferences.nightModeEnabled) c++
+                            if (preferences.audioNormalizationMode != AudioNormalizationMode.NONE) c++
+                            c += 6
+                            if (preferences.bassBoostEnabled) c++
+                            if (preferences.virtualizerEnabled) c++
+                        }
                         c
                     }
 
@@ -109,30 +120,6 @@ fun AudioSettingsScreen(
                         index = idx++, count = total,
                         onClick = { activeDialog = AudioSettingsDialog.AudioSpeedPicker },
                     )
-                    SettingListItem(
-                        icon = Tabler.Outline.Music,
-                        title = "Night Mode Volume",
-                        subtitle = "Maximum volume level at night",
-                        trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.NightModeVolumePicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Adjustments,
-                        title = "Night Mode Gain",
-                        subtitle = "Loudness compensation",
-                        trailingText = "${preferences.audioNightModeGain}",
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.NightModeGainPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.PlayerSkipForward,
-                        title = "Skip Prev Threshold",
-                        subtitle = "Restart song if past this point",
-                        trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.SkipPrevThresholdPicker },
-                    )
                     SettingToggleItem(
                         icon = Tabler.Outline.PlaylistAdd,
                         title = "Auto-play Next",
@@ -141,183 +128,218 @@ fun AudioSettingsScreen(
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
                     )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.PlaylistAdd,
-                        title = "Gapless Playback",
-                        subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
-                        checked = preferences.audioGaplessEnabled,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setGaplessEnabled(it) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Music,
-                        title = "Crossfade Duration",
-                        subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
-                        trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.CrossfadePicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Refresh,
-                        title = "Preload Buffer",
-                        subtitle = "Amount to buffer ahead during audio playback",
-                        trailingText = preferences.audioPreloadBufferSize.displayName,
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.AudioPreloadBufferPicker },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Adjustments,
-                        title = "Volume Normalization",
-                        subtitle = when (preferences.audioNormalizationMode) {
-                            AudioNormalizationMode.NONE -> "Off"
-                            AudioNormalizationMode.DYNAMIC -> "Dynamic compression"
-                            AudioNormalizationMode.TRACK -> "Per-track ReplayGain"
-                            AudioNormalizationMode.ALBUM -> "Album-aware ReplayGain"
-                        },
-                        trailingText = when (preferences.audioNormalizationMode) {
-                            AudioNormalizationMode.NONE -> "Off"
-                            AudioNormalizationMode.DYNAMIC -> "Dynamic"
-                            AudioNormalizationMode.TRACK -> "Track"
-                            AudioNormalizationMode.ALBUM -> "Album"
-                        },
-                        index = idx++, count = total,
-                        onClick = { activeDialog = AudioSettingsDialog.NormalizationModePicker },
-                    )
-                    if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
-                        preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
-                    ) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Adjustments,
-                            title = "ReplayGain Pre-Amp",
-                            subtitle = "Fine-tune target loudness",
-                            trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
-                            index = idx++, count = total,
-                            onClick = { activeDialog = AudioSettingsDialog.PreAmpPicker },
-                        )
-                    }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Adjustments,
-                        title = "Equalizer",
-                        subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
-                        checked = preferences.equalizerEnabled,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setEqualizerEnabled(it) },
-                        onClick = { activeDialog = AudioSettingsDialog.EqualizerEditor },
-                    )
-                    if (preferences.equalizerEnabled) {
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Microphone2,
-                            title = "Dialogue Boost",
-                            subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
-                            checked = preferences.dialogueBoostEnabled,
-                            index = idx++, count = total,
-                            onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
-                        )
-                    }
-                    if (preferences.dialogueBoostEnabled) {
+                    if (showAdvanced) {
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = "Dialogue Boost Strength",
-                            subtitle = preferences.dialogueBoostStrength.displayName,
-                            trailingText = preferences.dialogueBoostStrength.displayName,
+                            title = "Night Mode Volume",
+                            subtitle = "Maximum volume level at night",
+                            trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
                             index = idx++, count = total,
-                            onClick = {
-                                val strengths = EffectStrength.entries
-                                val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
-                                val nextIndex = (currentIndex + 1) % strengths.size
-                                viewModel.setDialogueBoostStrength(strengths[nextIndex])
-                            },
+                            onClick = { activeDialog = AudioSettingsDialog.NightModeVolumePicker },
                         )
-                    }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Gauge,
-                        title = "Night Mode",
-                        subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
-                        checked = preferences.nightModeEnabled,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setNightModeEnabled(it) },
-                    )
-                    if (preferences.nightModeEnabled) {
                         SettingListItem(
-                            icon = Tabler.Outline.Moon,
-                            title = "Night Mode Strength",
-                            subtitle = preferences.nightModeStrength.displayName,
-                            trailingText = preferences.nightModeStrength.displayName,
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Night Mode Gain",
+                            subtitle = "Loudness compensation",
+                            trailingText = "${preferences.audioNightModeGain}",
                             index = idx++, count = total,
-                            onClick = {
-                                val strengths = EffectStrength.entries
-                                val currentIndex = strengths.indexOf(preferences.nightModeStrength)
-                                val nextIndex = (currentIndex + 1) % strengths.size
-                                viewModel.setNightModeStrength(strengths[nextIndex])
-                            },
+                            onClick = { activeDialog = AudioSettingsDialog.NightModeGainPicker },
                         )
-                    }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.WaveSine,
-                        title = "Bass Boost",
-                        subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else "Off",
-                        checked = preferences.bassBoostEnabled,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setBassBoostEnabled(it) },
-                    )
-                    if (preferences.bassBoostEnabled) {
+                        SettingListItem(
+                            icon = Tabler.Outline.PlayerSkipForward,
+                            title = "Skip Prev Threshold",
+                            subtitle = "Restart song if past this point",
+                            trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.SkipPrevThresholdPicker },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.PlaylistAdd,
+                            title = "Gapless Playback",
+                            subtitle = if (preferences.audioGaplessEnabled) "Seamless track transitions" else "Brief pause between tracks",
+                            checked = preferences.audioGaplessEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setGaplessEnabled(it) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Music,
+                            title = "Crossfade Duration",
+                            subtitle = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s overlap between tracks" else "No crossfade",
+                            trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else "Off",
+                            index = idx++, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.CrossfadePicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = "Preload Buffer",
+                            subtitle = "Amount to buffer ahead during audio playback",
+                            trailingText = preferences.audioPreloadBufferSize.displayName,
+                            index = idx++, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.AudioPreloadBufferPicker },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Volume Normalization",
+                            subtitle = when (preferences.audioNormalizationMode) {
+                                AudioNormalizationMode.NONE -> "Off"
+                                AudioNormalizationMode.DYNAMIC -> "Dynamic compression"
+                                AudioNormalizationMode.TRACK -> "Per-track ReplayGain"
+                                AudioNormalizationMode.ALBUM -> "Album-aware ReplayGain"
+                            },
+                            trailingText = when (preferences.audioNormalizationMode) {
+                                AudioNormalizationMode.NONE -> "Off"
+                                AudioNormalizationMode.DYNAMIC -> "Dynamic"
+                                AudioNormalizationMode.TRACK -> "Track"
+                                AudioNormalizationMode.ALBUM -> "Album"
+                            },
+                            index = idx++, count = total,
+                            onClick = { activeDialog = AudioSettingsDialog.NormalizationModePicker },
+                        )
+                        if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+                            preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
+                        ) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Adjustments,
+                                title = "ReplayGain Pre-Amp",
+                                subtitle = "Fine-tune target loudness",
+                                trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
+                                index = idx++, count = total,
+                                onClick = { activeDialog = AudioSettingsDialog.PreAmpPicker },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Adjustments,
+                            title = "Equalizer",
+                            subtitle = if (preferences.equalizerEnabled) "10-band equalizer active" else "Equalizer disabled",
+                            checked = preferences.equalizerEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setEqualizerEnabled(it) },
+                            onClick = { activeDialog = AudioSettingsDialog.EqualizerEditor },
+                        )
+                        if (preferences.equalizerEnabled) {
+                            SettingToggleItem(
+                                icon = Tabler.Outline.Microphone2,
+                                title = "Dialogue Boost",
+                                subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else "Off",
+                                checked = preferences.dialogueBoostEnabled,
+                                index = idx++, count = total,
+                                onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                            )
+                        }
+                        if (preferences.dialogueBoostEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Music,
+                                title = "Dialogue Boost Strength",
+                                subtitle = preferences.dialogueBoostStrength.displayName,
+                                trailingText = preferences.dialogueBoostStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setDialogueBoostStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Gauge,
+                            title = "Night Mode",
+                            subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else "Off",
+                            checked = preferences.nightModeEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setNightModeEnabled(it) },
+                        )
+                        if (preferences.nightModeEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Moon,
+                                title = "Night Mode Strength",
+                                subtitle = preferences.nightModeStrength.displayName,
+                                trailingText = preferences.nightModeStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.nightModeStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setNightModeStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.WaveSine,
+                            title = "Bass Boost",
+                            subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else "Off",
+                            checked = preferences.bassBoostEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setBassBoostEnabled(it) },
+                        )
+                        if (preferences.bassBoostEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.WaveSine,
+                                title = "Bass Boost Strength",
+                                subtitle = preferences.bassBoostStrength.displayName,
+                                trailingText = preferences.bassBoostStrength.displayName,
+                                index = idx++, count = total,
+                                onClick = {
+                                    val strengths = EffectStrength.entries
+                                    val currentIndex = strengths.indexOf(preferences.bassBoostStrength)
+                                    val nextIndex = (currentIndex + 1) % strengths.size
+                                    viewModel.setBassBoostStrength(strengths[nextIndex])
+                                },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Speakerphone,
+                            title = "Virtualizer / Spatial Audio",
+                            subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}% strength" else "Off",
+                            checked = preferences.virtualizerEnabled,
+                            index = idx++, count = total,
+                            onCheckedChange = { viewModel.setVirtualizerEnabled(it) },
+                        )
+                        if (preferences.virtualizerEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Speakerphone,
+                                title = "Virtualizer Strength",
+                                subtitle = "${preferences.virtualizerStrength / 10}%",
+                                trailingText = "${preferences.virtualizerStrength / 10}%",
+                                index = idx++, count = total,
+                                onClick = {
+                                    val steps = listOf(0, 200, 400, 500, 600, 800, 1000)
+                                    val currentIdx = steps.indexOf(preferences.virtualizerStrength).coerceAtLeast(0)
+                                    val nextIdx = (currentIdx + 1) % steps.size
+                                    viewModel.setVirtualizerStrength(steps[nextIdx])
+                                },
+                            )
+                        }
                         SettingListItem(
                             icon = Tabler.Outline.WaveSine,
-                            title = "Bass Boost Strength",
-                            subtitle = preferences.bassBoostStrength.displayName,
-                            trailingText = preferences.bassBoostStrength.displayName,
+                            title = "Reverb",
+                            subtitle = preferences.reverbPreset.displayName,
+                            trailingText = preferences.reverbPreset.displayName,
                             index = idx++, count = total,
                             onClick = {
-                                val strengths = EffectStrength.entries
-                                val currentIndex = strengths.indexOf(preferences.bassBoostStrength)
-                                val nextIndex = (currentIndex + 1) % strengths.size
-                                viewModel.setBassBoostStrength(strengths[nextIndex])
+                                val presets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
+                                val currentIndex = presets.indexOf(preferences.reverbPreset)
+                                val nextIndex = (currentIndex + 1) % presets.size
+                                viewModel.setReverbPreset(presets[nextIndex])
                             },
                         )
-                    }
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Speakerphone,
-                        title = "Virtualizer / Spatial Audio",
-                        subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}% strength" else "Off",
-                        checked = preferences.virtualizerEnabled,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setVirtualizerEnabled(it) },
-                    )
-                    if (preferences.virtualizerEnabled) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Speakerphone,
-                            title = "Virtualizer Strength",
-                            subtitle = "${preferences.virtualizerStrength / 10}%",
-                            trailingText = "${preferences.virtualizerStrength / 10}%",
-                            index = idx++, count = total,
-                            onClick = {
-                                val steps = listOf(0, 200, 400, 500, 600, 800, 1000)
-                                val currentIdx = steps.indexOf(preferences.virtualizerStrength).coerceAtLeast(0)
-                                val nextIdx = (currentIdx + 1) % steps.size
-                                viewModel.setVirtualizerStrength(steps[nextIdx])
-                            },
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Wand,
+                            title = "Auto-EQ by Genre",
+                            subtitle = if (preferences.autoEqByGenre) "Automatically applies EQ preset based on genre" else "Off",
+                            checked = preferences.autoEqByGenre,
+                            index = idx, count = total,
+                            onCheckedChange = { viewModel.setAutoEqByGenre(it) },
                         )
-                    }
-                    SettingListItem(
-                        icon = Tabler.Outline.WaveSine,
-                        title = "Reverb",
-                        subtitle = preferences.reverbPreset.displayName,
-                        trailingText = preferences.reverbPreset.displayName,
-                        index = idx++, count = total,
-                        onClick = {
-                            val presets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
-                            val currentIndex = presets.indexOf(preferences.reverbPreset)
-                            val nextIndex = (currentIndex + 1) % presets.size
-                            viewModel.setReverbPreset(presets[nextIndex])
-                        },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Wand,
-                        title = "Auto-EQ by Genre",
-                        subtitle = if (preferences.autoEqByGenre) "Automatically applies EQ preset based on genre" else "Off",
-                        checked = preferences.autoEqByGenre,
-                        index = idx++, count = total,
-                        onCheckedChange = { viewModel.setAutoEqByGenre(it) },
+                }
+            }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 19,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
             }

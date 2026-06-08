@@ -203,6 +203,8 @@ class UserPreferencesStore @Inject constructor(
         val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
 
         val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
+
+        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -639,6 +641,7 @@ class UserPreferencesStore @Inject constructor(
                 maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
                 libraryConfigs = notificationLibraryConfigs,
             ),
+            showAdvancedSettings = readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -737,6 +740,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setShowAdvancedSettings(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
     }
 
     suspend fun clearAll() {

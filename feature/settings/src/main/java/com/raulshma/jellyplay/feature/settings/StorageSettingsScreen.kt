@@ -24,6 +24,7 @@ fun StorageSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
@@ -32,6 +33,12 @@ fun StorageSettingsScreen(
         title = "Storage",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -51,48 +58,60 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val storageTotal = 5
+                    val storageTotal = if (showAdvanced) 5 else 2
+                    var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
                         title = "Cache Used",
                         subtitle = "${viewModel.cacheSizeMb} MB",
-                        index = 0, count = storageTotal,
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Wifi,
-                        title = "WiFi Only",
-                        subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
-                        checked = preferences.wifiOnlyDownloads,
-                        index = 1, count = storageTotal,
-                        onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                        index = storageIdx++, count = storageTotal,
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Trash,
                         title = "Clear Cache",
                         subtitle = "Free up storage space",
-                        index = 2, count = storageTotal,
+                        index = storageIdx++, count = storageTotal,
                         onClick = { viewModel.clearCache() },
                     )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Refresh,
-                        title = "Auto-delete Cache",
-                        subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
-                        checked = preferences.autoDeleteCache,
-                        index = 3, count = storageTotal,
-                        onCheckedChange = { viewModel.setAutoDeleteCache(it) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Database,
-                        title = "Max Cache Size",
-                        subtitle = "Maximum disk space for caching",
-                        trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
-                        index = 4, count = storageTotal,
-                        onClick = {
-                            val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
-                            val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
-                            val nextIndex = (currentIndex + 1) % sizes.size
-                            viewModel.setMaxCacheSize(sizes[nextIndex])
-                        },
+                    if (showAdvanced) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Wifi,
+                            title = "WiFi Only",
+                            subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
+                            checked = preferences.wifiOnlyDownloads,
+                            index = storageIdx++, count = storageTotal,
+                            onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = "Auto-delete Cache",
+                            subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
+                            checked = preferences.autoDeleteCache,
+                            index = storageIdx++, count = storageTotal,
+                            onCheckedChange = { viewModel.setAutoDeleteCache(it) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Database,
+                            title = "Max Cache Size",
+                            subtitle = "Maximum disk space for caching",
+                            trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
+                            index = storageIdx, count = storageTotal,
+                            onClick = {
+                                val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
+                                val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
+                                val nextIndex = (currentIndex + 1) % sizes.size
+                                viewModel.setMaxCacheSize(sizes[nextIndex])
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 3,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
             }

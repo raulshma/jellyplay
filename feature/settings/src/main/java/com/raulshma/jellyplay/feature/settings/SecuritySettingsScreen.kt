@@ -52,6 +52,7 @@ fun SecuritySettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
+    val showAdvanced = preferences.showAdvancedSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
@@ -68,6 +69,12 @@ fun SecuritySettingsScreen(
         title = "Security",
         onBack = onBack,
         backgroundColor = backgroundColor,
+        actions = {
+            AdvancedSettingsToggleButton(
+                showAdvanced = showAdvanced,
+                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -94,13 +101,15 @@ fun SecuritySettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val secTotal = if (canShowBiometric) 3 else 2
+                    val baseSecTotal = if (canShowBiometric) 2 else 1
+                    val secTotal = if (showAdvanced) baseSecTotal + 1 else baseSecTotal
+                    var secIdx = 0
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = "PIN Lock",
                         subtitle = if (preferences.pinLockEnabled) "App locked with PIN" else "No PIN set",
                         checked = preferences.pinLockEnabled,
-                        index = 0, count = secTotal,
+                        index = secIdx++, count = secTotal,
                         onCheckedChange = { enabled ->
                             if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
                             else activeDialog = SecuritySettingsDialog.PinDisableAuth
@@ -118,7 +127,7 @@ fun SecuritySettingsScreen(
                             title = "Biometric Unlock",
                             subtitle = if (preferences.biometricLockEnabled) "Use fingerprint, face, or device credential" else "Disabled",
                             checked = preferences.biometricLockEnabled,
-                            index = 1, count = secTotal,
+                            index = secIdx++, count = secTotal,
                             onCheckedChange = { enabled ->
                                 if (enabled && bioActivity != null) {
                                     BiometricAuthHelper.authenticate(
@@ -135,20 +144,30 @@ fun SecuritySettingsScreen(
                             },
                         )
                     }
-                    val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
-                    val lockTimerLabels = listOf("Immediately", "30 seconds", "1 minute", "5 minutes", "10 minutes")
-                    SettingListItem(
-                        icon = Tabler.Outline.Clock,
-                        title = "Auto-Lock Timer",
-                        subtitle = "Time before app locks after leaving",
-                        trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
-                        index = if (canShowBiometric) 2 else 1,
-                        count = secTotal,
-                        onClick = {
-                            val currentIdx = lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)
-                            val nextIdx = (currentIdx + 1) % lockTimerOptions.size
-                            viewModel.setAutoLockTimerMs(lockTimerOptions[nextIdx])
-                        },
+                    if (showAdvanced) {
+                        val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
+                        val lockTimerLabels = listOf("Immediately", "30 seconds", "1 minute", "5 minutes", "10 minutes")
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Auto-Lock Timer",
+                            subtitle = "Time before app locks after leaving",
+                            trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
+                            index = secIdx, count = secTotal,
+                            onClick = {
+                                val currentIdx = lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)
+                                val nextIdx = (currentIdx + 1) % lockTimerOptions.size
+                                viewModel.setAutoLockTimerMs(lockTimerOptions[nextIdx])
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (!showAdvanced) {
+                item {
+                    HiddenSettingsHint(
+                        hiddenCount = 1,
+                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
             }
