@@ -7,6 +7,7 @@ data class CastDevice(
     val name: String,
     val type: String,
     val tag: Any? = null,
+    val strategyName: String = "",
 )
 
 interface CastStrategy {

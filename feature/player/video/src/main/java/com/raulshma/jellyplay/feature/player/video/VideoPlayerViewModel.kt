@@ -1175,7 +1175,9 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
-        castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
+        if (castManager.currentStrategyName != CastManager.STRATEGY_DLNA) {
+            castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
+        }
     }
 
     @OptIn(UnstableApi::class)
