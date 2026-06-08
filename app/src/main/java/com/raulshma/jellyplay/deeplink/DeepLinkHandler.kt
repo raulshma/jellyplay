@@ -9,7 +9,7 @@ import javax.inject.Singleton
 @Singleton
 class DeepLinkHandler @Inject constructor() {
 
-    private val supportedHosts = setOf("media")
+    private val supportedHosts = setOf("media", "newsletter", "seerr")
 
     fun parse(intent: Intent): Route? {
         val uri = intent.data ?: return null
@@ -25,9 +25,27 @@ class DeepLinkHandler @Inject constructor() {
     }
 
     private fun parseCustomScheme(uri: Uri): Route? {
-        if (uri.host !in supportedHosts) return null
-        val itemId = uri.lastPathSegment ?: return null
-        return routeForPath(uri.host ?: return null, itemId)
+        val host = uri.host ?: return null
+        if (host !in supportedHosts) return null
+        val segments = uri.pathSegments
+        return when (host) {
+            "media" -> {
+                val itemId = segments.firstOrNull() ?: uri.lastPathSegment
+                itemId?.let { routeForPath("media", it) }
+            }
+            "newsletter" -> {
+                val section = segments.firstOrNull() ?: uri.lastPathSegment
+                section?.let { routeForPath("newsletter", it) }
+            }
+            "seerr" -> {
+                val tmdbId = segments.getOrNull(0)?.toIntOrNull() ?: return null
+                val mediaType = segments.getOrNull(1)?.takeIf { it.isNotBlank() }
+                    ?: uri.getQueryParameter("type")?.takeIf { it.isNotBlank() }
+                    ?: "movie"
+                Route.SeerrDetail(tmdbId = tmdbId, mediaType = mediaType)
+            }
+            else -> null
+        }
     }
 
     private fun parseHttpsScheme(uri: Uri): Route? {
@@ -42,6 +60,7 @@ class DeepLinkHandler @Inject constructor() {
     private fun routeForPath(type: String, itemId: String): Route? {
         return when (type) {
             "media" -> Route.MediaDetail(itemId)
+            "newsletter" -> Route.NewsletterSectionList(itemId)
             else -> null
         }
     }
@@ -57,6 +76,14 @@ class DeepLinkHandler @Inject constructor() {
 
         fun createWebMediaLink(itemId: String): String {
             return "$SCHEME_HTTPS://$HOST_WEB/media/$itemId"
+        }
+
+        fun createContinueWatchingLink(): String {
+            return "$SCHEME_CUSTOM://newsletter/CONTINUE_WATCHING"
+        }
+
+        fun createSeerrLink(tmdbId: Int, mediaType: String): String {
+            return "$SCHEME_CUSTOM://seerr/$tmdbId/$mediaType"
         }
     }
 }

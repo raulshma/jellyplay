@@ -110,6 +110,7 @@ dependencies {
     implementation(project(":core:datastore"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    implementation(project(":core:notification"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:home"))
     implementation(project(":feature:library"))
@@ -126,6 +127,7 @@ dependencies {
     implementation(project(":feature:admin"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:newsletter"))
+    implementation(project(":feature:insights"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -149,9 +151,12 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.navigation3)
 
     implementation(libs.work.runtime.ktx)
+    implementation(libs.datastore.preferences)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.play.services.cast.framework)

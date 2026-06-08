@@ -571,4 +571,32 @@ class MediaInfoApiClientImpl @Inject constructor(
             )
         }
     }
+
+    override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResult {
+        val server = engine._currentServer.value?.address ?: throw IllegalStateException("Not connected")
+        val token = engine._currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val filterParam = filter?.let { "&filter=$it" } ?: ""
+        val url = "${server}/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam"
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Emby-Token", token)
+            .build()
+        val response = engine.okHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
+        val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        json.mapIndexed { index, element ->
+            val obj = element.jsonObject
+            ContentBreakdown(
+                label = obj["label"]?.jsonPrimitive?.content
+                    ?: obj["name"]?.jsonPrimitive?.content
+                    ?: "",
+                value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: 0,
+                colorIndex = index,
+            )
+        }
+    }
 }

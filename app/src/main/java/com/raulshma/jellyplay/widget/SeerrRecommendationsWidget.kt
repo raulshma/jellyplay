@@ -1,0 +1,201 @@
+package com.raulshma.jellyplay.widget
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.RemoteViews
+import com.raulshma.jellyplay.MainActivity
+import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.SeerrWidgetSource
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+
+/**
+ * Home-screen widget that surfaces Seerr (Jellyseerr/Overseerr)
+ * recommendations. Renders a poster grid; tap routes to the in-app
+ * Seerr detail screen via a `jellyplay://seerr/{tmdbId}/{mediaType}`
+ * deep link.
+ *
+ * Data flow:
+ *   * [SeerrRecommendationsWidgetWorker] refreshes the cached list every
+ *     6h and on user-initiated refresh.
+ *   * [SeerrRecommendationsWidgetService] is bound as the grid's remote
+ *     adapter and reads from
+ *     [UserPreferencesStore.seerrWidgetItems] — no network in the widget
+ *     process.
+ */
+class SeerrRecommendationsWidget : AppWidgetProvider() {
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface WidgetEntryPoint {
+        fun userPreferencesStore(): UserPreferencesStore
+        fun seerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+    }
+
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        for (id in appWidgetIds) {
+            updateAppWidget(context, appWidgetManager, id)
+        }
+        triggerInitialRefresh(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        triggerInitialRefresh(context)
+    }
+
+    override fun onDisabled(context: Context?) {
+        super.onDisabled(context)
+        refreshScope.cancel()
+    }
+
+    private fun triggerInitialRefresh(context: Context) {
+        val pending = goAsync()
+        refreshScope.launch {
+            try {
+                WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_REFRESH) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val componentName = ComponentName(context, SeerrRecommendationsWidget::class.java)
+            val ids = appWidgetManager.getAppWidgetIds(componentName)
+            appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.sr_widget_grid)
+            val pending = goAsync()
+            refreshScope.launch {
+                try {
+                    WidgetWorkScheduler.refreshSeerrNow(context.applicationContext)
+                } finally {
+                    pending.finish()
+                }
+            }
+        }
+    }
+
+    companion object {
+        const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_SEERR"
+
+        const val REQUEST_CODE_HEADER = 7_500_010
+        const val REQUEST_CODE_REFRESH = 7_500_011
+        const val REQUEST_CODE_ITEM = 7_500_012
+
+        fun updateAppWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+        ) {
+            val views = RemoteViews(context.packageName, R.layout.seerr_recommendations_widget)
+            views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context))
+
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            )
+            val isConnected = runCatching {
+                runBlocking {
+                    val prefs = entryPoint.seerrPreferencesStore().preferences.first()
+                    prefs.serverUrl.isNotBlank() && prefs.apiKey.isNotBlank()
+                }
+            }.getOrDefault(false)
+
+            if (isConnected) {
+                views.setTextViewText(
+                    R.id.sr_widget_empty_title,
+                    context.getString(R.string.widget_seerr_no_recommendations)
+                )
+                views.setTextViewText(
+                    R.id.sr_widget_empty_subtitle,
+                    context.getString(R.string.widget_seerr_no_recommendations_subtitle)
+                )
+            } else {
+                views.setTextViewText(
+                    R.id.sr_widget_empty_title,
+                    context.getString(R.string.widget_seerr_recommendations_empty)
+                )
+                views.setTextViewText(
+                    R.id.sr_widget_empty_subtitle,
+                    context.getString(R.string.widget_seerr_recommendations_empty_subtitle)
+                )
+            }
+
+            val openApp = PendingIntent.getActivity(
+                context,
+                REQUEST_CODE_HEADER,
+                WidgetDeepLinks.openAppIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            views.setOnClickPendingIntent(R.id.sr_widget_header, openApp)
+            views.setOnClickPendingIntent(R.id.sr_widget_empty, openApp)
+
+            val refreshIntent = Intent(context, SeerrRecommendationsWidget::class.java).apply {
+                action = ACTION_REFRESH
+            }
+            val refreshPending = PendingIntent.getBroadcast(
+                context,
+                REQUEST_CODE_REFRESH,
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            views.setOnClickPendingIntent(R.id.sr_widget_refresh, refreshPending)
+
+            val templateIntent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                addCategory(Intent.CATEGORY_DEFAULT)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val templatePending = PendingIntent.getActivity(
+                context,
+                REQUEST_CODE_ITEM,
+                templateIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            )
+            views.setPendingIntentTemplate(R.id.sr_widget_grid, templatePending)
+            views.setRemoteAdapter(
+                R.id.sr_widget_grid,
+                Intent(context, SeerrRecommendationsWidgetService::class.java),
+            )
+            views.setEmptyView(R.id.sr_widget_grid, R.id.sr_widget_empty)
+
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun readSourceLabel(context: Context): String = runCatching {
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            )
+            runBlocking {
+                entryPoint.userPreferencesStore().widgetConfig.first()
+            }.seerrSource.displayName
+        }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
+    }
+}

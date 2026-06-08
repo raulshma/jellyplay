@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":core:datastore"))
     implementation(project(":core:network"))
     implementation(project(":core:ui"))
+    implementation(project(":core:notification"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

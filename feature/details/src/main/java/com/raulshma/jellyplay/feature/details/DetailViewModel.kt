@@ -26,6 +26,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
+import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,6 +54,7 @@ class DetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
+    private val tmdbApiClient: TmdbApiClient,
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
@@ -65,6 +68,9 @@ class DetailViewModel @Inject constructor(
 
     private val _seerrSimilar = stateFlow<List<SeerrSearchItem>>(emptyList())
     val seerrSimilar: StateFlow<List<SeerrSearchItem>> = _seerrSimilar.flow
+
+    private val _relatedVideos = stateFlow<List<SeerrRelatedVideo>>(emptyList())
+    val relatedVideos: StateFlow<List<SeerrRelatedVideo>> = _relatedVideos.flow
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -187,6 +193,7 @@ class DetailViewModel @Inject constructor(
             seerrDataLoaded = false
             _seerrRecommendations.set(emptyList())
             _seerrSimilar.set(emptyList())
+            _relatedVideos.set(emptyList())
             isDownloading = false
             isDownloadingSeries = false
             downloadError = null
@@ -635,10 +642,7 @@ class DetailViewModel @Inject constructor(
         launch {
             _seerrRecommendations.set(emptyList())
             _seerrSimilar.set(emptyList())
-
-            val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
-            val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
-            if (!connected || !enabled) return@launch
+            _relatedVideos.set(emptyList())
 
             val mediaType = detail.item.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
@@ -646,17 +650,36 @@ class DetailViewModel @Inject constructor(
             val tmdbId = resolveTmdbId(detail)
             if (tmdbId == null) return@launch
 
-            coroutineScope {
-                val recsDeferred = async {
-                    seerrRepository.getRecommendations(tmdbId, mediaType)
-                        .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+            val connected = try { seerrRepository.isConnected().first() } catch (_: Exception) { false }
+
+            // 1. Fetch related videos (trailers)
+            if (connected) {
+                val videosResult = if (mediaType == MediaType.MOVIE) {
+                    seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
+                } else {
+                    seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
                 }
-                val similarDeferred = async {
-                    seerrRepository.getSimilar(tmdbId, mediaType)
-                        .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                _relatedVideos.set(videosResult.getOrElse { emptyList() })
+            } else {
+                val videosResult = tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
+                _relatedVideos.set(videosResult.getOrElse { emptyList() })
+            }
+
+            // 2. Fetch recommendations and similar if enabled
+            val enabled = try { seerrRepository.isRecommendationsEnabled().first() } catch (_: Exception) { false }
+            if (connected && enabled) {
+                coroutineScope {
+                    val recsDeferred = async {
+                        seerrRepository.getRecommendations(tmdbId, mediaType)
+                            .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                    }
+                    val similarDeferred = async {
+                        seerrRepository.getSimilar(tmdbId, mediaType)
+                            .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                    }
+                    _seerrRecommendations.set(recsDeferred.await().results.take(20))
+                    _seerrSimilar.set(similarDeferred.await().results.take(20))
                 }
-                _seerrRecommendations.set(recsDeferred.await().results.take(20))
-                _seerrSimilar.set(similarDeferred.await().results.take(20))
             }
         }
     }

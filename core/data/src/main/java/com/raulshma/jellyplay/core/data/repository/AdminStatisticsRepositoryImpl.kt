@@ -91,7 +91,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
             val pluginData = pluginMap[userId]
-            val watchTimeSec = pluginData?.totalPlayTime ?: 0L
+            val watchTimeSec = pluginData?.totalTime ?: 0L
 
             UserStatistics(
                 userId = userId,
@@ -148,10 +148,12 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 sortBy = "DatePlayed",
                 sortOrder = "Descending",
                 startIndex = 0,
-                limit = 200,
+                limit = 300,
             ).getOrDefault(Pair(0, emptyList()))
             buildFallbackActivityChart(recentlyPlayed.second)
         } else pluginChart
+
+        val fallbackTrendData = buildFallbackTrendData(userId)
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -189,6 +191,139 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         val movieTotal = apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
+        val pluginActivity = if (pluginAvailable) {
+            apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
+        } else emptyList()
+        val userPluginActivity = pluginActivity.firstOrNull { it.userId == userId }
+        var totalWatchTimeSec = userPluginActivity?.totalTime ?: 0L
+
+        val watchTimeBreakdown = computeWatchTimeBreakdown(userId)
+        if (totalWatchTimeSec == 0L) {
+            totalWatchTimeSec = watchTimeBreakdown.totalSeconds
+        }
+
+        val enhancedData = if (pluginAvailable) {
+            coroutineScope {
+                val weeklyActivity = async {
+                    apiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
+                }
+                val monthlyActivity = async {
+                    pluginActivity
+                }
+                val sixMonthCount = async {
+                    apiClient.getPlaybackReportingPlayActivity(days = 180, dataType = "count", filter = userId)
+                        .getOrDefault(emptyList())
+                }
+                val thirtyDayCount = async {
+                    apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId)
+                        .getOrDefault(emptyList())
+                }
+                val musicGenreBreakdown = async {
+                    apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = "$userId,Audio")
+                        .getOrDefault(emptyList())
+                }
+                val musicArtistBreakdown = async {
+                    apiClient.getPlaybackReportingArtistBreakdown(days = 30, filter = "$userId,Audio")
+                        .getOrDefault(emptyList())
+                }
+                val musicTopItems = async {
+                    apiClient.getItemsWithUserData(
+                        userId = userId,
+                        includeItemTypes = listOf("Audio"),
+                        isPlayed = true,
+                        sortBy = "PlayCount",
+                        sortOrder = "Descending",
+                        startIndex = 0,
+                        limit = 10,
+                    ).getOrDefault(Pair(0, emptyList()))
+                }
+                val audioPlayCount = async {
+                    apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+                }
+
+                val weeklyUserData = weeklyActivity.await().firstOrNull { it.userId == userId }
+                var weeklyWatchTimeSec = weeklyUserData?.totalTime ?: 0L
+                var monthlyWatchTimeSec = userPluginActivity?.totalTime ?: 0L
+
+                if (weeklyWatchTimeSec == 0L) weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds
+                if (monthlyWatchTimeSec == 0L) monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds
+
+                val streakData = sixMonthCount.await()
+                val viewingStreak = calculateViewingStreak(streakData)
+
+                val pluginTrend = thirtyDayCount.await().sortedBy { it.date }
+                val trendData = if (pluginTrend.isNotEmpty() && pluginTrend.any { it.value > 0 }) pluginTrend else fallbackTrendData
+                val activeDays = trendData.count { it.value > 0 }.coerceAtLeast(1)
+                val averageDailyMinutes = if (monthlyWatchTimeSec > 0) {
+                    (monthlyWatchTimeSec / 60 / activeDays).toInt()
+                } else 0
+
+                val currentMonthMinutes = monthlyWatchTimeSec / 60
+                val previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60
+                val percentageChange = if (previousMonthMinutes > 0) {
+                    ((currentMonthMinutes - previousMonthMinutes).toFloat() / previousMonthMinutes.toFloat()) * 100f
+                } else if (currentMonthMinutes > 0) 100f else 0f
+
+                val musicGenres = musicGenreBreakdown.await()
+                val musicArtists = musicArtistBreakdown.await()
+                val musicItems = musicTopItems.await()
+                val audioCount = audioPlayCount.await()
+
+                val musicTopTracks = musicItems.second.map { item ->
+                    com.raulshma.jellyplay.core.model.UserTopItem(
+                        itemId = item.id,
+                        name = item.name,
+                        type = item.mediaType.name,
+                        playCount = item.playCount,
+                        posterBlurHash = item.blurHashes.primary,
+                        seriesName = item.album,
+                        runtimeTicks = item.runTimeTicks ?: 0,
+                    )
+                }
+
+                val genrePieData = genreBreakdown.take(8)
+
+                EnhancedStatistics(
+                    weeklyWatchTimeSec = weeklyWatchTimeSec,
+                    monthlyWatchTimeSec = monthlyWatchTimeSec,
+                    viewingStreak = viewingStreak,
+                    trendData = trendData,
+                    averageDailyMinutes = averageDailyMinutes,
+                    monthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(
+                        currentMonthMinutes = currentMonthMinutes,
+                        previousMonthMinutes = previousMonthMinutes,
+                        percentageChange = percentageChange,
+                    ),
+                    musicStats = com.raulshma.jellyplay.core.model.MusicStatistics(
+                        totalListeningHours = musicItems.second.sumOf { (it.runTimeTicks ?: 0L) / 10_000_000L * it.playCount.coerceAtLeast(1) } / 3600f,
+                        topArtists = musicArtists.take(5),
+                        topGenres = musicGenres.take(5),
+                        topTracks = musicTopTracks.take(5),
+                    ),
+                    genrePieData = genrePieData,
+                )
+            }
+        } else {
+            EnhancedStatistics(
+                weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds,
+                monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds,
+                viewingStreak = com.raulshma.jellyplay.core.model.ViewingStreak(),
+                trendData = fallbackTrendData,
+                averageDailyMinutes = if (watchTimeBreakdown.last30DaysSeconds > 0 && fallbackTrendData.isNotEmpty()) {
+                    (watchTimeBreakdown.last30DaysSeconds / 60 / fallbackTrendData.count { it.value > 0 }.coerceAtLeast(1)).toInt()
+                } else 0,
+                monthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(
+                    currentMonthMinutes = watchTimeBreakdown.last30DaysSeconds / 60,
+                    previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60,
+                    percentageChange = if (watchTimeBreakdown.previous30DaysSeconds > 0) {
+                        ((watchTimeBreakdown.last30DaysSeconds - watchTimeBreakdown.previous30DaysSeconds).toFloat() / watchTimeBreakdown.previous30DaysSeconds.toFloat()) * 100f
+                    } else if (watchTimeBreakdown.last30DaysSeconds > 0) 100f else 0f,
+                ),
+                musicStats = com.raulshma.jellyplay.core.model.MusicStatistics(),
+                genrePieData = emptyList(),
+            )
+        }
+
         UserDetailPage(
             user = user,
             statistics = UserStatistics(
@@ -200,6 +335,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 moviePlayCount = moviePlayed,
                 episodePlayCount = episodePlayed,
                 songPlayCount = songPlayed,
+                totalWatchTimeSec = totalWatchTimeSec,
                 completionRate = completionRate,
                 lastSeen = user.lastActivityDate,
             ),
@@ -211,6 +347,14 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             genreBreakdown = genreBreakdown,
             methodBreakdown = methodBreakdown,
             deviceBreakdown = deviceBreakdown,
+            weeklyWatchTimeSec = enhancedData.weeklyWatchTimeSec,
+            monthlyWatchTimeSec = enhancedData.monthlyWatchTimeSec,
+            viewingStreak = enhancedData.viewingStreak,
+            trendData = enhancedData.trendData,
+            averageDailyMinutes = enhancedData.averageDailyMinutes,
+            monthlyComparison = enhancedData.monthlyComparison,
+            musicStats = enhancedData.musicStats,
+            genrePieData = enhancedData.genrePieData,
         )
     }
 
@@ -518,7 +662,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             val datePlayed = item.lastPlayedDate ?: continue
             val day = datePlayed.take(10)
             if (day in dateCounts) {
-                dateCounts[day] = dateCounts.getOrDefault(day, 0L) + 1
+                dateCounts[day] = dateCounts.getOrDefault(day, 0L) + item.playCount.coerceAtLeast(1)
             }
         }
         return dateCounts.entries.sortedBy { it.key }.map { (date, count) ->
@@ -526,5 +670,138 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         }
     }
 
+    private data class WatchTimeBreakdown(
+        val totalSeconds: Long,
+        val last30DaysSeconds: Long,
+        val last7DaysSeconds: Long,
+        val previous30DaysSeconds: Long,
+    )
+
+    private suspend fun computeWatchTimeBreakdown(userId: String): WatchTimeBreakdown {
+        return try {
+            val items = apiClient.getItemsWithUserData(
+                userId = userId,
+                isPlayed = true,
+                sortBy = "DatePlayed",
+                sortOrder = "Descending",
+                startIndex = 0,
+                limit = 500,
+            ).getOrDefault(Pair(0, emptyList()))
+
+            val now = java.time.LocalDate.now()
+            var totalSec = 0L
+            var last30Sec = 0L
+            var last7Sec = 0L
+            var prev30Sec = 0L
+
+            for (item in items.second) {
+                val runtimeSec = (item.runTimeTicks ?: 0L) / 10_000_000L
+                if (runtimeSec == 0L) continue
+                val plays = item.playCount.coerceAtLeast(1)
+                totalSec += runtimeSec * plays
+
+                val lastPlayed = item.lastPlayedDate?.take(10) ?: continue
+                val playedDate = try { java.time.LocalDate.parse(lastPlayed) } catch (_: Exception) { continue }
+                val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(playedDate, now)
+
+                if (daysAgo <= 30) {
+                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 30 / (daysAgo.toInt() + 30))
+                    last30Sec += runtimeSec * recentPlays
+                }
+                if (daysAgo <= 7) {
+                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 7 / (daysAgo.toInt() + 7))
+                    last7Sec += runtimeSec * recentPlays
+                }
+                if (daysAgo in 31..60) {
+                    prev30Sec += runtimeSec * plays
+                }
+            }
+
+            WatchTimeBreakdown(
+                totalSeconds = totalSec,
+                last30DaysSeconds = last30Sec.coerceAtMost(totalSec),
+                last7DaysSeconds = last7Sec.coerceAtMost(totalSec),
+                previous30DaysSeconds = prev30Sec.coerceAtMost(totalSec - last30Sec).coerceAtLeast(0L),
+            )
+        } catch (_: Exception) {
+            WatchTimeBreakdown(0L, 0L, 0L, 0L)
+        }
+    }
+
+    private suspend fun buildFallbackTrendData(userId: String): List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint> {
+        return try {
+            val items = apiClient.getItemsWithUserData(
+                userId = userId,
+                isPlayed = true,
+                sortBy = "DatePlayed",
+                sortOrder = "Descending",
+                startIndex = 0,
+                limit = 300,
+            ).getOrDefault(Pair(0, emptyList()))
+            buildFallbackActivityChart(items.second)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     private fun formatDate(date: java.time.LocalDate): String = date.toString()
+
+    private data class EnhancedStatistics(
+        val weeklyWatchTimeSec: Long = 0,
+        val monthlyWatchTimeSec: Long = 0,
+        val viewingStreak: com.raulshma.jellyplay.core.model.ViewingStreak = com.raulshma.jellyplay.core.model.ViewingStreak(),
+        val trendData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint> = emptyList(),
+        val averageDailyMinutes: Int = 0,
+        val monthlyComparison: com.raulshma.jellyplay.core.model.MonthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(),
+        val musicStats: com.raulshma.jellyplay.core.model.MusicStatistics = com.raulshma.jellyplay.core.model.MusicStatistics(),
+        val genrePieData: List<com.raulshma.jellyplay.core.model.ContentBreakdown> = emptyList(),
+    )
+
+    private fun calculateViewingStreak(activityData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>): com.raulshma.jellyplay.core.model.ViewingStreak {
+        val activeDates = activityData
+            .filter { it.value > 0 }
+            .map { it.date }
+            .toSet()
+
+        if (activeDates.isEmpty()) {
+            return com.raulshma.jellyplay.core.model.ViewingStreak()
+        }
+
+        val today = java.time.LocalDate.now()
+        var currentStreak = 0
+        var streakStartDate: String? = null
+
+        var checkDate = today
+        while (activeDates.contains(formatDate(checkDate))) {
+            currentStreak++
+            streakStartDate = formatDate(checkDate)
+            checkDate = checkDate.minusDays(1)
+        }
+
+        val sortedDates = activeDates.sorted()
+        var longestStreak = 0
+        var tempStreak = 1
+        for (i in 1 until sortedDates.size) {
+            try {
+                val prev = java.time.LocalDate.parse(sortedDates[i - 1])
+                val curr = java.time.LocalDate.parse(sortedDates[i])
+                if (java.time.temporal.ChronoUnit.DAYS.between(prev, curr) == 1L) {
+                    tempStreak++
+                } else {
+                    longestStreak = maxOf(longestStreak, tempStreak)
+                    tempStreak = 1
+                }
+            } catch (_: Exception) {
+                longestStreak = maxOf(longestStreak, tempStreak)
+                tempStreak = 1
+            }
+        }
+        longestStreak = maxOf(longestStreak, tempStreak)
+
+        return com.raulshma.jellyplay.core.model.ViewingStreak(
+            currentStreak = currentStreak,
+            longestStreak = longestStreak,
+            streakStartDate = streakStartDate,
+        )
+    }
 }

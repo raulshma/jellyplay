@@ -8,8 +8,6 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaType
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
 import javax.inject.Inject
@@ -190,29 +188,17 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/MediaSegments/$itemId"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", user.accessToken)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                emptyList()
-            } else {
-                val body = response.body?.string() ?: return@apiResult emptyList<MediaSegment>()
-                val segmentsResponse = JellyfinApiEngine.sharedJson.decodeFromString<MediaSegmentsResponse>(body)
-                segmentsResponse.Items.map { dto ->
-                    MediaSegment(
-                        id = dto.Id,
-                        itemId = dto.ItemId,
-                        type = MediaSegmentType.fromApiName(dto.Type),
-                        startTicks = dto.StartTicks,
-                        endTicks = dto.EndTicks,
-                    )
-                }
-            }
+        val segments = runCatching {
+            engine.requireApi().mediaSegmentsApi.getItemSegments(itemId = itemId.toUUID()).content
+        }.getOrNull() ?: return@apiResult emptyList()
+        segments.items.orEmpty().map { dto ->
+            MediaSegment(
+                id = dto.id?.toString() ?: "",
+                itemId = dto.itemId?.toString() ?: itemId,
+                type = MediaSegmentType.fromApiName(dto.type.serialName),
+                startTicks = dto.startTicks,
+                endTicks = dto.endTicks,
+            )
         }
     }
 
@@ -232,19 +218,10 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = engine.apiResult {
-        val server = engine._currentServer.value ?: throw IllegalStateException("No server")
-        val user = engine._currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles/$subtitleId"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", user.accessToken)
-            .post(okhttp3.RequestBody.create(null, ByteArray(0)))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw Exception("Failed to download subtitle: ${response.code}")
-            }
-        }
+        engine.requireApi().subtitleApi.downloadRemoteSubtitles(
+            itemId = itemId.toUUID(),
+            subtitleId = subtitleId,
+        )
     }
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
@@ -268,18 +245,3 @@ class PlaybackApiClientImpl @Inject constructor(
         )
     }
 }
-
-@kotlinx.serialization.Serializable
-private data class MediaSegmentDto(
-    val Id: String,
-    val ItemId: String,
-    val Type: String,
-    val StartTicks: Long,
-    val EndTicks: Long,
-)
-
-@kotlinx.serialization.Serializable
-private data class MediaSegmentsResponse(
-    val Items: List<MediaSegmentDto> = emptyList(),
-    val TotalRecordCount: Int = 0,
-)

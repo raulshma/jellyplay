@@ -32,9 +32,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +71,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.CheckFrequency
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
@@ -130,6 +135,8 @@ fun SettingsScreen(
     onSetupWizard: () -> Unit = {},
     onNewsletterClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
+    onAboutClick: () -> Unit = {},
+    onWatchProgressHeatmapClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences = viewModel.preferences
@@ -322,6 +329,30 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(2) {
                 SettingsGroup(
+                    icon = Tabler.Outline.Activity,
+                    title = "My Activity & Insights",
+                    summary = { "Favorites and viewing statistics" },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Heart,
+                        title = "Browse Favorites",
+                        subtitle = "View all your favorited items",
+                        index = 0, count = 2,
+                        onClick = onFavoritesClick,
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.ChartBar,
+                        title = "Watch Progress Heatmap",
+                        subtitle = "View your viewing activity over the past year",
+                        index = 1, count = 2,
+                        onClick = onWatchProgressHeatmapClick,
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(2) {
+                SettingsGroup(
                     icon = Tabler.Outline.Wand,
                     title = "Setup Wizard",
                     summary = { "Re-run the initial setup experience" },
@@ -374,9 +405,157 @@ fun SettingsScreen(
             }
 
             AnimatedSettingsEntrance(3) {
+                val notifPrefs = preferences.notificationPreferences
+                var showFrequencyPicker by remember { mutableStateOf(false) }
+                var showQuietStartPicker by remember { mutableStateOf(false) }
+                var showQuietEndPicker by remember { mutableStateOf(false) }
+
+                SettingsGroup(
+                    icon = Tabler.Outline.Bell,
+                    title = "Notifications",
+                    summary = {
+                        if (notifPrefs.enabled) "Checking ${notifPrefs.checkFrequency.displayName.lowercase()}"
+                        else "Disabled"
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Bell,
+                        title = "Enable Notifications",
+                        subtitle = "Get notified when new media is added to your server",
+                        checked = notifPrefs.enabled,
+                        index = 0, count = 9,
+                        onCheckedChange = { enabled ->
+                            viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }
+                        },
+                    )
+                    if (notifPrefs.enabled) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = "Check Frequency",
+                            subtitle = "How often to check for new media",
+                            trailingText = notifPrefs.checkFrequency.displayName,
+                            index = 1, count = 9,
+                            onClick = { showFrequencyPicker = true },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Moon,
+                            title = "Quiet Hours",
+                            subtitle = "Suppress notifications during set hours",
+                            checked = notifPrefs.quietHoursEnabled,
+                            index = 2, count = 9,
+                            onCheckedChange = { enabled ->
+                                viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
+                            },
+                        )
+                        if (notifPrefs.quietHoursEnabled) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Sunset,
+                                title = "Quiet Start",
+                                subtitle = "Begin quiet hours",
+                                trailingText = formatMinutes(notifPrefs.quietHoursStart),
+                                index = 3, count = 9,
+                                onClick = { showQuietStartPicker = true },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Sunrise,
+                                title = "Quiet End",
+                                subtitle = "End quiet hours",
+                                trailingText = formatMinutes(notifPrefs.quietHoursEnd),
+                                index = 4, count = 9,
+                                onClick = { showQuietEndPicker = true },
+                            )
+                        }
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Volume,
+                            title = "Sound",
+                            subtitle = "Play notification sound",
+                            checked = notifPrefs.soundEnabled,
+                            index = if (notifPrefs.quietHoursEnabled) 5 else 3,
+                            count = 9,
+                            onCheckedChange = { enabled ->
+                                viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.PhoneCall,
+                            title = "Vibrate",
+                            subtitle = "Vibrate on notification",
+                            checked = notifPrefs.vibrateEnabled,
+                            index = if (notifPrefs.quietHoursEnabled) 6 else 4,
+                            count = 9,
+                            onCheckedChange = { enabled ->
+                                viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
+                            },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.LetterCase,
+                            title = "Max Per Check",
+                            subtitle = "Maximum items per notification batch",
+                            trailingText = "${notifPrefs.maxPerCheck}",
+                            index = if (notifPrefs.quietHoursEnabled) 7 else 5,
+                            count = 9,
+                            onClick = { },
+                        )
+                        val libraryCount = viewModel.libraryFolders.size
+                        val enabledLibraries = viewModel.libraryFolders.count { folder ->
+                            notifPrefs.libraryConfigs[folder.id]?.enabled ?: true
+                        }
+                        SettingListItem(
+                            icon = Tabler.Outline.Folders,
+                            title = "Libraries",
+                            subtitle = "$enabledLibraries of $libraryCount libraries monitored",
+                            index = if (notifPrefs.quietHoursEnabled) 8 else 6,
+                            count = 9,
+                            onClick = { },
+                        )
+                    }
+                }
+
+                if (showFrequencyPicker) {
+                    SingleChoicePicker(
+                        title = "Check Frequency",
+                        options = CheckFrequency.entries.map { it.displayName },
+                        selectedIndex = CheckFrequency.entries.indexOf(notifPrefs.checkFrequency),
+                        onSelected = { index ->
+                            viewModel.updateNotificationPreferences {
+                                it.copy(checkFrequency = CheckFrequency.entries[index])
+                            }
+                            showFrequencyPicker = false
+                        },
+                        onDismiss = { showFrequencyPicker = false },
+                    )
+                }
+
+                if (showQuietStartPicker) {
+                    TimePicker(
+                        title = "Quiet Hours Start",
+                        initialMinutes = notifPrefs.quietHoursStart,
+                        onSelected = { minutes ->
+                            viewModel.updateNotificationPreferences { it.copy(quietHoursStart = minutes) }
+                            showQuietStartPicker = false
+                        },
+                        onDismiss = { showQuietStartPicker = false },
+                    )
+                }
+
+                if (showQuietEndPicker) {
+                    TimePicker(
+                        title = "Quiet Hours End",
+                        initialMinutes = notifPrefs.quietHoursEnd,
+                        onSelected = { minutes ->
+                            viewModel.updateNotificationPreferences { it.copy(quietHoursEnd = minutes) }
+                            showQuietEndPicker = false
+                        },
+                        onDismiss = { showQuietEndPicker = false },
+                    )
+                }
+            }
+
+            AnimatedSettingsEntrance(3) {
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
-                    title = "Home Screen",
+                    title = "Home Screen Layout",
                     summary = {
                         val enabled = preferences.enabledHomeSectionTypes
                         "${enabled.size} of ${HomeSectionType.CONFIGURABLE.size} sections visible"
@@ -489,14 +668,6 @@ fun SettingsScreen(
                             }
                         }
                     }
-
-                    SettingListItem(
-                        icon = Tabler.Outline.Heart,
-                        title = "Browse Favorites",
-                        subtitle = "View all your favorited items",
-                        index = idx, count = totalCount + 1,
-                        onClick = onFavoritesClick,
-                    )
                 }
             }
 
@@ -516,13 +687,14 @@ fun SettingsScreen(
                         add("speed" to 5)
                         add("aspect" to 6)
                         add("autoplay" to 7)
-                        add("browser" to 8)
-                        add("metadata" to 9)
-                        add("swipe" to 10)
-                        add("brightness" to 11)
-                        add("trickplay" to 12)
-                        add("trickplayGesture" to 13)
-                        add("preload" to 14)
+                        add("autoplayTrailers" to 8)
+                        add("browser" to 9)
+                        add("metadata" to 10)
+                        add("swipe" to 11)
+                        add("brightness" to 12)
+                        add("trickplay" to 13)
+                        add("trickplayGesture" to 14)
+                        add("preload" to 15)
                     }
                     val total = videoItems.size
 
@@ -591,11 +763,19 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
                     SettingToggleItem(
+                        icon = Tabler.Outline.PlayerPlay,
+                        title = "Autoplay Trailers",
+                        subtitle = if (preferences.trailerAutoplay) "Muted trailer playback in backdrop area" else "Trailer autoplay disabled",
+                        checked = preferences.trailerAutoplay,
+                        index = 8, count = total,
+                        onCheckedChange = { viewModel.setTrailerAutoplay(it) },
+                    )
+                    SettingToggleItem(
                         icon = Tabler.Outline.Video,
                         title = "Episode Browser",
                         subtitle = if (preferences.videoEpisodeBrowserEnabled) "Browse episodes during playback" else "Episode picker disabled",
                         checked = preferences.videoEpisodeBrowserEnabled,
-                        index = 8, count = total,
+                        index = 9, count = total,
                         onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                     )
                     SettingToggleItem(
@@ -603,7 +783,7 @@ fun SettingsScreen(
                         title = "Playback Metadata",
                         subtitle = if (preferences.videoShowPlaybackMetadata) "Show play method, codecs, HDR and Atmos info above seekbar" else "Metadata display hidden",
                         checked = preferences.videoShowPlaybackMetadata,
-                        index = 9, count = total,
+                        index = 10, count = total,
                         onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
                     )
                     SettingListItem(
@@ -611,7 +791,7 @@ fun SettingsScreen(
                         title = "Swipe Seek Range",
                         subtitle = "Maximum seek distance",
                         trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
-                        index = 10, count = total,
+                        index = 11, count = total,
                         onClick = { showSwipeSeekPicker = true },
                     )
                     SettingToggleItem(
@@ -619,7 +799,7 @@ fun SettingsScreen(
                         title = "Remember Brightness",
                         subtitle = if (preferences.videoRememberBrightness) "Brightness saved between sessions" else "Reset brightness each session",
                         checked = preferences.videoRememberBrightness,
-                        index = 11, count = total,
+                        index = 12, count = total,
                         onCheckedChange = { viewModel.setVideoRememberBrightness(it) },
                     )
                     SettingToggleItem(
@@ -627,7 +807,7 @@ fun SettingsScreen(
                         title = "Trickplay Preview",
                         subtitle = if (preferences.trickplayEnabled) "Show preview images while scrubbing" else "No preview images on seek bar",
                         checked = preferences.trickplayEnabled,
-                        index = 12, count = total,
+                        index = 13, count = total,
                         onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                     )
                     SettingToggleItem(
@@ -635,7 +815,7 @@ fun SettingsScreen(
                         title = "Trickplay on Gestures",
                         subtitle = if (preferences.trickplayOnSeekGesture) "Show preview on swipe seek" else "No preview on swipe gestures",
                         checked = preferences.trickplayOnSeekGesture,
-                        index = 13, count = total,
+                        index = 14, count = total,
                         onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                     )
                     SettingListItem(
@@ -643,7 +823,7 @@ fun SettingsScreen(
                         title = "Preload Buffer",
                         subtitle = "Amount to buffer ahead during playback",
                         trailingText = preferences.videoPreloadBufferSize.displayName,
-                        index = 14, count = total,
+                        index = 15, count = total,
                         onClick = { showPreloadBufferPicker = true },
                     )
                 }
@@ -1382,18 +1562,26 @@ fun SettingsScreen(
                     summary = { "Cache: ${viewModel.cacheSizeMb} MB" },
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    val storageTotal = 4
+                    val storageTotal = 5
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
                         title = "Cache Used",
                         subtitle = "${viewModel.cacheSizeMb} MB",
                         index = 0, count = storageTotal,
                     )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Wifi,
+                        title = "WiFi Only",
+                        subtitle = if (preferences.wifiOnlyDownloads) "Downloads only on unmetered networks" else "Downloads on any network",
+                        checked = preferences.wifiOnlyDownloads,
+                        index = 1, count = storageTotal,
+                        onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                    )
                     SettingListItem(
                         icon = Tabler.Outline.Trash,
                         title = "Clear Cache",
                         subtitle = "Free up storage space",
-                        index = 1, count = storageTotal,
+                        index = 2, count = storageTotal,
                         onClick = { viewModel.clearCache() },
                     )
                     SettingToggleItem(
@@ -1401,7 +1589,7 @@ fun SettingsScreen(
                         title = "Auto-delete Cache",
                         subtitle = if (preferences.autoDeleteCache) "Automatically clears on low storage" else "Manual cache management",
                         checked = preferences.autoDeleteCache,
-                        index = 2, count = storageTotal,
+                        index = 3, count = storageTotal,
                         onCheckedChange = { viewModel.setAutoDeleteCache(it) },
                     )
                     SettingListItem(
@@ -1409,7 +1597,7 @@ fun SettingsScreen(
                         title = "Max Cache Size",
                         subtitle = "Maximum disk space for caching",
                         trailingText = if (preferences.maxCacheSizeMb == 0) "Unlimited" else "${preferences.maxCacheSizeMb} MB",
-                        index = 3, count = storageTotal,
+                        index = 4, count = storageTotal,
                         onClick = {
                             val sizes = listOf(0, 250, 500, 1000, 2000, 5000)
                             val currentIndex = sizes.indexOf(preferences.maxCacheSizeMb)
@@ -1834,11 +2022,12 @@ fun SettingsScreen(
 
             AnimatedSettingsEntrance(if (isTv) 16 else 15) {
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    SettingInfoItem(
-                        icon = Tabler.Outline.Video,
-                        title = "Version",
-                        subtitle = "JellyPlay v${viewModel.appVersion}",
+                    SettingListItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        title = "About JellyPlay",
+                        subtitle = "Version ${viewModel.appVersion}",
                         index = 0, count = 1,
+                        onClick = onAboutClick,
                     )
                 }
             }
@@ -2902,4 +3091,89 @@ private fun vlcSkipFrameLabel(level: Int): String = when (level) {
     3 -> "Bi-Directional"
     4 -> "All (Aggressive)"
     else -> "Level $level"
+}
+
+private fun formatMinutes(minutes: Int): String {
+    val hours = minutes / 60
+    val mins = minutes % 60
+    val amPm = if (hours >= 12) "PM" else "AM"
+    val displayHour = when {
+        hours == 0 -> 12
+        hours > 12 -> hours - 12
+        else -> hours
+    }
+    return "${displayHour}:${mins.toString().padStart(2, '0')} $amPm"
+}
+
+@Composable
+private fun SingleChoicePicker(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                options.forEachIndexed { index, option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { onSelected(index) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = index == selectedIndex,
+                            onClick = { onSelected(index) },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePicker(
+    title: String,
+    initialMinutes: Int,
+    onSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialMinutes / 60,
+        initialMinute = initialMinutes % 60,
+        is24Hour = false,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            androidx.compose.material3.TimePicker(state = timePickerState)
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSelected(timePickerState.hour * 60 + timePickerState.minute)
+                }
+            ) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }

@@ -13,10 +13,13 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -25,6 +28,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -37,7 +41,11 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.LibraryWidgetItem
+import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.core.model.WidgetConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +116,7 @@ class UserPreferencesStore @Inject constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
         val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
         val COLOR_STYLE = stringPreferencesKey("color_style")
+        val LIBRARY_VIEW_MODE = stringPreferencesKey("library_view_mode")
         val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
 
         val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
@@ -122,6 +131,7 @@ class UserPreferencesStore @Inject constructor(
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
         val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
+        val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
         val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
         val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
@@ -145,6 +155,7 @@ class UserPreferencesStore @Inject constructor(
 
         val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
         val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
+        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
         val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
         val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
@@ -169,6 +180,29 @@ class UserPreferencesStore @Inject constructor(
         val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
 
         val TYPED_MIGRATION_DONE = booleanPreferencesKey("_typed_migration_done")
+
+        // ── Home-screen recommendations widgets ──
+        val WIDGET_CONFIG = stringPreferencesKey("widget_config")
+        val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
+        val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
+        val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
+        val SEERR_WIDGET_ITEMS = stringPreferencesKey("seerr_widget_items")
+        val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
+        val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
+        val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
+
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
+        val NOTIFICATIONS_QUIET_HOURS_ENABLED = booleanPreferencesKey("notifications_quiet_hours_enabled")
+        val NOTIFICATIONS_QUIET_HOURS_START = intPreferencesKey("notifications_quiet_hours_start")
+        val NOTIFICATIONS_QUIET_HOURS_END = intPreferencesKey("notifications_quiet_hours_end")
+        val NOTIFICATIONS_SOUND_ENABLED = booleanPreferencesKey("notifications_sound_enabled")
+        val NOTIFICATIONS_VIBRATE_ENABLED = booleanPreferencesKey("notifications_vibrate_enabled")
+        val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
+        val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
+        val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
+
+        val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -186,7 +220,7 @@ class UserPreferencesStore @Inject constructor(
                 "dynamic_theming", "oled_mode", "auto_delete_cache",
                 "pin_lock_enabled", "biometric_lock_enabled", "dialogue_boost_enabled",
                 "equalizer_enabled", "audio_passthrough", "frame_rate_matching",
-                "night_mode_enabled", "video_gestures_enabled", "video_autoplay_next",
+                "night_mode_enabled", "video_gestures_enabled", "video_autoplay_next", "trailer_autoplay",
                 "video_remember_brightness", "audio_autoplay_next", "trickplay_enabled",
                 "trickplay_on_seek_gesture", "video_episode_browser_enabled",
                 "video_show_playback_metadata", "audio_normalization_enabled",
@@ -194,7 +228,7 @@ class UserPreferencesStore @Inject constructor(
                 "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
                 "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
-                "newsletter_enabled",
+                "newsletter_enabled", "wifi_only_downloads",
             )
 
             migrateInts(prefs,
@@ -397,6 +431,7 @@ class UserPreferencesStore @Inject constructor(
             videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
             videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
             videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", false),
+            trailerAutoplay = readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
             videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
             videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", false),
             videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
@@ -458,6 +493,7 @@ class UserPreferencesStore @Inject constructor(
             lrBalance = readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
             autoEqByGenre = readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
             pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
+            wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
             downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
             enabledHomeSectionTypes = try {
                 prefs[Keys.HOME_ENABLED_SECTION_TYPES]?.let {
@@ -505,6 +541,27 @@ class UserPreferencesStore @Inject constructor(
             colorStyle = try {
                 ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
             } catch (_: Exception) { ColorStyle.TONAL_SPOT },
+            libraryViewMode = try {
+                LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
+            } catch (_: Exception) { LibraryViewMode.GRID },
+            notificationPreferences = NotificationPreferences(
+                enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
+                checkFrequency = try {
+                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
+                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
+                quietHoursEnabled = readBool(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED, "notifications_quiet_hours_enabled", false),
+                quietHoursStart = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_START, "notifications_quiet_hours_start", 1380),
+                quietHoursEnd = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_END, "notifications_quiet_hours_end", 420),
+                soundEnabled = readBool(prefs, Keys.NOTIFICATIONS_SOUND_ENABLED, "notifications_sound_enabled", true),
+                vibrateEnabled = readBool(prefs, Keys.NOTIFICATIONS_VIBRATE_ENABLED, "notifications_vibrate_enabled", true),
+                lightsEnabled = readBool(prefs, Keys.NOTIFICATIONS_LIGHTS_ENABLED, "notifications_lights_enabled", true),
+                maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
+                libraryConfigs = try {
+                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
+                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                    } ?: emptyMap()
+                } catch (_: Exception) { emptyMap() },
+            ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
@@ -701,6 +758,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
     }
 
+    suspend fun setTrailerAutoplay(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
+    }
+
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
         context.dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
     }
@@ -859,6 +920,10 @@ class UserPreferencesStore @Inject constructor(
         context.dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
     }
 
+    suspend fun setWifiOnlyDownloads(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+    }
+
     suspend fun setDownloadConnections(count: Int) {
         context.dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
     }
@@ -922,6 +987,74 @@ class UserPreferencesStore @Inject constructor(
             } ?: emptyList()
         }
 
+    val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.WIDGET_CONFIG]?.let {
+                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            } ?: WidgetConfig()
+        }
+
+    val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<LibraryWidgetItem>>(it) } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+
+    val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+
+    val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>> =
+        context.dataStore.data.map { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
+                try { json.decodeFromString<List<SeerrWidgetItem>>(it) } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }.distinctUntilChanged()
+
+    val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }.distinctUntilChanged()
+
+    val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long> =
+        context.dataStore.data.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }.distinctUntilChanged()
+
+    suspend fun setWidgetConfig(config: WidgetConfig) {
+        context.dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setLibraryWidgetItems(
+        items: List<LibraryWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LIBRARY_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.LIBRARY_WIDGET_VERSION] = version
+            prefs[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setSeerrWidgetItems(
+        items: List<SeerrWidgetItem>,
+        version: Long,
+        updatedAtMs: Long,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SEERR_WIDGET_ITEMS] = json.encodeToString(items)
+            prefs[Keys.SEERR_WIDGET_VERSION] = version
+            prefs[Keys.SEERR_WIDGET_UPDATED_AT_MS] = updatedAtMs
+        }
+    }
+
+    suspend fun setWidgetLastRefreshMs(ms: Long) {
+        context.dataStore.edit { it[Keys.WIDGET_LAST_REFRESH_MS] = ms }
+    }
+
     suspend fun setNewsletterEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
     }
@@ -940,6 +1073,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setColorStyle(style: ColorStyle) {
         context.dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+    }
+
+    suspend fun setLibraryViewMode(mode: LibraryViewMode) {
+        context.dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
     }
 
     suspend fun restorePreferences(prefs: UserPreferences) {
@@ -988,6 +1125,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
             settings[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = prefs.videoDefaultAspectRatio
             settings[Keys.VIDEO_AUTOPLAY_NEXT] = prefs.videoAutoplayNext
+            settings[Keys.TRAILER_AUTOPLAY] = prefs.trailerAutoplay
             settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
             settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
             settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel
@@ -1032,6 +1170,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.LR_BALANCE] = prefs.lrBalance
             settings[Keys.AUTO_EQ_BY_GENRE] = prefs.autoEqByGenre
             settings[Keys.PITCH_SEMITONES] = prefs.pitchSemitones
+            settings[Keys.WIFI_ONLY_DOWNLOADS] = prefs.wifiOnlyDownloads
             settings[Keys.DOWNLOAD_CONNECTIONS] = prefs.downloadConnections
             settings[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(
                 kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
@@ -1066,6 +1205,97 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.NEWSLETTER_LAST_VIEWED_MS] = prefs.newsletterLastViewedMs
             settings[Keys.ACCENT_COLOR_SWATCH] = prefs.accentColorSwatch
             settings[Keys.COLOR_STYLE] = prefs.colorStyle.name
+            settings[Keys.LIBRARY_VIEW_MODE] = prefs.libraryViewMode.name
+            val np = prefs.notificationPreferences
+            settings[Keys.NOTIFICATIONS_ENABLED] = np.enabled
+            settings[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
+            settings[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
+            settings[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
+            settings[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
+            settings[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
+            settings[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
+            settings[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
+                np.libraryConfigs,
+            )
+        }
+    }
+
+    val notificationPreferences: StateFlow<NotificationPreferences> = preferences.map { it.notificationPreferences }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, NotificationPreferences())
+
+    suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
+        context.dataStore.edit { prefs ->
+            val current = NotificationPreferences(
+                enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
+                checkFrequency = try {
+                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
+                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
+                quietHoursEnabled = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] ?: false,
+                quietHoursStart = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] ?: 1380,
+                quietHoursEnd = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] ?: 420,
+                soundEnabled = prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] ?: true,
+                vibrateEnabled = prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] ?: true,
+                lightsEnabled = prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] ?: true,
+                maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
+                libraryConfigs = try {
+                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
+                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
+                    } ?: emptyMap()
+                } catch (_: Exception) { emptyMap() },
+            )
+            val updated = transform(current)
+            prefs[Keys.NOTIFICATIONS_ENABLED] = updated.enabled
+            prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = updated.checkFrequency.name
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = updated.quietHoursEnabled
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] = updated.quietHoursStart
+            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] = updated.quietHoursEnd
+            prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] = updated.soundEnabled
+            prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = updated.vibrateEnabled
+            prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = updated.lightsEnabled
+            prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] = updated.maxPerCheck
+            prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
+                updated.libraryConfigs,
+            )
+        }
+    }
+
+    val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
+        get() = context.dataStore.data.map { prefs ->
+            prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                try {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } catch (_: Exception) { emptyList() }
+            } ?: emptyList()
+        }
+
+    suspend fun addRecentDlnaDevice(device: DlnaDeviceRef) {
+        context.dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+
+            val updated = (listOf(device) + current.filter { it.id != device.id })
+                .distinctBy { it.id }
+                .take(5)
+            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun removeRecentDlnaDevice(deviceId: String) {
+        context.dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
+                    json.decodeFromString<List<DlnaDeviceRef>>(it)
+                } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(current.filter { it.id != deviceId })
         }
     }
 }

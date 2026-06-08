@@ -1,68 +1,54 @@
 package com.raulshma.jellyplay.core.network
 
-import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import com.raulshma.jellyplay.core.model.LyricsWord
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import org.jellyfin.sdk.model.api.LyricDto
+import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.api.client.extensions.lyricsApi
+import javax.inject.Inject
+import javax.inject.Singleton
 
-internal object LyricsApi {
+@Singleton
+class LyricsApi @Inject constructor(
+    private val engine: JellyfinApiEngine,
+) {
 
-    private val json = JellyfinApiEngine.sharedJson
-    private val lyricsRegex = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})](.+)""")
-
-    private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
-        withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                response.body?.string() ?: ""
-            }
-        }
-
-    suspend fun fetchLyrics(
-        okHttpClient: OkHttpClient,
-        serverAddress: String,
-        itemId: String,
-        accessToken: String,
-    ): LyricsResult {
-        val url = "$serverAddress/Items/$itemId/Lyrics?api_key=$accessToken"
-        val request = Request.Builder()
-            .url(url)
-            .build()
-        val body = executeAndReadBody(okHttpClient, request)
-
-        val lines = try {
-            val array = json.parseToJsonElement(body).jsonArray
-            array.map { element ->
-                val obj = element.jsonObject
-                LyricsLine(
-                    timeMs = obj["start"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
-                    text = obj["text"]?.jsonPrimitive?.content ?: "",
-                )
-            }
-        } catch (e: Exception) {
-            body.lineSequence().mapNotNull { line: String ->
-                val match = lyricsRegex.find(line.trim())
-                match?.let { m ->
-                    val min = m.groupValues[1].toLong()
-                    val sec = m.groupValues[2].toDouble()
-                    val text = m.groupValues[3]
-                    LyricsLine(
-                        timeMs = min * 60_000 + (sec * 1000).toLong(),
-                        text = text,
-                    )
-                }
-            }.toList()
-        }
-
-        return LyricsResult(
-            lines = lines,
-            source = if (lines.isNotEmpty()) LyricsSource.EXTERNAL else LyricsSource.UNKNOWN,
+    suspend fun fetchLyrics(itemId: String): LyricsResult {
+        val response = runCatching { engine.requireApi().lyricsApi.getLyrics(itemId.toUUID()).content }
+        return response.fold(
+            onSuccess = { dto -> dto.toLyricsResult() },
+            onFailure = { LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN) },
         )
+    }
+
+    private fun LyricDto.toLyricsResult(): LyricsResult {
+        val lines = lyrics.mapNotNull { line ->
+            val startMs = line.start?.let { it / 10_000 } ?: 0L
+            val nextStartMs = run {
+                val idx = lyrics.indexOf(line)
+                if (idx >= 0 && idx + 1 < lyrics.size) {
+                    lyrics[idx + 1].start?.div(10_000) ?: startMs
+                } else startMs
+            }
+            val text = line.text
+            val words = line.cues?.map { cue ->
+                LyricsWord(
+                    timeMs = cue.start / 10_000,
+                    text = text.substring(cue.position, cue.endPosition.coerceAtMost(text.length)),
+                    durationMs = ((cue.end ?: cue.start) - cue.start) / 10_000,
+                )
+            }.orEmpty()
+            LyricsLine(
+                timeMs = startMs,
+                text = text,
+                durationMs = (nextStartMs - startMs).coerceAtLeast(0L),
+                words = words,
+            )
+        }
+        val source = if (lines.isEmpty()) LyricsSource.UNKNOWN else LyricsSource.EXTERNAL
+        return LyricsResult(lines = lines, source = source)
     }
 }

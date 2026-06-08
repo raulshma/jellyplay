@@ -26,4 +26,5 @@ interface MediaInfoApiClient {
     suspend fun getPlaybackReportingPlayActivity(days: Int = 30, dataType: String = "count", filter: String? = null): Result<List<PlaybackActivityPoint>>
     suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String? = null): Result<List<PlaybackReportingDetail>>
     suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int = 30, filter: String? = null): Result<List<ContentBreakdown>>
+    suspend fun getPlaybackReportingArtistBreakdown(days: Int = 30, filter: String? = null): Result<List<ContentBreakdown>>
 }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
+import com.composables.icons.tabler.outline.X
 
 @Composable
 fun HomeSearchResultsOverlay(
@@ -55,6 +57,10 @@ fun HomeSearchResultsOverlay(
     getImageUrl: (String) -> String,
     onJellyfinClick: (MediaItem) -> Unit,
     onSeerrClick: (SeerrSearchItem) -> Unit,
+    searchHistory: List<com.raulshma.jellyplay.core.data.repository.SearchHistoryItem> = emptyList(),
+    onHistoryClick: (String) -> Unit = {},
+    onDeleteHistoryItem: (Long) -> Unit = {},
+    onClearHistory: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val totalItems = jellyfinResults.size + seerrResults.size
@@ -78,7 +84,7 @@ fun HomeSearchResultsOverlay(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-        } else if (!hasAnyResults && !isSearching) {
+        } else if (!hasAnyResults && !isSearching && searchHistory.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -96,6 +102,79 @@ fun HomeSearchResultsOverlay(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
+                if (!hasAnyResults && searchHistory.isNotEmpty()) {
+                    item(contentType = "historyHeader") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Recent Searches",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.8.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "Clear all",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onClearHistory() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                    items(
+                        count = searchHistory.size,
+                        key = { "history-${searchHistory[it].id}" },
+                        contentType = { "historyItem" },
+                    ) { index ->
+                        val historyItem = searchHistory[index]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onHistoryClick(historyItem.query) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    Tabler.Outline.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = historyItem.query,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Icon(
+                                Tabler.Outline.X,
+                                contentDescription = "Remove",
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onDeleteHistoryItem(historyItem.id) }
+                                    .padding(2.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
                 if (jellyfinResults.isNotEmpty()) {
                     item(contentType = "libraryHeader") {
                         Text(

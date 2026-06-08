@@ -153,6 +153,12 @@ interface MediaEngine : PlayerLifecycleCallbacks, com.raulshma.jellyplay.core.da
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
 
+    // 3b. Adaptive polling
+    val pollingIntervalMs: StateFlow<Long>
+    val videoStatsEnabled: StateFlow<Boolean>
+    fun setPollingIntervalMs(ms: Long)
+    fun setVideoStatsEnabled(enabled: Boolean)
+
     // 4. Configuration & Capabilities
     val capabilities: EngineCapabilities
     fun updateConfig(config: EngineConfig)

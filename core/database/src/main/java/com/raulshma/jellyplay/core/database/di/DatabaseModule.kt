@@ -58,4 +58,10 @@ object DatabaseModule {
 
     @Provides
     fun provideAudioQueueDao(database: JellyPlayDatabase) = database.audioQueueDao()
+
+    @Provides
+    fun provideSearchHistoryDao(database: JellyPlayDatabase) = database.searchHistoryDao()
+
+    @Provides
+    fun provideSeenMediaDao(database: JellyPlayDatabase) = database.seenMediaDao()
 }

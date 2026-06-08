@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.view.WindowManager
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.NativeKeyEvent
@@ -62,6 +65,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,7 +180,12 @@ fun VideoPlayerScreen(
     var isGestureSeeking by remember { mutableStateOf(false) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
 
+    LaunchedEffect(showControls) {
+        viewModel.setControlsVisible(showControls)
+    }
+
     var volumeGestureAccumulator by remember { mutableFloatStateOf(0f) }
+    var overlayDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val isScreenLocked = uiState.isScreenLocked
 
@@ -222,6 +232,9 @@ fun VideoPlayerScreen(
             viewModel.playerLifecycleManager.clearPipDismissed()
             onBack()
         }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.closePlayer.collect { onBack() }
     }
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
@@ -676,7 +689,7 @@ fun VideoPlayerScreen(
                     }
                 }
             },
-            onClearOverlays = remember(doSeekTo) {
+            onClearOverlays = remember(doSeekTo, scope) {
                 {
                     if (isGestureSeeking) {
                         doSeekTo(gestureSeekPositionMs)
@@ -686,10 +699,14 @@ fun VideoPlayerScreen(
                     }
                     seekDirection = 0
                     seekOffsetMs = 0L
-                    brightnessOverlay = -1f
-                    volumeOverlay = -1f
                     volumeGestureAccumulator = 0f
                     isGestureSeeking = false
+                    overlayDismissJob?.cancel()
+                    overlayDismissJob = scope.launch {
+                        delay(800)
+                        brightnessOverlay = -1f
+                        volumeOverlay = -1f
+                    }
                 }
             },
             showControls = showControls,
@@ -699,6 +716,19 @@ fun VideoPlayerScreen(
                         showControls = true
                     } else {
                         onBack()
+                    }
+                }
+            },
+            onHapticPulse = remember(activity) {
+                {
+                    activity?.let { act ->
+                        val view = act.window.decorView
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        }
                     }
                 }
             },
@@ -958,19 +988,29 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(isSeeking, seekPositionMs) {
-        if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-            seekTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
-        } else if (!isSeeking) {
+    LaunchedEffect(Unit) {
+        snapshotFlow { seekPositionMs }
+            .collect { pos ->
+                if (isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+                    seekTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
+    }
+
+    LaunchedEffect(isSeeking) {
+        if (!isSeeking) {
             seekTrickplayBitmap = null
         }
     }
 
-    LaunchedEffect(isGestureSeeking, gestureSeekPositionMs) {
-        if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
-            gestureTrickplayVisible = true
-            gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(gestureSeekPositionMs)
-        }
+    LaunchedEffect(Unit) {
+        snapshotFlow { gestureSeekPositionMs }
+            .collect { pos ->
+                if (isGestureSeeking && uiState.trickplayOnSeekGesture && uiState.trickplayInfo != null) {
+                    gestureTrickplayVisible = true
+                    gestureTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
     }
 
     LaunchedEffect(isGestureSeeking) {
@@ -981,10 +1021,17 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(isTv, isSeeking, seekPositionMs) {
-        if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
-            tvTrickplayBitmap = viewModel.getTrickplayThumbnail(seekPositionMs)
-        } else if (!isSeeking) {
+    LaunchedEffect(Unit) {
+        snapshotFlow { seekPositionMs }
+            .collect { pos ->
+                if (isTv && isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null) {
+                    tvTrickplayBitmap = viewModel.getTrickplayThumbnail(pos)
+                }
+            }
+    }
+
+    LaunchedEffect(isSeeking) {
+        if (!isSeeking) {
             tvTrickplayBitmap = null
         }
     }
@@ -1121,13 +1168,20 @@ private fun SubtitleCueBox(
         when (style.edgeType) {
             SubtitleEdgeType.NONE -> Unit
             SubtitleEdgeType.OUTLINE -> {
-                SubtitleOutlineOffsets.forEach { (x, y) ->
-                    SubtitleTextLayer(
-                        text = annotatedText,
-                        color = edgeColor,
-                        textStyle = textStyle,
-                        modifier = Modifier.offset(x.dp, y.dp),
-                    )
+                val textMeasurer = rememberTextMeasurer()
+                val measuredText = remember(annotatedText, textStyle) {
+                    textMeasurer.measure(annotatedText, textStyle)
+                }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    SubtitleOutlineOffsets.forEach { (x, y) ->
+                        val offsetPx = with(density) { Offset(x.dp.toPx(), y.dp.toPx()) }
+                        drawText(
+                            measuredText,
+                            topLeft = offsetPx,
+                            color = edgeColor,
+                        )
+                    }
                 }
             }
             SubtitleEdgeType.DROP_SHADOW -> {

@@ -7,11 +7,23 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.util.Log
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
 class NowPlayingWidget : AppWidgetProvider() {
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface WidgetEntryPoint {
+        fun audioPlaybackManager(): AudioPlaybackManager
+    }
 
     override fun onUpdate(
         context: Context,
@@ -25,31 +37,84 @@ class NowPlayingWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        when (intent.action) {
-            ACTION_PLAY_PAUSE, ACTION_NEXT, ACTION_PREV -> {
-                context.sendBroadcast(
-                    Intent(intent.action).setPackage(context.packageName)
-                )
-                val appWidgetManager = AppWidgetManager.getInstance(context)
-                val componentName = ComponentName(context, NowPlayingWidget::class.java)
-                val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-                onUpdate(context, appWidgetManager, appWidgetIds)
+        val action = intent.action ?: return
+        when (action) {
+            ACTION_PLAY_PAUSE,
+            ACTION_NEXT,
+            ACTION_PREV,
+            ACTION_REWIND,
+            ACTION_FORWARD,
+            -> handleTransport(context, action)
+
+            ACTION_SEEK_TO -> {
+                val percent = intent.getIntExtra(EXTRA_SEEK_PERCENT, -1)
+                if (percent in 0..100) {
+                    handleSeek(context, percent)
+                }
             }
         }
     }
 
+    private fun handleTransport(context: Context, action: String) {
+        val pending = goAsync()
+        val manager = resolveAudioManager(context)
+        try {
+            if (manager == null) return
+            when (action) {
+                ACTION_PLAY_PAUSE -> manager.togglePlayPause()
+                ACTION_NEXT -> manager.skipToNext()
+                ACTION_PREV -> manager.skipToPrevious()
+                ACTION_REWIND -> manager.seekByDelta(-SEEK_DELTA_MS)
+                ACTION_FORWARD -> manager.seekByDelta(SEEK_DELTA_MS)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Transport command failed: $action", e)
+        } finally {
+            pending.finish()
+        }
+    }
+
+    private fun handleSeek(context: Context, percent: Int) {
+        val pending = goAsync()
+        val manager = resolveAudioManager(context)
+        try {
+            if (manager == null) return
+            val duration = manager.duration.value
+            if (duration <= 0L) return
+            val target = (percent.toLong() * duration / 100L).coerceIn(0L, duration)
+            manager.seekTo(target)
+        } catch (e: Exception) {
+            Log.w(TAG, "Seek command failed: $percent%", e)
+        } finally {
+            pending.finish()
+        }
+    }
+
+    private fun resolveAudioManager(context: Context): AudioPlaybackManager? = try {
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            WidgetEntryPoint::class.java,
+        )
+        entryPoint.audioPlaybackManager()
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to resolve AudioPlaybackManager", e)
+        null
+    }
+
     companion object {
+        private const val TAG = "NowPlayingWidget"
+
         const val ACTION_PLAY_PAUSE = "com.raulshma.jellyplay.widget.ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "com.raulshma.jellyplay.widget.ACTION_NEXT"
         const val ACTION_PREV = "com.raulshma.jellyplay.widget.ACTION_PREV"
+        const val ACTION_REWIND = "com.raulshma.jellyplay.widget.ACTION_REWIND"
+        const val ACTION_FORWARD = "com.raulshma.jellyplay.widget.ACTION_FORWARD"
+        const val ACTION_SEEK_TO = "com.raulshma.jellyplay.widget.ACTION_SEEK_TO"
         const val ACTION_UPDATE = "com.raulshma.jellyplay.widget.ACTION_UPDATE"
 
-        const val EXTRA_TITLE = "extra_title"
-        const val EXTRA_SUBTITLE = "extra_subtitle"
-        const val EXTRA_IS_PLAYING = "extra_is_playing"
-        const val EXTRA_ALBUM_ART = "extra_album_art"
-        const val EXTRA_POSITION_MS = "extra_position_ms"
-        const val EXTRA_DURATION_MS = "extra_duration_ms"
+        const val EXTRA_SEEK_PERCENT = "extra_seek_percent"
+
+        private const val SEEK_DELTA_MS = 10_000L
 
         fun updateAppWidget(
             context: Context,
@@ -57,43 +122,7 @@ class NowPlayingWidget : AppWidgetProvider() {
             appWidgetId: Int,
         ) {
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-
-            val launchIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val launchPendingIntent = PendingIntent.getActivity(
-                context, 0, launchIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_container, launchPendingIntent)
-
-            val playPauseIntent = Intent(context, NowPlayingWidget::class.java).apply {
-                action = ACTION_PLAY_PAUSE
-            }
-            val playPausePendingIntent = PendingIntent.getBroadcast(
-                context, 1, playPauseIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_play_pause, playPausePendingIntent)
-
-            val nextIntent = Intent(context, NowPlayingWidget::class.java).apply {
-                action = ACTION_NEXT
-            }
-            val nextPendingIntent = PendingIntent.getBroadcast(
-                context, 2, nextIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_next, nextPendingIntent)
-
-            val prevIntent = Intent(context, NowPlayingWidget::class.java).apply {
-                action = ACTION_PREV
-            }
-            val prevPendingIntent = PendingIntent.getBroadcast(
-                context, 3, prevIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_prev, prevPendingIntent)
-
+            wireClickIntents(context, views)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
@@ -105,67 +134,183 @@ class NowPlayingWidget : AppWidgetProvider() {
             albumArt: Bitmap? = null,
             positionMs: Long = 0L,
             durationMs: Long = 0L,
+            isEmptyState: Boolean = false,
         ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, NowPlayingWidget::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            if (appWidgetIds.isEmpty()) return
 
             for (appWidgetId in appWidgetIds) {
                 val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                views.setTextViewText(R.id.widget_title, title ?: context.getString(R.string.app_name))
-                views.setTextViewText(R.id.widget_subtitle, subtitle ?: "Not playing")
-                views.setImageViewResource(
-                    R.id.widget_play_pause,
-                    if (isPlaying) R.drawable.widget_ic_pause else R.drawable.widget_ic_play
+                wireClickIntents(context, views)
+                bindState(
+                    views = views,
+                    title = title,
+                    subtitle = subtitle,
+                    isPlaying = isPlaying,
+                    albumArt = albumArt,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    isEmptyState = isEmptyState,
                 )
-                if (albumArt != null) {
-                    views.setImageViewBitmap(R.id.widget_album_art, albumArt)
-                } else {
-                    views.setImageViewResource(
-                        R.id.widget_album_art,
-                        R.drawable.widget_ic_music
-                    )
-                }
-                if (durationMs > 0) {
-                    val progress = ((positionMs.toFloat() / durationMs) * 1000).toInt().coerceIn(0, 1000)
-                    views.setProgressBar(R.id.widget_progress, 1000, progress, false)
-                } else {
-                    views.setProgressBar(R.id.widget_progress, 1000, 0, false)
-                }
-                appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views)
+                appWidgetManager.updateAppWidget(appWidgetId, views)
             }
         }
 
-        fun sendUpdateBroadcast(
+        private fun wireClickIntents(context: Context, views: RemoteViews) {
+            val appIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val appPending = PendingIntent.getActivity(
+                context, REQ_OPEN_APP, appIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            views.setOnClickPendingIntent(R.id.widget_container, appPending)
+            views.setOnClickPendingIntent(R.id.widget_album_art, appPending)
+            views.setOnClickPendingIntent(R.id.widget_backdrop, appPending)
+            views.setOnClickPendingIntent(R.id.widget_empty_state, appPending)
+
+            views.setOnClickPendingIntent(
+                R.id.widget_play_pause,
+                broadcastPending(context, ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE),
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_next,
+                broadcastPending(context, ACTION_NEXT, REQ_NEXT),
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_prev,
+                broadcastPending(context, ACTION_PREV, REQ_PREV),
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_rewind,
+                broadcastPending(context, ACTION_REWIND, REQ_REWIND),
+            )
+            views.setOnClickPendingIntent(
+                R.id.widget_forward,
+                broadcastPending(context, ACTION_FORWARD, REQ_FORWARD),
+            )
+
+            val seekZoneIds = SEEK_ZONE_IDS
+            for (i in seekZoneIds.indices) {
+                val percent = SEEK_PERCENTS[i]
+                views.setOnClickPendingIntent(
+                    seekZoneIds[i],
+                    seekPending(context, percent, REQ_SEEK_BASE + i),
+                )
+            }
+        }
+
+        private fun broadcastPending(
             context: Context,
+            action: String,
+            requestCode: Int,
+        ): PendingIntent {
+            val intent = Intent(context, NowPlayingWidget::class.java).apply {
+                this.action = action
+            }
+            return PendingIntent.getBroadcast(
+                context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        private fun seekPending(
+            context: Context,
+            percent: Int,
+            requestCode: Int,
+        ): PendingIntent {
+            val intent = Intent(context, NowPlayingWidget::class.java).apply {
+                action = ACTION_SEEK_TO
+                putExtra(EXTRA_SEEK_PERCENT, percent)
+            }
+            return PendingIntent.getBroadcast(
+                context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        private fun bindState(
+            views: RemoteViews,
             title: String?,
             subtitle: String?,
             isPlaying: Boolean,
-            albumArt: Bitmap? = null,
-            positionMs: Long = 0L,
-            durationMs: Long = 0L,
+            albumArt: Bitmap?,
+            positionMs: Long,
+            durationMs: Long,
+            isEmptyState: Boolean,
         ) {
-            val scaledArt = albumArt?.let { art ->
-                if (art.byteCount > 512 * 1024) {
-                    val scale = (512f * 1024 / art.byteCount.coerceAtLeast(1)).let {
-                        kotlin.math.sqrt(it.toDouble()).toFloat()
-                    }
-                    val w = (art.width * scale).toInt().coerceAtLeast(1)
-                    val h = (art.height * scale).toInt().coerceAtLeast(1)
-                    Bitmap.createScaledBitmap(art, w, h, true)
-                } else art
+            if (isEmptyState) {
+                views.setViewVisibility(R.id.widget_empty_state, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_content, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_backdrop, android.view.View.GONE)
+                return
             }
-            val intent = Intent(context, NowPlayingWidget::class.java).apply {
-                action = ACTION_UPDATE
-                putExtra(EXTRA_TITLE, title)
-                putExtra(EXTRA_SUBTITLE, subtitle)
-                putExtra(EXTRA_IS_PLAYING, isPlaying)
-                putExtra(EXTRA_ALBUM_ART, scaledArt)
-                putExtra(EXTRA_POSITION_MS, positionMs)
-                putExtra(EXTRA_DURATION_MS, durationMs)
+            views.setViewVisibility(R.id.widget_empty_state, android.view.View.GONE)
+            views.setViewVisibility(R.id.widget_content, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.widget_backdrop, android.view.View.VISIBLE)
+
+            val displayTitle = title?.takeIf { it.isNotBlank() } ?: "—"
+            views.setTextViewText(R.id.widget_title, displayTitle)
+            views.setTextViewText(R.id.widget_subtitle, subtitle?.takeIf { it.isNotBlank() } ?: " ")
+            views.setTextViewText(
+                R.id.widget_position,
+                formatPosition(positionMs, durationMs, isPlaying),
+            )
+
+            if (albumArt != null) {
+                views.setImageViewBitmap(R.id.widget_album_art, albumArt)
+                views.setImageViewBitmap(R.id.widget_backdrop, albumArt)
+            } else {
+                views.setImageViewResource(R.id.widget_album_art, R.drawable.widget_ic_music)
+                views.setImageViewResource(R.id.widget_backdrop, R.drawable.widget_backdrop_placeholder)
             }
-            intent.setPackage(context.packageName)
-            context.sendBroadcast(intent)
+            views.setImageViewResource(
+                R.id.widget_play_pause,
+                if (isPlaying) R.drawable.widget_ic_pause else R.drawable.widget_ic_play,
+            )
+            if (durationMs > 0L) {
+                val progress = ((positionMs.toFloat() / durationMs) * 1_000f).toInt()
+                    .coerceIn(0, 1_000)
+                views.setProgressBar(R.id.widget_progress, 1_000, progress, false)
+            } else {
+                views.setProgressBar(R.id.widget_progress, 1_000, 0, false)
+            }
         }
+
+        private fun formatPosition(positionMs: Long, durationMs: Long, isPlaying: Boolean): String {
+            if (durationMs <= 0L) return "—"
+            val cur = formatMs(positionMs)
+            val total = formatMs(durationMs)
+            return if (isPlaying) "$cur / $total" else "Paused · $cur / $total"
+        }
+
+        private fun formatMs(ms: Long): String {
+            val totalSec = (ms / 1000L).coerceAtLeast(0L)
+            val m = totalSec / 60
+            val s = totalSec % 60
+            return "%d:%02d".format(m, s)
+        }
+
+        private const val REQ_OPEN_APP = 100
+        private const val REQ_PLAY_PAUSE = 101
+        private const val REQ_NEXT = 102
+        private const val REQ_PREV = 103
+        private const val REQ_REWIND = 104
+        private const val REQ_FORWARD = 105
+        private const val REQ_SEEK_BASE = 200
+
+        private val SEEK_ZONE_IDS = intArrayOf(
+            R.id.widget_seek_zone_0,
+            R.id.widget_seek_zone_1,
+            R.id.widget_seek_zone_2,
+            R.id.widget_seek_zone_3,
+            R.id.widget_seek_zone_4,
+            R.id.widget_seek_zone_5,
+            R.id.widget_seek_zone_6,
+        )
+
+        private val SEEK_PERCENTS = intArrayOf(0, 17, 33, 50, 67, 83, 100)
     }
 }
